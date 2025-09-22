@@ -43,5 +43,10 @@ namespace Sigre.DataAccess
             }
             ctx.SaveChanges(); 
         }
+
+        public Usuario DAUS_LoginUsuario()
+        {
+            return new Usuario();
+        }
     }
 }
