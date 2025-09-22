@@ -1,0 +1,1 @@
+alter table Seds add SED_Tipo char(1) not null default 'M'

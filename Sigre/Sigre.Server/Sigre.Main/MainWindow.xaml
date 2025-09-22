@@ -1,0 +1,16 @@
+﻿<Window x:Class="Sigre.Main.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Sigre.Main"
+        mc:Ignorable="d" SizeToContent="WidthAndHeight"
+        Title="MainWindow" Height="450" Width="800">
+    <Grid>
+        <StackPanel>
+            <Button Click="button_Click" Margin="4" Width="200">Obtener reporte</Button>
+            <Button Click="button_Reports" Margin="4" Width="200">Reportes Revision</Button>
+            <Button Click="fixPhotosPath_Click" Margin="4" Width="200">Corregir carpetas de fotos</Button>
+        </StackPanel>
+    </Grid>
+</Window>

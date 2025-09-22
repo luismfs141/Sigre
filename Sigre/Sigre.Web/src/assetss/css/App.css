@@ -1,0 +1,29 @@
+:root {
+  --color-primary: #FF758A;   /* Rosa */
+  --color-secondary: #FFA575; /* Naranja */
+  --color-accent: #FFEA75;    /* Amarillo */
+  --color-info: #75FFEA;      /* Cyan */
+  --color-highlight: #758AFF; /* Azul */
+}
+
+/* Solo overrides suaves, no reglas globales */
+.btn-custom-primary {
+  background-color: var(--color-primary);
+  color: #fff;
+  border: none;
+}
+
+.btn-custom-secondary {
+  background-color: var(--color-secondary);
+  color: #000;
+  border: none;
+}
+
+.sidebar-custom {
+  background-color: var(--color-highlight);
+}
+
+.card-custom {
+  background-color: var(--color-accent);
+  color: #000;
+}

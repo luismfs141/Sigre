@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+ <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <!-- Diagram content (shape and connector positions) -->
+    <edmx:Diagrams>
+      <Diagram DiagramId="e6fbbb739b9d4f89ab747d863317c63d" Name="Diagram1">
+        <EntityTypeShape EntityType="sigreModel.Alimentadore" Width="1.5" PointX="0.75" PointY="5.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Archivo" Width="1.5" PointX="10.75" PointY="4.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Codigo" Width="1.5" PointX="10.25" PointY="0.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Componente" Width="1.5" PointX="8" PointY="1" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Deficiencia" Width="1.5" PointX="8" PointY="5.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Equipos" Width="1.5" PointX="3" PointY="1.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Inspeccione" Width="1.5" PointX="5.75" PointY="10.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.KeyWord" Width="1.5" PointX="14.75" PointY="1.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Ordene" Width="1.5" PointX="10.75" PointY="7.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Poste" Width="1.5" PointX="10.75" PointY="10.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Sed" Width="1.5" PointX="0.75" PointY="12.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Tabla" Width="1.5" PointX="5.75" PointY="1.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Tipificacione" Width="1.5" PointX="12.5" PointY="1" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.UsrAlim" Width="1.5" PointX="2.75" PointY="12.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.UsrDef" Width="1.5" PointX="12.75" PointY="4.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Usuario" Width="1.5" PointX="3" PointY="4.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="sigreModel.Vano" Width="1.5" PointX="3" PointY="7.75" IsExpanded="true" />
+        <AssociationConnector Association="sigreModel.fk_EQUI_ALIM" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_USUA_ALIM" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_VANO_ALIM" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_CODI_COMP" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_TIPI_CODI" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_COMP_TABL" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.fk_DEFI_INSP" ManuallyRouted="false" />
+        <AssociationConnector Association="sigreModel.KEYW_TIPI_FK" ManuallyRouted="false" />
+      </Diagram>
+    </edmx:Diagrams>
+  </edmx:Designer>
+</edmx:Edmx>

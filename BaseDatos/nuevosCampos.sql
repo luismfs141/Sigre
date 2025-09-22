@@ -1,0 +1,9 @@
+alter table Deficiencias add DEFI_TipoMaterial varchar(3) null
+alter table Deficiencias add DEFI_NodoInicial varchar(20) null
+alter table Deficiencias add DEFI_NodoFinal varchar(20) null
+alter table Deficiencias add DEFI_TipoRetenida varchar(2) null
+alter table Deficiencias add DEFI_RetenidaMaterial varchar(2) null
+alter table Deficiencias add DEFI_TipoArmado varchar(20) null
+alter table Deficiencias add DEFI_ArmadoMaterial varchar(2) null
+alter table Deficiencias add DEFI_NumPostes int null
+alter table Deficiencias add DEFI_PozoTierra varchar(20) null

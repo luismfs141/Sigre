@@ -1,0 +1,1578 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+  <!-- EF Runtime content -->
+  <edmx:Runtime>
+    <!-- SSDL content -->
+    <edmx:StorageModels>
+    <Schema Namespace="sigreModel.Store" Provider="System.Data.SqlClient" ProviderManifestToken="2012" Alias="Self" xmlns:store="http://schemas.microsoft.com/ado/2007/12/edm/EntityStoreSchemaGenerator" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+        <EntityType Name="Alimentadores">
+          <Key>
+            <PropertyRef Name="ALIM_Interno" />
+          </Key>
+          <Property Name="ALIM_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ALIM_Codigo" Type="varchar" MaxLength="6" Nullable="false" />
+          <Property Name="ALIM_Latitud" Type="float" Nullable="false" />
+          <Property Name="ALIM_Longitud" Type="float" Nullable="false" />
+          <Property Name="ALIM_Etiqueta" Type="varchar" MaxLength="100" />
+        </EntityType>
+        <EntityType Name="Archivos">
+          <Key>
+            <PropertyRef Name="ARCH_Interno" />
+          </Key>
+          <Property Name="ARCH_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ARCH_Tipo" Type="char" MaxLength="1" Nullable="false" />
+          <Property Name="ARCH_Tabla" Type="varchar" MaxLength="50" Nullable="false" />
+          <Property Name="ARCH_CodTabla" Type="int" Nullable="false" />
+          <Property Name="ARCH_Nombre" Type="varchar" MaxLength="150" Nullable="false" />
+          <Property Name="ARCH_Activo" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Codigos">
+          <Key>
+            <PropertyRef Name="CODI_Interno" />
+          </Key>
+          <Property Name="CODI_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="CODI_Codigo" Type="varchar" MaxLength="6" Nullable="false" />
+          <Property Name="CODI_Deficiencia" Type="varchar" MaxLength="500" Nullable="false" />
+          <Property Name="COMP_Interno" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Componentes">
+          <Key>
+            <PropertyRef Name="COMP_Interno" />
+          </Key>
+          <Property Name="COMP_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="COMP_Componente" Type="varchar" MaxLength="500" Nullable="false" />
+          <Property Name="TABL_Interno" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Deficiencias">
+          <Key>
+            <PropertyRef Name="DEFI_Interno" />
+          </Key>
+          <Property Name="DEFI_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="DEFI_Estado" Type="char" MaxLength="1" />
+          <Property Name="INSP_Interno" Type="int" />
+          <Property Name="TABL_Interno" Type="int" />
+          <Property Name="DEFI_CodigoElemento" Type="varchar" MaxLength="50" />
+          <Property Name="TIPI_Interno" Type="int" />
+          <Property Name="DEFI_NumSuministro" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_FechaDenuncia" Type="datetime" />
+          <Property Name="DEFI_FechaInspeccion" Type="datetime" />
+          <Property Name="DEFI_FechaSubsanacion" Type="datetime" />
+          <Property Name="DEFI_Observacion" Type="varchar(max)" />
+          <Property Name="DEFI_EstadoSubsanacion" Type="char" MaxLength="1" />
+          <Property Name="DEFI_Latitud" Type="float" Nullable="false" />
+          <Property Name="DEFI_Longitud" Type="float" Nullable="false" />
+          <Property Name="DEFI_TipoElemento" Type="char" MaxLength="4" />
+          <Property Name="DEFI_DistHorizontal" Type="numeric" Precision="10" Scale="2" />
+          <Property Name="DEFI_DistVertical" Type="numeric" Precision="10" Scale="2" />
+          <Property Name="DEFI_DistTransversal" Type="numeric" Precision="10" Scale="2" />
+          <Property Name="DEFI_IdElemento" Type="int" />
+          <Property Name="DEFI_FecRegistro" Type="datetime" Nullable="false" />
+          <Property Name="DEFI_CodDef" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_CodRes" Type="int" />
+          <Property Name="DEFI_CodDen" Type="int" />
+          <Property Name="DEFI_Refer1" Type="varchar" MaxLength="30" />
+          <Property Name="DEFI_Refer2" Type="varchar" MaxLength="30" />
+          <Property Name="DEFI_CoordX" Type="float" />
+          <Property Name="DEFI_CoordY" Type="float" />
+          <Property Name="DEFI_CodAMT" Type="varchar" MaxLength="5" />
+          <Property Name="DEFI_NroOrden" Type="varchar" MaxLength="50" />
+          <Property Name="DEFI_PointX" Type="float" />
+          <Property Name="DEFI_PointY" Type="float" />
+          <Property Name="DEFI_UsuCre" Type="varchar" MaxLength="50" />
+          <Property Name="DEFI_UsuNPC" Type="varchar" MaxLength="50" />
+          <Property Name="DEFI_FecModificacion" Type="datetime" />
+          <Property Name="DEFI_FechaCreacion" Type="datetime" />
+          <Property Name="DEFI_TipoMaterial" Type="varchar" MaxLength="3" />
+          <Property Name="DEFI_NodoInicial" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_NodoFinal" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_TipoRetenida" Type="varchar" MaxLength="2" />
+          <Property Name="DEFI_RetenidaMaterial" Type="varchar" MaxLength="2" />
+          <Property Name="DEFI_TipoArmado" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_ArmadoMaterial" Type="varchar" MaxLength="2" />
+          <Property Name="DEFI_NumPostes" Type="int" />
+          <Property Name="DEFI_PozoTierra" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_Responsable" Type="bit" />
+          <Property Name="DEFI_Comentario" Type="varchar" MaxLength="120" />
+          <Property Name="DEFI_PozoTierra2" Type="varchar" MaxLength="20" />
+          <Property Name="DEFI_UsuarioInic" Type="varchar" MaxLength="30" Nullable="false" />
+          <Property Name="DEFI_UsuarioMod" Type="varchar" MaxLength="30" Nullable="false" />
+          <Property Name="DEFI_Activo" Type="bit" Nullable="false" />
+          <Property Name="DEFI_EstadoCriticidad" Type="int" />
+          <Property Name="DEFI_Inspeccionado" Type="bit" Nullable="false" />
+          <Property Name="DEFI_KeyWords" Type="varchar" MaxLength="30" />
+          <Property Name="DEFI_Col1" Type="varchar" MaxLength="50" />
+          <Property Name="DEFI_Col2" Type="varchar" MaxLength="50" />
+          <Property Name="DEFI_Col3" Type="varchar" MaxLength="50" />
+        </EntityType>
+        <EntityType Name="Equipos">
+          <Key>
+            <PropertyRef Name="EQUI_Interno" />
+          </Key>
+          <Property Name="EQUI_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EQUI_Etiqueta" Type="varchar" MaxLength="100" Nullable="false" />
+          <Property Name="EQUI_Latitud" Type="float" Nullable="false" />
+          <Property Name="EQUI_Longitud" Type="float" Nullable="false" />
+          <Property Name="ALIM_interno" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Inspecciones">
+          <Key>
+            <PropertyRef Name="INSP_Interno" />
+          </Key>
+          <Property Name="INSP_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="INSP_Tipo" Type="char" MaxLength="1" Nullable="false" />
+          <Property Name="INSP_CodigoElemento" Type="char" MaxLength="40" Nullable="false" />
+          <Property Name="INSP_Fecha" Type="datetime" Nullable="false" />
+        </EntityType>
+        <EntityType Name="KeyWords">
+          <Key>
+            <PropertyRef Name="KEYW_Interno" />
+          </Key>
+          <Property Name="KEYW_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="TIPI_Interno" Type="int" Nullable="false" />
+          <Property Name="KEYW_PalClave" Type="varchar" MaxLength="30" />
+        </EntityType>
+        <EntityType Name="Ordenes">
+          <Key>
+            <PropertyRef Name="ORDE_Interno" />
+          </Key>
+          <Property Name="ORDE_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ORDE_Codigo" Type="nvarchar" MaxLength="9" />
+          <Property Name="ORDE_CodAMT" Type="int" />
+          <Property Name="ORDE_FechaOrd" Type="datetime" />
+        </EntityType>
+        <EntityType Name="Postes">
+          <Key>
+            <PropertyRef Name="POST_Interno" />
+          </Key>
+          <Property Name="POST_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="POST_Etiqueta" Type="varchar" MaxLength="100" Nullable="false" />
+          <Property Name="POST_Latitud" Type="float" />
+          <Property Name="POST_Longitud" Type="float" />
+          <Property Name="ALIM_Interno" Type="int" Nullable="false" />
+          <Property Name="POST_CodigoNodo" Type="varchar" MaxLength="20" />
+          <Property Name="POST_Terceros" Type="bit" Nullable="false" />
+          <Property Name="POST_Material" Type="varchar" MaxLength="3" />
+          <Property Name="POST_Inspeccionado" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Seds">
+          <Key>
+            <PropertyRef Name="SED_Interno" />
+          </Key>
+          <Property Name="SED_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="SED_Etiqueta" Type="varchar" MaxLength="100" Nullable="false" />
+          <Property Name="SED_Latitud" Type="float" Nullable="false" />
+          <Property Name="SED_Longitud" Type="float" Nullable="false" />
+          <Property Name="SED_Tipo" Type="char" MaxLength="1" Nullable="false" />
+          <Property Name="ALIM_Interno" Type="int" Nullable="false" />
+          <Property Name="SED_Codigo" Type="varchar" MaxLength="20" Nullable="false" />
+          <Property Name="SED_Simbolo" Type="varchar" MaxLength="20" Nullable="false" />
+          <Property Name="SED_Terceros" Type="bit" Nullable="false" />
+          <Property Name="SED_Material" Type="varchar" MaxLength="3" />
+          <Property Name="SED_Inspeccionado" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Tablas">
+          <Key>
+            <PropertyRef Name="TABL_Interno" />
+          </Key>
+          <Property Name="TABL_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="TABL_Nombre" Type="varchar" MaxLength="100" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Tipificaciones">
+          <Key>
+            <PropertyRef Name="TIPI_Interno" />
+          </Key>
+          <Property Name="TIPI_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="TIPO_Descripcion" Type="varchar" MaxLength="500" Nullable="false" />
+          <Property Name="CODI_Interno" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="UsrAlim">
+          <Key>
+            <PropertyRef Name="USRA_Interno" />
+          </Key>
+          <Property Name="USRA_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="USUA_Interno" Type="int" />
+          <Property Name="USRA_Activo" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="UsrDef">
+          <Key>
+            <PropertyRef Name="USRD_Interno" />
+          </Key>
+          <Property Name="USRD_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="USUA_Interno" Type="int" Nullable="false" />
+          <Property Name="DEFI_Interno" Type="int" Nullable="false" />
+          <Property Name="USRD_Operacion" Type="char" MaxLength="1" Nullable="false" />
+          <Property Name="USRD_FechaRegistro" Type="datetime" Nullable="false" />
+          <Property Name="USRD_FechaOperacion" Type="datetime" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Usuarios">
+          <Key>
+            <PropertyRef Name="USUA_Interno" />
+          </Key>
+          <Property Name="USUA_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="USUA_Nombres" Type="varchar" MaxLength="50" />
+          <Property Name="USUA_Apellidos" Type="varchar" MaxLength="50" />
+          <Property Name="USUA_Imei" Type="varchar" MaxLength="20" />
+          <Property Name="ALIM_Interno" Type="int" />
+          <Property Name="USUA_Tipo" Type="char" MaxLength="3" />
+          <Property Name="USUA_Equipo" Type="varchar" MaxLength="15" />
+          <Property Name="USUA_Activo" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Vanos">
+          <Key>
+            <PropertyRef Name="VANO_Interno" />
+          </Key>
+          <Property Name="VANO_Interno" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="VANO_Codigo" Type="varchar" MaxLength="50" />
+          <Property Name="VANO_LatitudIni" Type="float" Nullable="false" />
+          <Property Name="VANO_LongitudIni" Type="float" Nullable="false" />
+          <Property Name="VANO_LatitudFin" Type="float" Nullable="false" />
+          <Property Name="VANO_LongitudFin" Type="float" Nullable="false" />
+          <Property Name="ALIM_Interno" Type="int" Nullable="false" />
+          <Property Name="VANO_Etiqueta" Type="varchar" MaxLength="20" Nullable="false" />
+          <Property Name="VANO_Terceros" Type="bit" Nullable="false" />
+          <Property Name="VANO_Material" Type="varchar" MaxLength="3" />
+          <Property Name="VANO_NodoInicial" Type="varchar" MaxLength="20" />
+          <Property Name="VANO_NodoFinal" Type="varchar" MaxLength="20" />
+          <Property Name="VANO_Inspeccionado" Type="bit" Nullable="false" />
+        </EntityType>
+        <Association Name="fk_CODI_COMP">
+          <End Role="Componentes" Type="Self.Componentes" Multiplicity="1" />
+          <End Role="Codigos" Type="Self.Codigos" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Componentes">
+              <PropertyRef Name="COMP_Interno" />
+            </Principal>
+            <Dependent Role="Codigos">
+              <PropertyRef Name="COMP_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_COMP_TABL">
+          <End Role="Tablas" Type="Self.Tablas" Multiplicity="1" />
+          <End Role="Componentes" Type="Self.Componentes" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Tablas">
+              <PropertyRef Name="TABL_Interno" />
+            </Principal>
+            <Dependent Role="Componentes">
+              <PropertyRef Name="TABL_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_DEFI_INSP">
+          <End Role="Inspecciones" Type="Self.Inspecciones" Multiplicity="0..1" />
+          <End Role="Deficiencias" Type="Self.Deficiencias" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Inspecciones">
+              <PropertyRef Name="INSP_Interno" />
+            </Principal>
+            <Dependent Role="Deficiencias">
+              <PropertyRef Name="INSP_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_EQUI_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadores" Multiplicity="1" />
+          <End Role="Equipos" Type="Self.Equipos" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Equipos">
+              <PropertyRef Name="ALIM_interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_TIPI_CODI">
+          <End Role="Codigos" Type="Self.Codigos" Multiplicity="1" />
+          <End Role="Tipificaciones" Type="Self.Tipificaciones" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Codigos">
+              <PropertyRef Name="CODI_Interno" />
+            </Principal>
+            <Dependent Role="Tipificaciones">
+              <PropertyRef Name="CODI_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_USUA_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadores" Multiplicity="0..1" />
+          <End Role="Usuarios" Type="Self.Usuarios" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Usuarios">
+              <PropertyRef Name="ALIM_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_VANO_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadores" Multiplicity="1" />
+          <End Role="Vanos" Type="Self.Vanos" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Vanos">
+              <PropertyRef Name="ALIM_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="KEYW_TIPI_FK">
+          <End Role="Tipificaciones" Type="Self.Tipificaciones" Multiplicity="1" />
+          <End Role="KeyWords" Type="Self.KeyWords" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Tipificaciones">
+              <PropertyRef Name="TIPI_Interno" />
+            </Principal>
+            <Dependent Role="KeyWords">
+              <PropertyRef Name="TIPI_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Function Name="sp_archivos_observados" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo" />
+        <Function Name="sp_archivos_tipificacionDiferente" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo" />
+        <Function Name="sp_ArchivosCompletarAlimentador" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo" />
+        <Function Name="sp_ArchivosDefSinDef" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_ArchivosEliminados" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_ArchivosIncompletosLista" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_ArchivosPorAlimentador" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_ArchivosSinDefCompletarAlimentador" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo" />
+        <Function Name="sp_ArchivosSinSEA" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_corregir_pozos" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_GetGapsByFeeder" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_GetPathFinal" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_GetPostsByFeeder" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_GetSedsByFeeder" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <Function Name="sp_ListaCompletaArchivos" Aggregate="false" BuiltIn="false" NiladicFunction="false" IsComposable="false" ParameterTypeSemantics="AllowImplicitConversion" Schema="dbo">
+          <Parameter Name="Feeder" Type="int" Mode="In" />
+        </Function>
+        <EntityContainer Name="sigreModelStoreContainer">
+          <EntitySet Name="Alimentadores" EntityType="Self.Alimentadores" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Archivos" EntityType="Self.Archivos" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Codigos" EntityType="Self.Codigos" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Componentes" EntityType="Self.Componentes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Deficiencias" EntityType="Self.Deficiencias" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Equipos" EntityType="Self.Equipos" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Inspecciones" EntityType="Self.Inspecciones" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="KeyWords" EntityType="Self.KeyWords" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Ordenes" EntityType="Self.Ordenes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Postes" EntityType="Self.Postes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Seds" EntityType="Self.Seds" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Tablas" EntityType="Self.Tablas" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Tipificaciones" EntityType="Self.Tipificaciones" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="UsrAlim" EntityType="Self.UsrAlim" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="UsrDef" EntityType="Self.UsrDef" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Usuarios" EntityType="Self.Usuarios" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="Vanos" EntityType="Self.Vanos" Schema="dbo" store:Type="Tables" />
+          <AssociationSet Name="fk_CODI_COMP" Association="Self.fk_CODI_COMP">
+            <End Role="Componentes" EntitySet="Componentes" />
+            <End Role="Codigos" EntitySet="Codigos" />
+          </AssociationSet>
+          <AssociationSet Name="fk_COMP_TABL" Association="Self.fk_COMP_TABL">
+            <End Role="Tablas" EntitySet="Tablas" />
+            <End Role="Componentes" EntitySet="Componentes" />
+          </AssociationSet>
+          <AssociationSet Name="fk_DEFI_INSP" Association="Self.fk_DEFI_INSP">
+            <End Role="Inspecciones" EntitySet="Inspecciones" />
+            <End Role="Deficiencias" EntitySet="Deficiencias" />
+          </AssociationSet>
+          <AssociationSet Name="fk_EQUI_ALIM" Association="Self.fk_EQUI_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Equipos" EntitySet="Equipos" />
+          </AssociationSet>
+          <AssociationSet Name="fk_TIPI_CODI" Association="Self.fk_TIPI_CODI">
+            <End Role="Codigos" EntitySet="Codigos" />
+            <End Role="Tipificaciones" EntitySet="Tipificaciones" />
+          </AssociationSet>
+          <AssociationSet Name="fk_USUA_ALIM" Association="Self.fk_USUA_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Usuarios" EntitySet="Usuarios" />
+          </AssociationSet>
+          <AssociationSet Name="fk_VANO_ALIM" Association="Self.fk_VANO_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Vanos" EntitySet="Vanos" />
+          </AssociationSet>
+          <AssociationSet Name="KEYW_TIPI_FK" Association="Self.KEYW_TIPI_FK">
+            <End Role="Tipificaciones" EntitySet="Tipificaciones" />
+            <End Role="KeyWords" EntitySet="KeyWords" />
+          </AssociationSet>
+        </EntityContainer>
+      </Schema></edmx:StorageModels>
+    <!-- CSDL content -->
+    <edmx:ConceptualModels>
+      <Schema Namespace="sigreModel" Alias="Self" annotation:UseStrongSpatialTypes="false" xmlns:annotation="http://schemas.microsoft.com/ado/2009/02/edm/annotation" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+        <EntityType Name="Alimentadore">
+          <Key>
+            <PropertyRef Name="ALIM_Interno" />
+          </Key>
+          <Property Name="ALIM_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ALIM_Codigo" Type="String" MaxLength="6" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="ALIM_Latitud" Type="Double" Nullable="false" />
+          <Property Name="ALIM_Longitud" Type="Double" Nullable="false" />
+          <Property Name="ALIM_Etiqueta" Type="String" MaxLength="100" FixedLength="false" Unicode="false" />
+          <NavigationProperty Name="Equipos" Relationship="Self.fk_EQUI_ALIM" FromRole="Alimentadores" ToRole="Equipos" />
+          <NavigationProperty Name="Usuarios" Relationship="Self.fk_USUA_ALIM" FromRole="Alimentadores" ToRole="Usuarios" />
+          <NavigationProperty Name="Vanos" Relationship="Self.fk_VANO_ALIM" FromRole="Alimentadores" ToRole="Vanos" />
+        </EntityType>
+        <EntityType Name="Archivo">
+          <Key>
+            <PropertyRef Name="ARCH_Interno" />
+          </Key>
+          <Property Name="ARCH_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ARCH_Tipo" Type="String" MaxLength="1" FixedLength="true" Unicode="false" Nullable="false" />
+          <Property Name="ARCH_Tabla" Type="String" MaxLength="50" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="ARCH_CodTabla" Type="Int32" Nullable="false" />
+          <Property Name="ARCH_Nombre" Type="String" MaxLength="150" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="ARCH_Activo" Type="Boolean" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Codigo">
+          <Key>
+            <PropertyRef Name="CODI_Interno" />
+          </Key>
+          <Property Name="CODI_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="CODI_Codigo" Type="String" MaxLength="6" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="CODI_Deficiencia" Type="String" MaxLength="500" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="COMP_Interno" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="Componente" Relationship="Self.fk_CODI_COMP" FromRole="Codigos" ToRole="Componentes" />
+          <NavigationProperty Name="Tipificaciones" Relationship="Self.fk_TIPI_CODI" FromRole="Codigos" ToRole="Tipificaciones" />
+        </EntityType>
+        <EntityType Name="Componente">
+          <Key>
+            <PropertyRef Name="COMP_Interno" />
+          </Key>
+          <Property Name="COMP_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="COMP_Componente" Type="String" MaxLength="500" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="TABL_Interno" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="Codigos" Relationship="Self.fk_CODI_COMP" FromRole="Componentes" ToRole="Codigos" />
+          <NavigationProperty Name="Tabla" Relationship="Self.fk_COMP_TABL" FromRole="Componentes" ToRole="Tablas" />
+        </EntityType>
+        <EntityType Name="Deficiencia">
+          <Key>
+            <PropertyRef Name="DEFI_Interno" />
+          </Key>
+          <Property Name="DEFI_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="DEFI_Estado" Type="String" MaxLength="1" FixedLength="true" Unicode="false" />
+          <Property Name="INSP_Interno" Type="Int32" />
+          <Property Name="TABL_Interno" Type="Int32" />
+          <Property Name="DEFI_CodigoElemento" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="TIPI_Interno" Type="Int32" />
+          <Property Name="DEFI_NumSuministro" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_FechaDenuncia" Type="DateTime" Precision="3" />
+          <Property Name="DEFI_FechaInspeccion" Type="DateTime" Precision="3" />
+          <Property Name="DEFI_FechaSubsanacion" Type="DateTime" Precision="3" />
+          <Property Name="DEFI_Observacion" Type="String" MaxLength="Max" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_EstadoSubsanacion" Type="String" MaxLength="1" FixedLength="true" Unicode="false" />
+          <Property Name="DEFI_Latitud" Type="Double" Nullable="false" />
+          <Property Name="DEFI_Longitud" Type="Double" Nullable="false" />
+          <Property Name="DEFI_TipoElemento" Type="String" MaxLength="4" FixedLength="true" Unicode="false" />
+          <Property Name="DEFI_DistHorizontal" Type="Decimal" Precision="10" Scale="2" />
+          <Property Name="DEFI_DistVertical" Type="Decimal" Precision="10" Scale="2" />
+          <Property Name="DEFI_DistTransversal" Type="Decimal" Precision="10" Scale="2" />
+          <Property Name="DEFI_IdElemento" Type="Int32" />
+          <Property Name="DEFI_FecRegistro" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="DEFI_CodDef" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_CodRes" Type="Int32" />
+          <Property Name="DEFI_CodDen" Type="Int32" />
+          <Property Name="DEFI_Refer1" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_Refer2" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_CoordX" Type="Double" />
+          <Property Name="DEFI_CoordY" Type="Double" />
+          <Property Name="DEFI_CodAMT" Type="String" MaxLength="5" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_NroOrden" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_PointX" Type="Double" />
+          <Property Name="DEFI_PointY" Type="Double" />
+          <Property Name="DEFI_UsuCre" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_UsuNPC" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_FecModificacion" Type="DateTime" Precision="3" />
+          <Property Name="DEFI_FechaCreacion" Type="DateTime" Precision="3" />
+          <Property Name="DEFI_TipoMaterial" Type="String" MaxLength="3" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_NodoInicial" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_NodoFinal" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_TipoRetenida" Type="String" MaxLength="2" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_RetenidaMaterial" Type="String" MaxLength="2" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_TipoArmado" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_ArmadoMaterial" Type="String" MaxLength="2" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_NumPostes" Type="Int32" />
+          <Property Name="DEFI_PozoTierra" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_Responsable" Type="Boolean" />
+          <Property Name="DEFI_Comentario" Type="String" MaxLength="120" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_PozoTierra2" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_UsuarioInic" Type="String" MaxLength="30" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="DEFI_UsuarioMod" Type="String" MaxLength="30" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="DEFI_Activo" Type="Boolean" Nullable="false" />
+          <Property Name="DEFI_EstadoCriticidad" Type="Int32" />
+          <Property Name="DEFI_Inspeccionado" Type="Boolean" Nullable="false" />
+          <Property Name="DEFI_KeyWords" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_Col1" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_Col2" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="DEFI_Col3" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <NavigationProperty Name="Inspeccione" Relationship="Self.fk_DEFI_INSP" FromRole="Deficiencias" ToRole="Inspecciones" />
+        </EntityType>
+        <EntityType Name="Equipos">
+          <Key>
+            <PropertyRef Name="EQUI_Interno" />
+          </Key>
+          <Property Name="EQUI_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EQUI_Etiqueta" Type="String" MaxLength="100" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="EQUI_Latitud" Type="Double" Nullable="false" />
+          <Property Name="EQUI_Longitud" Type="Double" Nullable="false" />
+          <Property Name="ALIM_interno" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="Alimentadore" Relationship="Self.fk_EQUI_ALIM" FromRole="Equipos" ToRole="Alimentadores" />
+        </EntityType>
+        <EntityType Name="Inspeccione">
+          <Key>
+            <PropertyRef Name="INSP_Interno" />
+          </Key>
+          <Property Name="INSP_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="INSP_Tipo" Type="String" MaxLength="1" FixedLength="true" Unicode="false" Nullable="false" />
+          <Property Name="INSP_CodigoElemento" Type="String" MaxLength="40" FixedLength="true" Unicode="false" Nullable="false" />
+          <Property Name="INSP_Fecha" Type="DateTime" Nullable="false" Precision="3" />
+          <NavigationProperty Name="Deficiencias" Relationship="Self.fk_DEFI_INSP" FromRole="Inspecciones" ToRole="Deficiencias" />
+        </EntityType>
+        <EntityType Name="KeyWord">
+          <Key>
+            <PropertyRef Name="KEYW_Interno" />
+          </Key>
+          <Property Name="KEYW_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="TIPI_Interno" Type="Int32" Nullable="false" />
+          <Property Name="KEYW_PalClave" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <NavigationProperty Name="Tipificacione" Relationship="Self.KEYW_TIPI_FK" FromRole="KeyWords" ToRole="Tipificaciones" />
+        </EntityType>
+        <EntityType Name="Ordene">
+          <Key>
+            <PropertyRef Name="ORDE_Interno" />
+          </Key>
+          <Property Name="ORDE_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ORDE_Codigo" Type="String" MaxLength="9" FixedLength="false" Unicode="true" />
+          <Property Name="ORDE_CodAMT" Type="Int32" />
+          <Property Name="ORDE_FechaOrd" Type="DateTime" Precision="3" />
+        </EntityType>
+        <EntityType Name="Poste">
+          <Key>
+            <PropertyRef Name="POST_Interno" />
+          </Key>
+          <Property Name="POST_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="POST_Etiqueta" Type="String" MaxLength="100" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="POST_Latitud" Type="Double" />
+          <Property Name="POST_Longitud" Type="Double" />
+          <Property Name="ALIM_Interno" Type="Int32" Nullable="false" />
+          <Property Name="POST_CodigoNodo" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="POST_Terceros" Type="Boolean" Nullable="false" />
+          <Property Name="POST_Material" Type="String" MaxLength="3" FixedLength="false" Unicode="false" />
+          <Property Name="POST_Inspeccionado" Type="Boolean" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Sed">
+          <Key>
+            <PropertyRef Name="SED_Interno" />
+          </Key>
+          <Property Name="SED_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="SED_Etiqueta" Type="String" MaxLength="100" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="SED_Latitud" Type="Double" Nullable="false" />
+          <Property Name="SED_Longitud" Type="Double" Nullable="false" />
+          <Property Name="SED_Tipo" Type="String" MaxLength="1" FixedLength="true" Unicode="false" Nullable="false" />
+          <Property Name="ALIM_Interno" Type="Int32" Nullable="false" />
+          <Property Name="SED_Codigo" Type="String" MaxLength="20" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="SED_Simbolo" Type="String" MaxLength="20" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="SED_Terceros" Type="Boolean" Nullable="false" />
+          <Property Name="SED_Material" Type="String" MaxLength="3" FixedLength="false" Unicode="false" />
+          <Property Name="SED_Inspeccionado" Type="Boolean" Nullable="false" />
+        </EntityType>
+        <EntityType Name="Tabla">
+          <Key>
+            <PropertyRef Name="TABL_Interno" />
+          </Key>
+          <Property Name="TABL_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="TABL_Nombre" Type="String" MaxLength="100" FixedLength="false" Unicode="false" Nullable="false" />
+          <NavigationProperty Name="Componentes" Relationship="Self.fk_COMP_TABL" FromRole="Tablas" ToRole="Componentes" />
+        </EntityType>
+        <EntityType Name="Tipificacione">
+          <Key>
+            <PropertyRef Name="TIPI_Interno" />
+          </Key>
+          <Property Name="TIPI_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="TIPO_Descripcion" Type="String" MaxLength="500" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="CODI_Interno" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="Codigo" Relationship="Self.fk_TIPI_CODI" FromRole="Tipificaciones" ToRole="Codigos" />
+          <NavigationProperty Name="KeyWords" Relationship="Self.KEYW_TIPI_FK" FromRole="Tipificaciones" ToRole="KeyWords" />
+        </EntityType>
+        <EntityType Name="UsrAlim">
+          <Key>
+            <PropertyRef Name="USRA_Interno" />
+          </Key>
+          <Property Name="USRA_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="USUA_Interno" Type="Int32" />
+          <Property Name="USRA_Activo" Type="Boolean" Nullable="false" />
+        </EntityType>
+        <EntityType Name="UsrDef">
+          <Key>
+            <PropertyRef Name="USRD_Interno" />
+          </Key>
+          <Property Name="USRD_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="USUA_Interno" Type="Int32" Nullable="false" />
+          <Property Name="DEFI_Interno" Type="Int32" Nullable="false" />
+          <Property Name="USRD_Operacion" Type="String" MaxLength="1" FixedLength="true" Unicode="false" Nullable="false" />
+          <Property Name="USRD_FechaRegistro" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="USRD_FechaOperacion" Type="DateTime" Nullable="false" Precision="3" />
+        </EntityType>
+        <EntityType Name="Usuario">
+          <Key>
+            <PropertyRef Name="USUA_Interno" />
+          </Key>
+          <Property Name="USUA_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="USUA_Nombres" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="USUA_Apellidos" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="USUA_Imei" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="ALIM_Interno" Type="Int32" />
+          <Property Name="USUA_Tipo" Type="String" MaxLength="3" FixedLength="true" Unicode="false" />
+          <Property Name="USUA_Equipo" Type="String" MaxLength="15" FixedLength="false" Unicode="false" />
+          <Property Name="USUA_Activo" Type="Boolean" Nullable="false" />
+          <NavigationProperty Name="Alimentadore" Relationship="Self.fk_USUA_ALIM" FromRole="Usuarios" ToRole="Alimentadores" />
+        </EntityType>
+        <EntityType Name="Vano">
+          <Key>
+            <PropertyRef Name="VANO_Interno" />
+          </Key>
+          <Property Name="VANO_Interno" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="VANO_Codigo" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+          <Property Name="VANO_LatitudIni" Type="Double" Nullable="false" />
+          <Property Name="VANO_LongitudIni" Type="Double" Nullable="false" />
+          <Property Name="VANO_LatitudFin" Type="Double" Nullable="false" />
+          <Property Name="VANO_LongitudFin" Type="Double" Nullable="false" />
+          <Property Name="ALIM_Interno" Type="Int32" Nullable="false" />
+          <Property Name="VANO_Etiqueta" Type="String" MaxLength="20" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="VANO_Terceros" Type="Boolean" Nullable="false" />
+          <Property Name="VANO_Material" Type="String" MaxLength="3" FixedLength="false" Unicode="false" />
+          <Property Name="VANO_NodoInicial" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="VANO_NodoFinal" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="VANO_Inspeccionado" Type="Boolean" Nullable="false" />
+          <NavigationProperty Name="Alimentadore" Relationship="Self.fk_VANO_ALIM" FromRole="Vanos" ToRole="Alimentadores" />
+        </EntityType>
+        <Association Name="fk_EQUI_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadore" Multiplicity="1" />
+          <End Role="Equipos" Type="Self.Equipos" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Equipos">
+              <PropertyRef Name="ALIM_interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_USUA_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadore" Multiplicity="0..1" />
+          <End Role="Usuarios" Type="Self.Usuario" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Usuarios">
+              <PropertyRef Name="ALIM_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_VANO_ALIM">
+          <End Role="Alimentadores" Type="Self.Alimentadore" Multiplicity="1" />
+          <End Role="Vanos" Type="Self.Vano" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Alimentadores">
+              <PropertyRef Name="ALIM_Interno" />
+            </Principal>
+            <Dependent Role="Vanos">
+              <PropertyRef Name="ALIM_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_CODI_COMP">
+          <End Role="Componentes" Type="Self.Componente" Multiplicity="1" />
+          <End Role="Codigos" Type="Self.Codigo" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Componentes">
+              <PropertyRef Name="COMP_Interno" />
+            </Principal>
+            <Dependent Role="Codigos">
+              <PropertyRef Name="COMP_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_TIPI_CODI">
+          <End Role="Codigos" Type="Self.Codigo" Multiplicity="1" />
+          <End Role="Tipificaciones" Type="Self.Tipificacione" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Codigos">
+              <PropertyRef Name="CODI_Interno" />
+            </Principal>
+            <Dependent Role="Tipificaciones">
+              <PropertyRef Name="CODI_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_COMP_TABL">
+          <End Role="Tablas" Type="Self.Tabla" Multiplicity="1" />
+          <End Role="Componentes" Type="Self.Componente" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Tablas">
+              <PropertyRef Name="TABL_Interno" />
+            </Principal>
+            <Dependent Role="Componentes">
+              <PropertyRef Name="TABL_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="fk_DEFI_INSP">
+          <End Role="Inspecciones" Type="Self.Inspeccione" Multiplicity="0..1" />
+          <End Role="Deficiencias" Type="Self.Deficiencia" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Inspecciones">
+              <PropertyRef Name="INSP_Interno" />
+            </Principal>
+            <Dependent Role="Deficiencias">
+              <PropertyRef Name="INSP_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="KEYW_TIPI_FK">
+          <End Role="Tipificaciones" Type="Self.Tipificacione" Multiplicity="1" />
+          <End Role="KeyWords" Type="Self.KeyWord" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="Tipificaciones">
+              <PropertyRef Name="TIPI_Interno" />
+            </Principal>
+            <Dependent Role="KeyWords">
+              <PropertyRef Name="TIPI_Interno" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <EntityContainer Name="sigreEntities" annotation:LazyLoadingEnabled="true">
+          <EntitySet Name="Alimentadores" EntityType="Self.Alimentadore" />
+          <EntitySet Name="Archivos" EntityType="Self.Archivo" />
+          <EntitySet Name="Codigos" EntityType="Self.Codigo" />
+          <EntitySet Name="Componentes" EntityType="Self.Componente" />
+          <EntitySet Name="Deficiencias" EntityType="Self.Deficiencia" />
+          <EntitySet Name="Equipos" EntityType="Self.Equipos" />
+          <EntitySet Name="Inspecciones" EntityType="Self.Inspeccione" />
+          <EntitySet Name="KeyWords" EntityType="Self.KeyWord" />
+          <EntitySet Name="Ordenes" EntityType="Self.Ordene" />
+          <EntitySet Name="Postes" EntityType="Self.Poste" />
+          <EntitySet Name="Seds" EntityType="Self.Sed" />
+          <EntitySet Name="Tablas" EntityType="Self.Tabla" />
+          <EntitySet Name="Tipificaciones" EntityType="Self.Tipificacione" />
+          <EntitySet Name="UsrAlims" EntityType="Self.UsrAlim" />
+          <EntitySet Name="UsrDefs" EntityType="Self.UsrDef" />
+          <EntitySet Name="Usuarios" EntityType="Self.Usuario" />
+          <EntitySet Name="Vanos" EntityType="Self.Vano" />
+          <AssociationSet Name="fk_EQUI_ALIM" Association="Self.fk_EQUI_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Equipos" EntitySet="Equipos" />
+          </AssociationSet>
+          <AssociationSet Name="fk_USUA_ALIM" Association="Self.fk_USUA_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Usuarios" EntitySet="Usuarios" />
+          </AssociationSet>
+          <AssociationSet Name="fk_VANO_ALIM" Association="Self.fk_VANO_ALIM">
+            <End Role="Alimentadores" EntitySet="Alimentadores" />
+            <End Role="Vanos" EntitySet="Vanos" />
+          </AssociationSet>
+          <AssociationSet Name="fk_CODI_COMP" Association="Self.fk_CODI_COMP">
+            <End Role="Componentes" EntitySet="Componentes" />
+            <End Role="Codigos" EntitySet="Codigos" />
+          </AssociationSet>
+          <AssociationSet Name="fk_TIPI_CODI" Association="Self.fk_TIPI_CODI">
+            <End Role="Codigos" EntitySet="Codigos" />
+            <End Role="Tipificaciones" EntitySet="Tipificaciones" />
+          </AssociationSet>
+          <AssociationSet Name="fk_COMP_TABL" Association="Self.fk_COMP_TABL">
+            <End Role="Tablas" EntitySet="Tablas" />
+            <End Role="Componentes" EntitySet="Componentes" />
+          </AssociationSet>
+          <AssociationSet Name="fk_DEFI_INSP" Association="Self.fk_DEFI_INSP">
+            <End Role="Inspecciones" EntitySet="Inspecciones" />
+            <End Role="Deficiencias" EntitySet="Deficiencias" />
+          </AssociationSet>
+          <AssociationSet Name="KEYW_TIPI_FK" Association="Self.KEYW_TIPI_FK">
+            <End Role="Tipificaciones" EntitySet="Tipificaciones" />
+            <End Role="KeyWords" EntitySet="KeyWords" />
+          </AssociationSet>
+          <FunctionImport Name="sp_ArchivosDefSinDef" ReturnType="Collection(sigreModel.sp_ArchivosDefSinDef_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_ArchivosEliminados" ReturnType="Collection(sigreModel.sp_ArchivosEliminados_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_ArchivosIncompletosLista" ReturnType="Collection(sigreModel.sp_ArchivosIncompletosLista_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_ArchivosPorAlimentador" ReturnType="Collection(sigreModel.sp_ArchivosPorAlimentador_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_ArchivosSinSEA" ReturnType="Collection(sigreModel.sp_ArchivosSinSEA_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_corregir_pozos" ReturnType="Collection(sigreModel.sp_corregir_pozos_Result)">
+          <Parameter Name="feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_GetGapsByFeeder" ReturnType="Collection(sigreModel.sp_GetGapsByFeeder_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_GetPathFinal" ReturnType="Collection(sigreModel.sp_GetPathFinal_Result)">
+          <Parameter Name="feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_GetPostsByFeeder" ReturnType="Collection(sigreModel.sp_GetPostsByFeeder_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_GetSedsByFeeder" ReturnType="Collection(sigreModel.sp_GetSedsByFeeder_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_ListaCompletaArchivos" ReturnType="Collection(sigreModel.sp_ListaCompletaArchivos_Result)">
+          <Parameter Name="Feeder" Mode="In" Type="Int32" />
+          </FunctionImport>
+          <FunctionImport Name="sp_archivos_observados" ReturnType="Collection(sigreModel.sp_archivos_observados_Result)" />
+          <FunctionImport Name="sp_archivos_tipificacionDiferente" ReturnType="Collection(sigreModel.sp_archivos_tipificacionDiferente_Result)" />
+          <FunctionImport Name="sp_ArchivosCompletarAlimentador" ReturnType="Collection(sigreModel.sp_ArchivosCompletarAlimentador_Result)" />
+          <FunctionImport Name="sp_ArchivosSinDefCompletarAlimentador" ReturnType="Collection(sigreModel.sp_ArchivosSinDefCompletarAlimentador_Result)" />
+        </EntityContainer>
+        <ComplexType Name="sp_ArchivosDefSinDef_Result">
+          <Property Type="String" Name="RouteDEF" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="RouteSinDef" Nullable="true" MaxLength="8000" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosEliminados_Result">
+          <Property Type="String" Name="DEFI_TipoElemento" Nullable="true" MaxLength="4" />
+          <Property Type="String" Name="ALIM_Etiqueta" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ALIM_Interno" Nullable="false" />
+          <Property Type="String" Name="Ruta" Nullable="true" MaxLength="150" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosIncompletosLista_Result">
+          <Property Type="Int32" Name="Codigo" Nullable="false" />
+          <Property Type="String" Name="Ruta" Nullable="true" MaxLength="8000" />
+          <Property Type="Int32" Name="NroFotos" Nullable="true" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosPorAlimentador_Result">
+          <Property Type="String" Name="Ruta" Nullable="false" MaxLength="150" />
+          <Property Type="String" Name="ultCarpeta" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="DEFI_Estado" Nullable="true" MaxLength="1" />
+          <Property Type="String" Name="DEFI_TipoElemento" Nullable="true" MaxLength="4" />
+          <Property Type="String" Name="ALIM_Etiqueta" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ALIM_Interno" Nullable="false" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosSinSEA_Result">
+          <Property Type="Int32" Name="IdElemento" Nullable="false" />
+          <Property Type="String" Name="Tipo" Nullable="true" MaxLength="4" />
+          <Property Type="Int32" Name="IdAlimentador" Nullable="false" />
+          <Property Type="String" Name="Ruta" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="CodDef" Nullable="true" MaxLength="12" />
+        </ComplexType>
+        <ComplexType Name="sp_corregir_pozos_Result">
+          <Property Type="String" Name="ARCH_Nombre" Nullable="false" MaxLength="150" />
+          <Property Type="Int32" Name="ARCH_CodTabla" Nullable="false" />
+          <Property Type="String" Name="Corregido" Nullable="true" MaxLength="8000" />
+        </ComplexType>
+        <ComplexType Name="sp_GetGapsByFeeder_Result">
+          <Property Type="Int32" Name="StructId" Nullable="true" />
+          <Property Type="String" Name="FeederCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="FeederLabel" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ElementId" Nullable="false" />
+          <Property Type="String" Name="ElementType" Nullable="false" MaxLength="4" />
+          <Property Type="String" Name="CodIns" Nullable="true" MaxLength="50" />
+          <Property Type="String" Name="Label" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="Origin" Nullable="false" MaxLength="17" />
+          <Property Type="String" Name="DeficiencyCode" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="TypificationCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="SedType" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="StartNode" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="EndNode" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="ElementMaterial" Nullable="false" MaxLength="3" />
+          <Property Type="String" Name="HeldType" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="Supply" Nullable="false" MaxLength="20" />
+          <Property Type="Decimal" Name="DistHorizontal" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="Decimal" Name="DistVertical" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="String" Name="ArmedMaterial" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="ArmedType" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="SubsanacionOld" Nullable="false" MaxLength="31" />
+          <Property Type="String" Name="SubsanacionNew" Nullable="false" MaxLength="2" />
+          <Property Type="Int32" Name="PostNum" Nullable="false" />
+          <Property Type="Int32" Name="ElementCritical" Nullable="false" />
+          <Property Type="String" Name="Users" Nullable="false" MaxLength="50" />
+          <Property Type="String" Name="DenunciationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="InspectionDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RectificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RegistrationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="ModificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="Observation" Nullable="false" />
+          <Property Type="String" Name="Comment" Nullable="false" MaxLength="120" />
+          <Property Type="Int32" Name="PhotosQuantity" Nullable="false" />
+          <Property Type="String" Name="Well1" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="Well2" Nullable="false" MaxLength="1" />
+          <Property Type="Double" Name="Latitude" Nullable="false" />
+          <Property Type="Double" Name="Longitude" Nullable="false" />
+          <Property Type="Boolean" Name="Responsible" Nullable="false" />
+          <Property Type="String" Name="PhotosPath" Nullable="true" MaxLength="8000" />
+          <Property Type="Int32" Name="DEFI_Interno" Nullable="true" />
+        </ComplexType>
+        <ComplexType Name="sp_GetPathFinal_Result">
+          <Property Type="DateTime" Name="DEFI_FecRegistro" Nullable="false" Precision="23" />
+          <Property Type="String" Name="PhotosPath" Nullable="true" MaxLength="8000" />
+        </ComplexType>
+        <ComplexType Name="sp_GetPostsByFeeder_Result">
+          <Property Type="Int32" Name="StructId" Nullable="true" />
+          <Property Type="String" Name="FeederCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="FeederLabel" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ElementId" Nullable="false" />
+          <Property Type="String" Name="ElementType" Nullable="false" MaxLength="4" />
+          <Property Type="String" Name="CodIns" Nullable="true" MaxLength="20" />
+          <Property Type="String" Name="Label" Nullable="false" MaxLength="100" />
+          <Property Type="String" Name="Origin" Nullable="false" MaxLength="17" />
+          <Property Type="String" Name="DeficiencyCode" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="TypificationCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="SedType" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="StartNode" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="EndNode" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="ElementMaterial" Nullable="false" MaxLength="3" />
+          <Property Type="String" Name="HeldType" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="Supply" Nullable="false" MaxLength="20" />
+          <Property Type="Decimal" Name="DistHorizontal" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="Decimal" Name="DistVertical" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="String" Name="ArmedMaterial" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="ArmedType" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="SubsanacionOld" Nullable="false" MaxLength="31" />
+          <Property Type="String" Name="SubsanacionNew" Nullable="false" MaxLength="2" />
+          <Property Type="Int32" Name="PostNum" Nullable="false" />
+          <Property Type="Int32" Name="ElementCritical" Nullable="false" />
+          <Property Type="String" Name="Users" Nullable="false" MaxLength="50" />
+          <Property Type="String" Name="DenunciationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="InspectionDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RectificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RegistrationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="ModificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="Observation" Nullable="false" />
+          <Property Type="String" Name="Comment" Nullable="false" MaxLength="120" />
+          <Property Type="Int32" Name="PhotosQuantity" Nullable="false" />
+          <Property Type="String" Name="Well1" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="Well2" Nullable="false" MaxLength="1" />
+          <Property Type="Double" Name="Latitude" Nullable="true" />
+          <Property Type="Double" Name="Longitude" Nullable="true" />
+          <Property Type="Boolean" Name="Responsible" Nullable="false" />
+          <Property Type="String" Name="PhotosPath" Nullable="true" MaxLength="8000" />
+          <Property Type="Int32" Name="DEFI_Interno" Nullable="true" />
+        </ComplexType>
+        <ComplexType Name="sp_GetSedsByFeeder_Result">
+          <Property Type="Int32" Name="StructId" Nullable="true" />
+          <Property Type="String" Name="FeederCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="FeederLabel" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ElementId" Nullable="false" />
+          <Property Type="String" Name="ElementType" Nullable="false" MaxLength="5" />
+          <Property Type="String" Name="SedType" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="CodIns" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="Label" Nullable="false" MaxLength="100" />
+          <Property Type="String" Name="Origin" Nullable="false" MaxLength="17" />
+          <Property Type="String" Name="DeficiencyCode" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="TypificationCode" Nullable="false" MaxLength="6" />
+          <Property Type="String" Name="StartNode" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="EndNode" Nullable="false" MaxLength="1" />
+          <Property Type="String" Name="ElementMaterial" Nullable="false" MaxLength="3" />
+          <Property Type="String" Name="HeldType" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="Supply" Nullable="false" MaxLength="20" />
+          <Property Type="Decimal" Name="DistHorizontal" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="Decimal" Name="DistVertical" Nullable="false" Precision="10" Scale="2" />
+          <Property Type="String" Name="ArmedMaterial" Nullable="false" MaxLength="2" />
+          <Property Type="String" Name="ArmedType" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="SubsanacionOld" Nullable="false" MaxLength="31" />
+          <Property Type="String" Name="SubsanacionNew" Nullable="false" MaxLength="2" />
+          <Property Type="Int32" Name="PostNum" Nullable="false" />
+          <Property Type="String" Name="Well1" Nullable="false" MaxLength="20" />
+          <Property Type="String" Name="Well2" Nullable="false" MaxLength="20" />
+          <Property Type="Int32" Name="ElementCritical" Nullable="false" />
+          <Property Type="String" Name="Users" Nullable="false" MaxLength="50" />
+          <Property Type="String" Name="DenunciationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="InspectionDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RectificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="RegistrationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="ModificationDate" Nullable="false" MaxLength="30" />
+          <Property Type="String" Name="Observation" Nullable="false" />
+          <Property Type="String" Name="Comment" Nullable="false" MaxLength="120" />
+          <Property Type="Int32" Name="PhotosQuantity" Nullable="false" />
+          <Property Type="String" Name="PhotosPath" Nullable="false" MaxLength="150" />
+          <Property Type="Double" Name="Latitude" Nullable="false" />
+          <Property Type="Double" Name="Longitude" Nullable="false" />
+          <Property Type="Boolean" Name="Responsible" Nullable="false" />
+          <Property Type="Int32" Name="DEFI_Interno" Nullable="true" />
+        </ComplexType>
+        <ComplexType Name="sp_ListaCompletaArchivos_Result">
+          <Property Type="String" Name="DEFI_TipoElemento" Nullable="true" MaxLength="4" />
+          <Property Type="String" Name="ALIM_Etiqueta" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ALIM_Interno" Nullable="false" />
+          <Property Type="String" Name="Ruta" Nullable="false" MaxLength="150" />
+        </ComplexType>
+        <ComplexType Name="sp_archivos_observados_Result">
+          <Property Type="String" Name="DEFI_CodDef" Nullable="true" MaxLength="20" />
+          <Property Type="Int32" Name="ARCH_CodTabla" Nullable="false" />
+          <Property Type="String" Name="Path" Nullable="true" MaxLength="150" />
+        </ComplexType>
+        <ComplexType Name="sp_archivos_tipificacionDiferente_Result">
+          <Property Type="Int32" Name="arch_codTabla" Nullable="false" />
+          <Property Type="String" Name="OldPath" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="RealTypification" Nullable="false" MaxLength="6" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosCompletarAlimentador_Result">
+          <Property Type="String" Name="Ruta" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="DEFI_TipoElemento" Nullable="true" MaxLength="4" />
+          <Property Type="String" Name="ALIM_Etiqueta" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ALIM_Interno" Nullable="false" />
+        </ComplexType>
+        <ComplexType Name="sp_ArchivosSinDefCompletarAlimentador_Result">
+          <Property Type="String" Name="Ruta" Nullable="true" MaxLength="150" />
+          <Property Type="String" Name="DEFI_TipoElemento" Nullable="true" MaxLength="4" />
+          <Property Type="String" Name="ALIM_Etiqueta" Nullable="true" MaxLength="100" />
+          <Property Type="Int32" Name="ALIM_Interno" Nullable="false" />
+        </ComplexType>
+      </Schema>
+    </edmx:ConceptualModels>
+    <!-- C-S mapping content -->
+    <edmx:Mappings>
+      <Mapping Space="C-S" xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="sigreModelStoreContainer" CdmEntityContainer="sigreEntities">
+          <EntitySetMapping Name="Alimentadores">
+            <EntityTypeMapping TypeName="sigreModel.Alimentadore">
+              <MappingFragment StoreEntitySet="Alimentadores">
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="ALIM_Codigo" ColumnName="ALIM_Codigo" />
+                <ScalarProperty Name="ALIM_Latitud" ColumnName="ALIM_Latitud" />
+                <ScalarProperty Name="ALIM_Longitud" ColumnName="ALIM_Longitud" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Archivos">
+            <EntityTypeMapping TypeName="sigreModel.Archivo">
+              <MappingFragment StoreEntitySet="Archivos">
+                <ScalarProperty Name="ARCH_Interno" ColumnName="ARCH_Interno" />
+                <ScalarProperty Name="ARCH_Tipo" ColumnName="ARCH_Tipo" />
+                <ScalarProperty Name="ARCH_Tabla" ColumnName="ARCH_Tabla" />
+                <ScalarProperty Name="ARCH_CodTabla" ColumnName="ARCH_CodTabla" />
+                <ScalarProperty Name="ARCH_Nombre" ColumnName="ARCH_Nombre" />
+                <ScalarProperty Name="ARCH_Activo" ColumnName="ARCH_Activo" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Codigos">
+            <EntityTypeMapping TypeName="sigreModel.Codigo">
+              <MappingFragment StoreEntitySet="Codigos">
+                <ScalarProperty Name="CODI_Interno" ColumnName="CODI_Interno" />
+                <ScalarProperty Name="CODI_Codigo" ColumnName="CODI_Codigo" />
+                <ScalarProperty Name="CODI_Deficiencia" ColumnName="CODI_Deficiencia" />
+                <ScalarProperty Name="COMP_Interno" ColumnName="COMP_Interno" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Componentes">
+            <EntityTypeMapping TypeName="sigreModel.Componente">
+              <MappingFragment StoreEntitySet="Componentes">
+                <ScalarProperty Name="COMP_Interno" ColumnName="COMP_Interno" />
+                <ScalarProperty Name="COMP_Componente" ColumnName="COMP_Componente" />
+                <ScalarProperty Name="TABL_Interno" ColumnName="TABL_Interno" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Deficiencias">
+            <EntityTypeMapping TypeName="sigreModel.Deficiencia">
+              <MappingFragment StoreEntitySet="Deficiencias">
+                <ScalarProperty Name="DEFI_Interno" ColumnName="DEFI_Interno" />
+                <ScalarProperty Name="DEFI_Estado" ColumnName="DEFI_Estado" />
+                <ScalarProperty Name="INSP_Interno" ColumnName="INSP_Interno" />
+                <ScalarProperty Name="TABL_Interno" ColumnName="TABL_Interno" />
+                <ScalarProperty Name="DEFI_CodigoElemento" ColumnName="DEFI_CodigoElemento" />
+                <ScalarProperty Name="TIPI_Interno" ColumnName="TIPI_Interno" />
+                <ScalarProperty Name="DEFI_NumSuministro" ColumnName="DEFI_NumSuministro" />
+                <ScalarProperty Name="DEFI_FechaDenuncia" ColumnName="DEFI_FechaDenuncia" />
+                <ScalarProperty Name="DEFI_FechaInspeccion" ColumnName="DEFI_FechaInspeccion" />
+                <ScalarProperty Name="DEFI_FechaSubsanacion" ColumnName="DEFI_FechaSubsanacion" />
+                <ScalarProperty Name="DEFI_Observacion" ColumnName="DEFI_Observacion" />
+                <ScalarProperty Name="DEFI_EstadoSubsanacion" ColumnName="DEFI_EstadoSubsanacion" />
+                <ScalarProperty Name="DEFI_Latitud" ColumnName="DEFI_Latitud" />
+                <ScalarProperty Name="DEFI_Longitud" ColumnName="DEFI_Longitud" />
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="DEFI_DistHorizontal" ColumnName="DEFI_DistHorizontal" />
+                <ScalarProperty Name="DEFI_DistVertical" ColumnName="DEFI_DistVertical" />
+                <ScalarProperty Name="DEFI_DistTransversal" ColumnName="DEFI_DistTransversal" />
+                <ScalarProperty Name="DEFI_IdElemento" ColumnName="DEFI_IdElemento" />
+                <ScalarProperty Name="DEFI_FecRegistro" ColumnName="DEFI_FecRegistro" />
+                <ScalarProperty Name="DEFI_CodDef" ColumnName="DEFI_CodDef" />
+                <ScalarProperty Name="DEFI_CodRes" ColumnName="DEFI_CodRes" />
+                <ScalarProperty Name="DEFI_CodDen" ColumnName="DEFI_CodDen" />
+                <ScalarProperty Name="DEFI_Refer1" ColumnName="DEFI_Refer1" />
+                <ScalarProperty Name="DEFI_Refer2" ColumnName="DEFI_Refer2" />
+                <ScalarProperty Name="DEFI_CoordX" ColumnName="DEFI_CoordX" />
+                <ScalarProperty Name="DEFI_CoordY" ColumnName="DEFI_CoordY" />
+                <ScalarProperty Name="DEFI_CodAMT" ColumnName="DEFI_CodAMT" />
+                <ScalarProperty Name="DEFI_NroOrden" ColumnName="DEFI_NroOrden" />
+                <ScalarProperty Name="DEFI_PointX" ColumnName="DEFI_PointX" />
+                <ScalarProperty Name="DEFI_PointY" ColumnName="DEFI_PointY" />
+                <ScalarProperty Name="DEFI_UsuCre" ColumnName="DEFI_UsuCre" />
+                <ScalarProperty Name="DEFI_UsuNPC" ColumnName="DEFI_UsuNPC" />
+                <ScalarProperty Name="DEFI_FecModificacion" ColumnName="DEFI_FecModificacion" />
+                <ScalarProperty Name="DEFI_FechaCreacion" ColumnName="DEFI_FechaCreacion" />
+                <ScalarProperty Name="DEFI_TipoMaterial" ColumnName="DEFI_TipoMaterial" />
+                <ScalarProperty Name="DEFI_NodoInicial" ColumnName="DEFI_NodoInicial" />
+                <ScalarProperty Name="DEFI_NodoFinal" ColumnName="DEFI_NodoFinal" />
+                <ScalarProperty Name="DEFI_TipoRetenida" ColumnName="DEFI_TipoRetenida" />
+                <ScalarProperty Name="DEFI_RetenidaMaterial" ColumnName="DEFI_RetenidaMaterial" />
+                <ScalarProperty Name="DEFI_TipoArmado" ColumnName="DEFI_TipoArmado" />
+                <ScalarProperty Name="DEFI_ArmadoMaterial" ColumnName="DEFI_ArmadoMaterial" />
+                <ScalarProperty Name="DEFI_NumPostes" ColumnName="DEFI_NumPostes" />
+                <ScalarProperty Name="DEFI_PozoTierra" ColumnName="DEFI_PozoTierra" />
+                <ScalarProperty Name="DEFI_Responsable" ColumnName="DEFI_Responsable" />
+                <ScalarProperty Name="DEFI_Comentario" ColumnName="DEFI_Comentario" />
+                <ScalarProperty Name="DEFI_PozoTierra2" ColumnName="DEFI_PozoTierra2" />
+                <ScalarProperty Name="DEFI_UsuarioInic" ColumnName="DEFI_UsuarioInic" />
+                <ScalarProperty Name="DEFI_UsuarioMod" ColumnName="DEFI_UsuarioMod" />
+                <ScalarProperty Name="DEFI_Activo" ColumnName="DEFI_Activo" />
+                <ScalarProperty Name="DEFI_EstadoCriticidad" ColumnName="DEFI_EstadoCriticidad" />
+                <ScalarProperty Name="DEFI_Inspeccionado" ColumnName="DEFI_Inspeccionado" />
+                <ScalarProperty Name="DEFI_KeyWords" ColumnName="DEFI_KeyWords" />
+                <ScalarProperty Name="DEFI_Col1" ColumnName="DEFI_Col1" />
+                <ScalarProperty Name="DEFI_Col2" ColumnName="DEFI_Col2" />
+                <ScalarProperty Name="DEFI_Col3" ColumnName="DEFI_Col3" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Equipos">
+            <EntityTypeMapping TypeName="sigreModel.Equipos">
+              <MappingFragment StoreEntitySet="Equipos">
+                <ScalarProperty Name="EQUI_Interno" ColumnName="EQUI_Interno" />
+                <ScalarProperty Name="EQUI_Etiqueta" ColumnName="EQUI_Etiqueta" />
+                <ScalarProperty Name="EQUI_Latitud" ColumnName="EQUI_Latitud" />
+                <ScalarProperty Name="EQUI_Longitud" ColumnName="EQUI_Longitud" />
+                <ScalarProperty Name="ALIM_interno" ColumnName="ALIM_interno" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Inspecciones">
+            <EntityTypeMapping TypeName="sigreModel.Inspeccione">
+              <MappingFragment StoreEntitySet="Inspecciones">
+                <ScalarProperty Name="INSP_Interno" ColumnName="INSP_Interno" />
+                <ScalarProperty Name="INSP_Tipo" ColumnName="INSP_Tipo" />
+                <ScalarProperty Name="INSP_CodigoElemento" ColumnName="INSP_CodigoElemento" />
+                <ScalarProperty Name="INSP_Fecha" ColumnName="INSP_Fecha" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="KeyWords">
+            <EntityTypeMapping TypeName="sigreModel.KeyWord">
+              <MappingFragment StoreEntitySet="KeyWords">
+                <ScalarProperty Name="KEYW_Interno" ColumnName="KEYW_Interno" />
+                <ScalarProperty Name="TIPI_Interno" ColumnName="TIPI_Interno" />
+                <ScalarProperty Name="KEYW_PalClave" ColumnName="KEYW_PalClave" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Ordenes">
+            <EntityTypeMapping TypeName="sigreModel.Ordene">
+              <MappingFragment StoreEntitySet="Ordenes">
+                <ScalarProperty Name="ORDE_Interno" ColumnName="ORDE_Interno" />
+                <ScalarProperty Name="ORDE_Codigo" ColumnName="ORDE_Codigo" />
+                <ScalarProperty Name="ORDE_CodAMT" ColumnName="ORDE_CodAMT" />
+                <ScalarProperty Name="ORDE_FechaOrd" ColumnName="ORDE_FechaOrd" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Postes">
+            <EntityTypeMapping TypeName="sigreModel.Poste">
+              <MappingFragment StoreEntitySet="Postes">
+                <ScalarProperty Name="POST_Interno" ColumnName="POST_Interno" />
+                <ScalarProperty Name="POST_Etiqueta" ColumnName="POST_Etiqueta" />
+                <ScalarProperty Name="POST_Latitud" ColumnName="POST_Latitud" />
+                <ScalarProperty Name="POST_Longitud" ColumnName="POST_Longitud" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="POST_CodigoNodo" ColumnName="POST_CodigoNodo" />
+                <ScalarProperty Name="POST_Terceros" ColumnName="POST_Terceros" />
+                <ScalarProperty Name="POST_Material" ColumnName="POST_Material" />
+                <ScalarProperty Name="POST_Inspeccionado" ColumnName="POST_Inspeccionado" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Seds">
+            <EntityTypeMapping TypeName="sigreModel.Sed">
+              <MappingFragment StoreEntitySet="Seds">
+                <ScalarProperty Name="SED_Interno" ColumnName="SED_Interno" />
+                <ScalarProperty Name="SED_Etiqueta" ColumnName="SED_Etiqueta" />
+                <ScalarProperty Name="SED_Latitud" ColumnName="SED_Latitud" />
+                <ScalarProperty Name="SED_Longitud" ColumnName="SED_Longitud" />
+                <ScalarProperty Name="SED_Tipo" ColumnName="SED_Tipo" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="SED_Codigo" ColumnName="SED_Codigo" />
+                <ScalarProperty Name="SED_Simbolo" ColumnName="SED_Simbolo" />
+                <ScalarProperty Name="SED_Terceros" ColumnName="SED_Terceros" />
+                <ScalarProperty Name="SED_Material" ColumnName="SED_Material" />
+                <ScalarProperty Name="SED_Inspeccionado" ColumnName="SED_Inspeccionado" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Tablas">
+            <EntityTypeMapping TypeName="sigreModel.Tabla">
+              <MappingFragment StoreEntitySet="Tablas">
+                <ScalarProperty Name="TABL_Interno" ColumnName="TABL_Interno" />
+                <ScalarProperty Name="TABL_Nombre" ColumnName="TABL_Nombre" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Tipificaciones">
+            <EntityTypeMapping TypeName="sigreModel.Tipificacione">
+              <MappingFragment StoreEntitySet="Tipificaciones">
+                <ScalarProperty Name="TIPI_Interno" ColumnName="TIPI_Interno" />
+                <ScalarProperty Name="TIPO_Descripcion" ColumnName="TIPO_Descripcion" />
+                <ScalarProperty Name="CODI_Interno" ColumnName="CODI_Interno" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="UsrAlims">
+            <EntityTypeMapping TypeName="sigreModel.UsrAlim">
+              <MappingFragment StoreEntitySet="UsrAlim">
+                <ScalarProperty Name="USRA_Interno" ColumnName="USRA_Interno" />
+                <ScalarProperty Name="USUA_Interno" ColumnName="USUA_Interno" />
+                <ScalarProperty Name="USRA_Activo" ColumnName="USRA_Activo" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="UsrDefs">
+            <EntityTypeMapping TypeName="sigreModel.UsrDef">
+              <MappingFragment StoreEntitySet="UsrDef">
+                <ScalarProperty Name="USRD_Interno" ColumnName="USRD_Interno" />
+                <ScalarProperty Name="USUA_Interno" ColumnName="USUA_Interno" />
+                <ScalarProperty Name="DEFI_Interno" ColumnName="DEFI_Interno" />
+                <ScalarProperty Name="USRD_Operacion" ColumnName="USRD_Operacion" />
+                <ScalarProperty Name="USRD_FechaRegistro" ColumnName="USRD_FechaRegistro" />
+                <ScalarProperty Name="USRD_FechaOperacion" ColumnName="USRD_FechaOperacion" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Usuarios">
+            <EntityTypeMapping TypeName="sigreModel.Usuario">
+              <MappingFragment StoreEntitySet="Usuarios">
+                <ScalarProperty Name="USUA_Interno" ColumnName="USUA_Interno" />
+                <ScalarProperty Name="USUA_Nombres" ColumnName="USUA_Nombres" />
+                <ScalarProperty Name="USUA_Apellidos" ColumnName="USUA_Apellidos" />
+                <ScalarProperty Name="USUA_Imei" ColumnName="USUA_Imei" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="USUA_Tipo" ColumnName="USUA_Tipo" />
+                <ScalarProperty Name="USUA_Equipo" ColumnName="USUA_Equipo" />
+                <ScalarProperty Name="USUA_Activo" ColumnName="USUA_Activo" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="Vanos">
+            <EntityTypeMapping TypeName="sigreModel.Vano">
+              <MappingFragment StoreEntitySet="Vanos">
+                <ScalarProperty Name="VANO_Interno" ColumnName="VANO_Interno" />
+                <ScalarProperty Name="VANO_Codigo" ColumnName="VANO_Codigo" />
+                <ScalarProperty Name="VANO_LatitudIni" ColumnName="VANO_LatitudIni" />
+                <ScalarProperty Name="VANO_LongitudIni" ColumnName="VANO_LongitudIni" />
+                <ScalarProperty Name="VANO_LatitudFin" ColumnName="VANO_LatitudFin" />
+                <ScalarProperty Name="VANO_LongitudFin" ColumnName="VANO_LongitudFin" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="VANO_Etiqueta" ColumnName="VANO_Etiqueta" />
+                <ScalarProperty Name="VANO_Terceros" ColumnName="VANO_Terceros" />
+                <ScalarProperty Name="VANO_Material" ColumnName="VANO_Material" />
+                <ScalarProperty Name="VANO_NodoInicial" ColumnName="VANO_NodoInicial" />
+                <ScalarProperty Name="VANO_NodoFinal" ColumnName="VANO_NodoFinal" />
+                <ScalarProperty Name="VANO_Inspeccionado" ColumnName="VANO_Inspeccionado" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosDefSinDef" FunctionName="sigreModel.Store.sp_ArchivosDefSinDef">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosDefSinDef_Result">
+                <ScalarProperty Name="RouteDEF" ColumnName="RouteDEF" />
+                <ScalarProperty Name="RouteSinDef" ColumnName="RouteSinDef" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosEliminados" FunctionName="sigreModel.Store.sp_ArchivosEliminados">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosEliminados_Result">
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosIncompletosLista" FunctionName="sigreModel.Store.sp_ArchivosIncompletosLista">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosIncompletosLista_Result">
+                <ScalarProperty Name="Codigo" ColumnName="Codigo" />
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+                <ScalarProperty Name="NroFotos" ColumnName="NroFotos" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosPorAlimentador" FunctionName="sigreModel.Store.sp_ArchivosPorAlimentador">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosPorAlimentador_Result">
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+                <ScalarProperty Name="ultCarpeta" ColumnName="ultCarpeta" />
+                <ScalarProperty Name="DEFI_Estado" ColumnName="DEFI_Estado" />
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosSinSEA" FunctionName="sigreModel.Store.sp_ArchivosSinSEA">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosSinSEA_Result">
+                <ScalarProperty Name="IdElemento" ColumnName="IdElemento" />
+                <ScalarProperty Name="Tipo" ColumnName="Tipo" />
+                <ScalarProperty Name="IdAlimentador" ColumnName="IdAlimentador" />
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+                <ScalarProperty Name="CodDef" ColumnName="CodDef" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_corregir_pozos" FunctionName="sigreModel.Store.sp_corregir_pozos">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_corregir_pozos_Result">
+                <ScalarProperty Name="ARCH_Nombre" ColumnName="ARCH_Nombre" />
+                <ScalarProperty Name="ARCH_CodTabla" ColumnName="ARCH_CodTabla" />
+                <ScalarProperty Name="Corregido" ColumnName="Corregido" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_GetGapsByFeeder" FunctionName="sigreModel.Store.sp_GetGapsByFeeder">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_GetGapsByFeeder_Result">
+                <ScalarProperty Name="StructId" ColumnName="StructId" />
+                <ScalarProperty Name="FeederCode" ColumnName="FeederCode" />
+                <ScalarProperty Name="FeederLabel" ColumnName="FeederLabel" />
+                <ScalarProperty Name="ElementId" ColumnName="ElementId" />
+                <ScalarProperty Name="ElementType" ColumnName="ElementType" />
+                <ScalarProperty Name="CodIns" ColumnName="CodIns" />
+                <ScalarProperty Name="Label" ColumnName="Label" />
+                <ScalarProperty Name="Origin" ColumnName="Origin" />
+                <ScalarProperty Name="DeficiencyCode" ColumnName="DeficiencyCode" />
+                <ScalarProperty Name="TypificationCode" ColumnName="TypificationCode" />
+                <ScalarProperty Name="SedType" ColumnName="SedType" />
+                <ScalarProperty Name="StartNode" ColumnName="StartNode" />
+                <ScalarProperty Name="EndNode" ColumnName="EndNode" />
+                <ScalarProperty Name="ElementMaterial" ColumnName="ElementMaterial" />
+                <ScalarProperty Name="HeldType" ColumnName="HeldType" />
+                <ScalarProperty Name="Supply" ColumnName="Supply" />
+                <ScalarProperty Name="DistHorizontal" ColumnName="DistHorizontal" />
+                <ScalarProperty Name="DistVertical" ColumnName="DistVertical" />
+                <ScalarProperty Name="ArmedMaterial" ColumnName="ArmedMaterial" />
+                <ScalarProperty Name="ArmedType" ColumnName="ArmedType" />
+                <ScalarProperty Name="SubsanacionOld" ColumnName="SubsanacionOld" />
+                <ScalarProperty Name="SubsanacionNew" ColumnName="SubsanacionNew" />
+                <ScalarProperty Name="PostNum" ColumnName="PostNum" />
+                <ScalarProperty Name="ElementCritical" ColumnName="ElementCritical" />
+                <ScalarProperty Name="Users" ColumnName="Users" />
+                <ScalarProperty Name="DenunciationDate" ColumnName="DenunciationDate" />
+                <ScalarProperty Name="InspectionDate" ColumnName="InspectionDate" />
+                <ScalarProperty Name="RectificationDate" ColumnName="RectificationDate" />
+                <ScalarProperty Name="RegistrationDate" ColumnName="RegistrationDate" />
+                <ScalarProperty Name="ModificationDate" ColumnName="ModificationDate" />
+                <ScalarProperty Name="Observation" ColumnName="Observation" />
+                <ScalarProperty Name="Comment" ColumnName="Comment" />
+                <ScalarProperty Name="PhotosQuantity" ColumnName="PhotosQuantity" />
+                <ScalarProperty Name="Well1" ColumnName="Well1" />
+                <ScalarProperty Name="Well2" ColumnName="Well2" />
+                <ScalarProperty Name="Latitude" ColumnName="Latitude" />
+                <ScalarProperty Name="Longitude" ColumnName="Longitude" />
+                <ScalarProperty Name="Responsible" ColumnName="Responsible" />
+                <ScalarProperty Name="PhotosPath" ColumnName="PhotosPath" />
+                <ScalarProperty Name="DEFI_Interno" ColumnName="DEFI_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_GetPathFinal" FunctionName="sigreModel.Store.sp_GetPathFinal">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_GetPathFinal_Result">
+                <ScalarProperty Name="DEFI_FecRegistro" ColumnName="DEFI_FecRegistro" />
+                <ScalarProperty Name="PhotosPath" ColumnName="PhotosPath" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_GetPostsByFeeder" FunctionName="sigreModel.Store.sp_GetPostsByFeeder">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_GetPostsByFeeder_Result">
+                <ScalarProperty Name="StructId" ColumnName="StructId" />
+                <ScalarProperty Name="FeederCode" ColumnName="FeederCode" />
+                <ScalarProperty Name="FeederLabel" ColumnName="FeederLabel" />
+                <ScalarProperty Name="ElementId" ColumnName="ElementId" />
+                <ScalarProperty Name="ElementType" ColumnName="ElementType" />
+                <ScalarProperty Name="CodIns" ColumnName="CodIns" />
+                <ScalarProperty Name="Label" ColumnName="Label" />
+                <ScalarProperty Name="Origin" ColumnName="Origin" />
+                <ScalarProperty Name="DeficiencyCode" ColumnName="DeficiencyCode" />
+                <ScalarProperty Name="TypificationCode" ColumnName="TypificationCode" />
+                <ScalarProperty Name="SedType" ColumnName="SedType" />
+                <ScalarProperty Name="StartNode" ColumnName="StartNode" />
+                <ScalarProperty Name="EndNode" ColumnName="EndNode" />
+                <ScalarProperty Name="ElementMaterial" ColumnName="ElementMaterial" />
+                <ScalarProperty Name="HeldType" ColumnName="HeldType" />
+                <ScalarProperty Name="Supply" ColumnName="Supply" />
+                <ScalarProperty Name="DistHorizontal" ColumnName="DistHorizontal" />
+                <ScalarProperty Name="DistVertical" ColumnName="DistVertical" />
+                <ScalarProperty Name="ArmedMaterial" ColumnName="ArmedMaterial" />
+                <ScalarProperty Name="ArmedType" ColumnName="ArmedType" />
+                <ScalarProperty Name="SubsanacionOld" ColumnName="SubsanacionOld" />
+                <ScalarProperty Name="SubsanacionNew" ColumnName="SubsanacionNew" />
+                <ScalarProperty Name="PostNum" ColumnName="PostNum" />
+                <ScalarProperty Name="ElementCritical" ColumnName="ElementCritical" />
+                <ScalarProperty Name="Users" ColumnName="Users" />
+                <ScalarProperty Name="DenunciationDate" ColumnName="DenunciationDate" />
+                <ScalarProperty Name="InspectionDate" ColumnName="InspectionDate" />
+                <ScalarProperty Name="RectificationDate" ColumnName="RectificationDate" />
+                <ScalarProperty Name="RegistrationDate" ColumnName="RegistrationDate" />
+                <ScalarProperty Name="ModificationDate" ColumnName="ModificationDate" />
+                <ScalarProperty Name="Observation" ColumnName="Observation" />
+                <ScalarProperty Name="Comment" ColumnName="Comment" />
+                <ScalarProperty Name="PhotosQuantity" ColumnName="PhotosQuantity" />
+                <ScalarProperty Name="Well1" ColumnName="Well1" />
+                <ScalarProperty Name="Well2" ColumnName="Well2" />
+                <ScalarProperty Name="Latitude" ColumnName="Latitude" />
+                <ScalarProperty Name="Longitude" ColumnName="Longitude" />
+                <ScalarProperty Name="Responsible" ColumnName="Responsible" />
+                <ScalarProperty Name="PhotosPath" ColumnName="PhotosPath" />
+                <ScalarProperty Name="DEFI_Interno" ColumnName="DEFI_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_GetSedsByFeeder" FunctionName="sigreModel.Store.sp_GetSedsByFeeder">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_GetSedsByFeeder_Result">
+                <ScalarProperty Name="StructId" ColumnName="StructId" />
+                <ScalarProperty Name="FeederCode" ColumnName="FeederCode" />
+                <ScalarProperty Name="FeederLabel" ColumnName="FeederLabel" />
+                <ScalarProperty Name="ElementId" ColumnName="ElementId" />
+                <ScalarProperty Name="ElementType" ColumnName="ElementType" />
+                <ScalarProperty Name="SedType" ColumnName="SedType" />
+                <ScalarProperty Name="CodIns" ColumnName="CodIns" />
+                <ScalarProperty Name="Label" ColumnName="Label" />
+                <ScalarProperty Name="Origin" ColumnName="Origin" />
+                <ScalarProperty Name="DeficiencyCode" ColumnName="DeficiencyCode" />
+                <ScalarProperty Name="TypificationCode" ColumnName="TypificationCode" />
+                <ScalarProperty Name="StartNode" ColumnName="StartNode" />
+                <ScalarProperty Name="EndNode" ColumnName="EndNode" />
+                <ScalarProperty Name="ElementMaterial" ColumnName="ElementMaterial" />
+                <ScalarProperty Name="HeldType" ColumnName="HeldType" />
+                <ScalarProperty Name="Supply" ColumnName="Supply" />
+                <ScalarProperty Name="DistHorizontal" ColumnName="DistHorizontal" />
+                <ScalarProperty Name="DistVertical" ColumnName="DistVertical" />
+                <ScalarProperty Name="ArmedMaterial" ColumnName="ArmedMaterial" />
+                <ScalarProperty Name="ArmedType" ColumnName="ArmedType" />
+                <ScalarProperty Name="SubsanacionOld" ColumnName="SubsanacionOld" />
+                <ScalarProperty Name="SubsanacionNew" ColumnName="SubsanacionNew" />
+                <ScalarProperty Name="PostNum" ColumnName="PostNum" />
+                <ScalarProperty Name="Well1" ColumnName="Well1" />
+                <ScalarProperty Name="Well2" ColumnName="Well2" />
+                <ScalarProperty Name="ElementCritical" ColumnName="ElementCritical" />
+                <ScalarProperty Name="Users" ColumnName="Users" />
+                <ScalarProperty Name="DenunciationDate" ColumnName="DenunciationDate" />
+                <ScalarProperty Name="InspectionDate" ColumnName="InspectionDate" />
+                <ScalarProperty Name="RectificationDate" ColumnName="RectificationDate" />
+                <ScalarProperty Name="RegistrationDate" ColumnName="RegistrationDate" />
+                <ScalarProperty Name="ModificationDate" ColumnName="ModificationDate" />
+                <ScalarProperty Name="Observation" ColumnName="Observation" />
+                <ScalarProperty Name="Comment" ColumnName="Comment" />
+                <ScalarProperty Name="PhotosQuantity" ColumnName="PhotosQuantity" />
+                <ScalarProperty Name="PhotosPath" ColumnName="PhotosPath" />
+                <ScalarProperty Name="Latitude" ColumnName="Latitude" />
+                <ScalarProperty Name="Longitude" ColumnName="Longitude" />
+                <ScalarProperty Name="Responsible" ColumnName="Responsible" />
+                <ScalarProperty Name="DEFI_Interno" ColumnName="DEFI_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ListaCompletaArchivos" FunctionName="sigreModel.Store.sp_ListaCompletaArchivos">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ListaCompletaArchivos_Result">
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_archivos_observados" FunctionName="sigreModel.Store.sp_archivos_observados">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_archivos_observados_Result">
+                <ScalarProperty Name="DEFI_CodDef" ColumnName="DEFI_CodDef" />
+                <ScalarProperty Name="ARCH_CodTabla" ColumnName="ARCH_CodTabla" />
+                <ScalarProperty Name="Path" ColumnName="Path" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_archivos_tipificacionDiferente" FunctionName="sigreModel.Store.sp_archivos_tipificacionDiferente">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_archivos_tipificacionDiferente_Result">
+                <ScalarProperty Name="arch_codTabla" ColumnName="arch_codTabla" />
+                <ScalarProperty Name="OldPath" ColumnName="OldPath" />
+                <ScalarProperty Name="RealTypification" ColumnName="RealTypification" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosCompletarAlimentador" FunctionName="sigreModel.Store.sp_ArchivosCompletarAlimentador">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosCompletarAlimentador_Result">
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+          <FunctionImportMapping FunctionImportName="sp_ArchivosSinDefCompletarAlimentador" FunctionName="sigreModel.Store.sp_ArchivosSinDefCompletarAlimentador">
+            <ResultMapping>
+              <ComplexTypeMapping TypeName="sigreModel.sp_ArchivosSinDefCompletarAlimentador_Result">
+                <ScalarProperty Name="Ruta" ColumnName="Ruta" />
+                <ScalarProperty Name="DEFI_TipoElemento" ColumnName="DEFI_TipoElemento" />
+                <ScalarProperty Name="ALIM_Etiqueta" ColumnName="ALIM_Etiqueta" />
+                <ScalarProperty Name="ALIM_Interno" ColumnName="ALIM_Interno" />
+              </ComplexTypeMapping>
+            </ResultMapping>
+          </FunctionImportMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+  <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <Connection>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="MetadataArtifactProcessing" Value="EmbedInOutputAssembly" />
+      </DesignerInfoPropertySet>
+    </Connection>
+    <Options>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="ValidateOnBuild" Value="true" />
+        <DesignerProperty Name="EnablePluralization" Value="true" />
+        <DesignerProperty Name="IncludeForeignKeysInModel" Value="true" />
+        <DesignerProperty Name="UseLegacyProvider" Value="false" />
+        <DesignerProperty Name="CodeGenerationStrategy" Value="None" />
+      </DesignerInfoPropertySet>
+    </Options>
+    <!-- Diagram content (shape and connector positions) -->
+    <Diagrams></Diagrams>
+  </Designer>
+</edmx:Edmx>

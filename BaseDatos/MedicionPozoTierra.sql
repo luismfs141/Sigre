@@ -1,0 +1,1 @@
+alter table Deficiencias add DEFI_PozoTierra2 varchar(20) null

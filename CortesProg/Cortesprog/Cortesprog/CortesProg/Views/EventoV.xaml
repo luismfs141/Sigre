@@ -1,0 +1,236 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<CarouselPage xmlns="http://xamarin.com/schemas/2014/forms"
+              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+              xmlns:conv="clr-namespace:Sigre.App.Utilitarios"
+              x:Class="Sigre.App.Views.EventoV"              
+              xmlns:vm="clr-namespace:Sigre.App.ViewModels"
+              xmlns:sf="clr-namespace:Syncfusion.SfAutoComplete.XForms;assembly=Syncfusion.SfAutoComplete.XForms">
+    <CarouselPage.BindingContext>
+        <vm:EventoVM/>
+    </CarouselPage.BindingContext>
+    <CarouselPage.Resources>
+        <ResourceDictionary>
+            <conv:BoolRevertConv x:Key="BoolRevertConv"/>
+            <conv:ParamIgualConv x:Key="ParamIgualConv"/>
+            <conv:NullableIntConverter x:Key="NullableIntConverter"/>
+            <conv:NullableToDateTimeConv x:Key="NullableToDateTimeConv"/>
+        </ResourceDictionary>
+    </CarouselPage.Resources>
+    <CarouselPage.ToolbarItems>
+        <ToolbarItem Text="Guardar" Command="{Binding GuardarCommand}" />
+    </CarouselPage.ToolbarItems>
+    <ContentPage>
+        <ContentPage.Padding>
+            <OnPlatform x:TypeArguments="Thickness">
+                <On Platform="iOS" Value="0, 20, 0, 0" />
+            </OnPlatform>
+        </ContentPage.Padding>
+        <ContentPage.Content>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="0.5*"/>
+                    <ColumnDefinition Width="0.5*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <!--Row 0-->
+                <Label Text="Tipo" FontAttributes="Bold" />
+                <!--Row 1-->
+                <Grid Grid.Row="1" Grid.ColumnSpan="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Label Text="Mantenimiento" BindingContext="{x:Reference swtTipoEvento}" IsVisible="{Binding IsToggled}"/>
+                    <Label Text="Expansión o Reforzamiento" BindingContext="{x:Reference swtTipoEvento}" IsVisible="{Binding IsToggled, Converter={StaticResource BoolRevertConv}}"/>
+                    <Switch x:Name="swtTipoEvento" Grid.Column="1" IsToggled="{Binding Evento.EVEN_Tipo, Converter={StaticResource ParamIgualConv}, ConverterParameter=M}"/>
+                </Grid>
+                <!--Row 2-->
+                <Label Grid.Row="2" Text="Código" FontAttributes="Bold" />
+                <Label Grid.Row="2" Grid.Column="1" Text="Aviso" FontAttributes="Bold"/>
+                <!--Row 3-->
+                <Entry Grid.Row="3" FontAttributes="Bold" Text="{Binding Evento.EVEN_Codigo}" Keyboard="Numeric"/>
+                <Picker Grid.Row="3" Grid.Column="1" Title="Seleccione" SelectedItem="{Binding Aviso}"
+                        ItemsSource="{Binding Avisos}" ItemDisplayBinding="{Binding Valor}"/>
+                <!--row 4-->
+                <Label Grid.Row="4" Text="Fec. Aviso" FontAttributes="Bold"/>
+                <Label Grid.Row="4" Grid.Column="1" Text="Nro. Doc."/>
+                <!--row 5-->
+                <DatePicker Grid.Row="5"/>
+                <Entry Grid.Row="5" Grid.Column="1" FontAttributes="Bold"/>
+                <!--row 6-->
+                <Label Grid.Row="6" FontAttributes="Bold" Text="Sustentación Expansión/Reforzamiento" Grid.ColumnSpan="2"/>
+                <Editor Grid.Row="7" Grid.ColumnSpan="2" AutoSize="TextChanges" Text="{Binding Evento.EVEN_Sustentacion}"
+                        VerticalOptions="FillAndExpand"/>
+            </Grid>
+        </ContentPage.Content>
+    </ContentPage>
+    <ContentPage>
+        <ContentPage.Content>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="0.5*"/>
+                    <ColumnDefinition Width="0.5*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="40"/>
+                </Grid.RowDefinitions>
+                <!--row 0-->
+                <Label Text="Responsable del evento" FontAttributes="Bold"/>
+                <Label Text="Nivel de tensión" FontAttributes="Bold" Grid.Column="1"/>
+                <!--row 1-->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Label Text="Propia" BindingContext="{x:Reference swtResponsable}" IsVisible="{Binding IsToggled}"/>
+                    <Label Text="Terceros" BindingContext="{x:Reference swtResponsable}" IsVisible="{Binding IsToggled, Converter={StaticResource BoolRevertConv}}"/>
+                    <Switch x:Name="swtResponsable" Grid.Column="1" IsToggled="{Binding Evento.EVEN_Responsable, Converter={StaticResource ParamIgualConv}, ConverterParameter=P}"/>
+                </Grid>
+                <Picker Grid.Row="1" Grid.Column="1" SelectedItem="{Binding Nivel}" Title="Seleccione"
+                        ItemsSource="{Binding Niveles}" ItemDisplayBinding="{Binding Valor}"/>
+                <!--row 2-->
+                <Label Text="Instalación salió" FontAttributes="Bold" Grid.Row="2"/>
+                <Label Text="Nombre Instalación salió" FontAttributes="Bold" Grid.Row="2" Grid.Column="1"/>
+                <!--row 3-->
+                <Picker Grid.Row="3" SelectedItem="{Binding InstalacionSalio}" Title="Seleccione"
+                          ItemsSource="{Binding Instalaciones}" ItemDisplayBinding="{Binding Valor}"/>
+                <Entry Grid.Row="3" Grid.Column="1" Text="{Binding Evento.EVEN_CodSalio, Mode=TwoWay, Converter={StaticResource NullableIntConverter}}"
+                       Placeholder="Number" Keyboard="Numeric"/>
+                <!--row 4-->
+                <Label Text="Instalación Afectada" FontAttributes="Bold" Grid.Row="4"/>
+                <Label Text="Nombre Instalación Afectada" FontAttributes="Bold" Grid.Row="4" Grid.Column="1"/>
+                <!--row 5-->
+                <Picker Grid.Row="5" SelectedItem="{Binding InstalacionFallo}" Title="Seleccione"
+                        ItemsSource="{Binding Instalaciones}" ItemDisplayBinding="{Binding Valor}"/>
+                <Entry Grid.Row="5" Grid.Column="1" Text="{Binding Evento.EVEN_CodFallo, Mode=TwoWay}"/>
+                <!--row 6-->
+                <Label Text="Ubicación elemento afectado" Grid.Row="6"/>
+                <!--row 7-->
+                <Entry Grid.Row="7" Grid.ColumnSpan="2" Text="{Binding Evento.EVEN_Ubicacion}"/>
+                <!--row 8-->
+                <Label Text="Elemento que actuó" Grid.Row="8"/>
+                <Label Text="Fases" Grid.Row="8" Grid.Column="1"/>
+                <!--row 9-->
+                <Picker Grid.Row="9" SelectedItem="{Binding ElementoActuo}" Title="Seleccione"
+                        ItemsSource="{Binding Instalaciones}" ItemDisplayBinding="{Binding Valor}"/>
+                <Grid Grid.Row="9" Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition/>
+                        <ColumnDefinition/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Label Text="R"/>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding Evento.EVEN_FaseR}"/>
+                    <Label Text="S" Grid.Column="2"/>
+                    <CheckBox Grid.Column="3" IsChecked="{Binding Evento.EVEN_FaseS}"/>
+                    <Label Text="T" Grid.Column="4"/>
+                    <CheckBox Grid.Column="5" IsChecked="{Binding Evento.EVEN_FaseT}"/>
+                    <Label Text="N" Grid.Column="6"/>
+                    <CheckBox Grid.Column="7" IsChecked="{Binding Evento.EVEN_FaseN}"/>
+                </Grid>
+            </Grid>
+        </ContentPage.Content>
+    </ContentPage>
+    <ContentPage>
+        <ContentPage.Content>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="40"/>
+                </Grid.RowDefinitions>
+                <!--row 0-->
+                <Label Text="FECHAS PROGRAMADAS" FontAttributes="Bold" Grid.ColumnSpan="5"/>
+                <!--row 1-->
+                <Label Grid.Row="1" Text="Inicio:"/>
+                <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="0.5*"/>
+                        <ColumnDefinition Width="0.5*"/>
+                    </Grid.ColumnDefinitions>
+                    <DatePicker Date="{Binding Evento.EVEN_FecIniProg, Converter={StaticResource NullableToDateTimeConv}}"/>
+                    <TimePicker Grid.Column="1" Time="{Binding Evento.EVEN_FecIniProg, Converter={StaticResource NullableToDateTimeConv}}"/>
+                </Grid>
+                <!--row 2-->
+                <Label Grid.Row="2" Text="Fin:"/>
+                <Grid Grid.Row="2" Grid.ColumnSpan="4" Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="0.5*"/>
+                        <ColumnDefinition Width="0.5*"/>
+                    </Grid.ColumnDefinitions>
+                    <DatePicker Date="{Binding Evento.EVEN_FecFinProg, Converter={StaticResource NullableToDateTimeConv}}"/>
+                    <TimePicker Grid.Column="1" Time="{Binding Evento.EVEN_FecFinProg, Converter={StaticResource NullableToDateTimeConv}}"/>
+                </Grid>
+                <!--row 3-->
+                <Label Grid.Row="3" Text="Duración:"/>
+                <Entry Grid.Row="3" Grid.ColumnSpan="2" Grid.Column="1" IsReadOnly="True"/>
+                <!--row 4-->
+                <Label Grid.Row="4" Text="FECHAS EJECUTADAS" FontAttributes="Bold" Grid.ColumnSpan="5"/>
+                <!--row 5-->
+                <Label Grid.Row="5" Text="Inicio:"/>
+                <DatePicker Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Date="{Binding Evento.EVEN_FecIniEjec}"/>
+                <TimePicker Grid.Row="5" Grid.Column="3" Grid.ColumnSpan="2" Time="{Binding Evento.EVEN_FecIniEjec}"/>
+                <!--row 6-->
+                <Label Grid.Row="6" Text="Fin:"/>
+                <DatePicker Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Date="{Binding Evento.EVEN_FecFinEjec}"/>
+                <TimePicker Grid.Row="6" Grid.Column="3" Grid.ColumnSpan="2" Time="{Binding Evento.EVEN_FecFinEjec}"/>
+                <!--row 7-->
+                <Label Grid.Row="7" Text="Duración:"/>
+                <Entry Grid.Row="7" Grid.Column="1" IsReadOnly="True"/>
+            </Grid>
+        </ContentPage.Content>
+    </ContentPage>
+    <ContentPage>
+        <ContentPage.Content>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="0.5*"/>
+                    <ColumnDefinition Width="0.5*"/>
+                </Grid.ColumnDefinitions>
+                <Label Text="Ing. Responsable" Grid.ColumnSpan="2"/>
+                <sf:SfAutoComplete DisplayMemberPath="USUA_Clave" Grid.Row="1" Grid.ColumnSpan="2"
+                                   DataSource="{Binding Usuarios}" SelectedValuePath="USUA_Interno"
+                                   SelectedValue="{Binding Evento.USUA_Interno, Mode=TwoWay}"/>
+                <Label Text="Resumen de Actividades" Grid.Row="2" Grid.ColumnSpan="2"/>
+                <Editor Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding Evento.EVEN_ResumenActividades}"/>
+                <Label Text="Afectados" Grid.Row="4"/>
+                <Entry Grid.Row="5" Text="{Binding Evento.EVEN_Afectados}" Keyboard="Numeric"/>
+                <Label Text="Pot. Interrumpida" Grid.Row="4" Grid.Column="1"/>
+                <Entry Grid.Row="5" Grid.Column="1" Text="{Binding Evento.EVEN_Potencia}" Keyboard="Numeric"/>
+            </Grid>
+        </ContentPage.Content>
+    </ContentPage>
+</CarouselPage>
