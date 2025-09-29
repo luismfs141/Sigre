@@ -33,6 +33,21 @@ public partial class SigreContext : DbContext
     public virtual DbSet<Inspeccione> Inspecciones { get; set; }
 
     public virtual DbSet<KeyWord> KeyWords { get; set; }
+
+    public virtual DbSet<Movile> Moviles { get; set; }
+
+    public virtual DbSet<Ordene> Ordenes { get; set; }
+
+    public virtual DbSet<Perfile> Perfiles { get; set; }
+
+    public virtual DbSet<PerfilesCodigo> PerfilesCodigos { get; set; }
+
+    public virtual DbSet<PerfilesUsuario> PerfilesUsuarios { get; set; }
+
+    public virtual DbSet<Permiso> Permisos { get; set; }
+
+    public virtual DbSet<PermisosPerfile> PermisosPerfiles { get; set; }
+
     public virtual DbSet<Poste> Postes { get; set; }
 
     public virtual DbSet<Sed> Seds { get; set; }
@@ -41,25 +56,21 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Tipificacione> Tipificaciones { get; set; }
 
-    public virtual DbSet<UsrAlim> UsrAlims { get; set; }
-
-    public virtual DbSet<UsrDef> UsrDefs { get; set; }
-
     public virtual DbSet<Usuario> Usuarios { get; set; }
+
+    public virtual DbSet<UsuariosAlimentadore> UsuariosAlimentadores { get; set; }
 
     public virtual DbSet<Vano> Vanos { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("server=localhost; initial catalog=sigre; user id=sa; password=1342; TrustServerCertificate=True");
-    //optionsBuilder.UseSqlServer("server=localhost; server=localhost;trusted_connection=true; TrustServerCertificate=True");
-    //optionsBuilder.UseSqlServer("server=arjen.database.windows.net;Initial Catalog=sigre;Persist Security Info=False;User ID=arjen;Password=Arj3nd@tab4s3;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;");
+        => optionsBuilder.UseSqlServer("Server=localhost;Database=sigre;User Id=sa;Password=1342;TrustServerCertificate=True;Encrypt=False;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Alimentadore>(entity =>
         {
-            entity.HasKey(e => e.AlimInterno).HasName("PK__Alimenta__A914B65A39F7D6EB");
+            entity.HasKey(e => e.AlimInterno).HasName("PK__Alimenta__A914B65AA77AF4C0");
 
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
             entity.Property(e => e.AlimCodigo)
@@ -76,7 +87,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Archivo>(entity =>
         {
-            entity.HasKey(e => e.ArchInterno).HasName("PK__Archivos__8119271AB5B69A72");
+            entity.HasKey(e => e.ArchInterno).HasName("PK__Archivos__8119271AFE432850");
 
             entity.Property(e => e.ArchInterno).HasColumnName("ARCH_Interno");
             entity.Property(e => e.ArchActivo)
@@ -101,7 +112,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Codigo>(entity =>
         {
-            entity.HasKey(e => e.CodiInterno).HasName("PK__Codigos__23087E7339B8BF57");
+            entity.HasKey(e => e.CodiInterno).HasName("PK__Codigos__23087E738F238967");
 
             entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
             entity.Property(e => e.CodiCodigo)
@@ -122,7 +133,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Componente>(entity =>
         {
-            entity.HasKey(e => e.CompInterno).HasName("PK__Componen__5CC4ECD0D6AE0CD8");
+            entity.HasKey(e => e.CompInterno).HasName("PK__Componen__5CC4ECD0D14E0A39");
 
             entity.Property(e => e.CompInterno).HasColumnName("COMP_Interno");
             entity.Property(e => e.CompComponente)
@@ -139,7 +150,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Deficiencia>(entity =>
         {
-            entity.HasKey(e => e.DefiInterno).HasName("PK__Deficien__CCD4DCC0CA25752C");
+            entity.HasKey(e => e.DefiInterno).HasName("PK__Deficien__CCD4DCC0294C4C3D");
 
             entity.Property(e => e.DefiInterno).HasColumnName("DEFI_Interno");
             entity.Property(e => e.DefiActivo)
@@ -221,10 +232,7 @@ public partial class SigreContext : DbContext
                 .HasColumnType("datetime")
                 .HasColumnName("DEFI_FechaSubsanacion");
             entity.Property(e => e.DefiIdElemento).HasColumnName("DEFI_IdElemento");
-            entity.Property(e => e.DefiInspeccionado)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
-                .HasColumnName("DEFI_Inspeccionado");
+            entity.Property(e => e.DefiInspeccionado).HasColumnName("DEFI_Inspeccionado");
             entity.Property(e => e.DefiKeyWords)
                 .HasMaxLength(30)
                 .IsUnicode(false)
@@ -372,7 +380,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Equipo>(entity =>
         {
-            entity.HasKey(e => e.EquiInterno).HasName("PK__Equipos__F076A0C9A181EF87");
+            entity.HasKey(e => e.EquiInterno).HasName("PK__Equipos__F076A0C9E703944E");
 
             entity.Property(e => e.EquiInterno).HasColumnName("EQUI_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_interno");
@@ -391,7 +399,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Inspeccione>(entity =>
         {
-            entity.HasKey(e => e.InspInterno).HasName("PK__Inspecci__0E84CC59F9600639");
+            entity.HasKey(e => e.InspInterno).HasName("PK__Inspecci__0E84CC597BA2C045");
 
             entity.Property(e => e.InspInterno).HasColumnName("INSP_Interno");
             entity.Property(e => e.InspCodigoElemento)
@@ -411,7 +419,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<KeyWord>(entity =>
         {
-            entity.HasKey(e => e.KeywInterno).HasName("PK__KeyWords__14F701535C0DD3FC");
+            entity.HasKey(e => e.KeywInterno).HasName("PK__KeyWords__14F70153A7AA82AF");
 
             entity.Property(e => e.KeywInterno).HasColumnName("KEYW_Interno");
             entity.Property(e => e.KeywPalClave)
@@ -426,11 +434,157 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("KEYW_TIPI_FK");
         });
 
-     
+        modelBuilder.Entity<Movile>(entity =>
+        {
+            entity.HasKey(e => e.MoviInterno);
+
+            entity.Property(e => e.MoviInterno).HasColumnName("MOVI_Interno");
+            entity.Property(e => e.MoviActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("MOVI_Activo");
+            entity.Property(e => e.MoviCorporativo).HasColumnName("MOVI_Corporativo");
+            entity.Property(e => e.MoviDescripcion)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("MOVI_Descripcion");
+            entity.Property(e => e.MoviImei)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("MOVI_Imei");
+            entity.Property(e => e.MoviMarca)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("MOVI_Marca");
+            entity.Property(e => e.MoviModelo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("MOVI_Modelo");
+            entity.Property(e => e.MoviNombre)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("MOVI_Nombre");
+        });
+
+        modelBuilder.Entity<Ordene>(entity =>
+        {
+            entity.HasKey(e => e.OrdeInterno).HasName("PK__Ordenes__DD34E2BC2C36966C");
+
+            entity.Property(e => e.OrdeInterno).HasColumnName("ORDE_Interno");
+            entity.Property(e => e.OrdeCodAmt).HasColumnName("ORDE_CodAMT");
+            entity.Property(e => e.OrdeCodigo)
+                .HasMaxLength(9)
+                .HasColumnName("ORDE_Codigo");
+            entity.Property(e => e.OrdeFechaOrd)
+                .HasColumnType("datetime")
+                .HasColumnName("ORDE_FechaOrd");
+        });
+
+        modelBuilder.Entity<Perfile>(entity =>
+        {
+            entity.HasKey(e => e.PerfInterno);
+
+            entity.Property(e => e.PerfInterno).HasColumnName("PERF_Interno");
+            entity.Property(e => e.PerfActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("PERF_Activo");
+            entity.Property(e => e.PerfNombre)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PERF_Nombre");
+        });
+
+        modelBuilder.Entity<PerfilesCodigo>(entity =>
+        {
+            entity.HasKey(e => e.PfcdInterno);
+
+            entity.Property(e => e.PfcdInterno).HasColumnName("PFCD_Interno");
+            entity.Property(e => e.PfcdActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("PFCD_Activo");
+            entity.Property(e => e.PfcdCodigo).HasColumnName("PFCD_Codigo");
+            entity.Property(e => e.PfcdPerfil).HasColumnName("PFCD_Perfil");
+
+            entity.HasOne(d => d.PfcdCodigoNavigation).WithMany(p => p.PerfilesCodigos)
+                .HasForeignKey(d => d.PfcdCodigo)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PerfilesCodigos_Codigos");
+
+            entity.HasOne(d => d.PfcdPerfilNavigation).WithMany(p => p.PerfilesCodigos)
+                .HasForeignKey(d => d.PfcdPerfil)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PerfilesCodigos_Perfiles");
+        });
+
+        modelBuilder.Entity<PerfilesUsuario>(entity =>
+        {
+            entity.HasKey(e => e.PfusInterno);
+
+            entity.Property(e => e.PfusInterno)
+                .ValueGeneratedNever()
+                .HasColumnName("PFUS_Interno");
+            entity.Property(e => e.PfusActivo).HasColumnName("PFUS_Activo");
+            entity.Property(e => e.PfusPerfil).HasColumnName("PFUS_Perfil");
+            entity.Property(e => e.PfusUsuario).HasColumnName("PFUS_Usuario");
+
+            entity.HasOne(d => d.PfusPerfilNavigation).WithMany(p => p.PerfilesUsuarios)
+                .HasForeignKey(d => d.PfusPerfil)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PerfilesUsuarios_Perfiles");
+
+            entity.HasOne(d => d.PfusUsuarioNavigation).WithMany(p => p.PerfilesUsuarios)
+                .HasForeignKey(d => d.PfusUsuario)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PerfilUsuario_Usuario");
+        });
+
+        modelBuilder.Entity<Permiso>(entity =>
+        {
+            entity.HasKey(e => e.PermInterno);
+
+            entity.Property(e => e.PermInterno).HasColumnName("PERM_Interno");
+            entity.Property(e => e.PermActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("PERM_Activo");
+            entity.Property(e => e.PermNombre)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PERM_Nombre");
+            entity.Property(e => e.PermReferencia)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PERM_Referencia");
+        });
+
+        modelBuilder.Entity<PermisosPerfile>(entity =>
+        {
+            entity.HasKey(e => e.PmpfInterno);
+
+            entity.Property(e => e.PmpfInterno).HasColumnName("PMPF_Interno");
+            entity.Property(e => e.PmpfActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("PMPF_Activo");
+            entity.Property(e => e.PmpfPerfil).HasColumnName("PMPF_Perfil");
+            entity.Property(e => e.PmpfPermiso).HasColumnName("PMPF_Permiso");
+
+            entity.HasOne(d => d.PmpfPerfilNavigation).WithMany(p => p.PermisosPerfiles)
+                .HasForeignKey(d => d.PmpfPerfil)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PermisosPerfiles_Perfiles");
+
+            entity.HasOne(d => d.PmpfPermisoNavigation).WithMany(p => p.PermisosPerfiles)
+                .HasForeignKey(d => d.PmpfPermiso)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PermisosPerfiles_Permisos");
+        });
 
         modelBuilder.Entity<Poste>(entity =>
         {
-            entity.HasKey(e => e.PostInterno).HasName("PK__Postes__32D637304F9A280B");
+            entity.HasKey(e => e.PostInterno).HasName("PK__Postes__32D6373064A8395B");
 
             entity.Property(e => e.PostInterno).HasColumnName("POST_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
@@ -454,7 +608,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Sed>(entity =>
         {
-            entity.HasKey(e => e.SedInterno).HasName("PK__Seds__8663923F943E2FEF");
+            entity.HasKey(e => e.SedInterno).HasName("PK__Seds__8663923FFA8E57F0");
 
             entity.Property(e => e.SedInterno).HasColumnName("SED_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
@@ -488,7 +642,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Tabla>(entity =>
         {
-            entity.HasKey(e => e.TablInterno).HasName("PK__Tablas__81723721FD278455");
+            entity.HasKey(e => e.TablInterno).HasName("PK__Tablas__81723721D3D93E07");
 
             entity.Property(e => e.TablInterno).HasColumnName("TABL_Interno");
             entity.Property(e => e.TablNombre)
@@ -499,7 +653,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Tipificacione>(entity =>
         {
-            entity.HasKey(e => e.TipiInterno).HasName("PK__Tipifica__A60961BBC9CCE15C");
+            entity.HasKey(e => e.TipiInterno).HasName("PK__Tipifica__A60961BB994EE79F");
 
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
             entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
@@ -514,46 +668,11 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("fk_TIPI_CODI");
         });
 
-        modelBuilder.Entity<UsrAlim>(entity =>
-        {
-            entity.HasKey(e => e.UsraInterno).HasName("PK__UsrAlim__468B7EC65FF7CDF8");
-
-            entity.ToTable("UsrAlim");
-
-            entity.Property(e => e.UsraInterno).HasColumnName("USRA_Interno");
-            entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
-            entity.Property(e => e.UsraActivo).HasColumnName("USRA_Activo");
-            entity.Property(e => e.UsuaInterno).HasColumnName("USUA_Interno");
-        });
-
-        modelBuilder.Entity<UsrDef>(entity =>
-        {
-            entity.HasKey(e => e.UsrdInterno).HasName("PK__UsrDef__79B40FFAC57C6121");
-
-            entity.ToTable("UsrDef");
-
-            entity.Property(e => e.UsrdInterno).HasColumnName("USRD_Interno");
-            entity.Property(e => e.DefiInterno).HasColumnName("DEFI_Interno");
-            entity.Property(e => e.UsrdFechaOperacion)
-                .HasColumnType("datetime")
-                .HasColumnName("USRD_FechaOperacion");
-            entity.Property(e => e.UsrdFechaRegistro)
-                .HasColumnType("datetime")
-                .HasColumnName("USRD_FechaRegistro");
-            entity.Property(e => e.UsrdOperacion)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .IsFixedLength()
-                .HasColumnName("USRD_Operacion");
-            entity.Property(e => e.UsuaInterno).HasColumnName("USUA_Interno");
-        });
-
         modelBuilder.Entity<Usuario>(entity =>
         {
-            entity.HasKey(e => e.UsuaInterno).HasName("PK__Usuarios__D3409409FB4662EF");
+            entity.HasKey(e => e.UsuaInterno).HasName("PK__Usuarios__D34094097AE6F930");
 
             entity.Property(e => e.UsuaInterno).HasColumnName("USUA_Interno");
-            entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
             entity.Property(e => e.UsuaActivo)
                 .IsRequired()
                 .HasDefaultValueSql("((1))")
@@ -562,32 +681,45 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("USUA_Apellidos");
-            entity.Property(e => e.UsuaEquipo)
-                .HasMaxLength(15)
+            entity.Property(e => e.UsuaCorreo)
+                .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasColumnName("USUA_Equipo");
-            entity.Property(e => e.UsuaImei)
-                .HasMaxLength(20)
-                .IsUnicode(false)
-                .HasColumnName("USUA_Imei");
+                .HasColumnName("USUA_Correo");
             entity.Property(e => e.UsuaNombres)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("USUA_Nombres");
-            entity.Property(e => e.UsuaTipo)
-                .HasMaxLength(3)
+            entity.Property(e => e.UsuaPassword)
                 .IsUnicode(false)
-                .IsFixedLength()
-                .HasColumnName("USUA_Tipo");
+                .HasColumnName("USUA_Password");
+        });
 
-            entity.HasOne(d => d.AlimInternoNavigation).WithMany(p => p.Usuarios)
-                .HasForeignKey(d => d.AlimInterno)
-                .HasConstraintName("fk_USUA_ALIM");
+        modelBuilder.Entity<UsuariosAlimentadore>(entity =>
+        {
+            entity.HasKey(e => e.UsalInterno).HasName("PK_UsuarioAlimentador");
+
+            entity.Property(e => e.UsalInterno).HasColumnName("USAL_Interno");
+            entity.Property(e => e.UsalActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("USAL_Activo");
+            entity.Property(e => e.UsalAlimentador).HasColumnName("USAL_Alimentador");
+            entity.Property(e => e.UsalUsuario).HasColumnName("USAL_Usuario");
+
+            entity.HasOne(d => d.UsalAlimentadorNavigation).WithMany(p => p.UsuariosAlimentadores)
+                .HasForeignKey(d => d.UsalAlimentador)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_UsuarioAlimentador_Alimentador");
+
+            entity.HasOne(d => d.UsalUsuarioNavigation).WithMany(p => p.UsuariosAlimentadores)
+                .HasForeignKey(d => d.UsalUsuario)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_UsuarioAlimentador_Usuario");
         });
 
         modelBuilder.Entity<Vano>(entity =>
         {
-            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F42F58404E");
+            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F4097793A8");
 
             entity.Property(e => e.VanoInterno).HasColumnName("VANO_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");

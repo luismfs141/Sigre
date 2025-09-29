@@ -17,7 +17,7 @@ public partial class Alimentadore
 
     public virtual ICollection<Equipo> Equipos { get; } = new List<Equipo>();
 
-    public virtual ICollection<Usuario> Usuarios { get; } = new List<Usuario>();
+    public virtual ICollection<UsuariosAlimentadore> UsuariosAlimentadores { get; } = new List<UsuariosAlimentadore>();
 
     public virtual ICollection<Vano> Vanos { get; } = new List<Vano>();
 }

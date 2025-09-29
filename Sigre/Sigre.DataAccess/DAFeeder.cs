@@ -22,78 +22,78 @@ namespace Sigre.DataAccess
             return feeders;
         }
 
-        public List<Alimentadore> DAFeedersByIdPhone(string x_idPhone)
-        {
-            SigreContext ctx = new SigreContext();
+        //public List<Alimentadore> DAFeedersByIdPhone(string x_idPhone)
+        //{
+        //    SigreContext ctx = new SigreContext();
 
-            Usuario usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaImei == x_idPhone);
+        //    Usuario usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaImei == x_idPhone);
             
-            if (usuario == null)
-            {
-                return new List<Alimentadore> { };
-            }
-            else if (usuario.AlimInterno == null)
-            {
-                var query = ctx.Alimentadores.ToList();
-                return query;
-            }
-            else
-            {
-                int alimInterno = usuario.AlimInterno.Value;
-                usuario = null;
-                var query = ctx.Alimentadores.Where(a => a.AlimInterno == alimInterno).ToList();
-                foreach(var item in query)
-                {
-                    item.Usuarios.Clear();
-                }
-                return query;
-            }
-        }
+        //    if (usuario == null)
+        //    {
+        //        return new List<Alimentadore> { };
+        //    }
+        //    else if (usuario.AlimInterno == null)
+        //    {
+        //        var query = ctx.Alimentadores.ToList();
+        //        return query;
+        //    }
+        //    else
+        //    {
+        //        int alimInterno = usuario.AlimInterno.Value;
+        //        usuario = null;
+        //        var query = ctx.Alimentadores.Where(a => a.AlimInterno == alimInterno).ToList();
+        //        foreach(var item in query)
+        //        {
+        //            item.Usuarios.Clear();
+        //        }
+        //        return query;
+        //    }
+        //}
 
-        public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
-        {
-            SigreContext ctx = new SigreContext();
-            List<Alimentadore> feeders = new List<Alimentadore>();
+        //public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
+        //{
+        //    SigreContext ctx = new SigreContext();
+        //    List<Alimentadore> feeders = new List<Alimentadore>();
 
-            var users = ctx.UsrAlims.Where(u => u.UsuaInterno == id_user);
+        //    var users = ctx.UsrAlims.Where(u => u.UsuaInterno == id_user);
 
 
-            foreach (var user in users)
-            {
-                Alimentadore feeder = ctx.Alimentadores.SingleOrDefault(a => a.AlimInterno == user.AlimInterno);
+        //    foreach (var user in users)
+        //    {
+        //        Alimentadore feeder = ctx.Alimentadores.SingleOrDefault(a => a.AlimInterno == user.AlimInterno);
 
-                if (feeder != null && !feeders.Contains(feeder))
-                {
-                    feeders.Add(feeder);
-                }
-            }
+        //        if (feeder != null && !feeders.Contains(feeder))
+        //        {
+        //            feeders.Add(feeder);
+        //        }
+        //    }
 
-            return feeders;
-        }
+        //    return feeders;
+        //}
 
-        public void DAFE_SaveByUser(int idUser,int idAlim, bool act)
-        {
-            SigreContext ctx = new SigreContext();
+        //public void DAFE_SaveByUser(int idUser,int idAlim, bool act)
+        //{
+        //    SigreContext ctx = new SigreContext();
 
-            var userAlim = ctx.UsrAlims.SingleOrDefault(ua => ua.UsuaInterno == idUser && ua.AlimInterno==idAlim);
+        //    var userAlim = ctx.UsrAlims.SingleOrDefault(ua => ua.UsuaInterno == idUser && ua.AlimInterno==idAlim);
 
-            if(userAlim == null)
-            {
-                ctx.UsrAlims.Add(new UsrAlim { 
-                    AlimInterno = idAlim,
-                    UsuaInterno = idUser, 
-                    UsraActivo = true});
-            }
-            else
-            {
-                ctx.Entry(userAlim).CurrentValues.SetValues(new UsrAlim
-                {
-                    AlimInterno = idAlim,
-                    UsuaInterno = idUser,
-                    UsraActivo = act
-                });
-            }
-        }
+        //    if(userAlim == null)
+        //    {
+        //        ctx.UsrAlims.Add(new UsrAlim { 
+        //            AlimInterno = idAlim,
+        //            UsuaInterno = idUser, 
+        //            UsraActivo = true});
+        //    }
+        //    else
+        //    {
+        //        ctx.Entry(userAlim).CurrentValues.SetValues(new UsrAlim
+        //        {
+        //            AlimInterno = idAlim,
+        //            UsuaInterno = idUser,
+        //            UsraActivo = act
+        //        });
+        //    }
+       // }
 
         public void DAFE_DrawMapByFeeder(int idFeeder)
         {

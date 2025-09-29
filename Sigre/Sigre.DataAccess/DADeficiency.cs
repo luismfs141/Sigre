@@ -9,7 +9,7 @@ namespace Sigre.DataAccess
     {
         public void DADEFI_Save(Deficiencia x_deficiency)
         {
-            x_deficiency.InspInternoNavigation = null;
+            //x_deficiency.InspInternoNavigation = null;
 
             SigreContext ctx = new SigreContext();
 
@@ -224,12 +224,12 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
-       public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)
+        public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)
         {
             /*
-             * 0->sin estado
-             * 1->Modificado
-             * 2->Nuevo
+             * 0 -> sin estado
+             * 1 -> Modificado
+             * 2 -> Nuevo
             */
             using (SigreContext ctx = new SigreContext())
             {
@@ -237,47 +237,56 @@ namespace Sigre.DataAccess
                 {
                     try
                     {
-                        List<Deficiencia> deficiencias = off.Deficiencies;
-                        List<Archivo> archivos = off.Files;
-                        List<Archivo> archivosDef = new List<Archivo>();
-
-                        int deficiencyId = 0;
-                        
+                        List<Deficiencia> deficiencias = off.Deficiencies ?? new List<Deficiencia>();
+                        List<Archivo> archivos = off.Files ?? new List<Archivo>();
 
                         foreach (var item in deficiencias)
                         {
-                            if (item.DefiEstado != "S")
+                            //if (item == null) continue;
+
+                            item.DefiFechaCreacion = DateTime.Now;
+
+                            int deficiencyId = item.DefiInterno;
+
+                            if (item.DefiEstado != "S") // Nuevo
                             {
-                                item.DefiFechaCreacion = DateTime.Now;
-                                deficiencyId = item.DefiInterno;
-                                item.DefiInterno = 0;
                                 ctx.Deficiencias.Add(item);
                             }
-                            else
+                            else // Modificado
                             {
-                                item.DefiFechaCreacion = DateTime.Now;
-                                deficiencyId = item.DefiInterno;
-                                var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == item.DefiInterno);
-                                ctx.Entry(original).CurrentValues.SetValues(item);
+                                var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == deficiencyId);
+
+                                if (original != null)
+                                {
+                                    ctx.Entry(original).CurrentValues.SetValues(item);
+                                }
+                                else
+                                {
+                                    ctx.Deficiencias.Add(item);
+                                }
                             }
+
+                            // Guardar aquí para que el DefiInterno se actualice (identity generado en DB)
                             ctx.SaveChanges();
 
-                            archivosDef.AddRange(archivos.Where(f => f.ArchCodTabla == deficiencyId));
+                            // Asociar archivos a la deficiencia ya persistida
+                            var archivosDef = archivos.Where(f => f.ArchCodTabla == deficiencyId).ToList();
 
                             foreach (Archivo archivo in archivosDef)
                             {
-                                archivo.ArchCodTabla = item.DefiInterno;
+                                archivo.ArchCodTabla = item.DefiInterno; // ahora con el nuevo ID
                                 ctx.Archivos.Add(archivo);
                             }
+
                             ctx.SaveChanges();
-                            archivosDef.Clear();
                         }
+
                         transaction.Commit();
                     }
                     catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw ex;
+                        throw; // no uses "throw ex;" porque pierdes el stack trace
                     }
                 }
             }

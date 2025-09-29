@@ -15,5 +15,5 @@ public partial class Archivo
 
     public string ArchNombre { get; set; } = null!;
 
-    public bool ArchActivo { get; set; }
+    public bool? ArchActivo { get; set; }
 }

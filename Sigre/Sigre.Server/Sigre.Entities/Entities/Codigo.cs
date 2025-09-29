@@ -15,5 +15,7 @@ public partial class Codigo
 
     public virtual Componente CompInternoNavigation { get; set; } = null!;
 
+    public virtual ICollection<PerfilesCodigo> PerfilesCodigos { get; } = new List<PerfilesCodigo>();
+
     public virtual ICollection<Tipificacione> Tipificaciones { get; } = new List<Tipificacione>();
 }

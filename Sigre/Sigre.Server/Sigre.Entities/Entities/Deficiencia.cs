@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Sigre.Entities;
+
 public partial class Deficiencia
 {
     public int DefiInterno { get; set; }
@@ -102,13 +103,19 @@ public partial class Deficiencia
 
     public string DefiUsuarioMod { get; set; } = null!;
 
-    public bool DefiActivo { get; set; }
+    public bool? DefiActivo { get; set; }
 
     public int? DefiEstadoCriticidad { get; set; }
-    public virtual Inspeccione? InspInternoNavigation { get; set; }
+
     public bool DefiInspeccionado { get; set; }
+
     public string? DefiKeyWords { get; set; }
+
     public string? DefiCol1 { get; set; }
+
     public string? DefiCol2 { get; set; }
+
     public string? DefiCol3 { get; set; }
+
+    public virtual Inspeccione? InspInternoNavigation { get; set; }
 }

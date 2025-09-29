@@ -1,4 +1,5 @@
 import { Picker } from '@react-native-picker/picker';
+import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect, useState } from 'react';
 import { Alert, Button, Text, TextInput, View } from 'react-native';
@@ -10,22 +11,35 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [selectedProject, setSelectedProject] = useState('project1');
+  const [deviceId, setDeviceId] = useState('');
   const router = useRouter();
 
   useEffect(() => {
     if (user) {
-      // cuando el usuario inicia sesión, podrías redirigir al proyecto elegido
       router.replace('(drawer)/map');
     }
   }, [user]);
 
-  const handleLogin = () => {
+  useEffect(() => {
+    // obtener datos del dispositivo
+    const fetchDeviceInfo = async () => {
+      const id = await Application.getAndroidId;
+      setDeviceId(id);
+    };
+    fetchDeviceInfo();
+  }, []);
+
+  const handleLogin = async () => {
     if (!username || !password) {
-      Alert.alert('Error', 'Ingresa usuario y contraseña');
+      Alert.alert("Error", "Ingresa usuario y contraseña");
       return;
     }
-    // Aquí pasas también el proyecto elegido si quieres guardarlo en el contexto
-    signIn(username, password, selectedProject);
+
+    const success = await signIn(username, password, selectedProject);
+
+    if (!success) {
+      Alert.alert("Error", "Usuario o contraseña incorrectos");
+    }
   };
 
   return (
@@ -60,6 +74,13 @@ export default function Login() {
 
       <View style={LoginStyles.button}>
         <Button title="Iniciar sesión" onPress={handleLogin} />
+      </View>
+
+      {/* 👇 sección del device info */}
+      <View style={{ marginTop: 30 }}>
+        <Text style={{ fontSize: 12, color: 'gray', textAlign: 'center' }}>
+          ID de dispositivo: {deviceId}
+        </Text>
       </View>
     </View>
   );
