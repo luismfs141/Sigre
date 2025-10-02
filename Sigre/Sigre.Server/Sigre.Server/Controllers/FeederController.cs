@@ -16,33 +16,27 @@ namespace Sigre.Server.Controllers
             return dAFeeder.DAFeeder_Get();
         }
 
-        //[HttpGet("GetFeedersByIdPhone")]
-        //public List<Alimentadore> GetFeedersByIdPhone(string x_idPhone)
-        //{
-        //    DAFeeder dAFeeder = new DAFeeder();
-        //    return dAFeeder.DAFeedersByIdPhone(x_idPhone);
-        //}
-        //[HttpGet("GetFeedersByUser")]
-        //public List<Alimentadore> GetFeedersByUser(int idUser)
-        //{
-        //    DAFeeder dAFeeder = new DAFeeder();
-        //    return dAFeeder.DAFE_GetFeedersByUser(idUser);
-        //}
+        [HttpGet("GetFeedersByUser")]
+        public List<Alimentadore> GetFeedersByUser(int idUser)
+        {
+            DAFeeder dAFeeder = new DAFeeder();
+            return dAFeeder.DAFE_GetFeedersByUser(idUser);
+        }
 
-        //[Route("saveByUser")]
-        //[HttpPost]
-        //public object SaveByUser(int idUser, int idAlim, bool act)
-        //{
-        //    DAFeeder dAFeeder = new DAFeeder();
-        //    dAFeeder.DAFE_SaveByUser(idUser, idAlim, act);
+        [Route("saveByUser")]
+        [HttpPost]
+        public object SaveByUser(int idUser, int idAlim, bool act)
+        {
+            DAFeeder dAFeeder = new DAFeeder();
+            dAFeeder.DAFE_SaveFeedersByUser(idUser, idAlim, act);
 
-        //    return new
-        //    {
-        //        id = ""+idUser+idAlim,
-        //        estado = "Satisfactorio",
-        //        Mensaje = "Se guardó correctamente"
-        //    };
-        //}
+            return new
+            {
+                id = "" + idUser + idAlim,
+                estado = "Satisfactorio",
+                Mensaje = "Se guardó correctamente"
+            };
+        }
         [Route("drawMap")]
         [HttpPost]
         public object DrawMapByFeeder(int idFeeder)
