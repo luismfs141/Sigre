@@ -227,16 +227,73 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
-        public List<DeficiencyDto> DADEFI_GetByListFeeders(int? feeder1, int? feeder2, int? feeder3)
+        public List<Deficiencia> DADEFI_GetByListFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
 
-            var deficiencias = ctx.DeficiencyDto
-                                    .FromSqlRaw("EXEC dbo.sp_GetDeficienciasByFeeders @Feeder1, @Feeder2, @Feeder3",
-                                        new SqlParameter("@Feeder1", (object)feeder1 ?? DBNull.Value),
-                                        new SqlParameter("@Feeder2", (object)feeder2 ?? DBNull.Value),
-                                        new SqlParameter("@Feeder3", (object)feeder3 ?? DBNull.Value)
-                                    ).ToList();
+            var deficiencias = (
+                from d in ctx.Deficiencias
+                join a in ctx.Alimentadores on d.DefiCodAmt equals a.AlimCodigo
+                where x_feeders.Contains(a.AlimInterno)
+                select new Deficiencia
+                {
+                    DefiActivo = d.DefiActivo,
+                    DefiInterno = d.DefiInterno,
+                    DefiArmadoMaterial = d.DefiArmadoMaterial,
+                    DefiCodAmt = d.DefiCodAmt,
+                    DefiCodDef = d.DefiCodDef,
+                    DefiCodDen = d.DefiCodDen,
+                    DefiCodigoElemento = d.DefiCodigoElemento,
+                    DefiCodRes = d.DefiCodRes,
+                    DefiComentario = d.DefiComentario,
+                    DefiCoordX = d.DefiCoordX,
+                    DefiCoordY = d.DefiCoordY,
+                    DefiDistHorizontal = d.DefiDistHorizontal,
+                    DefiDistTransversal = d.DefiDistTransversal,
+                    DefiDistVertical = d.DefiDistVertical,
+                    DefiEstado = d.DefiEstado,
+                    DefiEstadoCriticidad = d.DefiEstadoCriticidad,
+                    DefiEstadoSubsanacion = d.DefiEstadoSubsanacion,
+                    DefiFechaCreacion = d.DefiFechaCreacion,
+                    DefiFechaDenuncia = d.DefiFechaDenuncia,
+                    DefiFechaInspeccion = d.DefiFechaInspeccion,
+                    DefiFechaSubsanacion = d.DefiFechaSubsanacion,
+                    DefiFecModificacion = d.DefiFecModificacion,
+                    DefiFecRegistro = d.DefiFecRegistro,
+                    DefiIdElemento = d.DefiIdElemento,
+                    DefiLatitud = d.DefiLatitud,
+                    DefiLongitud = d.DefiLongitud,
+                    DefiNodoFinal = d.DefiNodoFinal,
+                    DefiNodoInicial = d.DefiNodoInicial,
+                    DefiNroOrden = d.DefiNroOrden,
+                    DefiNumPostes = d.DefiNumPostes,
+                    DefiNumSuministro = d.DefiNumSuministro,
+                    DefiObservacion = d.DefiObservacion,
+                    DefiPointX = d.DefiPointX,
+                    DefiPointY = d.DefiPointY,
+                    DefiPozoTierra = d.DefiPozoTierra,
+                    DefiPozoTierra2 = d.DefiPozoTierra2,
+                    DefiRefer1 = d.DefiRefer1,
+                    DefiRefer2 = d.DefiRefer2,
+                    DefiResponsable = d.DefiResponsable,
+                    DefiRetenidaMaterial = d.DefiRetenidaMaterial,
+                    DefiTipoArmado = d.DefiTipoArmado,
+                    DefiTipoElemento = d.DefiTipoElemento,
+                    DefiTipoMaterial = d.DefiTipoMaterial,
+                    DefiTipoRetenida = d.DefiTipoRetenida,
+                    DefiUsuarioInic = d.DefiUsuarioInic,
+                    DefiUsuarioMod = d.DefiUsuarioMod,
+                    DefiUsuCre = d.DefiUsuCre,
+                    DefiUsuNpc = d.DefiUsuNpc,
+                    InspInterno = d.InspInterno,
+                    InspInternoNavigation = d.InspInternoNavigation,
+                    TablInterno = d.TablInterno,
+                    TipiInterno = d.TipiInterno,//
+                    DefiInspeccionado = d.DefiInspeccionado,
+                    DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    DefiEstadoOffLine = 0,
+                }
+            ).ToList();
 
             return deficiencias;
         }
