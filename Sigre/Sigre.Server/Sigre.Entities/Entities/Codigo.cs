@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Sigre.Entities;
+namespace Sigre.Entities.Entities;
 
 public partial class Codigo
 {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.DataAccess.Context;
@@ -20,6 +20,10 @@ public partial class SigreContext : DbContext
     public virtual DbSet<Alimentadore> Alimentadores { get; set; }
 
     public virtual DbSet<Archivo> Archivos { get; set; }
+
+    public virtual DbSet<ArmadoMaterial> ArmadoMaterials { get; set; }
+
+    public virtual DbSet<ArmadoTipo> ArmadoTipos { get; set; }
 
     public virtual DbSet<Codigo> Codigos { get; set; }
 
@@ -51,7 +55,15 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Poste> Postes { get; set; }
 
+    public virtual DbSet<PosteMaterial> PosteMaterials { get; set; }
+
+    public virtual DbSet<RetenidaMaterial> RetenidaMaterials { get; set; }
+
+    public virtual DbSet<RetenidaTipo> RetenidaTipos { get; set; }
+
     public virtual DbSet<Sed> Seds { get; set; }
+
+    public virtual DbSet<SedMaterial> SedMaterials { get; set; }
 
     public virtual DbSet<Tabla> Tablas { get; set; }
 
@@ -65,7 +77,7 @@ public partial class SigreContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=localhost;Database=sigre;User Id=sa;Password=1342;TrustServerCertificate=True;Encrypt=False;");
+        => optionsBuilder.UseSqlServer("Server=localhost;Database=Sigre;Trusted_Connection=True;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -96,6 +108,11 @@ public partial class SigreContext : DbContext
                 .HasDefaultValueSql("((1))")
                 .HasColumnName("ARCH_Activo");
             entity.Property(e => e.ArchCodTabla).HasColumnName("ARCH_CodTabla");
+            entity.Property(e => e.ArchFecha)
+                .HasColumnType("datetime")
+                .HasColumnName("ARCH_Fecha");
+            entity.Property(e => e.ArchLatitud).HasColumnName("ARCH_Latitud");
+            entity.Property(e => e.ArchLongitud).HasColumnName("ARCH_Longitud");
             entity.Property(e => e.ArchNombre)
                 .HasMaxLength(150)
                 .IsUnicode(false)
@@ -109,6 +126,38 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .IsFixedLength()
                 .HasColumnName("ARCH_Tipo");
+        });
+
+        modelBuilder.Entity<ArmadoMaterial>(entity =>
+        {
+            entity.HasKey(e => e.ArmmtInterno);
+
+            entity.ToTable("ArmadoMaterial");
+
+            entity.Property(e => e.ArmmtInterno).HasColumnName("ARMMT_Interno");
+            entity.Property(e => e.ArmmtActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("ARMMT_Activo");
+            entity.Property(e => e.ArmmtNombre)
+                .HasMaxLength(10)
+                .HasColumnName("ARMMT_Nombre");
+        });
+
+        modelBuilder.Entity<ArmadoTipo>(entity =>
+        {
+            entity.HasKey(e => e.ArmtpInterno);
+
+            entity.ToTable("ArmadoTipo");
+
+            entity.Property(e => e.ArmtpInterno).HasColumnName("ARMTP_Interno");
+            entity.Property(e => e.ArmtpActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("ARMTP_Activo");
+            entity.Property(e => e.ArmtpNombre)
+                .HasMaxLength(10)
+                .HasColumnName("ARMTP_Nombre");
         });
 
         modelBuilder.Entity<Codigo>(entity =>
@@ -589,6 +638,8 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PostInterno).HasColumnName("POST_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.PostArmadoMaterial).HasColumnName("POST_ArmadoMaterial");
+            entity.Property(e => e.PostArmadoTipo).HasColumnName("POST_ArmadoTipo");
             entity.Property(e => e.PostCodigoNodo)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -600,11 +651,79 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.PostInspeccionado).HasColumnName("POST_Inspeccionado");
             entity.Property(e => e.PostLatitud).HasColumnName("POST_Latitud");
             entity.Property(e => e.PostLongitud).HasColumnName("POST_Longitud");
-            entity.Property(e => e.PostMaterial)
-                .HasMaxLength(3)
-                .IsUnicode(false)
-                .HasColumnName("POST_Material");
+            entity.Property(e => e.PostMaterial).HasColumnName("POST_Material");
+            entity.Property(e => e.PostRetenidaMaterial).HasColumnName("POST_RetenidaMaterial");
+            entity.Property(e => e.PostRetenidaTipo).HasColumnName("POST_RetenidaTipo");
             entity.Property(e => e.PostTerceros).HasColumnName("POST_Terceros");
+
+            entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.PostArmadoMaterial)
+                .HasConstraintName("FK_Postes_ArmadoMaterial");
+
+            entity.HasOne(d => d.PostArmadoTipoNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.PostArmadoTipo)
+                .HasConstraintName("FK_Postes_ArmadoTipo");
+
+            entity.HasOne(d => d.PostMaterialNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.PostMaterial)
+                .HasConstraintName("FK_Postes_PosteMaterial");
+
+            entity.HasOne(d => d.PostRetenidaMaterialNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.PostRetenidaMaterial)
+                .HasConstraintName("FK_Postes_RetenidaMaterial");
+
+            entity.HasOne(d => d.PostRetenidaTipoNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.PostRetenidaTipo)
+                .HasConstraintName("FK_Postes_RetenidaTipo");
+        });
+
+        modelBuilder.Entity<PosteMaterial>(entity =>
+        {
+            entity.HasKey(e => e.PosmtInterno);
+
+            entity.ToTable("PosteMaterial");
+
+            entity.Property(e => e.PosmtInterno).HasColumnName("POSMT_Interno");
+            entity.Property(e => e.PosmtNombre)
+                .HasMaxLength(10)
+                .HasColumnName("POSMT_Nombre");
+            entity.Property(e => e.PostActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("POST_Activo");
+        });
+
+        modelBuilder.Entity<RetenidaMaterial>(entity =>
+        {
+            entity.HasKey(e => e.RtnmtInterno);
+
+            entity.ToTable("RetenidaMaterial");
+
+            entity.Property(e => e.RtnmtInterno).HasColumnName("RTNMT_Interno");
+            entity.Property(e => e.RtnmtActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("RTNMT_Activo");
+            entity.Property(e => e.RtnmtNombre)
+                .HasMaxLength(10)
+                .HasColumnName("RTNMT_Nombre");
+        });
+
+        modelBuilder.Entity<RetenidaTipo>(entity =>
+        {
+            entity.HasKey(e => e.RtntpInterno);
+
+            entity.ToTable("RetenidaTipo");
+
+            entity.Property(e => e.RtntpInterno).HasColumnName("RTNTP_Interno");
+            entity.Property(e => e.RtntpActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("RTNTP_Activo");
+            entity.Property(e => e.RtntpNombre)
+                .HasMaxLength(10)
+                .IsFixedLength()
+                .HasColumnName("RTNTP_Nombre");
         });
 
         modelBuilder.Entity<Sed>(entity =>
@@ -613,6 +732,8 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.SedInterno).HasColumnName("SED_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.SedArmadoMaterial).HasColumnName("SED_ArmadoMaterial");
+            entity.Property(e => e.SedArmadoTipo).HasColumnName("SED_ArmadoTipo");
             entity.Property(e => e.SedCodigo)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -624,10 +745,10 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.SedInspeccionado).HasColumnName("SED_Inspeccionado");
             entity.Property(e => e.SedLatitud).HasColumnName("SED_Latitud");
             entity.Property(e => e.SedLongitud).HasColumnName("SED_Longitud");
-            entity.Property(e => e.SedMaterial)
-                .HasMaxLength(3)
-                .IsUnicode(false)
-                .HasColumnName("SED_Material");
+            entity.Property(e => e.SedMaterial).HasColumnName("SED_Material");
+            entity.Property(e => e.SedNumPostes).HasColumnName("SED_NumPostes");
+            entity.Property(e => e.SedRetenidaMaterial).HasColumnName("SED_RetenidaMaterial");
+            entity.Property(e => e.SedRetenidaTipo).HasColumnName("SED_RetenidaTipo");
             entity.Property(e => e.SedSimbolo)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -639,6 +760,42 @@ public partial class SigreContext : DbContext
                 .HasDefaultValueSql("('M')")
                 .IsFixedLength()
                 .HasColumnName("SED_Tipo");
+
+            entity.HasOne(d => d.SedArmadoMaterialNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.SedArmadoMaterial)
+                .HasConstraintName("FK_Seds_ArmadoMaterial");
+
+            entity.HasOne(d => d.SedArmadoTipoNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.SedArmadoTipo)
+                .HasConstraintName("FK_Seds_ArmadoTipo");
+
+            entity.HasOne(d => d.SedMaterialNavigation).WithMany(p => p.InverseSedMaterialNavigation)
+                .HasForeignKey(d => d.SedMaterial)
+                .HasConstraintName("FK_Seds_SedMaterial");
+
+            entity.HasOne(d => d.SedRetenidaMaterialNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.SedRetenidaMaterial)
+                .HasConstraintName("FK_Seds_RetenidaMaterial");
+
+            entity.HasOne(d => d.SedRetenidaTipoNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.SedRetenidaTipo)
+                .HasConstraintName("FK_Seds_RetenidaTipo");
+        });
+
+        modelBuilder.Entity<SedMaterial>(entity =>
+        {
+            entity.HasKey(e => e.SedmtInterno);
+
+            entity.ToTable("SedMaterial");
+
+            entity.Property(e => e.SedmtInterno).HasColumnName("SEDMT_Interno");
+            entity.Property(e => e.SedmtActivo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))")
+                .HasColumnName("SEDMT_Activo");
+            entity.Property(e => e.SedmtNombre)
+                .HasMaxLength(10)
+                .HasColumnName("SEDMT_Nombre");
         });
 
         modelBuilder.Entity<Tabla>(entity =>
@@ -756,7 +913,6 @@ public partial class SigreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_VANO_ALIM");
         });
-
         modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);
 
         OnModelCreatingPartial(modelBuilder);

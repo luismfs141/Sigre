@@ -1,5 +1,6 @@
 ﻿using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;

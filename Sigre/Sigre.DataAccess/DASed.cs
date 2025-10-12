@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 using System;
@@ -25,7 +26,7 @@ namespace Sigre.DataAccess
                 Longitude = s.SedLongitud,
                 ElementCode = s.SedCodigo,
                 Inspeccionado = s.SedInspeccionado,
-                TipoMaterial = s.SedMaterial == null?"CON":s.SedMaterial,
+                TipoMaterial = s.SedMaterial == null?"CON":s.SedMaterial.ToString(),
                 Tercero = s.SedTerceros,
                 Selected = false,
                 Type = 

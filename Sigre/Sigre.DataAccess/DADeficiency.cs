@@ -2,8 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
-using Sigre.Entities;
-using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Structs;
 
 namespace Sigre.DataAccess

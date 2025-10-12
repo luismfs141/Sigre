@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 using System;
@@ -33,7 +34,7 @@ namespace Sigre.DataAccess
                     IdAlimentador = p.AlimInterno,
                     Inspeccionado = p.PostInspeccionado,
                     Tercero = p.PostTerceros,
-                    TipoMaterial = p.PostMaterial == null? "CON":p.PostMaterial,
+                    TipoMaterial = p.PostMaterial == null? "CON":p.PostMaterial.ToString(),
                     Selected =false
                 }
             );

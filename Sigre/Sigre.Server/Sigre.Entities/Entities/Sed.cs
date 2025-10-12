@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Sigre.Entities;
+namespace Sigre.Entities.Entities;
 
 public partial class Sed
 {
@@ -23,7 +23,29 @@ public partial class Sed
 
     public bool SedTerceros { get; set; }
 
-    public string? SedMaterial { get; set; }
+    public int? SedMaterial { get; set; }
 
     public bool SedInspeccionado { get; set; }
+
+    public int? SedNumPostes { get; set; }
+
+    public int? SedArmadoTipo { get; set; }
+
+    public int? SedArmadoMaterial { get; set; }
+
+    public int? SedRetenidaTipo { get; set; }
+
+    public int? SedRetenidaMaterial { get; set; }
+
+    public virtual ICollection<Sed> InverseSedMaterialNavigation { get; } = new List<Sed>();
+
+    public virtual ArmadoMaterial? SedArmadoMaterialNavigation { get; set; }
+
+    public virtual ArmadoTipo? SedArmadoTipoNavigation { get; set; }
+
+    public virtual Sed? SedMaterialNavigation { get; set; }
+
+    public virtual RetenidaMaterial? SedRetenidaMaterialNavigation { get; set; }
+
+    public virtual RetenidaTipo? SedRetenidaTipoNavigation { get; set; }
 }

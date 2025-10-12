@@ -5,11 +5,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Sigre.Entities
+namespace Sigre.Entities.Entities;
+
+public partial class Deficiencia
 {
-    public partial class Deficiencia
-    {
-        [NotMapped]
-        public int DefiEstadoOffLine { get; set; }
-    }
+    [NotMapped]
+    public int DefiEstadoOffLine { get; set; }
 }

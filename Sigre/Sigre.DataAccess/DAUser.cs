@@ -1,6 +1,7 @@
 ﻿using BCrypt.Net;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;

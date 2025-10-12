@@ -73,15 +73,11 @@ namespace Sigre.Server.Controllers
         }
 
         [HttpPost("GetDeficienciesByFeeders")]
-        public List<DeficiencyDto> GetByListFeeder([FromBody] List<int> feeders)
+        public List<Deficiencia> GetByListFeeder([FromBody] List<int> feeders)
         {
             DADeficiency dADeficiency = new DADeficiency();
 
-            int? feeder1 = feeders.ElementAtOrDefault(0);
-            int? feeder2 = feeders.ElementAtOrDefault(1);
-            int? feeder3 = feeders.ElementAtOrDefault(2);
-
-            return dADeficiency.DADEFI_GetByListFeeders(feeder1, feeder2, feeder3);
+            return dADeficiency.DADEFI_GetByListFeeders(feeders);
         }
 
         [Route("SynchronizeData")]

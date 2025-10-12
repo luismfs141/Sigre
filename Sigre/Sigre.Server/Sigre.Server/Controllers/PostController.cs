@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
-using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.Server.Controllers

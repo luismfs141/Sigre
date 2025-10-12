@@ -1,7 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
-using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using System;
@@ -33,8 +32,7 @@ namespace Sigre.DataAccess
                 VanoMaterial = van.VanoMaterial == null? "ALU" : van.VanoMaterial,
                 VanoNodoFinal = van.VanoNodoFinal,
                 VanoNodoInicial = van.VanoNodoInicial,
-                VanoTerceros = van.VanoTerceros,
-                VanoSelected = false
+                VanoTerceros = van.VanoTerceros
             }
             );
             return vanos.ToList();
