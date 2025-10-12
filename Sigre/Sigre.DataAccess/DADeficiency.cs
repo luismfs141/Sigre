@@ -1,6 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore.Storage;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 
 namespace Sigre.DataAccess
@@ -222,6 +225,20 @@ namespace Sigre.DataAccess
              });
 
             return query.ToList();
+        }
+
+        public List<DeficiencyDto> DADEFI_GetByListFeeders(int? feeder1, int? feeder2, int? feeder3)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var deficiencias = ctx.DeficiencyDto
+                                    .FromSqlRaw("EXEC dbo.sp_GetDeficienciasByFeeders @Feeder1, @Feeder2, @Feeder3",
+                                        new SqlParameter("@Feeder1", (object)feeder1 ?? DBNull.Value),
+                                        new SqlParameter("@Feeder2", (object)feeder2 ?? DBNull.Value),
+                                        new SqlParameter("@Feeder3", (object)feeder3 ?? DBNull.Value)
+                                    ).ToList();
+
+            return deficiencias;
         }
 
         public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)

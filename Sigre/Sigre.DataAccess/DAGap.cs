@@ -39,6 +39,7 @@ namespace Sigre.DataAccess
             );
             return vanos.ToList();
         }
+
         public List<ElementStruct> DAGap_GetStructByFeeder(int x_feeder_id)
         {
             SigreContext ctx = new SigreContext();
@@ -49,6 +50,21 @@ namespace Sigre.DataAccess
 
             return gaps;
         }
-        
+
+        public List<Vano> DAGAP_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        {
+            var result = new List<Vano>();
+
+            if (feeder1.HasValue)
+                result.AddRange(DAGAP_GetByFeeder(feeder1.Value));
+
+            if (feeder2.HasValue)
+                result.AddRange(DAGAP_GetByFeeder(feeder2.Value));
+
+            if (feeder3.HasValue)
+                result.AddRange(DAGAP_GetByFeeder(feeder3.Value));
+
+            return result;
+        }
     }
 }

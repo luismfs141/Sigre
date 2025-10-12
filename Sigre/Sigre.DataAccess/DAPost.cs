@@ -39,6 +39,24 @@ namespace Sigre.DataAccess
             );
             return posts.ToList();
         }
+        public List<Poste> DAPOST_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        {
+            using var ctx = new SigreContext();
+
+            // Construir lista solo con los feeders válidos (no nulos)
+            var feederList = new List<int>();
+
+            if (feeder1.HasValue) feederList.Add(feeder1.Value);
+            if (feeder2.HasValue) feederList.Add(feeder2.Value);
+            if (feeder3.HasValue) feederList.Add(feeder3.Value);
+
+            // Buscar postes que coincidan con esos alimentadores
+            var postes = ctx.Postes
+                            .Where(p => feederList.Contains(p.AlimInterno))
+                            .ToList();
+
+            return postes;
+        }
         public List<ElementStruct> DAPOST_GetStructByFeeder(int x_feeder_id)
         {          
             SigreContext ctx = new SigreContext();

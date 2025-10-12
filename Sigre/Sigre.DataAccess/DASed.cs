@@ -38,6 +38,22 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
+        public List<Sed> DASed_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        {
+            using var ctx = new SigreContext();
+
+            var feederList = new List<int>();
+            if (feeder1.HasValue) feederList.Add(feeder1.Value);
+            if (feeder2.HasValue) feederList.Add(feeder2.Value);
+            if (feeder3.HasValue) feederList.Add(feeder3.Value);
+
+            var seds = ctx.Seds
+                          .Where(s => feederList.Contains(s.AlimInterno))
+                          .ToList();
+
+            return seds;
+        }
+
         public List<ElementStruct> DASed_GetStructByFeeder(int x_feeder_id)
         {
             SigreContext ctx = new SigreContext();

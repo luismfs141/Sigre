@@ -16,5 +16,17 @@ namespace Sigre.Server.Controllers
             DAPost dAPost = new DAPost();
             return dAPost.DAPOST_GetStructByFeeder(x_feeder_id);
         }
+
+        [HttpPost("GetPostByFeeders")]
+        public List<Poste> GetPostByFeeders(List<int> feeders)
+        {
+            DAPost dAPost = new DAPost();
+
+            int? feeder1 = feeders.ElementAtOrDefault(0);
+            int? feeder2 = feeders.ElementAtOrDefault(1);
+            int? feeder3 = feeders.ElementAtOrDefault(2);
+
+            return dAPost.DAPOST_GetByListFeeder(feeder1, feeder2, feeder3);
+        }
     }
 }

@@ -1,138 +1,108 @@
 import { useState } from "react";
+import { api } from "../config"; // tu instancia de axios
 import { executeSql, initTables } from "../database/helpers";
-import {
-  createDeficienciesTable,
-  createFilesTable,
-  createPostesTable,
-  createSedsTable,
-  createVanosTable,
-} from "../database/schema";
-import { downloadTable, uploadTable } from "../database/sync";
+import { createDeficienciesTable, insertDeficiency } from "../database/schema";
 
 export const useOffline = () => {
   const [loading, setLoading] = useState(false);
+  const client = api();
 
-  // Crear las tablas de la base de datos
+  // 🏗️ 1. Crear la tabla Deficiencias en SQLite
   const setupDatabase = async () => {
     setLoading(true);
     try {
-      await initTables([
-        createDeficienciesTable,
-        createFilesTable,
-        createPostesTable,
-        createVanosTable,
-        createSedsTable,
-      ]);
-      alert("Base de datos inicializada correctamente");
+      await initTables([createDeficienciesTable]);
+      alert("Tabla Deficiencias inicializada correctamente");
     } catch (error) {
-      console.error("Error al inicializar la base de datos", error);
-      alert("Hubo un error al inicializar la base de datos");
+      console.error("❌ Error al crear la tabla Deficiencias:", error);
+      alert("Hubo un error al crear la tabla Deficiencias");
     } finally {
       setLoading(false);
     }
   };
 
-  // Descargar datos desde la API y guardarlos en la base local
-  const downloadData = async () => {
+  // ⬇️ 2. Descargar deficiencias desde el backend y guardarlas en SQLite
+  const downloadDeficiencies = async (feeders = []) => {
     setLoading(true);
-
-    const tables = [
-      {
-        localTable: "deficiencias",
-        remoteTable: "Deficiencias",
-        query: "INSERT OR REPLACE INTO Deficiencias VALUES (?,?,?,?,?)",
-      },
-      {
-        localTable: "archivos",
-        remoteTable: "Archivos",
-        query: "INSERT OR REPLACE INTO Archivos VALUES (?,?,?,?,?,?)",
-      },
-      {
-        localTable: "postes",
-        remoteTable: "Postes",
-        query: "INSERT OR REPLACE INTO Postes VALUES (?,?,?,?,?,?)",
-      },
-      {
-        localTable: "vanos",
-        remoteTable: "Vanos",
-        query: "INSERT OR REPLACE INTO Vanos VALUES (?,?,?,?,?,?)",
-      },
-      {
-        localTable: "seds",
-        remoteTable: "Seds",
-        query: "INSERT OR REPLACE INTO Seds VALUES (?,?,?,?,?,?)",
-      },
-    ];
-
     try {
-      for (const { localTable, remoteTable, query } of tables) {
-        await downloadTable(localTable, remoteTable, query);
+      // Endpoint POST con lista de feeders
+      const endpoint = "/api/Deficiencies/GetDeficienciesByFeeders";
+
+      const res = await client.post(endpoint, feeders);
+      const data = res.data;
+
+      if (!Array.isArray(data)) {
+        throw new Error("El servidor no devolvió una lista válida de deficiencias");
       }
-      alert("Datos descargados correctamente");
+
+      // Limpiar datos antiguos (opcional)
+      await executeSql("DELETE FROM Deficiencias");
+
+      // Insertar fila por fila
+      for (const row of data) {
+        const values = [
+          row.defiInterno,
+          row.defiEstado,
+          row.tablInterno,
+          row.defiCodigoElemento,
+          row.tipiInterno,
+          row.defiNumSuministro,
+          row.defiFechaDenuncia,
+          row.defiFechaInspeccion,
+          row.defiFechaSubsanacion,
+          row.defiObservacion,
+          row.defiEstadoSubsanacion,
+          row.defiLatitud,
+          row.defiLongitud,
+          row.defiTipoElemento,
+          row.defiDistHorizontal,
+          row.defiDistVertical,
+          row.defiDistTransversal,
+          row.defiIdElemento,
+          row.defiFecRegistro,
+          row.defiCodDef,
+          row.defiCodAmt,
+          row.defiFecModificacion,
+          row.defiFechaCreacion,
+          row.defiPozoTierra,
+          row.defiResponsable ? 1 : 0,
+          row.defiComentario,
+          row.defiPozoTierra2,
+          row.defiUsuarioInic,
+          row.defiUsuarioMod,
+          row.defiActivo ? 1 : 0,
+          row.defiEstadoCriticidad,
+          row.defiInspeccionado ? 1 : 0,
+          row.defiCol1,
+          row.defiCol2,
+          row.defiCol3,
+          0, // pendingSync
+          new Date().toISOString(), // lastModified
+        ];
+
+        await executeSql(insertDeficiency, values);
+      }
+
+      alert(`✅ ${data.length} deficiencias descargadas correctamente`);
     } catch (error) {
-      console.error("Error al descargar los datos", error);
-      alert("Hubo un error al descargar los datos");
+      console.error("❌ Error al descargar deficiencias:", error);
+      alert("Hubo un error al descargar las deficiencias");
     } finally {
       setLoading(false);
     }
   };
 
-  // Subir datos pendientes (pendingSync = 1) desde la base local hacia el servidor
-  const uploadData = async () => {
-    setLoading(true);
-
-    const tables = [
-      {
-        localTable: "Deficiencias",
-        remoteTable: "deficiencias",
-        query: "SELECT * FROM Deficiencias WHERE pendingSync = 1",
-      },
-      {
-        localTable: "Archivos",
-        remoteTable: "archivos",
-        query: "SELECT * FROM Archivos WHERE pendingSync = 1",
-      },
-      {
-        localTable: "Postes",
-        remoteTable: "postes",
-        query: "SELECT * FROM Postes WHERE pendingSync = 1",
-      },
-      {
-        localTable: "Vanos",
-        remoteTable: "vanos",
-        query: "SELECT * FROM Vanos WHERE pendingSync = 1",
-      },
-      {
-        localTable: "Seds",
-        remoteTable: "seds",
-        query: "SELECT * FROM Seds WHERE pendingSync = 1",
-      },
-    ];
-
+  // 📦 3. Obtener deficiencias guardadas localmente
+  const getLocalDeficiencies = async () => {
     try {
-      for (const { localTable, remoteTable, query } of tables) {
-        await uploadTable(localTable, remoteTable, query);
-      }
-      alert("Datos subidos correctamente");
-    } catch (error) {
-      console.error("Error al subir los datos", error);
-      alert("Hubo un error al subir los datos");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Obtener todos los datos de una tabla local
-  const getTableData = async (tableName) => {
-    try {
-      const result = await executeSql(`SELECT * FROM ${tableName}`);
+      const result = await executeSql("SELECT * FROM Deficiencias");
       const rows = [];
       for (let i = 0; i < result.rows.length; i++) {
         rows.push(result.rows.item(i));
       }
       return rows;
     } catch (error) {
-      console.error(`Error al obtener datos de la tabla ${tableName}:`, error);
+      console.error("❌ Error al obtener deficiencias locales:", error);
       return [];
     }
   };
@@ -140,8 +110,7 @@ export const useOffline = () => {
   return {
     loading,
     setupDatabase,
-    downloadData,
-    uploadData,
-    getTableData,
+    downloadDeficiencies,
+    getLocalDeficiencies,
   };
 };

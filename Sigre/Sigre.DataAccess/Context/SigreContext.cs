@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Sigre.Entities;
+using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.DataAccess.Context;
 
@@ -755,6 +756,8 @@ public partial class SigreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_VANO_ALIM");
         });
+
+        modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);
 
         OnModelCreatingPartial(modelBuilder);
     }

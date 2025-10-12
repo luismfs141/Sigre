@@ -1,49 +1,82 @@
 export const createDeficienciesTable = `
 CREATE TABLE IF NOT EXISTS Deficiencias (
-  DEFI_Interno TEXT PRIMARY KEY,
-  DEFI_Descripcion TEXT,
-  PosteId TEXT,
+  DEFI_Interno INTEGER PRIMARY KEY,
+  DEFI_Estado TEXT,
+  TABL_Interno INTEGER,
+  DEFI_CodigoElemento TEXT,
+  TIPI_Interno INTEGER,
+  DEFI_NumSuministro TEXT,
+  DEFI_FechaDenuncia TEXT,
+  DEFI_FechaInspeccion TEXT,
+  DEFI_FechaSubsanacion TEXT,
+  DEFI_Observacion TEXT,
+  DEFI_EstadoSubsanacion TEXT,
+  DEFI_Latitud REAL,
+  DEFI_Longitud REAL,
+  DEFI_TipoElemento TEXT,
+  DEFI_DistHorizontal REAL,
+  DEFI_DistVertical REAL,
+  DEFI_DistTransversal REAL,
+  DEFI_IdElemento INTEGER,
+  DEFI_FecRegistro TEXT,
+  DEFI_CodDef TEXT,
+  DEFI_CodAmt TEXT,
+  DEFI_FecModificacion TEXT,
+  DEFI_FechaCreacion TEXT,
+  DEFI_PozoTierra TEXT,
+  DEFI_Responsable INTEGER, -- 0 o 1
+  DEFI_Comentario TEXT,
+  DEFI_PozoTierra2 TEXT,
+  DEFI_UsuarioInic TEXT,
+  DEFI_UsuarioMod TEXT,
+  DEFI_Activo INTEGER, -- 0 o 1
+  DEFI_EstadoCriticidad INTEGER,
+  DEFI_Inspeccionado INTEGER, -- 0 o 1
+  DEFI_Col1 TEXT,
+  DEFI_Col2 TEXT,
+  DEFI_Col3 TEXT,
   pendingSync INTEGER DEFAULT 0,
   lastModified TEXT
 )`;
 
-export const createFilesTable = `
-CREATE TABLE IF NOT EXISTS Archivos (
-  ARCH_Interno TEXT PRIMARY KEY,
-  ARCH_Nombre TEXT,
-  ARCH_Tipo TEXT,
-  DEFI_Interno TEXT,
-  pendingSync INTEGER DEFAULT 0,
-  lastModified TEXT
-)`;
-
-export const createPostesTable = `
-CREATE TABLE IF NOT EXISTS Postes (
-  POSTE_Interno TEXT PRIMARY KEY,
-  POSTE_Codigo TEXT,
-  POSTE_Latitud REAL,
-  POSTE_Longitud REAL,
-  pendingSync INTEGER DEFAULT 0,
-  lastModified TEXT
-)`;
-
-export const createVanosTable = `
-CREATE TABLE IF NOT EXISTS Vanos (
-  VANO_Interno TEXT PRIMARY KEY,
-  PosteOrigen TEXT,
-  PosteDestino TEXT,
-  Longitud REAL,
-  pendingSync INTEGER DEFAULT 0,
-  lastModified TEXT
-)`;
-
-export const createSedsTable = `
-CREATE TABLE IF NOT EXISTS Seds (
-  SED_Interno TEXT PRIMARY KEY,
-  SED_Codigo TEXT,
-  SED_Nombre TEXT,
-  SED_Latitud REAL,
-  SED_Longitud REAL,
-  pendingSync INTEGER DEFAULT 0,
-  lastModified TEXT
-)`;
+export const insertDeficiency = `
+INSERT OR REPLACE INTO Deficiencias (
+  DEFI_Interno,
+  DEFI_Estado,
+  TABL_Interno,
+  DEFI_CodigoElemento,
+  TIPI_Interno,
+  DEFI_NumSuministro,
+  DEFI_FechaDenuncia,
+  DEFI_FechaInspeccion,
+  DEFI_FechaSubsanacion,
+  DEFI_Observacion,
+  DEFI_EstadoSubsanacion,
+  DEFI_Latitud,
+  DEFI_Longitud,
+  DEFI_TipoElemento,
+  DEFI_DistHorizontal,
+  DEFI_DistVertical,
+  DEFI_DistTransversal,
+  DEFI_IdElemento,
+  DEFI_FecRegistro,
+  DEFI_CodDef,
+  DEFI_CodAmt,
+  DEFI_FecModificacion,
+  DEFI_FechaCreacion,
+  DEFI_PozoTierra,
+  DEFI_Responsable,
+  DEFI_Comentario,
+  DEFI_PozoTierra2,
+  DEFI_UsuarioInic,
+  DEFI_UsuarioMod,
+  DEFI_Activo,
+  DEFI_EstadoCriticidad,
+  DEFI_Inspeccionado,
+  DEFI_Col1,
+  DEFI_Col2,
+  DEFI_Col3,
+  pendingSync,
+  lastModified
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+`;

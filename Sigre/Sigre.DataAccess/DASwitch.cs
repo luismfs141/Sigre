@@ -27,5 +27,21 @@ namespace Sigre.DataAccess
             );
             return equi.ToList();
         }
+
+        public List<Equipo> DAEQUI_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        {
+            using var ctx = new SigreContext();
+
+            var feederList = new List<int>();
+            if (feeder1.HasValue) feederList.Add(feeder1.Value);
+            if (feeder2.HasValue) feederList.Add(feeder2.Value);
+            if (feeder3.HasValue) feederList.Add(feeder3.Value);
+
+            var equipos = ctx.Equipos
+                             .Where(e => feederList.Contains(e.AlimInterno))
+                             .ToList();
+
+            return equipos;
+        }
     }
 }

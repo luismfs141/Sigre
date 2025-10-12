@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
+using Sigre.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 
@@ -21,6 +22,18 @@ namespace Sigre.Server.Controllers
         {
             DASed dASed = new DASed();
             return dASed.DASed_GetStructByFeeder(x_feeder_id);
+        }
+
+        [HttpPost("GetSedsByFeeders")]
+        public List<Sed> GetSedsByFeeders(List<int> feeders)
+        {
+            DASed dASed = new DASed();
+
+            int? feeder1 = feeders.ElementAtOrDefault(0);
+            int? feeder2 = feeders.ElementAtOrDefault(1);
+            int? feeder3 = feeders.ElementAtOrDefault(2);
+
+            return dASed.DASed_GetByListFeeder(feeder1, feeder2, feeder3);
         }
     }
 }

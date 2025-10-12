@@ -27,5 +27,5 @@ namespace Sigre.Server.Controllers
 
             return pins;
          }
-}
+    }
 }
