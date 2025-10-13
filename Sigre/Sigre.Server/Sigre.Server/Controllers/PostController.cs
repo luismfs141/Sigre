@@ -22,11 +22,7 @@ namespace Sigre.Server.Controllers
         {
             DAPost dAPost = new DAPost();
 
-            int? feeder1 = feeders.ElementAtOrDefault(0);
-            int? feeder2 = feeders.ElementAtOrDefault(1);
-            int? feeder3 = feeders.ElementAtOrDefault(2);
-
-            return dAPost.DAPOST_GetByListFeeder(feeder1, feeder2, feeder3);
+            return dAPost.DAPOST_GetByListFeeder(feeders);
         }
     }
 }

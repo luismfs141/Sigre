@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 
@@ -9,12 +10,12 @@ namespace Sigre.Server.Controllers
     [Route("api/[controller]")]
     public class SedController : Controller
     {
-        [HttpGet("GetByFeeder")]
-        public List<PinStruct> ObtenerSed([FromQuery] int x_Alim_Id)
-        {
-            DASed dASed = new DASed();
-            return dASed.DASed_PinByFeeder(x_Alim_Id);
-        }
+        //[HttpGet("GetByFeeder")]
+        //public List<PinStruct> ObtenerSed([FromQuery] int x_Alim_Id)
+        //{
+        //    DASed dASed = new DASed();
+        //    return dASed.DASed_PinByFeeder(x_Alim_Id);
+        //}
 
         [HttpGet("GetStructByFeeder")]
         public List<ElementStruct> GetStructByFeeder([FromQuery] int x_feeder_id)
@@ -23,16 +24,12 @@ namespace Sigre.Server.Controllers
             return dASed.DASed_GetStructByFeeder(x_feeder_id);
         }
 
-        //[HttpPost("GetSedsByFeeders")]
-        //public List<Sed> GetSedsByFeeders(List<int> feeders)
-        //{
-        //    DASed dASed = new DASed();
+        [HttpPost("GetSedsByFeeders")]
+        public List<Sed> GetSedsByFeeders(List<int> feeders)
+        {
+            DASed dASed = new DASed();
 
-        //    int? feeder1 = feeders.ElementAtOrDefault(0);
-        //    int? feeder2 = feeders.ElementAtOrDefault(1);
-        //    int? feeder3 = feeders.ElementAtOrDefault(2);
-
-        //    return dASed.DASed_GetByListFeeder(feeder1, feeder2, feeder3);
-        //}
+            return dASed.DASed_GetByListFeeder(feeders);
+        }
     }
 }

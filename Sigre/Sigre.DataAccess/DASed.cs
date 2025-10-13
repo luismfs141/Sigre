@@ -15,10 +15,10 @@ namespace Sigre.DataAccess
 {
     public class DASed
     {
-        public List<PinStruct> DASed_PinByFeeder(int x_feeder_id)
+        public List<PinStruct> DASed_PinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
-            var query = ctx.Seds.Where(v => v.AlimInterno == x_feeder_id).Select(s => new PinStruct() {
+            var query = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).Select(s => new PinStruct() {
                 Id = s.SedInterno,
                 Label = s.SedEtiqueta,
                 IdAlimentador = s.AlimInterno,
@@ -26,9 +26,7 @@ namespace Sigre.DataAccess
                 Longitude = s.SedLongitud,
                 ElementCode = s.SedCodigo,
                 Inspeccionado = s.SedInspeccionado,
-                TipoMaterial = s.SedMaterial == null?"CON":s.SedMaterial.ToString(),
                 Tercero = s.SedTerceros,
-                Selected = false,
                 Type = 
                     s.SedTipo == "M" ? ElectricElement.SedMP :
                     s.SedTipo == "B" ? ElectricElement.SedBP :
@@ -39,18 +37,11 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
-        public List<Sed> DASed_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        public List<Sed> DASed_GetByListFeeder(List<int> x_feeders)
         {
-            using var ctx = new SigreContext();
+            SigreContext ctx = new SigreContext();
 
-            var feederList = new List<int>();
-            if (feeder1.HasValue) feederList.Add(feeder1.Value);
-            if (feeder2.HasValue) feederList.Add(feeder2.Value);
-            if (feeder3.HasValue) feederList.Add(feeder3.Value);
-
-            var seds = ctx.Seds
-                          .Where(s => feederList.Contains(s.AlimInterno))
-                          .ToList();
+            var seds = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).ToList();
 
             return seds;
         }

@@ -17,11 +17,9 @@ namespace Sigre.Entities.Structs
         public double Longitude { get; set; }
         public int IdAlimentador { get; set; }
         public string ElementCode { get; set; }
-        public string? TipoMaterial { get; set; }
         public bool Inspeccionado { get; set; }
         public bool Tercero { get; set; }
         public string? NodoInicial { get; set; }
         public string? NodoFinal { get; set; }
-        public bool Selected { get; set; }
     }
 }

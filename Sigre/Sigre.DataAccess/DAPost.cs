@@ -19,10 +19,10 @@ namespace Sigre.DataAccess
 {
     public class DAPost
     {
-        public List<PinStruct> DAPOST_PinByFeeder(int x_feeder_Id)
+        public List<PinStruct> DAPOST_PinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
-            var posts = ctx.Postes.Where(v => v.AlimInterno == x_feeder_Id).Select(p => 
+            var posts = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).Select(p => 
                 new PinStruct()
                 {
                     Id = p.PostInterno,
@@ -33,28 +33,16 @@ namespace Sigre.DataAccess
                     ElementCode = p.PostCodigoNodo,
                     IdAlimentador = p.AlimInterno,
                     Inspeccionado = p.PostInspeccionado,
-                    Tercero = p.PostTerceros,
-                    TipoMaterial = p.PostMaterial == null? "CON":p.PostMaterial.ToString(),
-                    Selected =false
+                    Tercero = p.PostTerceros
                 }
             );
             return posts.ToList();
         }
-        public List<Poste> DAPOST_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        public List<Poste> DAPOST_GetByListFeeder(List<int> x_feeders)
         {
             using var ctx = new SigreContext();
 
-            // Construir lista solo con los feeders válidos (no nulos)
-            var feederList = new List<int>();
-
-            if (feeder1.HasValue) feederList.Add(feeder1.Value);
-            if (feeder2.HasValue) feederList.Add(feeder2.Value);
-            if (feeder3.HasValue) feederList.Add(feeder3.Value);
-
-            // Buscar postes que coincidan con esos alimentadores
-            var postes = ctx.Postes
-                            .Where(p => feederList.Contains(p.AlimInterno))
-                            .ToList();
+            var postes = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).ToList();
 
             return postes;
         }

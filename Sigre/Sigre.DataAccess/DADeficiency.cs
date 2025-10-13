@@ -136,23 +136,27 @@ namespace Sigre.DataAccess
             return deficiencies;
         }
 
-        public List<PinStruct> DADEFI_GetPinsByFeeder(int x_feeder_id)
+        public List<PinStruct> DADEFI_GetPinsByFeeders(List<int> x_feeders )
         {
             SigreContext ctx = new SigreContext();
 
-            Alimentadore alim = ctx.Alimentadores.SingleOrDefault(a => a.AlimInterno == x_feeder_id);
+            var query = (
+                from a in ctx.Alimentadores
+                join d in ctx.Deficiencias on a.AlimCodigo equals d.DefiCodAmt
+                where x_feeders.Contains(a.AlimInterno)
+                select new PinStruct
+                {
+                    Id = d.DefiInterno,
+                    IdAlimentador = a.AlimInterno,
+                    Label =  "",
+                    Type = ElectricElement.Deficiency,
+                    Latitude = d.DefiLatitud,
+                    Longitude = d.DefiLongitud,
+                    Inspeccionado = d.DefiInspeccionado
+                }
+            );
 
-            var query = ctx.Deficiencias.Where(d => d.DefiCodAmt == alim.AlimCodigo).Select(p => new PinStruct() { 
-                Id = 0,
-                IdAlimentador = alim.AlimInterno,
-                Label = "",
-                Type = ElectricElement.Deficiency,
-                Latitude = p.DefiLatitud,
-                Longitude = p.DefiLongitud
-                
-            });
-
-            return query.ToList();  
+            return query.ToList();
         }
 
         public List<Deficiencia> DADEFI_GetByFeeder(int x_feeder_id)

@@ -29,22 +29,15 @@ namespace Sigre.DataAccess
 
         //    return usuario;
         //}
-        //public void DAUS_SaveUser(Usuario us)
-        //{
-        //    SigreContext ctx = new SigreContext();
-        //    us.UsuaImei = us.UsuaImei.ToLower();
 
-        //    if (us.UsuaInterno == 0)
-        //    {
-        //        ctx.Usuarios.Add(us);
-        //    }
-        //    else
-        //    {
-        //        Usuario usOriginal=ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == us.UsuaInterno);
-        //        ctx.Entry(usOriginal).CurrentValues.SetValues(us);
-        //    }
-        //    ctx.SaveChanges(); 
-        //}
+        public Usuario DAUS_GetUser(int x_usuario)
+        {
+            SigreContext ctx = new SigreContext();
+
+            Usuario usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == x_usuario);
+
+            return usuario;
+        }
 
         public void DAUS_SaveUser(Usuario us)
         {
@@ -84,6 +77,16 @@ namespace Sigre.DataAccess
 
             return usuario;
         }
+        public Perfile DAUS_GetPerfilByUser(int x_usuario)
+        {
+            SigreContext ctx = new SigreContext();
 
+            return (
+                from pu in ctx.PerfilesUsuarios
+                join p in ctx.Perfiles on pu.PfusPerfil equals p.PerfInterno
+                where pu.PfusInterno == x_usuario
+                select p
+            ).FirstOrDefault();
+        }
     }
 }

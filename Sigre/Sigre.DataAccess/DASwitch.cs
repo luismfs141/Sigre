@@ -13,10 +13,10 @@ namespace Sigre.DataAccess
     public class DASwitch
     {
 
-        public List<PinStruct> DAEQUI_PinByFeeder(int x_feeder_Id)
+        public List<PinStruct> DAEQUI_PinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
-            var equi = ctx.Equipos.Where(e => e.AlimInterno == x_feeder_Id).Select(e =>
+            var equi = ctx.Equipos.Where(e => x_feeders.Contains(e.AlimInterno)).Select(e =>
                 new PinStruct()
                 {
                     Id = e.EquiInterno,
@@ -29,17 +29,12 @@ namespace Sigre.DataAccess
             return equi.ToList();
         }
 
-        public List<Equipo> DAEQUI_GetByListFeeder(int? feeder1, int? feeder2, int? feeder3)
+        public List<Equipo> DAEQUI_GetByListFeeder(List<int> x_feeders)
         {
-            using var ctx = new SigreContext();
-
-            var feederList = new List<int>();
-            if (feeder1.HasValue) feederList.Add(feeder1.Value);
-            if (feeder2.HasValue) feederList.Add(feeder2.Value);
-            if (feeder3.HasValue) feederList.Add(feeder3.Value);
+            SigreContext ctx = new SigreContext();
 
             var equipos = ctx.Equipos
-                             .Where(e => feederList.Contains(e.AlimInterno))
+                             .Where(e => x_feeders.Contains(e.AlimInterno))
                              .ToList();
 
             return equipos;
