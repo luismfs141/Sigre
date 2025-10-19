@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Usuario
 {
+    [Key]
     public int UsuaInterno { get; set; }
 
     public string UsuaNombres { get; set; } = null!;

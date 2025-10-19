@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Movile
 {
+    [Key]
     public int MoviInterno { get; set; }
 
     public string MoviNombre { get; set; } = null!;

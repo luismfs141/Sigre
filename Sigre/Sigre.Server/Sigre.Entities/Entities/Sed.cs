@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Sed
 {
+    [Key]
     public int SedInterno { get; set; }
 
     public string SedEtiqueta { get; set; } = null!;

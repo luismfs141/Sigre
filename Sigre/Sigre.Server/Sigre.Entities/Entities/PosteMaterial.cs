@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class PosteMaterial
 {
+    [Key]
     public int PosmtInterno { get; set; }
 
     public string PosmtNombre { get; set; } = null!;

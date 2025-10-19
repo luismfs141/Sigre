@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class RetenidaTipo
 {
+    [Key]
     public int RtntpInterno { get; set; }
 
     public string RtntpNombre { get; set; } = null!;

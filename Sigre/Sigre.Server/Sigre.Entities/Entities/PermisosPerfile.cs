@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
 
 namespace Sigre.Entities.Entities;
 
 public partial class PermisosPerfile
 {
+    [Key]
     public int PmpfInterno { get; set; }
 
     public int PmpfPermiso { get; set; }

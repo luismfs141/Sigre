@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
 
 namespace Sigre.Entities.Entities;
 
 public partial class Permiso
 {
+    [Key]
     public int PermInterno { get; set; }
 
     public string PermReferencia { get; set; } = null!;

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Archivo
 {
+    [Key]
     public int ArchInterno { get; set; }
 
     public string ArchTipo { get; set; } = null!;

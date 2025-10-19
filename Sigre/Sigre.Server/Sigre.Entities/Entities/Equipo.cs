@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Equipo
 {
+    [Key]
     public int EquiInterno { get; set; }
 
     public string EquiEtiqueta { get; set; } = null!;

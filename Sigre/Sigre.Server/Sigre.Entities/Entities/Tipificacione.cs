@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Tipificacione
 {
+    [Key]
     public int TipiInterno { get; set; }
 
     public string TipoDescripcion { get; set; } = null!;

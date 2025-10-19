@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Vano
 {
+    [Key]
     public int VanoInterno { get; set; }
 
     public string? VanoCodigo { get; set; }

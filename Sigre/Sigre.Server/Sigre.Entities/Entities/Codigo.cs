@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Codigo
 {
+    [Key]
     public int CodiInterno { get; set; }
 
     public string CodiCodigo { get; set; } = null!;

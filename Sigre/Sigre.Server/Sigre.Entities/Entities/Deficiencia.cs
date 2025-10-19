@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Deficiencia
 {
+    [Key]
     public int DefiInterno { get; set; }
 
     public string? DefiEstado { get; set; }

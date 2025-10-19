@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sigre.Entities.Entities;
 
 public partial class Perfile
 {
+    [Key]
     public int PerfInterno { get; set; }
 
     public string PerfNombre { get; set; } = null!;

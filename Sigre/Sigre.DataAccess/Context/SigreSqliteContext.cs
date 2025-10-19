@@ -2,10 +2,6 @@
 using Sigre.Entities.Entities;
 using Sigre.Entities.Structs;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Sigre.DataAccess.Context
 {
@@ -31,7 +27,33 @@ namespace Sigre.DataAccess.Context
         public DbSet<RetenidaMaterial> RetenidaMaterials { get; set; }
         public DbSet<PosteMaterial> PosteMaterials { get; set; }
         public DbSet<SedMaterial> SedMaterials { get; set; }
-        // 👇 nueva tabla de pines
+
+        // 👇 Nueva tabla de pines
         public DbSet<PinStruct> Pines { get; set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            // Habilita logging sensible para rastrear conflictos de ID o tracking
+            optionsBuilder.EnableSensitiveDataLogging();
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Configuración para PinStruct
+            modelBuilder.Entity<PinStruct>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                // 👇 Asegura autoincremento en SQLite
+                entity.Property(e => e.Id)
+                      .ValueGeneratedOnAdd();
+
+                // 👇 Nueva columna que guarda el ID del elemento original
+                entity.Property(e => e.IdOriginal)
+                      .HasDefaultValue(0);
+            });
+        }
     }
 }

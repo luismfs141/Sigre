@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
 
 namespace Sigre.Entities.Entities;
 
 public partial class PerfilesUsuario
 {
+    [Key]
     public int PfusInterno { get; set; }
 
     public int PfusUsuario { get; set; }
