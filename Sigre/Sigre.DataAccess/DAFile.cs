@@ -52,5 +52,13 @@ namespace Sigre.DataAccess
 
             return query.ToList();
         }
+
+        public Archivo DAARCH_GetTableData()
+        {
+            SigreContext ctx = new SigreContext();
+
+            Archivo archivoTabla = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == 1);
+            return archivoTabla;
+        }
     }
 }

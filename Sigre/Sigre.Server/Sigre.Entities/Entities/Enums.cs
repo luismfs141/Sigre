@@ -4,23 +4,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Sigre.Entities
+namespace Sigre.Entities.Entities;
+
+public enum ElectricElement
 {
-    public enum ElectricElement
-    {
-        Gap,
-        SedMP,
-        SedBP,
-        SedCA,
-        SedPV,
-        Post,
-        Swicth,
-        Unknown,
-        Deficiency,
-        SedST
-    }
-    public enum States
-    {
-        Ok
-    }
+    Gap,
+    SedMP,
+    SedBP,
+    SedCA,
+    SedPV,
+    Post,
+    Swicth,
+    Unknown,
+    Deficiency,
+    SedST
+}
+public enum States
+{
+    Ok
 }

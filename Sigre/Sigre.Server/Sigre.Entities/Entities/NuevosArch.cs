@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Sigre.DataAccess.Entities;
+namespace Sigre.Entities.Entities;
 
 public partial class NuevosArch
 {

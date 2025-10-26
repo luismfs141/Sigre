@@ -11,5 +11,7 @@ namespace Sigre.DataAccess.Context
     public partial class SigreContext : DbContext
     {
         public virtual DbSet<ElementStruct>ElementStructs { get; set; }
+
+        public DbSet<DeficiencyDto> DeficiencyDto { get; set; }
     }
 }

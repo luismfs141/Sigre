@@ -72,6 +72,14 @@ namespace Sigre.Server.Controllers
             return dADeficiency.DADEFI_GetByFeeder(x_feeder_id);
         }
 
+        [HttpPost("GetDeficienciesByFeeders")]
+        public List<Deficiencia> GetByListFeeder([FromBody] List<int> feeders)
+        {
+            DADeficiency dADeficiency = new DADeficiency();
+
+            return dADeficiency.DADEFI_GetByListFeeders(feeders);
+        }
+
         [Route("SynchronizeData")]
         [HttpPost]
         public object SyncronizeData(OffLineStruct off)

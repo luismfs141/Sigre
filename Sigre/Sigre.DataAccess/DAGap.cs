@@ -1,9 +1,9 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
-using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,22 +33,37 @@ namespace Sigre.DataAccess
                 VanoMaterial = van.VanoMaterial == null? "ALU" : van.VanoMaterial,
                 VanoNodoFinal = van.VanoNodoFinal,
                 VanoNodoInicial = van.VanoNodoInicial,
-                VanoTerceros = van.VanoTerceros,
-                VanoSelected = false
+                VanoTerceros = van.VanoTerceros
             }
             );
             return vanos.ToList();
         }
-        public List<ElementStruct> DAGap_GetStructByFeeder(int x_feeder_id)
+
+        public List<Vano> DAGAP_GetByListFeeder(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
 
-            var gaps = ctx.ElementStructs.FromSqlRaw("exec sp_GetGapsByFeeder @Feeder",
-                new SqlParameter("@Feeder", x_feeder_id)
-                ).ToList();
+            var vanos = ctx.Vanos.Where(v => x_feeders.Contains(v.AlimInterno)).ToList();
 
-            return gaps;
+            return vanos;
         }
-        
+
+        public List<PinStruct> DAGAP_GetPinsByFeeders(List<int> x_feeders)
+        {
+            SigreContext ctx = new SigreContext();
+
+            List<PinStruct> pinVanos = ctx.Vanos.Where(v => x_feeders.Contains(v.AlimInterno)).Select(v => new PinStruct()
+            {
+                Id = v.VanoInterno,
+                IdAlimentador = v.AlimInterno,
+                Label = "",
+                Type = ElectricElement.Gap,
+                NodoInicial = v.VanoNodoInicial,
+                NodoFinal = v.VanoNodoFinal,
+                Inspeccionado = v.VanoInspeccionado
+            }).ToList();
+
+            return pinVanos;
+        }
     }
 }

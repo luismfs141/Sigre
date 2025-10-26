@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
-using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 
@@ -15,11 +14,19 @@ namespace Sigre.Server.Controllers
             DAGap dAGap = new DAGap();
             return dAGap.DAGAP_GetByFeeder(x_feeder_id);
         }
-        [HttpGet("GetStructByFeeder")]
-        public List<ElementStruct> GetStructByFeeder(int x_feeder_id)
+        //[HttpGet("GetStructByFeeder")]
+        //public List<ElementStruct> GetStructByFeeder(int x_feeder_id)
+        //{
+        //    DAGap dAGap = new DAGap();
+        //    return dAGap.DAGap_GetStructByFeeder(x_feeder_id);
+        //}
+
+        [HttpPost("GetGapsByFeeders")]
+        public List<Vano> GetGapsByFeeders(List<int> feeders)
         {
             DAGap dAGap = new DAGap();
-            return dAGap.DAGap_GetStructByFeeder(x_feeder_id);
+
+            return dAGap.DAGAP_GetByListFeeder(feeders);
         }
     }
 }
