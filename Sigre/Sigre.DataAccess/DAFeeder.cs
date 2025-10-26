@@ -455,12 +455,6 @@ namespace Sigre.DataAccess
                                 : $"PIN_{Guid.NewGuid():N}" // Valor generado si viene nulo
                         }).ToList();
 
-                        // Validar pines creados
-                        var pinProblems2 = ValidateEntitiesKeys(pinesEntities, "PinesEntities");
-                        if (pinProblems2.Any())
-                        {
-                            foreach (var prob in pinProblems2) Log("PIN PROBLEM: " + prob);
-                        }
 
                         sqliteCtx.Pines.AddRange(pinesEntities);
                         Log($"Pines añadidos: {pinesEntities.Count}");
