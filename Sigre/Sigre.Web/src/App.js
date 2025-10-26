@@ -1,48 +1,76 @@
-import React from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-import './assetss/css/App.css';
-import { Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import './assetss/css/Generalbar.css';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 
-import Login from './components/Login';
-import Dashboard from './pages/Dashboard';
-import Users from './pages/Users';
-import Maps from './pages/Maps';
-import Reports from './pages/Reports';
-import Records from './pages/Records';
-import Feeders from './pages/Elements/Feeders';
-import Gaps from './pages/Elements/Gaps';
-import Posts from './pages/Elements/Posts';
-import Codes from './pages/Codes';
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
+import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
+import Grupos from './pages/Grupos';
+import Menu from './pages/Menu';
+import Estado from './pages/Estado';
+import Sorteos from './pages/Sorteos';
+import Cronograma from './pages/Cronograma';
+import Soporte from './pages/Soporte';
+import LoginForm from './pages/Login';
+import Personal from './pages/Personal'
+import Empresa from './pages/Empresa';
+import RegistroCliente from './pages/RegistroCliente';
 
 function App() {
-  return (
-    <Routes>
-      {/* Rutas públicas */}
-      <Route path="/" element={<Login />} />
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
-      {/* Rutas privadas con layout */}
-      <Route
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/users" element={<Users />} />
-        <Route path="/maps" element={<Maps />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/records" element={<Records />} />
-        <Route path="/feeders" element={<Feeders />} />
-        <Route path="/gaps" element={<Gaps />} />
-        <Route path="/posts" element={<Posts />} />
-        <Route path="/codes" element={<Codes />} />
-      </Route>
-    </Routes>
+  // Verificar si el usuario está autenticado al montar el componente
+  useEffect(() => {
+    if (localStorage.getItem('usuario') === "undefined") {
+        localStorage.removeItem('usuario');
+    }
+
+    const usuarioData = localStorage.getItem('usuario');
+    if (usuarioData) {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  // Función para manejar el login
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+    navigate("/Menu"); // Redirige a la página principal después de iniciar sesión
+  };
+
+  // Función para manejar el logout
+  const handleLogout = () => {
+    localStorage.removeItem('usuario'); // Eliminar los datos del cliente de localStorage
+    setIsAuthenticated(false); // Cambiar el estado de autenticación
+    navigate("/Login"); // Redirigir al login
+  };
+
+  return (
+    <div>
+      {/* Mostrar el LoginForm solo si no está autenticado */}
+      {!isAuthenticated ? (
+        <Routes>
+          <Route path="/" element={<LoginForm onLogin={handleLogin} />} />
+          <Route path="/Login" element={<LoginForm onLogin={handleLogin} />} />  
+        </Routes>
+      ) : (
+        <>
+          <Sidebar />
+          <section id="content">
+            <Navbar onLogout={handleLogout} />
+            <Routes>
+              <Route path="/Personal" element={<Personal />} />
+              <Route path="/Empresa" element={<Empresa />} />
+              <Route path="/Menu" element={<Menu />} />
+              <Route path="/Grupos" element={<Grupos />} />
+              <Route path="/Estado" element={<Estado />} />
+              <Route path="/Sorteos" element={<Sorteos />} />
+              <Route path="/Cronograma" element={<Cronograma />} />
+              <Route path="/Soporte" element={<Soporte />} />
+            </Routes>
+          </section>
+        </>
+      )}
+    </div>
   );
 }
 
