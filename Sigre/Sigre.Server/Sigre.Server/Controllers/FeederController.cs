@@ -66,30 +66,12 @@ namespace Sigre.Server.Controllers
             {
                 DAFeeder dAFeeder = new DAFeeder();
 
-                string folderPath = Path.Combine(Directory.GetCurrentDirectory(), "temp");
-                if (!Directory.Exists(folderPath))
-                    Directory.CreateDirectory(folderPath);
+                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(request.Feeders, request.UserId);
 
-                string filePath = Path.Combine(folderPath, $"sigre_copy_{request.UserId}.sqlite");
-
-                // Llamas al método que genera la copia
-                dAFeeder.DAFE_CreateDatabaseSqlite(request.Feeders, request.UserId);
-
-                // ⚙️ Aquí deberías generar la copia SQLite real (por ejemplo con SigreSqliteContext)
-                // y guardarla en filePath
-
-                if (!System.IO.File.Exists(filePath))
+                if (fileBytes == null || fileBytes.Length == 0)
                     return NotFound("No se generó el archivo SQLite.");
 
-                var memory = new MemoryStream();
-                using (var stream = new FileStream(filePath, FileMode.Open))
-                {
-                    await stream.CopyToAsync(memory);
-                }
-
-                memory.Position = 0;
-
-                return File(memory, "application/octet-stream", Path.GetFileName(filePath));
+                return File(fileBytes, "application/octet-stream", "sigre_offline.db");
             }
             catch (Exception ex)
             {

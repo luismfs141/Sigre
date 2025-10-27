@@ -1,30 +1,42 @@
-import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Button,
+  FlatList,
+  Modal,
+  StyleSheet,
   Text,
+  TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthContext } from "../../context/AuthContext";
 import { useOffline } from "../../hooks/useOffline";
 
+// Mock de feeders disponibles, cada uno con id y nombre
+const allFeeders = [
+  { id: 1, name: "Alimentador A" },
+  { id: 2, name: "Alimentador B" },
+  { id: 3, name: "Alimentador C" },
+  { id: 4, name: "Alimentador D" },
+];
+
 export default function Sync() {
-  const { loading, setupDatabase, downloadDeficiencies, getLocalDeficiencies } =
-    useOffline();
+  const { user } = useContext(AuthContext);
+  const { loading, downloadDatabase } = useOffline();
 
-  const [feeders, setFeeders] = useState([null, null, null]);
+  const [selectedFeeders, setSelectedFeeders] = useState([]);
   const [dbExists, setDbExists] = useState(false);
-  const dbName = "mydb.db";
+  const [modalVisible, setModalVisible] = useState(false);
+  const dbName = "sigre_offline.db";
 
-  // 📦 Verifica si existe base local al iniciar
   useEffect(() => {
     checkDatabase();
   }, []);
 
-  // 🔍 Verifica si existe la base de datos SQLite
   const checkDatabase = async () => {
     try {
       const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
@@ -36,63 +48,35 @@ export default function Sync() {
     }
   };
 
-  // 🧭 Maneja cambio de combo sin repetir valores
-  const handleFeederChange = (index, value) => {
-    if (feeders.includes(value)) {
-      Alert.alert("Duplicado", "Ya seleccionaste este número en otro combo.");
+  const handleDownload = async () => {
+    if (!selectedFeeders.length) {
+      Alert.alert("Selecciona al menos un alimentador");
       return;
     }
-    const updated = [...feeders];
-    updated[index] = value;
-    setFeeders(updated);
-  };
 
-  // 📥 Descargar data desde servidor
-  const handleDownload = async () => {
-    try {
-      await downloadDeficiencies(feeders);
-      Alert.alert("Éxito", "Datos descargados correctamente.");
+    const feederIds = selectedFeeders.map(f=>f.id);
+
+    const fileUri = await downloadDatabase(user.id, feederIds);
+    if (fileUri) {
+      Alert.alert("✅ Base descargada correctamente");
       await checkDatabase();
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Fallo al descargar datos.");
+    } else {
+      Alert.alert("❌ Error descargando la base");
     }
   };
 
-  // 📤 Subir data al servidor
-  const handleUpload = async () => {
+  const handleExport = async () => {
     try {
       const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
       const fileInfo = await FileSystem.getInfoAsync(dbPath);
 
-      if (fileInfo.exists) {
-        await FileSystem.deleteAsync(dbPath, { idempotent: true });
-        setDbExists(false);
-        Alert.alert("Subida simulada", "Se eliminó la base local correctamente.");
-      } else {
-        Alert.alert("Sin base local", "No se encontró la base de datos.");
-      }
-    } catch (error) {
-      console.error("Error al eliminar base local:", error);
-      Alert.alert("Error", "No se pudo eliminar la base local.");
-    }
-  };
-
-  // 💾 Exportar backup (copia de la base)
-  const handleExportBackup = async () => {
-    try {
-      const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
-      const fileInfo = await FileSystem.getInfoAsync(dbPath);
       if (!fileInfo.exists) {
-        Alert.alert("Sin base local", "No se encontró una base SQLite local.");
+        Alert.alert("Sin base local", "No se encontró la base SQLite local.");
         return;
       }
 
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert(
-          "No disponible",
-          "La función de compartir no está disponible en este dispositivo."
-        );
+        Alert.alert("No disponible", "La función de compartir no está disponible.");
         return;
       }
 
@@ -103,89 +87,113 @@ export default function Sync() {
     }
   };
 
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-        backgroundColor: "#f9f9f9",
-      }}
+  const handleSync = async () => {
+    // Simulación de sincronización: eliminar base local
+    try {
+      const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+      await FileSystem.deleteAsync(dbPath, { idempotent: true });
+      setDbExists(false);
+      Alert.alert("📡 Sincronización simulada", "Base local eliminada.");
+    } catch (error) {
+      console.error("Error sincronizando:", error);
+      Alert.alert("Error", "No se pudo sincronizar la base.");
+    }
+  };
+
+  const addFeeder = (feeder) => {
+    setSelectedFeeders((prev) => [...prev, feeder]);
+    setModalVisible(false);
+  };
+
+  const removeFeeder = (feeder) => {
+    setSelectedFeeders((prev) => prev.filter((f) => f.id !== feeder.id));
+  };
+
+  const renderSelectedFeeder = ({ item }) => (
+    <View style={styles.feederRow}>
+      <Text style={styles.feederText}>{item.name}</Text>
+      <Button title="❌" onPress={() => removeFeeder(item)} />
+    </View>
+  );
+
+  const renderFeederItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.modalItem}
+      onPress={() => addFeeder(item)}
     >
-      {loading ? (
-        <View style={{ alignItems: "center", marginVertical: 20 }}>
+      <Text>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {loading && (
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007bff" />
           <Text style={{ marginTop: 10 }}>Procesando...</Text>
         </View>
-      ) : (
+      )}
+
+      {!loading && (
         <>
-          <Text style={{ fontSize: 18, marginBottom: 10, fontWeight: "bold" }}>
-            Selecciona los feeders:
+          <Text style={styles.title}>Alimentadores seleccionados:</Text>
+
+          {selectedFeeders.length === 0 && (
+            <Text style={{ marginBottom: 10 }}>Ninguno seleccionado</Text>
+          )}
+
+          <FlatList
+            data={selectedFeeders}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderSelectedFeeder}
+            style={{ marginBottom: 10 }}
+          />
+
+          <Button title="➕ Añadir alimentador" onPress={() => setModalVisible(true)} />
+
+          <View style={styles.buttonGroup}>
+            <Button title="📥 Descargar Base" onPress={handleDownload} disabled={dbExists} />
+            <Button title="💾 Exportar Base" onPress={handleExport} disabled={!dbExists} />
+            <Button title="🔄 Sincronizar" onPress={handleSync} />
+          </View>
+
+          <Text style={{ marginTop: 10, fontWeight: "bold", color: dbExists ? "green" : "red" }}>
+            {dbExists ? "📦 Base local detectada" : "⚠️ No hay base de datos local"}
           </Text>
 
-          {[0, 1, 2].map((i) => (
-            <Picker
-              key={i}
-              selectedValue={feeders[i]}
-              style={{
-                height: 50,
-                width: 200,
-                backgroundColor: "#fff",
-                marginBottom: 10,
-              }}
-              onValueChange={(val) => handleFeederChange(i, val)}
-            >
-              <Picker.Item label={`Feeder ${i + 1}`} value={null} />
-              <Picker.Item label="1" value={1} />
-              <Picker.Item label="2" value={2} />
-              <Picker.Item label="3" value={3} />
-            </Picker>
-          ))}
-
-          <View style={{ marginTop: 20, width: "100%" }}>
-            <Button title="Inicializar BD" onPress={setupDatabase} />
-          </View>
-
-          <View style={{ marginTop: 15, width: "100%" }}>
-            <Button
-              title="📥 Descargar Data"
-              onPress={handleDownload}
-              disabled={dbExists}
-              color={dbExists ? "gray" : "#007bff"}
-            />
-          </View>
-
-          <View style={{ marginTop: 15, width: "100%" }}>
-            <Button
-              title="📤 Subir Data"
-              onPress={handleUpload}
-              disabled={!dbExists}
-              color={!dbExists ? "gray" : "#28a745"}
-            />
-          </View>
-
-          <View style={{ marginTop: 15, width: "100%" }}>
-            <Button
-              title="💾 Exportar Backup"
-              onPress={handleExportBackup}
-              color="#6c757d"
-            />
-          </View>
-
-          <Text
-            style={{
-              marginTop: 20,
-              color: dbExists ? "green" : "red",
-              fontWeight: "bold",
-            }}
+          {/* Modal para seleccionar feeders */}
+          <Modal
+            visible={modalVisible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setModalVisible(false)}
           >
-            {dbExists
-              ? "📦 Base local detectada"
-              : "⚠️ No hay base de datos local"}
-          </Text>
+            <View style={styles.modalBackground}>
+              <View style={styles.modalContainer}>
+                <Text style={{ fontWeight: "bold", marginBottom: 10 }}>Selecciona un alimentador</Text>
+                <FlatList
+                  data={allFeeders.filter((f) => !selectedFeeders.some((sf) => sf.id === f.id))}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={renderFeederItem}
+                />
+                <Button title="Cerrar" onPress={() => setModalVisible(false)} />
+              </View>
+            </View>
+          </Modal>
         </>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 15, backgroundColor: "#f9f9f9" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
+  feederRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 5 },
+  feederText: { fontSize: 16 },
+  buttonGroup: { flexDirection: "row", justifyContent: "space-around", marginVertical: 10 },
+  modalBackground: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContainer: { width: "80%", backgroundColor: "#fff", borderRadius: 10, padding: 15 },
+  modalItem: { padding: 10, borderBottomWidth: 1, borderBottomColor: "#ccc" },
+});

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
+using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 
 namespace Sigre.DataAccess
@@ -130,7 +131,7 @@ namespace Sigre.DataAccess
                      TipiInterno = d.TipiInterno,//
                      DefiInspeccionado = d.DefiInspeccionado,
                      DefiKeyWords = d.DefiKeyWords,
-                     DefiEstadoOffLine = 0,
+                     EstadoOffLine = 0,
                  }).ToList();
 
             return deficiencies;
@@ -224,7 +225,7 @@ namespace Sigre.DataAccess
                  TipiInterno = d.TipiInterno,//
                  DefiInspeccionado = d.DefiInspeccionado,
                  DefiKeyWords = d.DefiKeyWords == null? "":d.DefiKeyWords,
-                 DefiEstadoOffLine = 0,
+                 EstadoOffLine = 0,
              });
 
             return query.ToList();
@@ -294,7 +295,7 @@ namespace Sigre.DataAccess
                     TipiInterno = d.TipiInterno,//
                     DefiInspeccionado = d.DefiInspeccionado,
                     DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
-                    DefiEstadoOffLine = 0,
+                    EstadoOffLine = 0,
                 }
             ).ToList();
 
