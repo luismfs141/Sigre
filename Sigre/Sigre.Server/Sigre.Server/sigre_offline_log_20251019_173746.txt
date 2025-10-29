@@ -1,8 +1,0 @@
-[2025-10-19 17:37:46] Iniciando creación de copia SQLite...
-[2025-10-19 17:37:46] Archivo previo eliminado: C:\Users\ACER\Source\Repos\sigre\Sigre\Sigre.Server\Sigre.Server\sigre_offline_1.db
-[2025-10-19 17:37:50] Se encontraron problemas antes de insertar en SQLite:
-[2025-10-19 17:37:50]   - Perfil == null
-[2025-10-19 17:37:50] ERROR al AddRange Deficiencias: System.InvalidCastException: Unable to cast object of type 'System.Collections.Generic.List`1[Sigre.Entities.Entities.Deficiencia]' to type 'Sigre.Entities.Entities.Deficiencia'.
-   at Sigre.DataAccess.DAFeeder.DAFE_CreateDatabaseSqlite(List`1 x_feeders, Int32 x_usuario) in C:\Users\ACER\Source\Repos\sigre\Sigre\Sigre.DataAccess\DAFeeder.cs:line 337
-FATAL ERROR: System.InvalidCastException: Unable to cast object of type 'System.Collections.Generic.List`1[Sigre.Entities.Entities.Deficiencia]' to type 'Sigre.Entities.Entities.Deficiencia'.
-   at Sigre.DataAccess.DAFeeder.DAFE_CreateDatabaseSqlite(List`1 x_feeders, Int32 x_usuario) in C:\Users\ACER\Source\Repos\sigre\Sigre\Sigre.DataAccess\DAFeeder.cs:line 337

@@ -61,22 +61,26 @@ namespace Sigre.DataAccess
             ctx.SaveChanges();
         }
 
-        public Usuario DAUS_LoginUser(string correo, string password, string imei)
+        public Usuario DAUS_LoginUser(string correo, string password, string imei = null)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
             var usuario = ctx.Usuarios.FirstOrDefault(u => u.UsuaCorreo == correo && u.UsuaActivo == true);
             if (usuario == null) return null;
 
-            // Validar hash
             bool passwordOk = BCrypt.Net.BCrypt.Verify(password, usuario.UsuaPassword);
             if (!passwordOk) return null;
 
-            var movil = ctx.Moviles.FirstOrDefault(m => m.MoviImei == imei && m.MoviActivo == true);
-            if (movil == null) return null;
+            // Validar IMEI solo si se envía
+            if (!string.IsNullOrEmpty(imei))
+            {
+                var movil = ctx.Moviles.FirstOrDefault(m => m.MoviImei == imei && m.MoviActivo == true);
+                if (movil == null) return null;
+            }
 
             return usuario;
         }
+
         public Perfile DAUS_GetPerfilByUser(int x_usuario)
         {
             SigreContext ctx = new SigreContext();

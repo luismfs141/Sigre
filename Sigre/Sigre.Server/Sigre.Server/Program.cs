@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore; // 👈 importante si usas EF
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Sigre.DataAccess;              // 👈 tu namespace real para DAUser y SigreContext
+using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using System.Text;
 
@@ -34,12 +34,23 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// ⚡ Registrar tu DbContext (ajusta el nombre de la cadena)
+// ⚡ Registrar DbContext
 builder.Services.AddDbContext<SigreContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ⚡ Registrar tus clases personalizadas
 builder.Services.AddScoped<DAUser>();
+
+// 🔥 Agregar CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalhost3000", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")  // origen del front React
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
 
@@ -51,6 +62,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// ✅ Usa la política CORS antes de Authentication/Authorization
+app.UseCors("AllowLocalhost3000");
 
 app.UseAuthentication();
 app.UseAuthorization();
