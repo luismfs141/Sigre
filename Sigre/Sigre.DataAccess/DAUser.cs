@@ -1,5 +1,7 @@
-﻿using Sigre.DataAccess.Context;
+﻿using BCrypt.Net;
+using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,27 +12,42 @@ namespace Sigre.DataAccess
 {
     public class DAUser
     {
-        public List<Usuario> DAUS_GetUsers()
+        //public List<Usuario> DAUS_GetUsers()
+        //{
+        //    SigreContext ctx = new SigreContext();
+
+        //    var usuarios = ctx.Usuarios.OrderBy(u => u.UsuaEquipo).ToList();
+
+        //    return usuarios;
+        //}
+
+        //public Usuario DAUS_GetUserByImei(string x_imei)
+        //{
+        //    SigreContext ctx = new SigreContext();
+
+        //    var usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaImei==x_imei);
+
+        //    return usuario;
+        //}
+
+        public Usuario DAUS_GetUser(int x_usuario)
         {
             SigreContext ctx = new SigreContext();
 
-            var usuarios = ctx.Usuarios.OrderBy(u => u.UsuaEquipo).ToList();
-
-            return usuarios;
-        }
-
-        public Usuario DAUS_GetUserByImei(string x_imei)
-        {
-            SigreContext ctx = new SigreContext();
-
-            var usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaImei==x_imei);
+            Usuario usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == x_usuario);
 
             return usuario;
         }
+
         public void DAUS_SaveUser(Usuario us)
         {
-            SigreContext ctx = new SigreContext();
-            us.UsuaImei = us.UsuaImei.ToLower();
+            using var ctx = new SigreContext();
+
+            // ⚠️ Solo generar hash si es usuario nuevo o cambia su contraseña
+            if (!string.IsNullOrEmpty(us.UsuaPassword))
+            {
+                us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword);
+            }
 
             if (us.UsuaInterno == 0)
             {
@@ -38,10 +55,42 @@ namespace Sigre.DataAccess
             }
             else
             {
-                Usuario usOriginal=ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == us.UsuaInterno);
+                var usOriginal = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == us.UsuaInterno);
                 ctx.Entry(usOriginal).CurrentValues.SetValues(us);
             }
-            ctx.SaveChanges(); 
+            ctx.SaveChanges();
+        }
+
+        public Usuario DAUS_LoginUser(string correo, string password, string imei = null)
+        {
+            using var ctx = new SigreContext();
+
+            var usuario = ctx.Usuarios.FirstOrDefault(u => u.UsuaCorreo == correo && u.UsuaActivo == true);
+            if (usuario == null) return null;
+
+            bool passwordOk = BCrypt.Net.BCrypt.Verify(password, usuario.UsuaPassword);
+            if (!passwordOk) return null;
+
+            // Validar IMEI solo si se envía
+            if (!string.IsNullOrEmpty(imei))
+            {
+                var movil = ctx.Moviles.FirstOrDefault(m => m.MoviImei == imei && m.MoviActivo == true);
+                if (movil == null) return null;
+            }
+
+            return usuario;
+        }
+
+        public Perfile DAUS_GetPerfilByUser(int x_usuario)
+        {
+            SigreContext ctx = new SigreContext();
+
+            return (
+                from pu in ctx.PerfilesUsuarios
+                join p in ctx.Perfiles on pu.PfusPerfil equals p.PerfInterno
+                where pu.PfusInterno == x_usuario
+                select p
+            ).FirstOrDefault();
         }
     }
 }

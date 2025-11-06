@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
-namespace Sigre.Entities;
+namespace Sigre.Entities.Entities;
 
 public partial class Componente
 {
+    [Key]
     public int CompInterno { get; set; }
 
     public string CompComponente { get; set; } = null!;

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 using System;
@@ -18,10 +19,10 @@ namespace Sigre.DataAccess
 {
     public class DAPost
     {
-        public List<PinStruct> DAPOST_PinByFeeder(int x_feeder_Id)
+        public List<PinStruct> DAPOST_PinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
-            var posts = ctx.Postes.Where(v => v.AlimInterno == x_feeder_Id).Select(p => 
+            var posts = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).Select(p => 
                 new PinStruct()
                 {
                     Id = p.PostInterno,
@@ -32,12 +33,18 @@ namespace Sigre.DataAccess
                     ElementCode = p.PostCodigoNodo,
                     IdAlimentador = p.AlimInterno,
                     Inspeccionado = p.PostInspeccionado,
-                    Tercero = p.PostTerceros,
-                    TipoMaterial = p.PostMaterial == null? "CON":p.PostMaterial,
-                    Selected =false
+                    Tercero = p.PostTerceros
                 }
             );
             return posts.ToList();
+        }
+        public List<Poste> DAPOST_GetByListFeeder(List<int> x_feeders)
+        {
+            using var ctx = new SigreContext();
+
+            var postes = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).ToList();
+
+            return postes;
         }
         public List<ElementStruct> DAPOST_GetStructByFeeder(int x_feeder_id)
         {          

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
-namespace Sigre.Entities;
+namespace Sigre.Entities.Entities;
 
 public partial class Inspeccione
 {
+    [Key]
     public int InspInterno { get; set; }
 
     public string InspTipo { get; set; } = null!;

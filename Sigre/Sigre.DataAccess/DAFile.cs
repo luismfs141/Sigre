@@ -52,5 +52,26 @@ namespace Sigre.DataAccess
 
             return query.ToList();
         }
+
+        public List<Archivo> DAARCH_GetByFeeders(List<int> x_feeders)
+        {
+            using var ctx = new SigreContext();
+
+            var query = from ar in ctx.Archivos
+                        join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
+                        join amt in ctx.Alimentadores on df.DefiCodAmt equals amt.AlimCodigo
+                        where x_feeders.Contains(amt.AlimInterno)
+                        select ar;
+
+            return query.ToList();
+        }
+
+        public Archivo DAARCH_GetTableData()
+        {
+            SigreContext ctx = new SigreContext();
+
+            Archivo archivoTabla = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == 1);
+            return archivoTabla;
+        }
     }
 }

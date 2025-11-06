@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace Sigre.Entities.Entities;
+
+public partial class Ordene
+{
+    [Key]
+    public int OrdeInterno { get; set; }
+
+    public string? OrdeCodigo { get; set; }
+
+    public int? OrdeCodAmt { get; set; }
+
+    public DateTime? OrdeFechaOrd { get; set; }
+}

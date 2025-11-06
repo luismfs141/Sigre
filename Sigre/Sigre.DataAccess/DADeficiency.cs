@@ -1,6 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore.Storage;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
-using Sigre.Entities;
+using Sigre.Entities.Entities;
+using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 
 namespace Sigre.DataAccess
@@ -9,7 +12,7 @@ namespace Sigre.DataAccess
     {
         public void DADEFI_Save(Deficiencia x_deficiency)
         {
-            x_deficiency.InspInternoNavigation = null;
+            //x_deficiency.InspInternoNavigation = null;
 
             SigreContext ctx = new SigreContext();
 
@@ -128,29 +131,33 @@ namespace Sigre.DataAccess
                      TipiInterno = d.TipiInterno,//
                      DefiInspeccionado = d.DefiInspeccionado,
                      DefiKeyWords = d.DefiKeyWords,
-                     DefiEstadoOffLine = 0,
+                     EstadoOffLine = 0,
                  }).ToList();
 
             return deficiencies;
         }
 
-        public List<PinStruct> DADEFI_GetPinsByFeeder(int x_feeder_id)
+        public List<PinStruct> DADEFI_GetPinsByFeeders(List<int> x_feeders )
         {
             SigreContext ctx = new SigreContext();
 
-            Alimentadore alim = ctx.Alimentadores.SingleOrDefault(a => a.AlimInterno == x_feeder_id);
+            var query = (
+                from a in ctx.Alimentadores
+                join d in ctx.Deficiencias on a.AlimCodigo equals d.DefiCodAmt
+                where x_feeders.Contains(a.AlimInterno)
+                select new PinStruct
+                {
+                    Id = d.DefiInterno,
+                    IdAlimentador = a.AlimInterno,
+                    Label =  "",
+                    Type = ElectricElement.Deficiency,
+                    Latitude = d.DefiLatitud,
+                    Longitude = d.DefiLongitud,
+                    Inspeccionado = d.DefiInspeccionado
+                }
+            );
 
-            var query = ctx.Deficiencias.Where(d => d.DefiCodAmt == alim.AlimCodigo).Select(p => new PinStruct() { 
-                Id = 0,
-                IdAlimentador = alim.AlimInterno,
-                Label = "",
-                Type = ElectricElement.Deficiency,
-                Latitude = p.DefiLatitud,
-                Longitude = p.DefiLongitud
-                
-            });
-
-            return query.ToList();  
+            return query.ToList();
         }
 
         public List<Deficiencia> DADEFI_GetByFeeder(int x_feeder_id)
@@ -218,18 +225,89 @@ namespace Sigre.DataAccess
                  TipiInterno = d.TipiInterno,//
                  DefiInspeccionado = d.DefiInspeccionado,
                  DefiKeyWords = d.DefiKeyWords == null? "":d.DefiKeyWords,
-                 DefiEstadoOffLine = 0,
+                 EstadoOffLine = 0,
              });
 
             return query.ToList();
         }
 
-       public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)
+        public List<Deficiencia> DADEFI_GetByListFeeders(List<int> x_feeders)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var deficiencias = (
+                from d in ctx.Deficiencias
+                join a in ctx.Alimentadores on d.DefiCodAmt equals a.AlimCodigo
+                where x_feeders.Contains(a.AlimInterno)
+                select new Deficiencia
+                {
+                    DefiActivo = d.DefiActivo,
+                    DefiInterno = d.DefiInterno,
+                    DefiArmadoMaterial = d.DefiArmadoMaterial,
+                    DefiCodAmt = d.DefiCodAmt,
+                    DefiCodDef = d.DefiCodDef,
+                    DefiCodDen = d.DefiCodDen,
+                    DefiCodigoElemento = d.DefiCodigoElemento,
+                    DefiCodRes = d.DefiCodRes,
+                    DefiComentario = d.DefiComentario,
+                    DefiCoordX = d.DefiCoordX,
+                    DefiCoordY = d.DefiCoordY,
+                    DefiDistHorizontal = d.DefiDistHorizontal,
+                    DefiDistTransversal = d.DefiDistTransversal,
+                    DefiDistVertical = d.DefiDistVertical,
+                    DefiEstado = d.DefiEstado,
+                    DefiEstadoCriticidad = d.DefiEstadoCriticidad,
+                    DefiEstadoSubsanacion = d.DefiEstadoSubsanacion,
+                    DefiFechaCreacion = d.DefiFechaCreacion,
+                    DefiFechaDenuncia = d.DefiFechaDenuncia,
+                    DefiFechaInspeccion = d.DefiFechaInspeccion,
+                    DefiFechaSubsanacion = d.DefiFechaSubsanacion,
+                    DefiFecModificacion = d.DefiFecModificacion,
+                    DefiFecRegistro = d.DefiFecRegistro,
+                    DefiIdElemento = d.DefiIdElemento,
+                    DefiLatitud = d.DefiLatitud,
+                    DefiLongitud = d.DefiLongitud,
+                    DefiNodoFinal = d.DefiNodoFinal,
+                    DefiNodoInicial = d.DefiNodoInicial,
+                    DefiNroOrden = d.DefiNroOrden,
+                    DefiNumPostes = d.DefiNumPostes,
+                    DefiNumSuministro = d.DefiNumSuministro,
+                    DefiObservacion = d.DefiObservacion,
+                    DefiPointX = d.DefiPointX,
+                    DefiPointY = d.DefiPointY,
+                    DefiPozoTierra = d.DefiPozoTierra,
+                    DefiPozoTierra2 = d.DefiPozoTierra2,
+                    DefiRefer1 = d.DefiRefer1,
+                    DefiRefer2 = d.DefiRefer2,
+                    DefiResponsable = d.DefiResponsable,
+                    DefiRetenidaMaterial = d.DefiRetenidaMaterial,
+                    DefiTipoArmado = d.DefiTipoArmado,
+                    DefiTipoElemento = d.DefiTipoElemento,
+                    DefiTipoMaterial = d.DefiTipoMaterial,
+                    DefiTipoRetenida = d.DefiTipoRetenida,
+                    DefiUsuarioInic = d.DefiUsuarioInic,
+                    DefiUsuarioMod = d.DefiUsuarioMod,
+                    DefiUsuCre = d.DefiUsuCre,
+                    DefiUsuNpc = d.DefiUsuNpc,
+                    InspInterno = d.InspInterno,
+                    InspInternoNavigation = d.InspInternoNavigation,
+                    TablInterno = d.TablInterno,
+                    TipiInterno = d.TipiInterno,//
+                    DefiInspeccionado = d.DefiInspeccionado,
+                    DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    EstadoOffLine = 0,
+                }
+            ).ToList();
+
+            return deficiencias;
+        }
+
+        public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)
         {
             /*
-             * 0->sin estado
-             * 1->Modificado
-             * 2->Nuevo
+             * 0 -> sin estado
+             * 1 -> Modificado
+             * 2 -> Nuevo
             */
             using (SigreContext ctx = new SigreContext())
             {
@@ -237,47 +315,56 @@ namespace Sigre.DataAccess
                 {
                     try
                     {
-                        List<Deficiencia> deficiencias = off.Deficiencies;
-                        List<Archivo> archivos = off.Files;
-                        List<Archivo> archivosDef = new List<Archivo>();
-
-                        int deficiencyId = 0;
-                        
+                        List<Deficiencia> deficiencias = off.Deficiencies ?? new List<Deficiencia>();
+                        List<Archivo> archivos = off.Files ?? new List<Archivo>();
 
                         foreach (var item in deficiencias)
                         {
-                            if (item.DefiEstado != "S")
+                            //if (item == null) continue;
+
+                            item.DefiFechaCreacion = DateTime.Now;
+
+                            int deficiencyId = item.DefiInterno;
+
+                            if (item.DefiEstado != "S") // Nuevo
                             {
-                                item.DefiFechaCreacion = DateTime.Now;
-                                deficiencyId = item.DefiInterno;
-                                item.DefiInterno = 0;
                                 ctx.Deficiencias.Add(item);
                             }
-                            else
+                            else // Modificado
                             {
-                                item.DefiFechaCreacion = DateTime.Now;
-                                deficiencyId = item.DefiInterno;
-                                var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == item.DefiInterno);
-                                ctx.Entry(original).CurrentValues.SetValues(item);
+                                var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == deficiencyId);
+
+                                if (original != null)
+                                {
+                                    ctx.Entry(original).CurrentValues.SetValues(item);
+                                }
+                                else
+                                {
+                                    ctx.Deficiencias.Add(item);
+                                }
                             }
+
+                            // Guardar aquí para que el DefiInterno se actualice (identity generado en DB)
                             ctx.SaveChanges();
 
-                            archivosDef.AddRange(archivos.Where(f => f.ArchCodTabla == deficiencyId));
+                            // Asociar archivos a la deficiencia ya persistida
+                            var archivosDef = archivos.Where(f => f.ArchCodTabla == deficiencyId).ToList();
 
                             foreach (Archivo archivo in archivosDef)
                             {
-                                archivo.ArchCodTabla = item.DefiInterno;
+                                archivo.ArchCodTabla = item.DefiInterno; // ahora con el nuevo ID
                                 ctx.Archivos.Add(archivo);
                             }
+
                             ctx.SaveChanges();
-                            archivosDef.Clear();
                         }
+
                         transaction.Commit();
                     }
                     catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw ex;
+                        throw; // no uses "throw ex;" porque pierdes el stack trace
                     }
                 }
             }

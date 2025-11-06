@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Structs;
 using System;
@@ -14,10 +15,10 @@ namespace Sigre.DataAccess
 {
     public class DASed
     {
-        public List<PinStruct> DASed_PinByFeeder(int x_feeder_id)
+        public List<PinStruct> DASed_PinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
-            var query = ctx.Seds.Where(v => v.AlimInterno == x_feeder_id).Select(s => new PinStruct() {
+            var query = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).Select(s => new PinStruct() {
                 Id = s.SedInterno,
                 Label = s.SedEtiqueta,
                 IdAlimentador = s.AlimInterno,
@@ -25,9 +26,7 @@ namespace Sigre.DataAccess
                 Longitude = s.SedLongitud,
                 ElementCode = s.SedCodigo,
                 Inspeccionado = s.SedInspeccionado,
-                TipoMaterial = s.SedMaterial == null?"CON":s.SedMaterial,
                 Tercero = s.SedTerceros,
-                Selected = false,
                 Type = 
                     s.SedTipo == "M" ? ElectricElement.SedMP :
                     s.SedTipo == "B" ? ElectricElement.SedBP :
@@ -36,6 +35,15 @@ namespace Sigre.DataAccess
                     s.SedTipo == "S" ? ElectricElement.SedST : ElectricElement.Unknown
             });
             return query.ToList();
+        }
+
+        public List<Sed> DASed_GetByListFeeder(List<int> x_feeders)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var seds = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).ToList();
+
+            return seds;
         }
 
         public List<ElementStruct> DASed_GetStructByFeeder(int x_feeder_id)

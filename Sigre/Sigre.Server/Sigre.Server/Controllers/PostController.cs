@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
-using Sigre.Entities;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.Server.Controllers
@@ -15,6 +15,14 @@ namespace Sigre.Server.Controllers
         {
             DAPost dAPost = new DAPost();
             return dAPost.DAPOST_GetStructByFeeder(x_feeder_id);
+        }
+
+        [HttpPost("GetPostByFeeders")]
+        public List<Poste> GetPostByFeeders(List<int> feeders)
+        {
+            DAPost dAPost = new DAPost();
+
+            return dAPost.DAPOST_GetByListFeeder(feeders);
         }
     }
 }

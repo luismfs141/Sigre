@@ -1,39 +1,63 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
-using Sigre.Entities;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
-namespace Sigre.Server.Controllers
+[Route("api/[controller]")]
+[ApiController]
+public class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class UserController
+    private readonly DAUser _daUser;
+    private readonly IConfiguration _config;
+
+
+    public AuthController(DAUser daUser, IConfiguration config)
     {
-        [HttpGet ("GetUsers")]
-        public List<Usuario> GetUsuarios()
-        {
-            DAUser dAUser = new DAUser();
-
-            return dAUser.DAUS_GetUsers();
-        }
-        [HttpGet("GetUserByImei")]
-        public Usuario GetUsuarioByImei(string x_imei)
-        {
-            DAUser user = new DAUser();
-            return user.DAUS_GetUserByImei(x_imei);
-        }
-        [Route("save")]
-        [HttpPost]
-        public object Save(Usuario usuario)
-        {
-            DAUser dAUser = new DAUser();
-            dAUser.DAUS_SaveUser(usuario);
-
-            return new
-            {
-                id = usuario.UsuaInterno,
-                estado = "Satisfactorio",
-                Mensaje = "Se guardó correctamente"
-            };
-        }
+        _daUser = daUser;
+        _config = config;
     }
+
+    [HttpPost("login")]
+    public IActionResult Login([FromBody] LoginRequest request)
+    {
+        var usuario = _daUser.DAUS_LoginUser(request.Correo, request.Password, request.Imei);
+
+        if (usuario == null)
+            return Unauthorized(new { message = "Credenciales inválidas" });
+
+        // Crear token JWT
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, usuario.UsuaCorreo),
+            new Claim("usuarioId", usuario.UsuaInterno.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("esta_es_una_clave_super_segura_123456!"));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: "SigreAPI",
+            audience: "SigreMobile",
+            claims: claims,
+            expires: DateTime.Now.AddHours(2),
+            signingCredentials: creds);
+
+        return Ok(new
+        {
+            token = new JwtSecurityTokenHandler().WriteToken(token),
+            usuario.UsuaInterno,
+            usuario.UsuaNombres,
+            usuario.UsuaApellidos
+        });
+    }
+}
+
+public class LoginRequest
+{
+    public string Correo { get; set; }
+    public string Password { get; set; }
+    public string? Imei { get; set; }
 }

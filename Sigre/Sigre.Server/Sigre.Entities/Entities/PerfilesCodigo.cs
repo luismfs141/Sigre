@@ -1,0 +1,21 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace Sigre.Entities.Entities;
+
+public partial class PerfilesCodigo
+{
+    [Key]
+    public int PfcdInterno { get; set; }
+
+    public int PfcdPerfil { get; set; }
+
+    public int PfcdCodigo { get; set; }
+
+    public bool? PfcdActivo { get; set; }
+
+    public virtual Codigo PfcdCodigoNavigation { get; set; } = null!;
+
+    public virtual Perfile PfcdPerfilNavigation { get; set; } = null!;
+}
