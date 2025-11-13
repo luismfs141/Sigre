@@ -30,20 +30,6 @@ namespace Sigre.Server.Controllers
             return dAFeeder.DAFE_GetFeedersByUser(idUser);
         }
 
-        [Route("saveByUser")]
-        [HttpPost]
-        public object SaveByUser(int idUser, int idAlim, bool act)
-        {
-            DAFeeder dAFeeder = new DAFeeder();
-            dAFeeder.DAFE_SaveFeedersByUser(idUser, idAlim, act);
-
-            return new
-            {
-                id = "" + idUser + idAlim,
-                estado = "Satisfactorio",
-                Mensaje = "Se guardó correctamente"
-            };
-        }
         [Route("drawMap")]
         [HttpPost]
         public object DrawMapByFeeder(int idFeeder)
