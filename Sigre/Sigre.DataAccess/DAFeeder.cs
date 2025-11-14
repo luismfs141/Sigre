@@ -46,38 +46,6 @@ namespace Sigre.DataAccess
             return feeders;
         }
 
-        public void DAFE_SaveFeedersByUser(int idUser, int idAlim, bool act)
-        {
-            SigreContext ctx = new SigreContext();
-
-            var usuarioAlimentador = ctx.UsuariosAlimentadores
-                                  .SingleOrDefault(ua => ua.UsalUsuario == idUser && ua.UsalAlimentador == idAlim);
-
-            if (usuarioAlimentador == null && act)
-            {
-                ctx.UsuariosAlimentadores.Add(new UsuariosAlimentadore
-                {
-                    UsalUsuario = idUser,
-                    UsalAlimentador = idAlim,
-                    UsalActivo = true
-                });
-            }
-            else if (usuarioAlimentador != null)
-            {
-                if (act)
-                {
-                    usuarioAlimentador.UsalActivo = true;
-                    ctx.UsuariosAlimentadores.Update(usuarioAlimentador);
-                }
-                else
-                {
-                    ctx.UsuariosAlimentadores.Remove(usuarioAlimentador);
-                }
-            }
-
-            ctx.SaveChanges();
-        }
-
         public void DAFE_DrawMapByFeeder(int idFeeder)
         {
             using (SigreContext ctx = new SigreContext())

@@ -109,7 +109,7 @@ export function AuthProvider({ children }) {
     try {
       const deviceId = await getDeviceId();
 
-      const response = await fetch(`${baseURL}Auth/login`, {
+      const response = await fetch(`${baseURL}User/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ correo, password, imei: deviceId }),

@@ -157,9 +157,9 @@ export default function DrawerLayout() {
       <Drawer.Screen
         name="profile"
         options={{
-          title: "Perfil",
+          title: 'Mis Datos',
           drawerIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="man" size={size} color={color} />
           ),
         }}
       />
@@ -169,7 +169,7 @@ export default function DrawerLayout() {
       <Drawer.Screen
         name="map"
         options={{
-          title: "",
+          title: 'Mapa',
           drawerIcon: ({ color, size }) => (
             <Ionicons name="map" size={size} color={color} />
           ),
@@ -202,6 +202,15 @@ export default function DrawerLayout() {
           title: "Sincronizar",
           drawerIcon: ({ color, size }) => (
             <Ionicons name="sync" size={size} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="user"
+        options={{
+          title: 'Usuarios',
+          drawerIcon: ({ color, size }) => (
+            <Ionicons name="people" size={size} color={color} />
           ),
         }}
       />

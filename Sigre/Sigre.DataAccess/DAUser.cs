@@ -12,23 +12,23 @@ namespace Sigre.DataAccess
 {
     public class DAUser
     {
-        //public List<Usuario> DAUS_GetUsers()
-        //{
-        //    SigreContext ctx = new SigreContext();
+        public List<Usuario> DAUS_GetUsers()
+        {
+            SigreContext ctx = new SigreContext();
 
-        //    var usuarios = ctx.Usuarios.OrderBy(u => u.UsuaEquipo).ToList();
+            var usuarios = ctx.Usuarios.OrderBy(u => u.UsuaNombres).ToList();
 
-        //    return usuarios;
-        //}
+            return usuarios;
+        }
 
-        //public Usuario DAUS_GetUserByImei(string x_imei)
-        //{
-        //    SigreContext ctx = new SigreContext();
+        public List<Perfile> DAUS_GetProfiles()
+        {
+            SigreContext ctx = new SigreContext();
 
-        //    var usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaImei==x_imei);
+            var perfiles = ctx.Perfiles.OrderBy(p => p.PerfNombre).ToList();
 
-        //    return usuario;
-        //}
+            return perfiles;
+        }
 
         public Usuario DAUS_GetUser(int x_usuario)
         {
@@ -39,28 +39,98 @@ namespace Sigre.DataAccess
             return usuario;
         }
 
-        public void DAUS_SaveUser(Usuario us)
+        public void DAUS_SaveUser(Usuario us, List<int> perfiles)
         {
             using var ctx = new SigreContext();
+            using var trans = ctx.Database.BeginTransaction();
 
-            // ⚠️ Solo generar hash si es usuario nuevo o cambia su contraseña
-            if (!string.IsNullOrEmpty(us.UsuaPassword))
+            try
             {
-                us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword);
-            }
+                // 🔐 Hash de contraseña solo si se especifica
+                if (!string.IsNullOrEmpty(us.UsuaPassword))
+                {
+                    us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword);
+                }
 
-            if (us.UsuaInterno == 0)
-            {
-                ctx.Usuarios.Add(us);
+                // 🧩 Si es nuevo usuario
+                if (us.UsuaInterno == 0)
+                {
+                    ctx.Usuarios.Add(us);
+                    ctx.SaveChanges();
+                }
+                else
+                {
+                    // 🧱 Actualizar usuario existente
+                    var usOriginal = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == us.UsuaInterno);
+                    if (usOriginal == null)
+                        throw new Exception("Usuario no encontrado.");
+
+                    ctx.Entry(usOriginal).CurrentValues.SetValues(us);
+                    ctx.SaveChanges();
+                }
+
+                int usuarioId = us.UsuaInterno;
+
+                // 🧾 Eliminar perfiles previos
+                var perfilesPrevios = ctx.PerfilesUsuarios.Where(p => p.PfusUsuario == usuarioId);
+                ctx.PerfilesUsuarios.RemoveRange(perfilesPrevios);
+
+                // 🧾 Insertar nuevos perfiles
+                foreach (var idPerfil in perfiles)
+                {
+                    ctx.PerfilesUsuarios.Add(new PerfilesUsuario
+                    {
+                        PfusUsuario = usuarioId,
+                        PfusPerfil = idPerfil,
+                        PfusActivo = true
+                    });
+                }
+
+                ctx.SaveChanges();
+                trans.Commit();
             }
-            else
+            catch (Exception ex)
             {
-                var usOriginal = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == us.UsuaInterno);
-                ctx.Entry(usOriginal).CurrentValues.SetValues(us);
+                trans.Rollback();
+                throw new Exception("Error al guardar usuario: " + ex.Message);
             }
-            ctx.SaveChanges();
         }
 
+        public void DAUS_SaveUserFeeders(int usuario, List<int> alimentadores)
+        {
+            using var ctx = new SigreContext();
+            using var trans = ctx.Database.BeginTransaction();
+
+            try
+            {
+                // 🔹 Eliminar relaciones existentes
+                var existentes = ctx.UsuariosAlimentadores
+                    .Where(x => x.UsalUsuario == usuario)
+                    .ToList();
+
+                ctx.UsuariosAlimentadores.RemoveRange(existentes);
+
+                // 🔹 Crear nuevas relaciones
+                if (alimentadores != null && alimentadores.Count > 0)
+                {
+                    var nuevas = alimentadores.Select(id => new UsuariosAlimentadore
+                    {
+                        UsalUsuario = usuario,
+                        UsalAlimentador = id
+                    }).ToList();
+
+                    ctx.UsuariosAlimentadores.AddRange(nuevas);
+                }
+
+                ctx.SaveChanges();
+                trans.Commit();
+            }
+            catch (Exception ex)
+            {
+                trans.Rollback();
+                throw new Exception("Error al guardar alimentadores del usuario: " + ex.Message);
+            }
+        }
         public Usuario DAUS_LoginUser(string correo, string password, string imei = null)
         {
             using var ctx = new SigreContext();
