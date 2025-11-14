@@ -56,6 +56,8 @@ export default function Sync() {
 
     const feederIds = selectedFeeders.map(f=>f.id);
 
+    console.log(feederIds);
+
     const fileUri = await downloadDatabase(user.id, feederIds);
     if (fileUri) {
       Alert.alert("✅ Base descargada correctamente");

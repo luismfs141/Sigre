@@ -11,7 +11,8 @@ export const useOffline = () => {
     setLoading(true);
     try {
       const endpoint = "/Feeder/export";
-
+      console.log(endpoint);
+      
       const res = await client.post(
         endpoint,
         { UserId: userId, Feeders: feeders },
