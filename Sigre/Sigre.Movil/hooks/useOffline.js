@@ -2,17 +2,21 @@ import { Buffer } from "buffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { useState } from "react";
 import { api } from "../config";
+import { runQuery } from "../database/offlineDB/db"; // ← Importa runQuery desde tu módulo central de DB
 
 export const useOffline = () => {
   const [loading, setLoading] = useState(false);
   const client = api();
 
+  // -----------------------------------------------------
+  // DESCARGAR BASE DE DATOS
+  // -----------------------------------------------------
   const downloadDatabase = async (userId, feeders = []) => {
     setLoading(true);
     try {
       const endpoint = "/Feeder/export";
-      console.log(endpoint);
-      
+      console.log("📥 Descargando BD desde:", endpoint);
+
       const res = await client.post(
         endpoint,
         { UserId: userId, Feeders: feeders },
@@ -21,16 +25,18 @@ export const useOffline = () => {
 
       if (!res.data) throw new Error("No se recibió la base de datos");
 
-      const fileUri = FileSystem.documentDirectory + "SQLite/sigre_offline.db";
+      const folder = FileSystem.documentDirectory + "SQLite";
+      const fileUri = folder + "/sigre_offline.db";
 
-      // Crear carpeta SQLite si no existe
-      await FileSystem.makeDirectoryAsync(FileSystem.documentDirectory + "SQLite", { intermediates: true });
+      await FileSystem.makeDirectoryAsync(folder, { intermediates: true });
 
-      // Convertir ArrayBuffer a Base64 usando Buffer
+      // Convertir binario -> Base64
       const base64 = Buffer.from(res.data).toString("base64");
 
-      // Guardar archivo en el dispositivo
-      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      // Guardar SQLite localmente
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
       console.log("✅ Base SQLite guardada en:", fileUri);
       return fileUri;
@@ -42,8 +48,26 @@ export const useOffline = () => {
     }
   };
 
+  // -----------------------------------------------------
+  // MÉTODOS ESPECÍFICOS
+  // -----------------------------------------------------
+  const getPinsByFeederLocal = async (feederId) => {
+    return await runQuery("SELECT * FROM Pines WHERE x_feeder_id = ?", [
+      feederId,
+    ]);
+  };
+
+  const getGapsByFeederLocal = async (feederId) => {
+    return await runQuery("SELECT * FROM Vanos WHERE x_feeder_id = ?", [
+      feederId,
+    ]);
+  };
+
+
   return {
     loading,
     downloadDatabase,
+    getPinsByFeederLocal,
+    getGapsByFeederLocal,
   };
 };

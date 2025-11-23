@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../config";
+import { getAllFeedersLocal } from "../database/offlineDB/feeders";
 
 export function useFeeder(userId = null) {
   const [feeders, setFeeders] = useState([]);
@@ -58,6 +59,24 @@ export function useFeeder(userId = null) {
     }
   }, [API_BASE]);
 
+
+    const fetchLocalFeeders = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const data = await getAllFeedersLocal();
+      setFeeders(data);
+      return data; 
+    } catch (err) {
+      console.error("useFeeder.fetchLocalFeeders:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+
   /** 🔹 Cargar lista inicial (todos o por usuario) */
   useEffect(() => {
     if (userId) {
@@ -75,5 +94,6 @@ export function useFeeder(userId = null) {
     reload: userId ? () => getFeedersByUser(userId) : fetchFeeders,
     getFeedersByUser,
     drawMap,
+    fetchLocalFeeders,
   };
 }

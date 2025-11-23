@@ -85,8 +85,7 @@ export default function User() {
     
     // Agregar los nuevos feeders al estado existente
     setSelectedFeeders(prev => [
-      ...prev, 
-      ...feedersByUser.map(f => f.alimInterno)
+      ...new Set([...prev, ...feedersByUser.map(f => f.alimInterno)])
     ]);
     setModalFeeders(true);
   };

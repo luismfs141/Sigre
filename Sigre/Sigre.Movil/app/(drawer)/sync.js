@@ -82,7 +82,7 @@ export default function Sync() {
         return;
       }
 
-      await Sharing.shareAsync(dbPath);
+      await Sharing.shareAsync(dbPath); // Aquí se abre WhatsApp, correo, Drive, etc.
     } catch (error) {
       console.error("Error exportando backup:", error);
       Alert.alert("Error", "No se pudo exportar la base de datos.");
