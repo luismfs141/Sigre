@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'; // 👈 iconos de Expo
 import { Picker } from '@react-native-picker/picker';
 import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';

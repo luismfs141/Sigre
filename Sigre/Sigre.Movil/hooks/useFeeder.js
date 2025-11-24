@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../config";
+import { getAllFeedersLocal } from "../database/offlineDB/feeders";
 
 export function useFeeder(userId = null) {
   const [feeders, setFeeders] = useState([]);
@@ -82,14 +83,38 @@ const getFeedersByUser = useCallback(async (id = userId) => {
     }
   }, [API_BASE]);
 
-  /** 🔹 Cargar lista inicial (todos o por usuario) */
-  useEffect(() => {
-    if (userId) {
-      getFeedersByUser(userId);
-    } else {
-      fetchFeeders();
+  /** 🔹 Obtener todos los alimentadores locales*/
+const fetchLocalFeeders = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
+
+    // Obtener todos los alimentadores desde la base local
+    const localData = await getAllFeedersLocal();
+
+    if (!localData || localData.length === 0) {
+      console.warn("⚠ No hay alimentadores locales");
+      setFeeders([]);
+      return [];
     }
-  }, [userId, fetchFeeders, getFeedersByUser]);
+
+    setFeeders(localData);
+    console.log("✅ Alimentadores locales cargados:", localData);
+    return localData;
+  } catch (err) {
+    console.error("❌ Error al obtener alimentadores locales:", err);
+    setError(err.message);
+    return [];
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+
+  /** 🔹 Cargar lista inicial (todos o por usuario) */
+useEffect(() => {
+  fetchLocalFeeders();
+}, [fetchLocalFeeders]);
 
   return {
     feeders,
@@ -99,5 +124,6 @@ const getFeedersByUser = useCallback(async (id = userId) => {
     reload: userId ? () => getFeedersByUser(userId) : fetchFeeders,
     getFeedersByUser,
     drawMap,
+    fetchLocalFeeders,
   };
 }

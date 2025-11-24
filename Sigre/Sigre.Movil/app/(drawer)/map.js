@@ -1,99 +1,236 @@
-import { useFeeder } from "../../hooks/useFeeder";
+import * as Location from 'expo-location';
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef } from 'react';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
-import { useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import MapView from "react-native-maps";
-import CustomMarker from "../../components/Map/CustomMarker";
+import { DropDown } from '../../components/DropDown.js';
+import { PinCallout } from '../../components/PinCallout';
 
-export default function Map() {
+import { mapStyles, pinStyles } from '../../assets/styles/Map.js';
+import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/utils.js';
+
+import { useDatos } from "../../context/DatosContext.js";
+import { useFeeder } from '../../hooks/useFeeder.js';
+import { useMap } from '../../hooks/useMap';
+
+export const Map = () => {
+  const {
+    selectedFeeder, setSelectedFeeder, pins, setPins, gaps, setGaps,
+    region, setRegion, selectedItem, setSelectedPin, setSelectedGap,
+    feeders, setFeeders,
+  } = useDatos();
+
+  const { getPinsByFeeder, getGapsByFeeder, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion } = useMap();
+  const { fetchLocalFeeders } = useFeeder();
+  const router = useRouter();
+
   const mapRef = useRef(null);
-  const [selectedPin, setSelectedPin] = useState(null);
-  const [bubblePos, setBubblePos] = useState({ x: 0, y: 0 });
 
-  const { feeders } = useFeeder();
+  // --------------------------------------------------------------
+  // Cargar pins/gaps cuando se selecciona alimentador
+  // --------------------------------------------------------------
 
-  const handleSelectPin = async (pin) => {
-    setSelectedPin(pin);
+  useEffect(() => {
+    if (!selectedFeeder) return;
 
-    if (!mapRef.current) return;
+    (async () => {
+      const [pinsLoaded, gapsLoaded] = await Promise.all([
+        getPinsByFeeder(selectedFeeder.AlimInterno),
+        getGapsByFeeder(selectedFeeder.AlimInterno)
+      ]);
 
-    const point = await mapRef.current.coordinateForPoint({
-      latitude: pin.latitude,
-      longitude: pin.longitude,
+      setGaps(gapsLoaded);
+
+      // centra mapa en primer pin
+      setRegionByFeeder(pinsLoaded);
+
+      // muestra solo pines visibles
+      setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.getMapBoundaries().then(b => {
+            const regionNow = {
+              latitude: (b.northEast.latitude + b.southWest.latitude) / 2,
+              longitude: (b.northEast.longitude + b.southWest.longitude) / 2,
+              latitudeDelta: Math.abs(b.northEast.latitude - b.southWest.latitude),
+              longitudeDelta: Math.abs(b.northEast.longitude - b.southWest.longitude)
+            };
+            getPinsByRegion(regionNow);
+          });
+        }
+      }, 500);
+    })();
+  }, [selectedFeeder]);
+
+  // --------------------------------------------------------------
+  // GPS
+  // --------------------------------------------------------------
+  const userLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const { coords } = await Location.getCurrentPositionAsync({
+      enableHighAccuracy: true,
+      accuracy: Location.Accuracy.Highest
     });
 
-    setBubblePos({
-      x: point.x,
-      y: point.y - 40, 
-    });
+    const newRegion = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    };
+
+    mapRef.current?.animateToRegion(newRegion, 600);
+    setRegionByCoordinate(coords.latitude, coords.longitude);
   };
 
+  // --------------------------------------------------------------
+  // MEMOIZACIÓN PARA EVITAR RERENDERS DE +1000 PINS
+  // --------------------------------------------------------------
+  const memoPins = useMemo(() => {
+    return Array.isArray(pins)
+      ? pins.filter(p => p.Type !== 0 && p.Latitude && p.Longitude)
+      : [];
+  }, [pins]);
+
+  const memoGaps = useMemo(() => {
+    return Array.isArray(gaps) ? gaps : [];
+  }, [gaps]);
+
+  const formatLabel = (label) => {
+    if (!label) return "";
+    return label.replace(/\r?\n|\r/g, " - ").trim();
+  };
+
+const isValidLabel = (label) => {
+  if (!label) return false;
+  return /^[0-9]+$/.test(label.trim()); // solo números
+};
+
+
+const onMarkerPress = (item) => {
+  Alert.alert(
+    "Elemento seleccionado",
+    `ID: ${item.Id}\nCódigo: ${item.ElementCode}\nTipo: ${item.Type}`,
+    [
+      { text: "Cancelar", style: "cancel" },
+      { 
+        text: "Inspeccionar",
+        onPress: () => {
+          // Guardar elemento en el context
+          if (item.Type === 0 || item.Type === 8) {
+            setSelectedGap(item);  // si es un gap
+          } else {
+            setSelectedPin(item);  // si es un pin
+          }
+
+          // Navegar a pantalla de inspección
+          router.push("/(drawer)/inspection");
+        }
+      }
+    ]
+  );
+};
+
+  // --------------------------------------------------------------
+  // Render
+  // --------------------------------------------------------------
   return (
     <View style={{ flex: 1 }}>
+      <DropDown onSelectFeeder={setSelectedFeeder} />
+
       <MapView
         ref={mapRef}
-        style={styles.map}
-        initialRegion={{
-          latitude: -16.39889,
-          longitude: -71.53694,
-          latitudeDelta: 0.2,
-          longitudeDelta: 0.2,
+        style={mapStyles.mapContainer}
+        region={region}
+        mapType="satellite"
+        onRegionChangeComplete={(reg) => {
+          setRegion(reg);
+          getPinsByRegion(reg);
         }}
-        onPress={() => setSelectedPin(null)}
       >
-        {feeders
-          .filter(f => f.alimLatitud && f.alimLongitud)
-          .map(f => (
-            <CustomMarker
-              key={f.alimInterno}
-              pin={{
-                label: f.alimEtiqueta,
-                codigo: f.alimCodigo,
-                latitude: f.alimLatitud,
-                longitude: f.alimLongitud,
+
+        {/* GAPs */}
+        {memoGaps.map((gap, i) => (
+          <Polyline
+            key={i}
+            coordinates={[
+              { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
+              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }
+            ]}
+            strokeWidth={3}
+            strokeColor={getGapColorByInspected(gap)}
+            tappable
+            onPress={() => onMarkerPress(gap)} 
+          />
+        ))}
+
+        {/* PINES */}
+
+        {memoPins.map((pin, i) => {
+          const cleanLabel = formatLabel(pin.Label);
+
+          const showLabel =
+            Number(pin.Type) !== 8 &&      // no mostrar gaps
+            isValidLabel(cleanLabel);      // solo números reales
+
+          return (
+            <Marker
+              key={pin.Id || i}
+              coordinate={{
+                latitude: pin.Latitude,
+                longitude: pin.Longitude,
               }}
-              onPress={handleSelectPin}
-            />
-          ))}
+              tracksViewChanges={true}
+              onPress={() => onMarkerPress(pin)} 
+            >
+              <View style={pinStyles.pinWrapper}>
+
+                <Image
+                  source={getSourceImageFromType2(pin)}
+                  style={pinStyles.pinIcon}
+                  resizeMode="contain"
+                />
+
+                {showLabel && (
+                  <View style={pinStyles.labelBox}>
+                    <Text style={pinStyles.labelText}>{cleanLabel}</Text>
+                  </View>
+                )}
+              </View>
+
+              <PinCallout pin={pin} />
+            </Marker>
+          );
+        })}
+
       </MapView>
 
-      {/* GLOBO FLOTANTE */}
-      {selectedPin && (
-        <View
-          style={[
-            styles.bubble,
-            { top: bubblePos.y, left: bubblePos.x }
-          ]}
-        >
-          <Text style={styles.title}>{selectedPin.label}</Text>
-          <Text style={styles.code}>Código: {selectedPin.codigo}</Text>
-        </View>
-      )}
+      <TouchableOpacity style={styles.floatBtn} onPress={userLocation}>
+        <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+      </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  map: { width: "100%", height: "100%" },
-
-  bubble: {
-    position: "absolute",
-    backgroundColor: "white",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#666",
+  floatBtn: {
+    position: 'absolute',
+    top: '2%',
+    right: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
     elevation: 5,
   },
-
-  title: {
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-
-  code: {
-    fontSize: 12,
-    color: "#333",
+  btnImg: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
   },
 });
+
+export default Map;

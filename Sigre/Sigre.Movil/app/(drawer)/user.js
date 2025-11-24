@@ -93,19 +93,16 @@ export default function User() {
   
     /** 🔹 Abrir modal de alimentadores */
   const openFeedersModal = async (user) => {
-  setSelectedUser(user);
-
-  // Limpia antes
-  setSelectedFeeders([]);
-
-  // Obtiene alimentadores actualizados directamente desde el backend
-  const nuevosFeeders = await getFeedersByUser(user.usuaInterno);
-
-  // Guarda los IDs recién obtenidos
-  setSelectedFeeders(nuevosFeeders.map(f => f.alimInterno));
-
-  setModalFeeders(true);
-};
+    setSelectedUser(user);
+    await getFeedersByUser(user.usuaInterno);
+    // setSelectedFeeders(feedersByUser.map(f => f.alimInterno));
+    
+    // Agregar los nuevos feeders al estado existente
+    setSelectedFeeders(prev => [
+      ...new Set([...prev, ...feedersByUser.map(f => f.alimInterno)])
+    ]);
+    setModalFeeders(true);
+  };
 
 
 
