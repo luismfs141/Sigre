@@ -1,68 +1,120 @@
-import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
-import styles from '../assets/styles/DropDown.js';
+import { useState } from 'react';
+import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import feederMap from '../assets/feederMap.png'; // tu icono
+import { getAllFeedersLocal } from '../database/offlineDB/feeders';
 
-import { useDatos } from '../context/DatosContext.js';
-import { useFeeder } from '../hooks/useFeeder.js';
+export const DropDown = ({ onSelectFeeder }) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [feeders, setFeeders] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-export function DropDown() {
-
-  const { feeders, setFeeders, setSelectedFeeder } = useDatos();
-  const { fetchLocalFeeders } = useFeeder();
-
-  const [value, setValue] = useState(null);
-  const [isFocus, setIsFocus] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const data = await fetchLocalFeeders();
-      setFeeders(data ?? []);
-    })();
-  }, []);
-
-  const renderLabel = () => {
-    if (value || isFocus) {
-      return (
-        <Text style={[styles.label, { color: 'blue' }]}>
-          {value}
-        </Text>
-      );
+  const openModal = async () => {
+    setModalVisible(true);
+    setLoading(true);
+    try {
+      const localFeeders = await getAllFeedersLocal();
+      setFeeders(localFeeders);
+    } catch (err) {
+      console.error("Error cargando alimentadores desde DB:", err);
+      setFeeders([]);
+    } finally {
+      setLoading(false);
     }
-    return null;
+  };
+
+  const handleSelect = (feeder) => {
+    onSelectFeeder(feeder);
+    setModalVisible(false);
   };
 
   return (
-    <View style={styles.container}>
-      {renderLabel()}
+    <>
+      {/* Imagen flotante como dropdown */}
+      <TouchableOpacity style={styles.floatBtn} onPress={openModal}>
+        <Image source={feederMap} style={styles.btnImg} />
+      </TouchableOpacity>
 
-      <Dropdown
-        style={[styles.dropdown, { borderColor: 'blue' }]}
-        placeholderStyle={styles.placeholderStyle}
-        selectedTextStyle={styles.selectedTextStyle}
-        inputSearchStyle={styles.inputSearchStyle}
-        
-        data={feeders}
+      {/* Modal con lista de alimentadores */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Selecciona un alimentador</Text>
 
-        search
-        maxHeight={300}
-        labelField="AlimEtiqueta"  // exactamente como está en la DB
-        valueField="AlimInterno"   // exactamente como está en la DB
-        placeholder="Alimentadores"
-        searchPlaceholder="Buscar..."
-        value={value}
+            {loading ? (
+              <Text style={styles.loadingText}>Cargando...</Text>
+            ) : feeders.length === 0 ? (
+              <Text style={styles.emptyText}>No hay alimentadores disponibles</Text>
+            ) : (
+              <FlatList
+                data={feeders}
+                keyExtractor={item => item.AlimInterno?.toString() || Math.random().toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.item} onPress={() => handleSelect(item)}>
+                    <Text style={styles.itemText}>{item.AlimEtiqueta}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
 
-        onFocus={() => setIsFocus(true)}
-        onBlur={() => setIsFocus(false)}
-
-        onChange={(item) => {
-          setValue(item.AlimInterno); // exactamente como está en la DB
-          setIsFocus(false);
-          setSelectedFeeder(item);    // guarda todo el objeto tal cual
-        }}
-      />
-    </View>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+              <Text style={styles.closeText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
-}
+};
 
-export default DropDown;
+const styles = StyleSheet.create({
+  floatBtn: {
+    position: 'absolute',
+    top: "2%",  
+    right: "88%",
+    width: 35,
+    height: 35,
+    borderRadius: 20,       // hace el botón circular
+    backgroundColor: '#296ce7ff', // azul claro
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+    elevation: 5, // para Android
+  },
+  btnImg: {
+    width: 22,   // un poco más pequeño que el botón
+    height: 22,
+    resizeMode: 'contain',
+  },
+
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '85%',
+    maxHeight: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+  },
+  modalTitle: { fontWeight: 'bold', fontSize: 18, marginBottom: 10, textAlign: 'center' },
+  item: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  itemText: { fontSize: 16, color: '#333' },
+  loadingText: { textAlign: 'center', padding: 10, color: '#555' },
+  emptyText: { textAlign: 'center', padding: 10, color: '#999' },
+  closeButton: {
+    marginTop: 10,
+    paddingVertical: 10,
+    backgroundColor: '#ddd',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  closeText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+});

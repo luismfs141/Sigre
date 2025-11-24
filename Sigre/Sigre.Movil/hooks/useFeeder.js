@@ -59,32 +59,38 @@ export function useFeeder(userId = null) {
     }
   }, [API_BASE]);
 
+  /** 🔹 Obtener todos los alimentadores locales*/
+const fetchLocalFeeders = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-    const fetchLocalFeeders = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    // Obtener todos los alimentadores desde la base local
+    const localData = await getAllFeedersLocal();
 
-      const data = await getAllFeedersLocal();
-      setFeeders(data);
-      return data; 
-    } catch (err) {
-      console.error("useFeeder.fetchLocalFeeders:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (!localData || localData.length === 0) {
+      console.warn("⚠ No hay alimentadores locales");
+      setFeeders([]);
+      return [];
     }
-  }, []);
+
+    setFeeders(localData);
+    console.log("✅ Alimentadores locales cargados:", localData);
+    return localData;
+  } catch (err) {
+    console.error("❌ Error al obtener alimentadores locales:", err);
+    setError(err.message);
+    return [];
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
 
   /** 🔹 Cargar lista inicial (todos o por usuario) */
-  useEffect(() => {
-    if (userId) {
-      getFeedersByUser(userId);
-    } else {
-      fetchFeeders();
-    }
-  }, [userId, fetchFeeders, getFeedersByUser]);
+useEffect(() => {
+  fetchLocalFeeders();
+}, [fetchLocalFeeders]);
 
   return {
     feeders,

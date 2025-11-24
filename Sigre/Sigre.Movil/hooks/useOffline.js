@@ -2,15 +2,12 @@ import { Buffer } from "buffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { useState } from "react";
 import { api } from "../config";
-import { runQuery } from "../database/offlineDB/db"; // ← Importa runQuery desde tu módulo central de DB
 
 export const useOffline = () => {
   const [loading, setLoading] = useState(false);
+  const [dbVersion, setDbVersion] = useState(0); // contador de cambios
   const client = api();
 
-  // -----------------------------------------------------
-  // DESCARGAR BASE DE DATOS
-  // -----------------------------------------------------
   const downloadDatabase = async (userId, feeders = []) => {
     setLoading(true);
     try {
@@ -30,15 +27,15 @@ export const useOffline = () => {
 
       await FileSystem.makeDirectoryAsync(folder, { intermediates: true });
 
-      // Convertir binario -> Base64
       const base64 = Buffer.from(res.data).toString("base64");
 
-      // Guardar SQLite localmente
       await FileSystem.writeAsStringAsync(fileUri, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
       console.log("✅ Base SQLite guardada en:", fileUri);
+
+      setDbVersion(prev => prev + 1); // <--- Notificar cambio
       return fileUri;
     } catch (error) {
       console.error("❌ Error descargando la base SQLite:", error);
@@ -48,26 +45,9 @@ export const useOffline = () => {
     }
   };
 
-  // -----------------------------------------------------
-  // MÉTODOS ESPECÍFICOS
-  // -----------------------------------------------------
-  const getPinsByFeederLocal = async (feederId) => {
-    return await runQuery("SELECT * FROM Pines WHERE x_feeder_id = ?", [
-      feederId,
-    ]);
-  };
-
-  const getGapsByFeederLocal = async (feederId) => {
-    return await runQuery("SELECT * FROM Vanos WHERE x_feeder_id = ?", [
-      feederId,
-    ]);
-  };
-
-
   return {
     loading,
     downloadDatabase,
-    getPinsByFeederLocal,
-    getGapsByFeederLocal,
+    dbVersion, // <--- exportar dbVersion
   };
 };

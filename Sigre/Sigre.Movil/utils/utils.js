@@ -1,67 +1,68 @@
 import * as MediaLibrary from 'expo-media-library';
 
-export const getSourceImageFromType2= (pin) =>{
-  switch (pin.type) {
-      case 0:
-        return require('../assets/Elements/Uninspected/8.png');
-      case 1:
-        if(pin.inspeccionado){
-          return require('../assets/Elements/Inspected/1.png');
-        }
-        else{
-          if(pin.tercero){
-            return require('../assets/Elements/Removed/1.png');
-          }
-          else{
-            return require('../assets/Elements/Uninspected/1.png');
-          }
-        }
-      case 2:
-        if(pin.inspeccionado){
-          return require('../assets/Elements/Inspected/2.png');
-        }
-        else{
-          if(pin.tercero){
-            return require('../assets/Elements/Removed/2.png');
-          }
-          else{
-            return require('../assets/Elements/Uninspected/2.png');
-          }
-        }
-      case 3:
-        if(pin.inspeccionado){
-          return require('../assets/Elements/Inspected/3.png');
-        }
-        else{
-          if(pin.tercero){
-            return require('../assets/Elements/Removed/3.png');
-          }
-          else{
-            return require('../assets/Elements/Uninspected/3.png');
-          }
-        }
-      case 4:
-        return require('../assets/Elements/Uninspected/4.png');
-      case 5:
-        if(pin.inspeccionado){
-          return require('../assets/Elements/Inspected/5.png');
-        }
-        else{
-          if(pin.tercero){
-            return require('../assets/Elements/Removed/5.png');
-          }
-          else{
-            return require('../assets/Elements/Uninspected/5.png');
-          }
-        }
-      case 6:
-        return require('../assets/Elements/Uninspected/6.png');
-      case 8:
-        return require('../assets/Elements/Uninspected/0.png');
-      default:
-        return require('../assets/Elements/Uninspected/7.png');
+// Tabla de iconos según estado
+const ICONS = {
+  inspected: {
+    1: require("../assets/Elements/Inspected/1.png"),
+    2: require("../assets/Elements/Inspected/2.png"),
+    3: require("../assets/Elements/Inspected/3.png"),
+    5: require("../assets/Elements/Inspected/5.png"),
+  },
+
+  removed: {
+    1: require("../assets/Elements/Removed/1.png"),
+    2: require("../assets/Elements/Removed/2.png"),
+    3: require("../assets/Elements/Removed/3.png"),
+    5: require("../assets/Elements/Removed/5.png"),
+  },
+
+  uninspected: {
+    0: require("../assets/Elements/Uninspected/8.png"),
+    1: require("../assets/Elements/Uninspected/1.png"),
+    2: require("../assets/Elements/Uninspected/2.png"),
+    3: require("../assets/Elements/Uninspected/3.png"),
+    4: require("../assets/Elements/Uninspected/4.png"),
+    5: require("../assets/Elements/Uninspected/5.png"),
+    6: require("../assets/Elements/Uninspected/6.png"),
+    8: require("../assets/Elements/Uninspected/0.png"),
+    default: require("../assets/Elements/Uninspected/7.png"),
+  },
+};
+
+export const getSourceImageFromType2 = (pin) => {
+  const type = Number(pin.Type);
+
+  // Si el pin tiene un tipo válido (0–8), NO usar default
+  const hasValidType = type !== null && !isNaN(type);
+
+  // 1️⃣ Inspeccionado
+  if (pin.Inspeccionado) {
+    if (hasValidType && ICONS.inspected[type]) {
+      return ICONS.inspected[type];   // usa icono real
     }
-}
+    return hasValidType ? null : ICONS.uninspected.default;
+  }
+
+  // 2️⃣ Tercero
+  if (pin.Tercero) {
+    if (hasValidType && ICONS.removed[type]) {
+      return ICONS.removed[type];
+    }
+    return hasValidType ? null : ICONS.uninspected.default;
+  }
+
+  // 3️⃣ No inspeccionado
+  if (hasValidType && ICONS.uninspected[type]) {
+    return ICONS.uninspected[type];
+  }
+
+  // Si hay tipo pero no existe el icono → NO poner default
+  if (hasValidType) return null;
+
+  // Solo si NO tiene tipo → default
+  return ICONS.uninspected.default;
+};
+
 
 export const getGapColorByInspected = (gap)=>{
   if(gap.vanoInspeccionado==true){

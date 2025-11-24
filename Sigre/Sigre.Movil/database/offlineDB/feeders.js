@@ -13,7 +13,7 @@ export const getAllFeedersLocal = async () => {
       ORDER BY AlimEtiqueta ASC;
     `;
 
-    const rows = await runQuery(sql);
+    const rows = await runQuery(sql, [], true);
 
     if (!rows || rows.length === 0) {
       console.warn("⚠ No hay alimentadores en la base local");
