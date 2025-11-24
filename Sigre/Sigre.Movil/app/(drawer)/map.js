@@ -1,114 +1,99 @@
-// import { StyleSheet, View } from "react-native";
-// import MapView from "react-native-maps";
+import { useFeeder } from "../../hooks/useFeeder";
 
-// export const options = {
-//   title: "", 
-// };
-
-
-// export default function Map() {
-//   return (
-//     <View style={styles.container}>
-//       <MapView
-//         style={styles.map}
-//         initialRegion={{
-//           latitude: -12.0464, // Lima, Perú
-//           longitude: -77.0428,
-//           latitudeDelta: 0.05,
-//           longitudeDelta: 0.05,
-//         }}
-//       />
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1 },
-//   map: { width: "100%", height: "100%" },
-// });
-///////////////////////////////////////////
-
-
-
-
-
-
-
-
-// import { StyleSheet, View } from "react-native";
-// import MapView from "react-native-maps";
-// import ListBox from "../../components/ui/ListBox"; // 👈 importa el nuevo componente
-
-// export default function Map() {
-//   return (
-//     <View style={styles.container}>
-//       {/* Cabecera con ListBox */}
-//       <View style={styles.header}>
-//         <ListBox />
-//       </View>
-
-//       {/* Mapa */}
-//       <MapView
-//         style={styles.map}
-//         initialRegion={{
-//           latitude: -12.0464,
-//           longitude: -77.0428,
-//           latitudeDelta: 0.05,
-//           longitudeDelta: 0.05,
-//         }}
-//       />
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1 },
-//   header: {
-//     position: "absolute",
-//     top: 40,
-//     alignSelf: "center",
-//     zIndex: 2,
-//     backgroundColor: "white",
-//     borderRadius: 8,
-//     padding: 5,
-//     elevation: 5,
-//   },
-//   map: { width: "100%", height: "100%" },
-// });
-
-
-
-
-
-
-
-///////////////////////////
-
-
-
-
-
-
-import { StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import MapView from "react-native-maps";
+import CustomMarker from "../../components/Map/CustomMarker";
 
 export default function Map() {
+  const mapRef = useRef(null);
+  const [selectedPin, setSelectedPin] = useState(null);
+  const [bubblePos, setBubblePos] = useState({ x: 0, y: 0 });
+
+  const { feeders } = useFeeder();
+
+  const handleSelectPin = async (pin) => {
+    setSelectedPin(pin);
+
+    if (!mapRef.current) return;
+
+    const point = await mapRef.current.coordinateForPoint({
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+    });
+
+    setBubblePos({
+      x: point.x,
+      y: point.y - 40, 
+    });
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1 }}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={{
-          latitude: -12.0464,
-          longitude: -77.0428,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitude: -16.39889,
+          longitude: -71.53694,
+          latitudeDelta: 0.2,
+          longitudeDelta: 0.2,
         }}
-      />
+        onPress={() => setSelectedPin(null)}
+      >
+        {feeders
+          .filter(f => f.alimLatitud && f.alimLongitud)
+          .map(f => (
+            <CustomMarker
+              key={f.alimInterno}
+              pin={{
+                label: f.alimEtiqueta,
+                codigo: f.alimCodigo,
+                latitude: f.alimLatitud,
+                longitude: f.alimLongitud,
+              }}
+              onPress={handleSelectPin}
+            />
+          ))}
+      </MapView>
+
+      {/* GLOBO FLOTANTE */}
+      {selectedPin && (
+        <View
+          style={[
+            styles.bubble,
+            { top: bubblePos.y, left: bubblePos.x }
+          ]}
+        >
+          <Text style={styles.title}>{selectedPin.label}</Text>
+          <Text style={styles.code}>Código: {selectedPin.codigo}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   map: { width: "100%", height: "100%" },
+
+  bubble: {
+    position: "absolute",
+    backgroundColor: "white",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#666",
+    elevation: 5,
+  },
+
+  title: {
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+
+  code: {
+    fontSize: 12,
+    color: "#333",
+  },
 });

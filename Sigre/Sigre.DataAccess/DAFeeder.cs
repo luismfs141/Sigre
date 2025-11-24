@@ -27,23 +27,44 @@ namespace Sigre.DataAccess
             return feeders;
         }
 
+        //public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
+        //{
+        //    SigreContext ctx = new SigreContext();
+        //    List<Alimentadore> feeders = new List<Alimentadore>();
+
+        //    // Obtener los IDs de los alimentadores asignados al usuario
+        //    var idFeeders = ctx.UsuariosAlimentadores
+        //                       .Where(u => u.UsalUsuario == id_user)
+        //                       .Select(a => a.UsalAlimentador)
+        //                       .ToList();
+
+        //    // Obtener los alimentadores filtrando por los IDs anteriores
+        //    feeders = ctx.Alimentadores
+        //                     .Where(a => idFeeders.Contains(a.AlimInterno))
+        //                     .ToList();
+
+        //    return feeders;
+        //}
         public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
         {
-            SigreContext ctx = new SigreContext();
-            List<Alimentadore> feeders = new List<Alimentadore>();
+            using (var ctx = new SigreContext())
+            {
+                // 🔹 Limpia cualquier entidad cacheada del contexto (prevención)
+                ctx.ChangeTracker.Clear();
 
-            // Obtener los IDs de los alimentadores asignados al usuario
-            var idFeeders = ctx.UsuariosAlimentadores
-                               .Where(u => u.UsalUsuario == id_user)
-                               .Select(a => a.UsalAlimentador)
-                               .ToList();
+                // 🔹 Desactiva el tracking para lecturas (mejor rendimiento y sin cache)
+                var feeders = ctx.UsuariosAlimentadores
+                    .AsNoTracking()
+                    .Where(u => u.UsalUsuario == id_user)
+                    .Join(ctx.Alimentadores.AsNoTracking(),
+                          ua => ua.UsalAlimentador,
+                          a => a.AlimInterno,
+                          (ua, a) => a)
+                    .OrderBy(a => a.AlimCodigo)
+                    .ToList();
 
-            // Obtener los alimentadores filtrando por los IDs anteriores
-            feeders = ctx.Alimentadores
-                             .Where(a => idFeeders.Contains(a.AlimInterno))
-                             .ToList();
-
-            return feeders;
+                return feeders;
+            }
         }
 
         public void DAFE_DrawMapByFeeder(int idFeeder)

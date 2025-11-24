@@ -1,20 +1,23 @@
-import { Text } from 'react-native';
-import { Marker } from 'react-native-maps';
-import { pinStyles } from '../../assets/styles/pinStyles';
-import { getSourceImageFromType2 } from '../../utils/utils';
-import PinCallout from './PinCallout';
 
-const CustomMarker = ({ pin, onPress }) => (
-  <Marker
-    title={pin.label}
-    tracksViewChanges={false}
-    coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-    onPress={() => onPress(pin)}
-    icon={getSourceImageFromType2(pin)}
-  >
-    <Text style={pinStyles.label}>{pin.label}</Text>
-    <PinCallout pin={pin} />
-  </Marker>
-);
 
-export default CustomMarker;
+import { Image } from "react-native";
+import { Marker } from "react-native-maps";
+
+export default function CustomMarker({ pin, onPress }) {
+  return (
+    <Marker
+      coordinate={{
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+      }}
+      onPress={() => onPress(pin)}
+      anchor={{ x: 0.5, y: 0.5 }}
+    >
+      <Image
+        source={require("../../assets/Elements/Uninspected/1.png")}
+        style={{ width: 32, height: 32 }}
+        resizeMode="contain"
+      />
+    </Marker>
+  );
+}

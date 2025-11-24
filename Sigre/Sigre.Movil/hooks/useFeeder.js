@@ -17,6 +17,7 @@ export function useFeeder(userId = null) {
       if (!res.ok) throw new Error("Error al obtener alimentadores");
       const data = await res.json();
       setFeeders(data);
+  
     } catch (err) {
       console.error("useFeeder.fetchFeeders:", err);
       setError(err.message);
@@ -25,23 +26,46 @@ export function useFeeder(userId = null) {
     }
   }, [API_BASE]);
 
+  // /** 🔹 Obtener alimentadores por usuario */
+  // const getFeedersByUser = useCallback(async (id = userId) => {
+  //   if (!id) return;
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+  //     const res = await fetch(`${API_BASE}Feeder/GetFeedersByUser?idUser=${id}`);
+  //     if (!res.ok) throw new Error("Error al obtener alimentadores por usuario");
+  //     const data = await res.json();
+  //     setFeedersByUser(data);
+  //   } catch (err) {
+  //     console.error("useFeeder.getFeedersByUser:", err);
+  //     setError(err.message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [API_BASE, userId]);
+
   /** 🔹 Obtener alimentadores por usuario */
-  const getFeedersByUser = useCallback(async (id = userId) => {
-    if (!id) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(`${API_BASE}Feeder/GetFeedersByUser?idUser=${id}`);
-      if (!res.ok) throw new Error("Error al obtener alimentadores por usuario");
-      const data = await res.json();
-      setFeedersByUser(data);
-    } catch (err) {
-      console.error("useFeeder.getFeedersByUser:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE, userId]);
+const getFeedersByUser = useCallback(async (id = userId) => {
+  if (!id) return [];
+  try {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`${API_BASE}Feeder/GetFeedersByUser?idUser=${id}`);
+    if (!res.ok) throw new Error("Error al obtener alimentadores por usuario");
+    const data = await res.json();
+    setFeedersByUser(data);
+    return data; // 👈 muy importante
+  } catch (err) {
+    console.error("useFeeder.getFeedersByUser:", err);
+    setError(err.message);
+    return [];
+  } finally {
+    setLoading(false);
+  }
+}, [API_BASE, userId]);
+
+
+
 
   /** 🔹 Dibujar mapa por alimentador */
   const drawMap = useCallback(async (idFeeder) => {

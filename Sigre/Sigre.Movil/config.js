@@ -5,7 +5,9 @@ import axios from 'axios';
 //const baseURL = 'http://localhost:56870/api/'; // desa sin SSL
 //const baseURL = 'https://localhost:7280/api/'; //
 //const baseURL = 'http://192.168.0.208/SigreHost/api/'; // local
-const baseURL = 'http://192.168.1.14/SigreHost/api/'; // local
+const baseURL = 'http://192.168.1.9/SigreHost/api/'; // local
+
+
 
 export const API_URL = baseURL; 
 
