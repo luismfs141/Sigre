@@ -84,6 +84,9 @@ export default function DrawerLayout() {
         }}
       />
 
+      
+
+
        {/* 👇 Esta es la nueva opción de salir */}
        <Drawer.Screen
          name="logout"
@@ -95,7 +98,20 @@ export default function DrawerLayout() {
          }}
        />
 
+<Drawer.Screen
+  name="test-maps"
+  options={{
+    title: "Mapa de Prueba",
+    drawerIcon: ({ color, size }) => (
+      <Ionicons name="map" size={size} color={color} />
+    ),
+  }}
+/>
+
+       
+
       
     </Drawer>
   );
 }
+

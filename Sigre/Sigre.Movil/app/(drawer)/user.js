@@ -77,18 +77,42 @@ export default function User() {
     }
   };
 
-  /** 🔹 Abrir modal de alimentadores */
-  const openFeedersModal = async (user) => {
-    setSelectedUser(user);
-    await getFeedersByUser(user.usuaInterno);
-    // setSelectedFeeders(feedersByUser.map(f => f.alimInterno));
+  // /** 🔹 Abrir modal de alimentadores */
+  // const openFeedersModal = async (user) => {
+  //   setSelectedUser(user);
+  //   await getFeedersByUser(user.usuaInterno);
+  //   // setSelectedFeeders(feedersByUser.map(f => f.alimInterno));
     
-    // Agregar los nuevos feeders al estado existente
-    setSelectedFeeders(prev => [
-      ...new Set([...prev, ...feedersByUser.map(f => f.alimInterno)])
-    ]);
-    setModalFeeders(true);
-  };
+  //   // Agregar los nuevos feeders al estado existente
+  //   setSelectedFeeders(prev => [
+  //     ...prev, 
+  //     ...feedersByUser.map(f => f.alimInterno)
+  //   ]);
+  //   setModalFeeders(true);
+  // };
+  
+
+  ///////////////////////////////////////////////////
+    /** 🔹 Abrir modal de alimentadores */
+const openFeedersModal = async (user) => {
+  setSelectedUser(user);
+
+  // 🧹 Limpiar selección anterior
+  setSelectedFeeders([]);
+
+  // 🔹 Obtener lista del backend
+  const lista = await getFeedersByUser(user.usuaInterno);
+
+  // 📝 Usar directamente lo que retorna la función
+  setSelectedFeeders(lista.map(f => f.alimInterno));
+
+  setModalFeeders(true);
+};
+
+
+//////////////////////////////////////////////////////
+
+
 
   /** 🔹 Seleccionar o deseleccionar un alimentador */
   const handleAddFeeder = (idFeeder) => {
