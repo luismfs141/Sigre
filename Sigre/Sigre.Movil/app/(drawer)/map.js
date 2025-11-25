@@ -13,16 +13,18 @@ import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/uti
 import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap';
+import { usePost } from '../../hooks/usePost.js';
 
 export const Map = () => {
   const {
     selectedFeeder, setSelectedFeeder, pins, setPins, gaps, setGaps,
     region, setRegion, selectedItem, setSelectedPin, setSelectedGap,
-    feeders, setFeeders,
+    feeders, setFeeders
   } = useDatos();
 
   const { getPinsByFeeder, getGapsByFeeder, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion } = useMap();
   const { fetchLocalFeeders } = useFeeder();
+  const { fetchAndSelectPost } = usePost();
   const router = useRouter();
 
   const mapRef = useRef(null);
@@ -109,20 +111,24 @@ const isValidLabel = (label) => {
 };
 
 
+
 const onMarkerPress = (item) => {
+  console.log(item);
   Alert.alert(
     "Elemento seleccionado",
-    `ID: ${item.Id}\nCódigo: ${item.ElementCode}\nTipo: ${item.Type}`,
+    `Tipo: ${item.Type}\nCódigo: ${item.ElementCode}`,
     [
       { text: "Cancelar", style: "cancel" },
       { 
         text: "Inspeccionar",
-        onPress: () => {
-          // Guardar elemento en el context
+        onPress: async () => {
           if (item.Type === 0 || item.Type === 8) {
-            setSelectedGap(item);  // si es un gap
+            setSelectedGap(item);  // es un gap
+          } else if (item.Type === 5) {
+            // es un poste → usar el hook para guardarlo globalmente
+            await fetchAndSelectPost(item.Id);
           } else {
-            setSelectedPin(item);  // si es un pin
+            setSelectedPin(item);  // es un pin
           }
 
           // Navegar a pantalla de inspección

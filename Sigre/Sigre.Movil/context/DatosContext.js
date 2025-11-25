@@ -7,8 +7,11 @@ export const DatosProvider = ({ children }) => {
   const [feeders, setFeeders] = useState([]);
   const [pins, setPins] = useState([]);
   const [gaps, setGaps] = useState([]);
+  const [selectedPost, setSelectedPost] = useState([]);
+  const [selectedSed, setSelectedSed] = useState([]);
   const [totalPins, setTotalPins] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   const [region, setRegion] = useState({
     latitude: -12.0464,
@@ -41,6 +44,12 @@ export const DatosProvider = ({ children }) => {
         gaps,
         setGaps,
 
+        selectedPost,
+        setSelectedPost,
+
+        selectedSed,
+        setSelectedSed,
+
         totalPins,
         setTotalPins,
 
@@ -50,6 +59,8 @@ export const DatosProvider = ({ children }) => {
         setSelectedGap,
 
         region, setRegion,
+        selectedProject,
+        setSelectedProject
       }}
     >
       {children}
