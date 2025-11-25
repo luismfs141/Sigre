@@ -43,6 +43,15 @@ export const useMap = () => {
   const getPinsByRegion = (region) => {
     if (!Array.isArray(totalPins)) return setPins([]);
 
+// Si el zoom no es suficiente → no mostrar pines
+if (region.latitudeDelta > 0.008) {
+  setPins([]);
+  return;
+}
+
+
+
+
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
 
     const minLat = latitude - latitudeDelta * 0.6;
@@ -59,6 +68,8 @@ export const useMap = () => {
 
     setPins(visiblePins);
   };
+    
+
 
   // --------------------------------------------------------------
   // GAPS (no causan lag)

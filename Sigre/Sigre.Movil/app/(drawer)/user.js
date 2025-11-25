@@ -77,22 +77,6 @@ export default function User() {
     }
   };
 
-  // /** 🔹 Abrir modal de alimentadores */
-  // const openFeedersModal = async (user) => {
-  //   setSelectedUser(user);
-  //   await getFeedersByUser(user.usuaInterno);
-  //   // setSelectedFeeders(feedersByUser.map(f => f.alimInterno));
-    
-  //   // Agregar los nuevos feeders al estado existente
-  //   setSelectedFeeders(prev => [
-  //     ...prev, 
-  //     ...feedersByUser.map(f => f.alimInterno)
-  //   ]);
-  //   setModalFeeders(true);
-  // };
-  
-
-  ///////////////////////////////////////////////////
     /** 🔹 Abrir modal de alimentadores */
 const openFeedersModal = async (user) => {
   setSelectedUser(user);
@@ -108,9 +92,6 @@ const openFeedersModal = async (user) => {
 
   setModalFeeders(true);
 };
-
-
-//////////////////////////////////////////////////////
 
 
 

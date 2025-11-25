@@ -1,12 +1,10 @@
-import * as React from 'react';
-import { View, StyleSheet, Image} from 'react-native';
 import { Audio } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
+import * as React from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 import { TouchableOpacity } from "react-native-gesture-handler";
-import mime from "mime";
 import { useSelector } from 'react-redux';
 import { useMultimedia } from "../hooks/useMultimedia";
-import { saveFile } from "../utils/utils"
 
 export const RecordAudio = ({files}) => {
 

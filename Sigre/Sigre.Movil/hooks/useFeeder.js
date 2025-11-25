@@ -18,8 +18,7 @@ export function useFeeder(userId = null) {
       const res = await fetch(`${API_BASE}Feeder/GetFeeder`);
       if (!res.ok) throw new Error("Error al obtener alimentadores");
       const data = await res.json();
-      console.log("ERROR 1111");
-      console.log(data);
+
       setFeeders(data);
   
     } catch (err) {

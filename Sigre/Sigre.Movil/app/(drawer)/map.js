@@ -29,6 +29,10 @@ export const Map = () => {
 
   const mapRef = useRef(null);
 
+  // 🔍 Umbral de zoom
+  const ZOOM_THRESHOLD = 0.007; // mientras más chico, más zoom exige
+  const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
+
   // --------------------------------------------------------------
   // Cargar pins/gaps cuando se selecciona alimentador
   // --------------------------------------------------------------
@@ -90,15 +94,19 @@ export const Map = () => {
   // --------------------------------------------------------------
   // MEMOIZACIÓN PARA EVITAR RERENDERS DE +1000 PINS
   // --------------------------------------------------------------
-  const memoPins = useMemo(() => {
-    return Array.isArray(pins)
-      ? pins.filter(p => p.Type !== 0 && p.Latitude && p.Longitude)
-      : [];
-  }, [pins]);
+const memoPins = useMemo(() => {
+  if (!shouldShowPins) return [];
 
-  const memoGaps = useMemo(() => {
-    return Array.isArray(gaps) ? gaps : [];
-  }, [gaps]);
+  return Array.isArray(pins)
+    ? pins.filter(p => p.Type !== 0 && p.Latitude && p.Longitude)
+    : [];
+}, [pins, shouldShowPins]);
+
+
+const memoGaps = useMemo(() => {
+  return Array.isArray(gaps) ? gaps : [];
+}, [gaps]);
+
 
   const formatLabel = (label) => {
     if (!label) return "";
@@ -113,7 +121,6 @@ const isValidLabel = (label) => {
 
 
 const onMarkerPress = (item) => {
-  console.log(item);
   Alert.alert(
     "Elemento seleccionado",
     `Tipo: ${item.Type}\nCódigo: ${item.ElementCode}`,

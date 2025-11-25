@@ -62,7 +62,6 @@ export function useUser() {
       }
 
       const data = await response.json();
-      console.log("Usuario guardado:", data);
 
       // ✅ Recargar lista de usuarios
       await fetchData();
@@ -100,7 +99,6 @@ export function useUser() {
       }
 
       const data = await response.json();
-      console.log("Alimentadores guardados:", data);
 
       return data;
     } catch (err) {
