@@ -9,6 +9,7 @@ export function useFeeder(userId = null) {
   const [error, setError] = useState(null);
   const API_BASE = API_URL;
 
+//////////////////////////////////////////////////////////////////////
   /** 🔹 Obtener todos los alimentadores */
   const fetchFeeders = useCallback(async () => {
     try {
@@ -17,6 +18,8 @@ export function useFeeder(userId = null) {
       const res = await fetch(`${API_BASE}Feeder/GetFeeder`);
       if (!res.ok) throw new Error("Error al obtener alimentadores");
       const data = await res.json();
+      console.log("ERROR 1111");
+      console.log(data);
       setFeeders(data);
   
     } catch (err) {
@@ -26,6 +29,10 @@ export function useFeeder(userId = null) {
       setLoading(false);
     }
   }, [API_BASE]);
+
+
+//////////////////////////////////////////////////////////////////////////////
+
 
   // /** 🔹 Obtener alimentadores por usuario */
   // const getFeedersByUser = useCallback(async (id = userId) => {
@@ -44,6 +51,7 @@ export function useFeeder(userId = null) {
   //     setLoading(false);
   //   }
   // }, [API_BASE, userId]);
+
 
   /** 🔹 Obtener alimentadores por usuario */
 const getFeedersByUser = useCallback(async (id = userId) => {
@@ -110,11 +118,17 @@ const fetchLocalFeeders = useCallback(async () => {
   }
 }, []);
 
+///////////////////////////////////////////////////////////////////////////////
+//   /** 🔹 Cargar lista inicial (todos o por usuario) */
+// useEffect(() => {
+//   fetchLocalFeeders();
+// }, [fetchLocalFeeders]);
 
-  /** 🔹 Cargar lista inicial (todos o por usuario) */
+
 useEffect(() => {
-  fetchLocalFeeders();
-}, [fetchLocalFeeders]);
+  fetchFeeders(); // forza carga desde API
+}, []);
+/////////////////////////////////////////////////////////////////////////////////
 
   return {
     feeders,

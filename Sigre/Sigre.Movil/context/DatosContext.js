@@ -9,6 +9,7 @@ export const DatosProvider = ({ children }) => {
   const [gaps, setGaps] = useState([]);
   const [totalPins, setTotalPins] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedPost, setSelectedPost] = userState(null);
 
   const [region, setRegion] = useState({
     latitude: -12.0464,
