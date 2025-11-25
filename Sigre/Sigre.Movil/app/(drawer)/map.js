@@ -146,6 +146,8 @@ const onMarkerPress = (item) => {
   );
 };
 
+
+
   // --------------------------------------------------------------
   // Render
   // --------------------------------------------------------------
@@ -184,9 +186,12 @@ const onMarkerPress = (item) => {
         {memoPins.map((pin, i) => {
           const cleanLabel = formatLabel(pin.Label);
 
+
+
+
           const showLabel =
-            Number(pin.Type) !== 8 &&      // no mostrar gaps
-            isValidLabel(cleanLabel);      // solo números reales
+  Number(pin.Type) !== 8 &&        // NO mostrar gaps
+  cleanLabel && cleanLabel.trim().length > 0;
 
           return (
             <Marker
@@ -199,7 +204,6 @@ const onMarkerPress = (item) => {
               onPress={() => onMarkerPress(pin)} 
             >
               <View style={pinStyles.pinWrapper}>
-
                 <Image
                   source={getSourceImageFromType2(pin)}
                   style={pinStyles.pinIcon}
@@ -245,5 +249,14 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
 });
+
+
+
+
+
+
+
+
+
 
 export default Map;
