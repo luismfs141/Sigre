@@ -99,9 +99,9 @@ export default function DrawerLayout() {
        />
 
 <Drawer.Screen
-  name="test-maps"
+  name="registerDef"
   options={{
-    title: "Mapa de Prueba",
+    title: "Prueba def",
     drawerIcon: ({ color, size }) => (
       <Ionicons name="map" size={size} color={color} />
     ),
