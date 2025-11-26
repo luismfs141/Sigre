@@ -121,10 +121,7 @@ const isValidLabel = (label) => {
 };
 
 
-
 const onMarkerPress = (item) => {
-  console.log(item);
-
   let tipoElemento = "";
   let codigo = "";
 
