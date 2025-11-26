@@ -181,46 +181,72 @@ const onMarkerPress = (item) => {
           />
         ))}
 
-        {/* PINES */}
+        
+{/* PINES */}
+{memoPins.map((pin, i) => {
+  const cleanLabel = formatLabel(pin.Label);
+  const showLabel =
+    Number(pin.Type) !== 8 &&
+    cleanLabel && cleanLabel.trim().length > 0;
 
-        {memoPins.map((pin, i) => {
-          const cleanLabel = formatLabel(pin.Label);
+  // ❌ TYPE 8 → NO CLICK, NO LABEL, NO CALLOUT
+  if (Number(pin.Type) === 8) {
+    return (
+      <Marker
+        key={pin.Id || i}
+        coordinate={{
+          latitude: pin.Latitude,
+          longitude: pin.Longitude,
+        }}
+        tracksViewChanges={true}
+        pointerEvents="none"     // 👈 EVITA CLIC
+      >
+        <View style={pinStyles.pinWrapper}>
+          <Image
+            source={getSourceImageFromType2(pin)}
+            style={pinStyles.pinIcon}
+            resizeMode="contain"
+          />
+          {/* SIN LABEL */}
+        </View>
+      </Marker>
+    );
+  }
+
+  // ✔ Todo LO DEMÁS → normal
+  return (
+    <Marker
+      key={pin.Id || i}
+      coordinate={{
+        latitude: pin.Latitude,
+        longitude: pin.Longitude,
+      }}
+      tracksViewChanges={true}
+      onPress={() => onMarkerPress(pin)}
+    >
+      <View style={pinStyles.pinWrapper}>
+        <Image
+          source={getSourceImageFromType2(pin)}
+          style={pinStyles.pinIcon}
+          resizeMode="contain"
+        />
+
+        {showLabel && (
+          <View style={pinStyles.labelBox}>
+            <Text style={pinStyles.labelText}>{cleanLabel}</Text>
+          </View>
+        )}
+      </View>
+
+      <PinCallout pin={pin} />
+    </Marker>
+  );
+})}
+
+        
 
 
 
-
-          const showLabel =
-  Number(pin.Type) !== 8 &&        // NO mostrar gaps
-  cleanLabel && cleanLabel.trim().length > 0;
-
-          return (
-            <Marker
-              key={pin.Id || i}
-              coordinate={{
-                latitude: pin.Latitude,
-                longitude: pin.Longitude,
-              }}
-              tracksViewChanges={true}
-              onPress={() => onMarkerPress(pin)} 
-            >
-              <View style={pinStyles.pinWrapper}>
-                <Image
-                  source={getSourceImageFromType2(pin)}
-                  style={pinStyles.pinIcon}
-                  resizeMode="contain"
-                />
-
-                {showLabel && (
-                  <View style={pinStyles.labelBox}>
-                    <Text style={pinStyles.labelText}>{cleanLabel}</Text>
-                  </View>
-                )}
-              </View>
-
-              <PinCallout pin={pin} />
-            </Marker>
-          );
-        })}
 
       </MapView>
 
