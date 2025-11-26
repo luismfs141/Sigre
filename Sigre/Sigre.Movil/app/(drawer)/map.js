@@ -1,6 +1,11 @@
 import * as Location from 'expo-location';
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef } from 'react';
+
+//------------------------------------------------------------------------------------------------------------------------NEW
+import { useEffect, useMemo, useRef, useState } from 'react';
+//------------------------------------------------------------------------------------------------------------------------NEW
+
+
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
@@ -14,6 +19,9 @@ import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap';
 import { usePost } from '../../hooks/usePost.js';
+
+
+
 
 export const Map = () => {
   const {
@@ -29,9 +37,26 @@ export const Map = () => {
 
   const mapRef = useRef(null);
 
+//------------------------------------------------------------------------------------------------------------------------NEW
+// 🛰️ Ubicación en tiempo real
+const [userLocation, setUserLocation] = useState(null);
+
+// 🧭 Dirección del teléfono (heading)
+const [heading, setHeading] = useState(0);
+
+const [isUserInteracting, setIsUserInteracting] = useState(false);
+
+
+//------------------------------------------------------------------------------------------------------------------------NEW
+
+
+
+
+
   // 🔍 Umbral de zoom
   const ZOOM_THRESHOLD = 0.007; // mientras más chico, más zoom exige
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
+
 
   // --------------------------------------------------------------
   // Cargar pins/gaps cuando se selecciona alimentador
@@ -68,10 +93,79 @@ export const Map = () => {
     })();
   }, [selectedFeeder]);
 
+
+
+
+
+
+
+
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+// 🛰️ Seguimiento en tiempo real del GPS
+useEffect(() => {
+  let subscription;
+
+  (async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return;
+
+    subscription = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Highest,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
+      (loc) => {
+        setUserLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+      }
+    );
+  })();
+
+  return () => subscription && subscription.remove();
+}, []);
+
+
+
+
+
+// 🧭 Seguimiento de la orientación del celular
+useEffect(() => {
+  let subscription;
+
+  (async () => {
+    subscription = await Location.watchHeadingAsync((e) => {
+      setHeading(e.trueHeading);
+    });
+  })();
+
+  return () => subscription && subscription.remove();
+}, []);
+
+
+
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+//------------------------------------------------------------------------------------------------------------------------NEW
+
+
+
+
+
+
+
+
+
   // --------------------------------------------------------------
   // GPS
   // --------------------------------------------------------------
-  const userLocation = async () => {
+  const goToUserLocation  = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return;
 
@@ -159,12 +253,57 @@ const onMarkerPress = (item) => {
         ref={mapRef}
         style={mapStyles.mapContainer}
         region={region}
+        initialRegion={region}
         mapType="satellite"
+        onTouchStart={() => setIsUserInteracting(true)}
+        onPanDrag={() => setIsUserInteracting(true)}
+
         onRegionChangeComplete={(reg) => {
           setRegion(reg);
           getPinsByRegion(reg);
         }}
+        
+
+
+
+
       >
+
+        {/* 🟦 UBICACIÓN DEL USUARIO */}
+  {userLocation && (
+    <Marker
+      coordinate={userLocation}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={true}
+    >
+      <View style={{ alignItems: "center", justifyContent: "center" }}>
+        {/* Flecha */}
+        <Image
+          source={require("../../assets/transparent.png")}
+          style={{
+            width: 34,
+            height: 34,
+            tintColor: "#0066FF",
+            transform: [{ rotate: `${heading}deg` }],
+          }}
+        />
+
+        {/* Punto azul */}
+        <View
+          style={{
+            width: 16,
+            height: 16,
+            backgroundColor: "#4285F4",
+            borderRadius: 8,
+            borderWidth: 3,
+            borderColor: "white",
+            position: "absolute",
+          }}
+        />
+      </View>
+    </Marker>
+  )}
+
 
         {/* GAPs */}
         {memoGaps.map((gap, i) => (
@@ -250,7 +389,7 @@ const onMarkerPress = (item) => {
 
       </MapView>
 
-      <TouchableOpacity style={styles.floatBtn} onPress={userLocation}>
+      <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
         <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
       </TouchableOpacity>
     </View>

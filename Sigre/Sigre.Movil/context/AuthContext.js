@@ -34,6 +34,7 @@ export function AuthProvider({ children }) {
 
     console.log("Intentando login en:", url);
     console.log("Datos enviados:", { correo, password, imei: deviceId });
+    
 
     const response = await fetch(url, {
       method: "POST",
