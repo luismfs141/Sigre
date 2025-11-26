@@ -10,7 +10,7 @@ export const DatosProvider = ({ children }) => {
   const [selectedPost, setSelectedPost] = useState([]);
   const [selectedSed, setSelectedSed] = useState([]);
   const [totalPins, setTotalPins] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItem, setSelectedItem] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
 
   const [region, setRegion] = useState({
@@ -55,6 +55,8 @@ export const DatosProvider = ({ children }) => {
 
         // item seleccionado
         selectedItem,
+        setSelectedItem,
+
         setSelectedPin,
         setSelectedGap,
 

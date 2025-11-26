@@ -14,17 +14,19 @@ import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap';
 import { usePost } from '../../hooks/usePost.js';
+import { useSed } from '../../hooks/useSed.js';
 
 export const Map = () => {
   const {
     selectedFeeder, setSelectedFeeder, pins, setPins, gaps, setGaps,
-    region, setRegion, selectedItem, setSelectedPin, setSelectedGap,
-    feeders, setFeeders
+    region, setRegion, setSelectedItem, setSelectedPin, setSelectedGap,
+    feeders, setFeeders,
   } = useDatos();
 
   const { getPinsByFeeder, getGapsByFeeder, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion } = useMap();
   const { fetchLocalFeeders } = useFeeder();
   const { fetchAndSelectPost } = usePost();
+  const { fetchAndSelectSed } = useSed();
   const router = useRouter();
 
   const mapRef = useRef(null);
@@ -121,32 +123,53 @@ const isValidLabel = (label) => {
 
 
 const onMarkerPress = (item) => {
+  console.log(item);
+
+  let tipoElemento = "";
+  let codigo = "";
+
+  if (item.VanoCodigo) {
+    tipoElemento = "Vano";
+    codigo = item.VanoCodigo;
+  } else if (item.ElementCode) {
+    tipoElemento = "Elemento";
+    codigo = item.ElementCode;
+  }
+
   Alert.alert(
     "Elemento seleccionado",
-    `Tipo: ${item.Type}\nCódigo: ${item.ElementCode}`,
+    `Tipo: ${tipoElemento}\nCódigo: ${codigo}`,
     [
       { text: "Cancelar", style: "cancel" },
       { 
         text: "Inspeccionar",
         onPress: async () => {
-          if (item.Type === 0 || item.Type === 8) {
-            setSelectedGap(item);  // es un gap
-          } else if (item.Type === 5) {
-            // es un poste → usar el hook para guardarlo globalmente
-            await fetchAndSelectPost(item.Id);
-          } else {
-            setSelectedPin(item);  // es un pin
+
+          // -------------------------------
+          //        PROCESAMIENTO
+          // -------------------------------
+
+          if (item.VanoCodigo) {
+            setSelectedItem(item);
+          }
+          else if (item.Type === 5) {
+            await fetchAndSelectPost(item.IdOriginal);
+          }
+          //Deficiencias y Unknown
+          else if (item.Type === 7 || item.Type === 8) {
+            return; // no hacer nada
           }
 
-          // Navegar a pantalla de inspección
+          else {
+            await fetchAndSelectSed(item.IdOriginal);
+          }
+
           router.push("/(drawer)/inspection");
         }
       }
     ]
   );
 };
-
-
 
   // --------------------------------------------------------------
   // Render
