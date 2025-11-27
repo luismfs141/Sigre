@@ -61,6 +61,7 @@ export const DatosProvider = ({ children }) => {
         setSelectedGap,
 
         region, setRegion,
+
         selectedProject,
         setSelectedProject
       }}

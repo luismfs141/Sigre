@@ -10,14 +10,14 @@ const mapStyles = StyleSheet.create({
 
 
 
-//-----------------------------------------------------------------------
+// //-----------------------------------------------------------------------
 // const pinStyles = StyleSheet.create({
 //   labelBox: {
 //     marginTop: 0,
 //     paddingVertical: 2,
 //     backgroundColor: "rgba(0,0,0,0.65)",
 //     borderRadius: 4,
-//     maxWidth: 140,
+//     maxWidth: 200,
 //   },
 //   labelText: {
 //     color: "#00FFFF",
