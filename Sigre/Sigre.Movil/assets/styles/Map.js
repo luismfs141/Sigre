@@ -36,6 +36,8 @@ const pinStyles = StyleSheet.create({
     overflow: "visible",      // 👈 CLAVE PARA QUE EL LABEL NO SE CORTE
   },
 
+
+  //AGREGAR IF PARA ESTACIONES
   pinIcon: {
     width: 22,
     height: 22,
