@@ -1023,12 +1023,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   textArea: {
-  backgroundColor: "white",
-  padding: 10,
-  borderRadius: 5,
-  height: 120,
-  textAlignVertical: "top",  // ← NECESARIO para Android
-},
+    backgroundColor: "white",
+    padding: 10,
+    borderRadius: 5,
+    height: 120,
+    textAlignVertical: "top",  // ← NECESARIO para Android
+  },
 
   bottomButtons: {
     flexDirection: "row",
@@ -1095,17 +1095,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
 
-charCounterContainer: {
-  width: "100%",
-  alignItems: "flex-end",
-  marginTop: 4,
-  paddingRight: 4
-},
+  charCounterContainer: {
+    width: "100%",
+    alignItems: "flex-end",
+    marginTop: 4,
+    paddingRight: 4
+  },
 
-charCounter: {
-  fontSize: 12,
-  color: "#555",
-},
+  charCounter: {
+    fontSize: 12,
+    color: "#555",
+  },
 
 
 });
