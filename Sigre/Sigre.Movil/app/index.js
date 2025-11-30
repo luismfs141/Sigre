@@ -1,3 +1,5 @@
+import { useDatos } from '@/context/DatosContext';
+import { Ionicons } from '@expo/vector-icons'; // 👈 iconos de Expo
 import { Picker } from '@react-native-picker/picker';
 import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';
@@ -10,9 +12,9 @@ export default function Login() {
   const { user, signIn } = useContext(AuthContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedProject, setSelectedProject] = useState('project1');
   const [deviceId, setDeviceId] = useState('');
   const router = useRouter();
+  const { selectedProject, setSelectedProject } = useDatos();
 
   useEffect(() => {
     if (user) {
@@ -40,6 +42,7 @@ export default function Login() {
     if (!success) {
       Alert.alert("Error", "Usuario o contraseña incorrectos");
     }
+    setSelectedProject(selectedProject);
   };
 
   return (
@@ -67,8 +70,8 @@ export default function Login() {
           selectedValue={selectedProject}
           onValueChange={(itemValue) => setSelectedProject(itemValue)}
         >
-          <Picker.Item label="Project 1" value="project1" />
-          <Picker.Item label="Project 2" value="project2" />
+          <Picker.Item label="Baja Tensión" value="1" />
+          <Picker.Item label="Media Tensión" value="2" />
         </Picker>
       </View>
 
@@ -85,3 +88,6 @@ export default function Login() {
     </View>
   );
 }
+
+
+

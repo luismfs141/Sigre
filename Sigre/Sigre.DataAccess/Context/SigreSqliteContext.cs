@@ -26,6 +26,7 @@ namespace Sigre.DataAccess.Context
         public DbSet<PosteMaterial> PosteMaterials { get; set; }
         public DbSet<SedMaterial> SedMaterials { get; set; }
         public DbSet<PinStruct> Pines { get; set; }
+        public DbSet<Alimentadore> Alimentadores { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

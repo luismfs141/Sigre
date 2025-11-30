@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from 'expo-application';
-import React, { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { Platform } from 'react-native';
 import { API_URL } from '../config'; // 👈 Import directo
 
@@ -28,37 +28,46 @@ export function AuthProvider({ children }) {
   };
 
   const signIn = async (correo, password, proyecto) => {
-    try {
-      const deviceId = await getDeviceId();
+  try {
+    const deviceId = await getDeviceId();
+    const url = `${baseURL}User/login`;  // 👈 corregido (antes decía Auth/login)
 
-      const response = await fetch(`${baseURL}Auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ correo, password, imei: deviceId }),
-      });
+    console.log("Intentando login en:", url);
+    console.log("Datos enviados:", { correo, password, imei: deviceId });
+    
 
-      if (!response.ok) return false;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ correo, password, imei: "" }),
+    });
 
-      const data = await response.json();
-
-      const loggedUser = {
-        id: data.usuaInterno,
-        nombre: data.usuaNombres,
-        correo: data.usuaCorreo,
-        proyecto,
-        token: data.token,
-        deviceId, // lo guardamos también en contexto
-      };
-
-      setUser(loggedUser);
-      await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
-
-      return true;
-    } catch (error) {
-      console.error("Error login:", error);
+    if (!response.ok) {
+      console.log("Error HTTP:", response.status);
       return false;
     }
-  };
+
+    const data = await response.json();
+    console.log("Respuesta del servidor:", data);
+
+    const loggedUser = {
+      id: data.usuaInterno,
+      nombre: data.usuaNombres,
+      correo: data.usuaCorreo,
+      proyecto,
+      token: data.token,
+      deviceId,
+    };
+
+    setUser(loggedUser);
+    await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
+    return true;
+  } catch (error) {
+    console.error("Error login:", error);
+    return false;
+  }
+};
+
 
   const signOut = async () => {
     setUser(null);

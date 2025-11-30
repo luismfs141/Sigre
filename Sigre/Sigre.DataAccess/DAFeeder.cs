@@ -27,55 +27,40 @@ namespace Sigre.DataAccess
             return feeders;
         }
 
-        public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
+        public List<Alimentadore> DAFeeder_GetFeederById(List<int> idAlimentadores)
         {
             SigreContext ctx = new SigreContext();
-            List<Alimentadore> feeders = new List<Alimentadore>();
 
-            // Obtener los IDs de los alimentadores asignados al usuario
-            var idFeeders = ctx.UsuariosAlimentadores
-                               .Where(u => u.UsalUsuario == id_user)
-                               .Select(a => a.UsalAlimentador)
-                               .ToList();
+            if (idAlimentadores == null || idAlimentadores.Count == 0)
+                return new List<Alimentadore>();
 
-            // Obtener los alimentadores filtrando por los IDs anteriores
-            feeders = ctx.Alimentadores
-                             .Where(a => idFeeders.Contains(a.AlimInterno))
+            // Obtener alimentadores cuyos IDs estén en la lista
+            var feeders = ctx.Alimentadores
+                             .Where(a => idAlimentadores.Contains(a.AlimInterno))
                              .ToList();
 
             return feeders;
         }
-
-        public void DAFE_SaveFeedersByUser(int idUser, int idAlim, bool act)
+        public List<Alimentadore> DAFE_GetFeedersByUser(int id_user)
         {
-            SigreContext ctx = new SigreContext();
-
-            var usuarioAlimentador = ctx.UsuariosAlimentadores
-                                  .SingleOrDefault(ua => ua.UsalUsuario == idUser && ua.UsalAlimentador == idAlim);
-
-            if (usuarioAlimentador == null && act)
+            using (var ctx = new SigreContext())
             {
-                ctx.UsuariosAlimentadores.Add(new UsuariosAlimentadore
-                {
-                    UsalUsuario = idUser,
-                    UsalAlimentador = idAlim,
-                    UsalActivo = true
-                });
-            }
-            else if (usuarioAlimentador != null)
-            {
-                if (act)
-                {
-                    usuarioAlimentador.UsalActivo = true;
-                    ctx.UsuariosAlimentadores.Update(usuarioAlimentador);
-                }
-                else
-                {
-                    ctx.UsuariosAlimentadores.Remove(usuarioAlimentador);
-                }
-            }
+                // 🔹 Limpia cualquier entidad cacheada del contexto (prevención)
+                ctx.ChangeTracker.Clear();
 
-            ctx.SaveChanges();
+                // 🔹 Desactiva el tracking para lecturas (mejor rendimiento y sin cache)
+                var feeders = ctx.UsuariosAlimentadores
+                    .AsNoTracking()
+                    .Where(u => u.UsalUsuario == id_user)
+                    .Join(ctx.Alimentadores.AsNoTracking(),
+                          ua => ua.UsalAlimentador,
+                          a => a.AlimInterno,
+                          (ua, a) => a)
+                    .OrderBy(a => a.AlimCodigo)
+                    .ToList();
+
+                return feeders;
+            }
         }
 
         public void DAFE_DrawMapByFeeder(int idFeeder)
@@ -129,6 +114,7 @@ namespace Sigre.DataAccess
                     var dATypification = new DATypification();
                     var dAUser = new DAUser();
                     var dAFile = new DAFile();
+                    var dAFeeder = new DAFeeder();
 
                     var pines = new List<PinStruct>();
                     pines.AddRange(dADeficiency.DADEFI_GetPinsByFeeders(x_feeders));
@@ -146,6 +132,7 @@ namespace Sigre.DataAccess
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
                     var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
                     var archivos = dAFile.DAARCH_GetByFeeders(x_feeders);
+                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_feeders);
 
                     // Materiales
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();
@@ -163,6 +150,7 @@ namespace Sigre.DataAccess
                     sqliteCtx.Switches.AddRange(switches);
                     sqliteCtx.Tipificaciones.AddRange(tipificaciones);
                     sqliteCtx.Archivos.AddRange(archivos);
+                    sqliteCtx.Alimentadores.AddRange(alimentadores);
 
                     if (usuario != null) sqliteCtx.Usuarios.Add(usuario);
                     if (perfil != null) sqliteCtx.Perfiles.Add(perfil);
