@@ -117,17 +117,20 @@ namespace Sigre.DataAccess
                     var dAFeeder = new DAFeeder();
 
                     var pines = new List<PinStruct>();
-                    pines.AddRange(dADeficiency.DADEFI_GetPinsByFeeders(x_feeders));
-                    pines.AddRange(dAGap.DAGAP_GetPinsByFeeders(x_feeders));
-                    pines.AddRange(dAPost.DAPOST_PinsByFeeders(x_feeders));
-                    pines.AddRange(dASed.DASed_PinsByFeeders(x_feeders));
-                    pines.AddRange(dASwitch.DAEQUI_PinsByFeeders(x_feeders));
+                    pines.AddRange(dADeficiency.DADEFI_GetPinsByFeeders(x_ids));
+                    //pines.AddRange(dAGap.DAGAP_GetPinsByFeeders(x_ids));
+                    pines.AddRange(dAGap.DAGAP_GetPins(x_ids, proyecto));
+                    //pines.AddRange(dAPost.DAPOST_PinsByFeeders(x_feeders));
+                    pines.AddRange(dAPost.DAPOST_Pins(x_ids, proyecto));
+                    //pines.AddRange(dASed.DASed_PinsByFeeders(x_ids));
+                    pines.AddRange(dASed.DASed_Pins(x_ids, proyecto));
+                    pines.AddRange(dASwitch.DAEQUI_PinsByFeeders(x_ids));
 
-                    var deficiencias = dADeficiency.DADEFI_GetByListFeeders(x_feeders);
-                    var vanos = dAGap.DAGAP_GetByListFeeder(x_feeders);
-                    var postes = dAPost.DAPOST_GetByListFeeder(x_feeders);
-                    var seds = dASed.DASed_GetByListFeeder(x_feeders);
-                    var switches = dASwitch.DAEQUI_GetByListFeeder(x_feeders);
+                    var deficiencias = dADeficiency.DADEFI_GetByProject(x_ids, proyecto);
+                    var vanos = dAGap.DAGAP_GetByProject(x_ids, proyecto);
+                    var postes = dAPost.DAPOST_GetByProject(x_ids, proyecto);
+                    var seds = dASed.DASed_GetByProject(x_ids, proyecto);
+                    var switches = dASwitch.DAEQUI_GetByProject(x_ids, proyecto);
                     var tipificaciones = dATypification.DATIPI_GetByUser(x_usuario);
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
                     var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);

@@ -302,6 +302,86 @@ namespace Sigre.DataAccess
             return deficiencias;
         }
 
+        public List<Deficiencia> DADEFI_GetByListSeds(List<int> x_seds)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var deficiencias = (
+                from d in ctx.Deficiencias
+                join a in ctx.Alimentadores on d.DefiCodAmt equals a.AlimCodigo
+                join s in ctx.Seds on a.AlimInterno equals s.AlimInterno
+                where x_seds.Contains(s.SedInterno)
+                select new Deficiencia
+                {
+                    DefiActivo = d.DefiActivo,
+                    DefiInterno = d.DefiInterno,
+                    DefiArmadoMaterial = d.DefiArmadoMaterial,
+                    DefiCodAmt = d.DefiCodAmt,
+                    DefiCodDef = d.DefiCodDef,
+                    DefiCodDen = d.DefiCodDen,
+                    DefiCodigoElemento = d.DefiCodigoElemento,
+                    DefiCodRes = d.DefiCodRes,
+                    DefiComentario = d.DefiComentario,
+                    DefiCoordX = d.DefiCoordX,
+                    DefiCoordY = d.DefiCoordY,
+                    DefiDistHorizontal = d.DefiDistHorizontal,
+                    DefiDistTransversal = d.DefiDistTransversal,
+                    DefiDistVertical = d.DefiDistVertical,
+                    DefiEstado = d.DefiEstado,
+                    DefiEstadoCriticidad = d.DefiEstadoCriticidad,
+                    DefiEstadoSubsanacion = d.DefiEstadoSubsanacion,
+                    DefiFechaCreacion = d.DefiFechaCreacion,
+                    DefiFechaDenuncia = d.DefiFechaDenuncia,
+                    DefiFechaInspeccion = d.DefiFechaInspeccion,
+                    DefiFechaSubsanacion = d.DefiFechaSubsanacion,
+                    DefiFecModificacion = d.DefiFecModificacion,
+                    DefiFecRegistro = d.DefiFecRegistro,
+                    DefiIdElemento = d.DefiIdElemento,
+                    DefiLatitud = d.DefiLatitud,
+                    DefiLongitud = d.DefiLongitud,
+                    DefiNodoFinal = d.DefiNodoFinal,
+                    DefiNodoInicial = d.DefiNodoInicial,
+                    DefiNroOrden = d.DefiNroOrden,
+                    DefiNumPostes = d.DefiNumPostes,
+                    DefiNumSuministro = d.DefiNumSuministro,
+                    DefiObservacion = d.DefiObservacion,
+                    DefiPointX = d.DefiPointX,
+                    DefiPointY = d.DefiPointY,
+                    DefiPozoTierra = d.DefiPozoTierra,
+                    DefiPozoTierra2 = d.DefiPozoTierra2,
+                    DefiRefer1 = d.DefiRefer1,
+                    DefiRefer2 = d.DefiRefer2,
+                    DefiResponsable = d.DefiResponsable,
+                    DefiRetenidaMaterial = d.DefiRetenidaMaterial,
+                    DefiTipoArmado = d.DefiTipoArmado,
+                    DefiTipoElemento = d.DefiTipoElemento,
+                    DefiTipoMaterial = d.DefiTipoMaterial,
+                    DefiTipoRetenida = d.DefiTipoRetenida,
+                    DefiUsuarioInic = d.DefiUsuarioInic,
+                    DefiUsuarioMod = d.DefiUsuarioMod,
+                    DefiUsuCre = d.DefiUsuCre,
+                    DefiUsuNpc = d.DefiUsuNpc,
+                    InspInterno = d.InspInterno,
+                    InspInternoNavigation = d.InspInternoNavigation,
+                    TablInterno = d.TablInterno,
+                    TipiInterno = d.TipiInterno,//
+                    DefiInspeccionado = d.DefiInspeccionado,
+                    DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    EstadoOffLine = 0,
+                }
+            ).ToList();
+
+            return deficiencias;
+        }
+
+        public List<Deficiencia> DADEFI_GetByProject(List<int> x_ids, int x_project)
+        {
+            if (x_project == 0)
+                return DADEFI_GetByListSeds(x_ids);
+            else
+                return DADEFI_GetByListFeeders(x_ids);
+        }
+
         public void DADEFI_SaveDeficienciesAndFiles(OffLineStruct off)
         {
             /*

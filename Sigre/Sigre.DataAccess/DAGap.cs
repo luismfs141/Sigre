@@ -48,6 +48,26 @@ namespace Sigre.DataAccess
             return vanos;
         }
 
+        public List<Vano> DAGAP_GetByListSeds(List<int> x_seds)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var vanos = ctx.Vanos.Where(v => x_seds.Contains((int)v.VanoSubestacion)).ToList();
+
+            return vanos;
+        }
+
+        //0-> Baja Tension, 1 -> Media Tension
+        public List<Vano> DAGAP_GetByProject(List<int> x_ids, int x_project)
+        {
+            if (x_project == 0)
+                return DAGAP_GetByListSeds(x_ids);
+            else
+                return DAGAP_GetByListFeeder(x_ids);
+        }
+
+
+
         public List<PinStruct> DAGAP_GetPinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();

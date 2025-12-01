@@ -46,6 +46,23 @@ namespace Sigre.DataAccess
 
             return postes;
         }
+
+        public List<Poste> DAPOST_GetByListSeds(List<int> x_seds)
+        {
+            using var ctx = new SigreContext();
+
+            var postes = ctx.Postes.Where(p => x_seds.Contains((int)p.PostSubestacion)).ToList();
+
+            return postes;
+        }
+
+        public List<Poste> DAPOST_GetByProject(List<int> x_ids, int x_project)
+        {
+            if (x_project == 0)
+                return DAPOST_GetByListSeds(x_ids);
+            else
+                return DAPOST_GetByListFeeder(x_ids);
+        }
         public List<ElementStruct> DAPOST_GetStructByFeeder(int x_feeder_id)
         {          
             SigreContext ctx = new SigreContext();
