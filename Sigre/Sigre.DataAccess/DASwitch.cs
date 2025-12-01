@@ -39,5 +39,12 @@ namespace Sigre.DataAccess
 
             return equipos;
         }
+        public List<Equipo> DAEQUI_GetByProject(List<int> x_ids, int x_project)
+        {
+            if (x_project == 0)
+                return null;
+            else
+                return DAEQUI_GetByListFeeder(x_ids);
+        }
     }
 }
