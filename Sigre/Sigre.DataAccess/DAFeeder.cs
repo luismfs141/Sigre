@@ -83,7 +83,17 @@ namespace Sigre.DataAccess
             }
         }
 
-        public byte[] DAFE_CreateDatabaseSqlite(List<int> x_feeders, int x_usuario)
+        public List<Sed> DAFE_GetSedsByFeeder(int x_feeder_id)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var seds = ctx.Seds.Where(s => s.AlimInterno == x_feeder_id).ToList();
+
+            return seds;
+        }
+
+        // 0 -> Baja Tension, 1 -> Media Tension
+        public byte[] DAFE_CreateDatabaseSqlite(List<int> x_ids, int x_usuario, int proyecto)
         {
             try
             {
@@ -117,22 +127,24 @@ namespace Sigre.DataAccess
                     var dAFeeder = new DAFeeder();
 
                     var pines = new List<PinStruct>();
-                    pines.AddRange(dADeficiency.DADEFI_GetPinsByFeeders(x_feeders));
-                    pines.AddRange(dAGap.DAGAP_GetPinsByFeeders(x_feeders));
-                    pines.AddRange(dAPost.DAPOST_PinsByFeeders(x_feeders));
-                    pines.AddRange(dASed.DASed_PinsByFeeders(x_feeders));
-                    pines.AddRange(dASwitch.DAEQUI_PinsByFeeders(x_feeders));
+                    pines.AddRange(dADeficiency.DADEFI_GetPinsByFeeders(x_ids));
+                    //pines.AddRange(dAGap.DAGAP_GetPinsByFeeders(x_ids));
+                    pines.AddRange(dAGap.DAGAP_GetPins(x_ids, proyecto));
+                    //pines.AddRange(dAPost.DAPOST_PinsByFeeders(x_feeders));
+                    pines.AddRange(dAPost.DAPOST_Pins(x_ids, proyecto));
+                    pines.AddRange(dASed.DASed_PinsByFeeders(x_ids));
+                    pines.AddRange(dASwitch.DAEQUI_PinsByFeeders(x_ids));
 
-                    var deficiencias = dADeficiency.DADEFI_GetByListFeeders(x_feeders);
-                    var vanos = dAGap.DAGAP_GetByListFeeder(x_feeders);
-                    var postes = dAPost.DAPOST_GetByListFeeder(x_feeders);
-                    var seds = dASed.DASed_GetByListFeeder(x_feeders);
-                    var switches = dASwitch.DAEQUI_GetByListFeeder(x_feeders);
+                    var deficiencias = dADeficiency.DADEFI_GetByListFeeders(x_ids);
+                    var vanos = dAGap.DAGAP_GetByListFeeder(x_ids);
+                    var postes = dAPost.DAPOST_GetByListFeeder(x_ids);
+                    var seds = dASed.DASed_GetByListFeeder(x_ids);
+                    var switches = dASwitch.DAEQUI_GetByListFeeder(x_ids);
                     var tipificaciones = dATypification.DATIPI_GetByUser(x_usuario);
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
                     var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
-                    var archivos = dAFile.DAARCH_GetByFeeders(x_feeders);
-                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_feeders);
+                    var archivos = dAFile.DAARCH_GetByFeeders(x_ids);
+                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_ids);
 
                     // Materiales
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();

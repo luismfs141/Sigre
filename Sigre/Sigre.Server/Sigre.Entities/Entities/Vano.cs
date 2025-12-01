@@ -33,5 +33,11 @@ public partial class Vano
 
     public bool VanoInspeccionado { get; set; }
 
+    public int? VanoSubestacion { get; set; }
+
+    public bool? VanoEsMt { get; set; }
+
+    public bool? VanoEsBt { get; set; }
+
     public virtual Alimentadore AlimInternoNavigation { get; set; } = null!;
 }

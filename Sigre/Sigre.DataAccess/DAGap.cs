@@ -65,5 +65,36 @@ namespace Sigre.DataAccess
 
             return pinVanos;
         }
+
+        public List<PinStruct> DAGAP_GetPinsBySubestacion(List<int> x_subestaciones)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var pinVanos = ctx.Vanos
+                    .Where(v => x_subestaciones.Contains((int)v.VanoSubestacion)) // suponiendo campo SubestacionInterna
+                    .Select(v => new PinStruct()
+                    {
+                        Id = v.VanoInterno,
+                        IdAlimentador = v.AlimInterno,
+                        Label = "",
+                        Type = ElectricElement.Gap,
+                        NodoInicial = v.VanoNodoInicial,
+                        NodoFinal = v.VanoNodoFinal,
+                        Inspeccionado = v.VanoInspeccionado
+                    }).ToList();
+
+                return pinVanos;
+            }
+        }
+
+        //0-> Baja Tension, 1 -> Media Tension
+        public List<PinStruct> DAGAP_GetPins(List<int> x_ids, int proyecto)
+        {
+            if (proyecto == 0)
+                return DAGAP_GetPinsBySubestacion(x_ids);
+            else
+                return DAGAP_GetPinsByFeeders(x_ids);
+        }
+
     }
 }

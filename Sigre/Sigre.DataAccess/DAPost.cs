@@ -56,5 +56,37 @@ namespace Sigre.DataAccess
 
             return posts;
         }
+
+        public List<PinStruct> DAPOST_PinsBySubestacion(List<int> x_subestaciones)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var posts = ctx.Postes
+                    .Where(p => x_subestaciones.Contains((int)p.PostSubestacion)) // asumimos que hay SubestacionInterna
+                    .Select(p => new PinStruct()
+                    {
+                        Id = p.PostInterno,
+                        Label = p.PostEtiqueta,
+                        Latitude = p.PostLatitud ?? 0,
+                        Longitude = p.PostLongitud ?? 0,
+                        Type = ElectricElement.Post,
+                        ElementCode = p.PostCodigoNodo,
+                        IdAlimentador = p.AlimInterno,
+                        Inspeccionado = p.PostInspeccionado,
+                        Tercero = p.PostTerceros
+                    }).ToList();
+
+                return posts;
+            }
+        }
+
+        //0 -> Baja Tension, 1 -> Media Tension
+        public List<PinStruct> DAPOST_Pins(List<int> x_ids, int proyecto)
+        {
+            if (proyecto == 0)
+                return DAPOST_PinsBySubestacion(x_ids);
+            else
+                return DAPOST_PinsByFeeders(x_ids);
+        }
     }
 }
