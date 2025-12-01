@@ -4,6 +4,7 @@ import { getAllFeedersLocal } from "../database/offlineDB/feeders";
 
 export function useFeeder(userId = null) {
   const [feeders, setFeeders] = useState([]);
+  const [seds, setSeds] = useState([]);
   const [feedersByUser, setFeedersByUser] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -117,6 +118,28 @@ const fetchLocalFeeders = useCallback(async () => {
   }
 }, []);
 
+ /** 🔹 Obtener SEDs por alimentador */
+  const fetchSedsByFeeder = useCallback(async (idFeeder) => {
+    if (!idFeeder) return [];
+    try {
+      setLoading(true);
+      setError(null);
+
+      const res = await fetch(`${API_BASE}Feeder/GetSedsByFeeder?x_feeder=${idFeeder}`);
+      if (!res.ok) throw new Error("Error al obtener SEDs por alimentador");
+
+      const data = await res.json();
+      setSeds(data);
+      return data; // muy importante devolver los datos
+    } catch (err) {
+      console.error("useSedsByFeeder.fetchSedsByFeeder:", err);
+      setError(err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE]);
+
 ///////////////////////////////////////////////////////////////////////////////
 //   /** 🔹 Cargar lista inicial (todos o por usuario) */
 // useEffect(() => {
@@ -138,5 +161,7 @@ useEffect(() => {
     getFeedersByUser,
     drawMap,
     fetchLocalFeeders,
+    seds,
+    fetchSedsByFeeder,
   };
 }

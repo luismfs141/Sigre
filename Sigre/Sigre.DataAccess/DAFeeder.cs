@@ -83,7 +83,17 @@ namespace Sigre.DataAccess
             }
         }
 
-        public byte[] DAFE_CreateDatabaseSqlite(List<int> x_feeders, int x_usuario)
+        public List<Sed> DAFE_GetSedsByFeeder(int x_feeder_id)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var seds = ctx.Seds.Where(s => s.AlimInterno == x_feeder_id).ToList();
+
+            return seds;
+        }
+
+        // 0 -> Baja Tension, 1 -> Media Tension
+        public byte[] DAFE_CreateDatabaseSqlite(List<int> x_ids, int x_usuario, int proyecto)
         {
             try
             {
@@ -134,8 +144,8 @@ namespace Sigre.DataAccess
                     var tipificaciones = dATypification.DATIPI_GetByUser(x_usuario);
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
                     var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
-                    var archivos = dAFile.DAARCH_GetByFeeders(x_feeders);
-                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_feeders);
+                    var archivos = dAFile.DAARCH_GetByFeeders(x_ids);
+                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_ids);
 
                     // Materiales
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();

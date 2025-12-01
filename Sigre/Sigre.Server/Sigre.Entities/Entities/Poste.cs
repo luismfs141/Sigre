@@ -33,6 +33,12 @@ public partial class Poste
 
     public int? PostArmadoMaterial { get; set; }
 
+    public int? PostSubestacion { get; set; }
+
+    public bool? PostEsMt { get; set; }
+
+    public bool? PostEsBt { get; set; }
+
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 
     public virtual ArmadoTipo? PostArmadoTipoNavigation { get; set; }

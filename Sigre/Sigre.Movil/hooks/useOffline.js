@@ -5,37 +5,27 @@ import { api } from "../config";
 
 export const useOffline = () => {
   const [loading, setLoading] = useState(false);
-  const [dbVersion, setDbVersion] = useState(0); // contador de cambios
+  const [dbVersion, setDbVersion] = useState(0);
   const client = api();
 
-  const downloadDatabase = async (userId, feeders = []) => {
+  const downloadDatabase = async (userId, feeders = [], Id) => {
     setLoading(true);
     try {
       const endpoint = "/Feeder/export";
-      console.log("📥 Descargando BD desde:", endpoint);
-
-      const res = await client.post(
-        endpoint,
-        { UserId: userId, Feeders: feeders },
-        { responseType: "arraybuffer" }
-      );
+      const res = await client.post(endpoint, { UserId: userId, Feeders: feeders, x_id: Id }, { responseType: "arraybuffer" });
 
       if (!res.data) throw new Error("No se recibió la base de datos");
 
       const folder = FileSystem.documentDirectory + "SQLite";
+      await FileSystem.makeDirectoryAsync(folder, { intermediates: true });
       const fileUri = folder + "/sigre_offline.db";
 
-      await FileSystem.makeDirectoryAsync(folder, { intermediates: true });
-
       const base64 = Buffer.from(res.data).toString("base64");
-
-      await FileSystem.writeAsStringAsync(fileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
 
       console.log("✅ Base SQLite guardada en:", fileUri);
 
-      setDbVersion(prev => prev + 1); // <--- Notificar cambio
+      setDbVersion(prev => prev + 1);
       return fileUri;
     } catch (error) {
       console.error("❌ Error descargando la base SQLite:", error);
@@ -48,6 +38,6 @@ export const useOffline = () => {
   return {
     loading,
     downloadDatabase,
-    dbVersion, // <--- exportar dbVersion
+    dbVersion,
   };
 };

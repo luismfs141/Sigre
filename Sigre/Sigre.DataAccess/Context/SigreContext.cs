@@ -645,6 +645,8 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("POST_CodigoNodo");
+            entity.Property(e => e.PostEsBt).HasColumnName("POST_EsBT");
+            entity.Property(e => e.PostEsMt).HasColumnName("POST_EsMT");
             entity.Property(e => e.PostEtiqueta)
                 .HasMaxLength(100)
                 .IsUnicode(false)
@@ -655,6 +657,7 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.PostMaterial).HasColumnName("POST_Material");
             entity.Property(e => e.PostRetenidaMaterial).HasColumnName("POST_RetenidaMaterial");
             entity.Property(e => e.PostRetenidaTipo).HasColumnName("POST_RetenidaTipo");
+            entity.Property(e => e.PostSubestacion).HasColumnName("POST_Subestacion");
             entity.Property(e => e.PostTerceros).HasColumnName("POST_Terceros");
 
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
@@ -886,6 +889,8 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("VANO_Codigo");
+            entity.Property(e => e.VanoEsBt).HasColumnName("VANO_EsBT");
+            entity.Property(e => e.VanoEsMt).HasColumnName("VANO_EsMT");
             entity.Property(e => e.VanoEtiqueta)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -907,6 +912,7 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("VANO_NodoInicial");
+            entity.Property(e => e.VanoSubestacion).HasColumnName("VANO_Subestacion");
             entity.Property(e => e.VanoTerceros).HasColumnName("VANO_Terceros");
 
             entity.HasOne(d => d.AlimInternoNavigation).WithMany(p => p.Vanos)
@@ -914,6 +920,7 @@ public partial class SigreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_VANO_ALIM");
         });
+
         modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);
 
         OnModelCreatingPartial(modelBuilder);

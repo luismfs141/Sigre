@@ -52,7 +52,7 @@ namespace Sigre.Server.Controllers
             {
                 DAFeeder dAFeeder = new DAFeeder();
 
-                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(request.Feeders, request.UserId);
+                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(request.Feeders, request.UserId, request.x_id);
 
                 if (fileBytes == null || fileBytes.Length == 0)
                     return NotFound("No se generó el archivo SQLite.");
@@ -65,10 +65,18 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
+
+        [HttpGet("GetSedsByFeeder")]
+        public List<Sed> GetSedsByFeeder(int x_feeder)
+        {
+            DAFeeder dAFeeder = new DAFeeder();
+            return dAFeeder.DAFE_GetSedsByFeeder(x_feeder);
+        }
     }
     public class DatabaseExportRequest
     {
         public int UserId { get; set; }
         public List<int> Feeders { get; set; } = new();
+        public int x_id { get; set; }
     }
 }

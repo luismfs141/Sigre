@@ -11,7 +11,7 @@ export const DatosProvider = ({ children }) => {
   const [selectedSed, setSelectedSed] = useState([]);
   const [totalPins, setTotalPins] = useState([]);
   const [selectedItem, setSelectedItem] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(0);
 
   const [region, setRegion] = useState({
     latitude: -12.0464,
