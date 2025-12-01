@@ -1,7 +1,7 @@
 // useMap.js
 import { useDatos } from "../context/DatosContext";
-import { getGapsByFeederLocal } from "../database/offlineDB/gaps";
-import { getPinsByFeederLocal } from "../database/offlineDB/pins";
+import { getGapsByFeederLocal, getGapsBySedLocal } from "../database/offlineDB/gaps";
+import { getPinsByFeederLocal, getPinsBySedLocal } from "../database/offlineDB/pins";
 
 export const useMap = () => {
   const {
@@ -38,18 +38,41 @@ export const useMap = () => {
   };
 
   // --------------------------------------------------------------
+  // CARGAR TODOS LOS PINS DE LA SUBESTACION (NO SE MUESTRAN AÚN)
+  // --------------------------------------------------------------
+  const getPinsBySed = async (sedId) => {
+    try {
+      let data = await getPinsBySedLocal(sedId);
+      if (!Array.isArray(data)) data = [];
+
+      const pinsFiltered = data
+        .filter(p => p.Type !== 0)
+        .map(p => ({
+          ...p,
+          Latitude: Number(p.Latitude),
+          Longitude: Number(p.Longitude)
+        }));
+
+      setTotalPins(pinsFiltered);
+      return pinsFiltered;
+    } catch (err) {
+      console.error("❌ Error cargando pines offline:", err);
+      setTotalPins([]);
+      return [];
+    }
+  };
+
+  // --------------------------------------------------------------
   // MOSTRAR SOLO LOS PINS EN LA REGION VISIBLE
   // --------------------------------------------------------------
   const getPinsByRegion = (region) => {
-    if (!Array.isArray(totalPins)) return setPins([]);
+      if (!Array.isArray(totalPins)) return setPins([]);
 
-// Si el zoom no es suficiente → no mostrar pines
-if (region.latitudeDelta > 0.008) {
-  setPins([]);
-  return;
-}
-
-
+  // Si el zoom no es suficiente → no mostrar pines
+  if (region.latitudeDelta > 0.008) {
+    setPins([]);
+    return;
+  }
 
 
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
@@ -70,12 +93,29 @@ if (region.latitudeDelta > 0.008) {
   };
     
 
-
   // --------------------------------------------------------------
   // GAPS (no causan lag)
   // --------------------------------------------------------------
   const getGapsByFeeder = async (feederId) => {
     let data = await getGapsByFeederLocal(feederId);
+    if (!Array.isArray(data)) data = [];
+
+    setGaps(data.map(g => ({
+      ...g,
+      VanoLatitudIni: Number(g.VanoLatitudIni),
+      VanoLongitudIni: Number(g.VanoLongitudIni),
+      VanoLatitudFin: Number(g.VanoLatitudFin),
+      VanoLongitudFin: Number(g.VanoLongitudFin)
+    })));
+
+    return data;
+  };
+
+  // --------------------------------------------------------------
+  // GAPS POR SUBESTACION(no causan lag)
+  // --------------------------------------------------------------
+  const getGapsBySed = async (sedId) => {
+    let data = await getGapsBySedLocal(sedId);
     if (!Array.isArray(data)) data = [];
 
     setGaps(data.map(g => ({
@@ -107,6 +147,8 @@ if (region.latitudeDelta > 0.008) {
     getPinsByFeeder,
     getPinsByRegion,
     getGapsByFeeder,
+    getGapsBySed,
+    getPinsBySed,
     setRegionByFeeder
   };
 };

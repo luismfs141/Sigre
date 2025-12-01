@@ -1,15 +1,17 @@
 import * as Location from 'expo-location';
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
 import { DropDown } from '../../components/DropDown.js';
+import { DropDownSed } from "../../components/DropDownSed";
 import { PinCallout } from '../../components/PinCallout';
 
 import { mapStyles, pinStyles } from '../../assets/styles/Map.js';
 import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/utils.js';
 
+import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap.js';
@@ -22,6 +24,7 @@ export const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
 
+  const { user } = useContext(AuthContext);
   const {
     selectedFeeder, setSelectedFeeder,
     pins, setPins,
@@ -175,10 +178,26 @@ export const Map = () => {
   // ------------------- RENDER -------------------
   if (!selectedFeeder) {
     return (
-      <View style={styles.placeholderContainer}>
-        <Text style={styles.placeholderText}>Selecciona un alimentador para mostrar el mapa</Text>
-        <DropDown onSelectFeeder={setSelectedFeeder} />
-      </View>
+      // <View style={styles.placeholderContainer}>
+      //   <Text style={styles.placeholderText}>Selecciona un alimentador para mostrar el mapa</Text>
+      //   <DropDown onSelectFeeder={setSelectedFeeder} />
+      // </View>
+    <View style={styles.placeholderContainer}>
+      {/* Mostrar dropdown según user.proyecto */}
+      {user?.proyecto === 1 && (
+        <>
+          <Text style={styles.placeholderText}>Selecciona un alimentador para mostrar el mapa</Text>
+          <DropDown onSelectFeeder={(f) => console.log("Feeder:", f)} />
+        </>        
+      )}
+
+      {user?.proyecto === 0 && (
+        <>
+          <Text style={styles.placeholderText}>Selecciona una subestacion para mostrar el mapa</Text>
+          <DropDownSed onSelectSed={(s) => console.log("SED:", s)} />
+        </>       
+      )}
+    </View>
     );
   }
 

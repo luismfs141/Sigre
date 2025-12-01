@@ -186,7 +186,9 @@ namespace Sigre.DataAccess
                         NodoInicial = p.NodoInicial,
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
-                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label
+                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label,
+                        IdSed = p.IdSed
+                        
                     }).ToList();
 
                     sqliteCtx.Pines.AddRange(pinesEntities);

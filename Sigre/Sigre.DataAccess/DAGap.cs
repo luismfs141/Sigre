@@ -80,7 +80,8 @@ namespace Sigre.DataAccess
                 Type = ElectricElement.Gap,
                 NodoInicial = v.VanoNodoInicial,
                 NodoFinal = v.VanoNodoFinal,
-                Inspeccionado = v.VanoInspeccionado
+                Inspeccionado = v.VanoInspeccionado,
+                IdSed = v.VanoSubestacion
             }).ToList();
 
             return pinVanos;
@@ -100,7 +101,8 @@ namespace Sigre.DataAccess
                         Type = ElectricElement.Gap,
                         NodoInicial = v.VanoNodoInicial,
                         NodoFinal = v.VanoNodoFinal,
-                        Inspeccionado = v.VanoInspeccionado
+                        Inspeccionado = v.VanoInspeccionado,
+                        IdSed = (int)v.VanoSubestacion
                     }).ToList();
 
                 return pinVanos;

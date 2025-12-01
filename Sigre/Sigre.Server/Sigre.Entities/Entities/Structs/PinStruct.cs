@@ -26,5 +26,6 @@ namespace Sigre.Entities.Structs
         public bool Tercero { get; set; }
         public string? NodoInicial { get; set; }
         public string? NodoFinal { get; set; }
+        public int? IdSed { get; set; }
     }
 }

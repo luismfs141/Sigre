@@ -33,7 +33,8 @@ namespace Sigre.DataAccess
                     ElementCode = p.PostCodigoNodo,
                     IdAlimentador = p.AlimInterno,
                     Inspeccionado = p.PostInspeccionado,
-                    Tercero = p.PostTerceros
+                    Tercero = p.PostTerceros,
+                    IdSed = p.PostSubestacion
                 }
             );
             return posts.ToList();
@@ -90,8 +91,9 @@ namespace Sigre.DataAccess
                         ElementCode = p.PostCodigoNodo,
                         IdAlimentador = p.AlimInterno,
                         Inspeccionado = p.PostInspeccionado,
-                        Tercero = p.PostTerceros
-                    }).ToList();
+                        Tercero = p.PostTerceros,
+                        IdSed = (int) p.PostSubestacion
+                    }).ToList();            
 
                 return posts;
             }
@@ -101,7 +103,11 @@ namespace Sigre.DataAccess
         public List<PinStruct> DAPOST_Pins(List<int> x_ids, int proyecto)
         {
             if (proyecto == 0)
-                return DAPOST_PinsBySubestacion(x_ids);
+            {
+                var post = DAPOST_PinsBySubestacion(x_ids);
+                return post;
+            }
+                
             else
                 return DAPOST_PinsByFeeders(x_ids);
         }

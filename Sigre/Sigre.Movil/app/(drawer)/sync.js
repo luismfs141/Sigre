@@ -70,38 +70,25 @@ export default function Sync() {
   // ───────────────────────────────
   // Descargar base
   // ───────────────────────────────
-  const handleDownload = async () => {
-    try {
-      // Para proyecto 0 usamos selectedSubstations (ids SED)
-      if (user?.proyecto === 0) {
-        if (!selectedFeeder) return Alert.alert("Selecciona un alimentador");
-        if (selectedSubstations.length === 0) return Alert.alert("Selecciona al menos una subestación");
 
-        const sedIds = selectedSubstations.map(s => parseInt(s.id, 10));
-        const fileUri = await downloadDatabase(user.id, sedIds, 1);
+const handleDownload = async () => {
+  try {
+    // ──────────────────────────────
+    // PROYECTO 0 — Baja Tensión
+    // ──────────────────────────────
+    if (user?.proyecto === 0) {
+      if (!selectedFeeder)
+        return Alert.alert("Selecciona un alimentador");
 
-        if (!fileUri) throw new Error("No se descargó la base correctamente");
+      if (selectedSubstations.length === 0)
+        return Alert.alert("Selecciona al menos una subestación");
 
-        await closeDatabase();
-        await openDatabase();
-        await new Promise(r => setTimeout(r, 150));
+      // SOLO enviar el alimentador al backend
+      const sedsIds = selectedSubstations.map(s => parseInt(s.id, 10));
 
-        // limpiar selección
-        setSelectedFeeders([]);
-        setSelectedSubstations([]);
-        setSelectedFeeder(null);
-        setDbExists(true);
+      console.log(sedsIds);
 
-        Alert.alert("Éxito", "Base descargada correctamente.");
-        return;
-      }
-
-      // Para proyecto 1 mantenemos la lógica original (alimentadores)
-      if (!selectedFeeders.length)
-        return Alert.alert("Selecciona al menos un alimentador");
-
-      const feederIds = selectedFeeders.map(f => parseInt(f.id, 10));
-      const fileUri = await downloadDatabase(user.id, feederIds, 1);
+      const fileUri = await downloadDatabase(user.id, sedsIds, 0);
 
       if (!fileUri) throw new Error("No se descargó la base correctamente");
 
@@ -110,15 +97,39 @@ export default function Sync() {
       await new Promise(r => setTimeout(r, 150));
 
       setSelectedFeeders([]);
+      setSelectedSubstations([]);
+      setSelectedFeeder(null);
       setDbExists(true);
 
       Alert.alert("Éxito", "Base descargada correctamente.");
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "No se pudo descargar la base");
+      return;
     }
-  };
 
+    // ──────────────────────────────
+    // PROYECTO 1 — Media Tensión
+    // ──────────────────────────────
+    if (!selectedFeeders.length)
+      return Alert.alert("Selecciona al menos un alimentador");
+
+    const feederIds = selectedFeeders.map(f => parseInt(f.id, 10));
+
+    const fileUri = await downloadDatabase(user.id, feederIds, 1);
+
+    if (!fileUri) throw new Error("No se descargó la base correctamente");
+
+    await closeDatabase();
+    await openDatabase();
+    await new Promise(r => setTimeout(r, 150));
+
+    setSelectedFeeders([]);
+    setDbExists(true);
+
+    Alert.alert("Éxito", "Base descargada correctamente.");
+  } catch (error) {
+    console.error(error);
+    Alert.alert("Error", "No se pudo descargar la base");
+  }
+};
   // ───────────────────────────────
   // Exportar base
   // ───────────────────────────────

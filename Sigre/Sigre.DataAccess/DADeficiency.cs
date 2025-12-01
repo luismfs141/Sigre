@@ -307,9 +307,9 @@ namespace Sigre.DataAccess
             SigreContext ctx = new SigreContext();
 
             var deficiencias = (
-                from d in ctx.Deficiencias
-                join a in ctx.Alimentadores on d.DefiCodAmt equals a.AlimCodigo
-                join s in ctx.Seds on a.AlimInterno equals s.AlimInterno
+                from d in ctx.Deficiencias.AsNoTracking()
+                join a in ctx.Alimentadores.AsNoTracking() on d.DefiCodAmt equals a.AlimCodigo
+                join s in ctx.Seds.AsNoTracking() on a.AlimInterno equals s.AlimInterno
                 where x_seds.Contains(s.SedInterno)
                 select new Deficiencia
                 {
@@ -362,17 +362,21 @@ namespace Sigre.DataAccess
                     DefiUsuCre = d.DefiUsuCre,
                     DefiUsuNpc = d.DefiUsuNpc,
                     InspInterno = d.InspInterno,
-                    InspInternoNavigation = d.InspInternoNavigation,
+
+            // 👇 ESTA ES LA DIFERENCIA
+                    InspInternoNavigation = null,
+
                     TablInterno = d.TablInterno,
-                    TipiInterno = d.TipiInterno,//
+                    TipiInterno = d.TipiInterno,
                     DefiInspeccionado = d.DefiInspeccionado,
-                    DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    DefiKeyWords = d.DefiKeyWords ?? "",
                     EstadoOffLine = 0,
                 }
             ).ToList();
 
             return deficiencias;
         }
+
 
         public List<Deficiencia> DADEFI_GetByProject(List<int> x_ids, int x_project)
         {

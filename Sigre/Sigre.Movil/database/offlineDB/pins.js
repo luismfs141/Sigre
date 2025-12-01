@@ -18,3 +18,22 @@ export const getPinsByFeederLocal = async (feederId) => {
     return [];
   }
 };
+
+export const getPinsBySedLocal = async (sedId) => {
+  try {
+    const rows = await runQuery(
+      "SELECT * FROM Pines WHERE IdSed = ?",
+      [sedId]
+    );
+
+    if (!rows || rows.length === 0) {
+      console.warn(`⚠ No hay pines para la subestacion ${sedId}`);
+      return [];
+    }
+
+    return rows;
+  } catch (error) {
+    console.error(`❌ Error al obtener pines locales para el alimentador ${sedId}:`, error);
+    return [];
+  }
+};
