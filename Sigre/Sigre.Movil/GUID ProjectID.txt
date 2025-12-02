@@ -1,1 +1,3 @@
 5ee67ca4-4847-420c-bfff-7e7d63fec617
+
+eas build -p android --profile preview
