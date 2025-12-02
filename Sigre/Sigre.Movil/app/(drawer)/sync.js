@@ -86,8 +86,6 @@ const handleDownload = async () => {
       // SOLO enviar el alimentador al backend
       const sedsIds = selectedSubstations.map(s => parseInt(s.id, 10));
 
-      console.log(sedsIds);
-
       const fileUri = await downloadDatabase(user.id, sedsIds, 0);
 
       if (!fileUri) throw new Error("No se descargó la base correctamente");
@@ -376,7 +374,7 @@ const handleDownload = async () => {
                 keyExtractor={item => (item.SED_Interno ?? item.sedInterno).toString()}
                 renderItem={({ item }) => {
                   const id = item.SED_Interno ?? item.sedInterno;
-                  const name = item.SED_Etiqueta ?? item.sedEtiqueta;
+                  const name = item.SED_Etiqueta ?? item.sedCodigo;
 
                   const isSelected = selectedSubstations.some(s => s.id === id);
 

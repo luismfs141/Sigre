@@ -304,77 +304,36 @@ namespace Sigre.DataAccess
 
         public List<Deficiencia> DADEFI_GetByListSeds(List<int> x_seds)
         {
-            SigreContext ctx = new SigreContext();
+            using (var ctx = new SigreContext())
+            {
+                // Obtener los IDs de postes correspondientes a las subestaciones
+                var Idpostes = ctx.Postes
+                    .Where(p => x_seds.Contains((int)p.PostSubestacion))
+                    .Select(p => p.PostInterno)
+                    .ToList();
 
-            var deficiencias = (
-                from d in ctx.Deficiencias.AsNoTracking()
-                join a in ctx.Alimentadores.AsNoTracking() on d.DefiCodAmt equals a.AlimCodigo
-                join s in ctx.Seds.AsNoTracking() on a.AlimInterno equals s.AlimInterno
-                where x_seds.Contains(s.SedInterno)
-                select new Deficiencia
-                {
-                    DefiActivo = d.DefiActivo,
-                    DefiInterno = d.DefiInterno,
-                    DefiArmadoMaterial = d.DefiArmadoMaterial,
-                    DefiCodAmt = d.DefiCodAmt,
-                    DefiCodDef = d.DefiCodDef,
-                    DefiCodDen = d.DefiCodDen,
-                    DefiCodigoElemento = d.DefiCodigoElemento,
-                    DefiCodRes = d.DefiCodRes,
-                    DefiComentario = d.DefiComentario,
-                    DefiCoordX = d.DefiCoordX,
-                    DefiCoordY = d.DefiCoordY,
-                    DefiDistHorizontal = d.DefiDistHorizontal,
-                    DefiDistTransversal = d.DefiDistTransversal,
-                    DefiDistVertical = d.DefiDistVertical,
-                    DefiEstado = d.DefiEstado,
-                    DefiEstadoCriticidad = d.DefiEstadoCriticidad,
-                    DefiEstadoSubsanacion = d.DefiEstadoSubsanacion,
-                    DefiFechaCreacion = d.DefiFechaCreacion,
-                    DefiFechaDenuncia = d.DefiFechaDenuncia,
-                    DefiFechaInspeccion = d.DefiFechaInspeccion,
-                    DefiFechaSubsanacion = d.DefiFechaSubsanacion,
-                    DefiFecModificacion = d.DefiFecModificacion,
-                    DefiFecRegistro = d.DefiFecRegistro,
-                    DefiIdElemento = d.DefiIdElemento,
-                    DefiLatitud = d.DefiLatitud,
-                    DefiLongitud = d.DefiLongitud,
-                    DefiNodoFinal = d.DefiNodoFinal,
-                    DefiNodoInicial = d.DefiNodoInicial,
-                    DefiNroOrden = d.DefiNroOrden,
-                    DefiNumPostes = d.DefiNumPostes,
-                    DefiNumSuministro = d.DefiNumSuministro,
-                    DefiObservacion = d.DefiObservacion,
-                    DefiPointX = d.DefiPointX,
-                    DefiPointY = d.DefiPointY,
-                    DefiPozoTierra = d.DefiPozoTierra,
-                    DefiPozoTierra2 = d.DefiPozoTierra2,
-                    DefiRefer1 = d.DefiRefer1,
-                    DefiRefer2 = d.DefiRefer2,
-                    DefiResponsable = d.DefiResponsable,
-                    DefiRetenidaMaterial = d.DefiRetenidaMaterial,
-                    DefiTipoArmado = d.DefiTipoArmado,
-                    DefiTipoElemento = d.DefiTipoElemento,
-                    DefiTipoMaterial = d.DefiTipoMaterial,
-                    DefiTipoRetenida = d.DefiTipoRetenida,
-                    DefiUsuarioInic = d.DefiUsuarioInic,
-                    DefiUsuarioMod = d.DefiUsuarioMod,
-                    DefiUsuCre = d.DefiUsuCre,
-                    DefiUsuNpc = d.DefiUsuNpc,
-                    InspInterno = d.InspInterno,
+                // Obtener los IDs de vanos correspondientes a las subestaciones
+                var Idvanos = ctx.Vanos
+                    .Where(v => x_seds.Contains((int)v.VanoSubestacion))
+                    .Select(v => v.VanoInterno)
+                    .ToList();
 
-            // 👇 ESTA ES LA DIFERENCIA
-                    InspInternoNavigation = null,
+                // Traer las deficiencias de postes y vanos de forma materializada (ToList)
+                var defPostes = ctx.Deficiencias
+                    .Where(dp => dp.DefiTipoElemento == "POST" && Idpostes.Contains((int)dp.DefiIdElemento))
+                    .ToList();
 
-                    TablInterno = d.TablInterno,
-                    TipiInterno = d.TipiInterno,
-                    DefiInspeccionado = d.DefiInspeccionado,
-                    DefiKeyWords = d.DefiKeyWords ?? "",
-                    EstadoOffLine = 0,
-                }
-            ).ToList();
+                var defVanos = ctx.Deficiencias
+                    .Where(dv => dv.DefiTipoElemento == "VANO" && Idvanos.Contains((int)dv.DefiIdElemento))
+                    .ToList();
 
-            return deficiencias;
+                // Combinar resultados
+                var deficiencias = new List<Deficiencia>();
+                deficiencias.AddRange(defPostes);
+                deficiencias.AddRange(defVanos);
+
+                return deficiencias;
+            }
         }
 
 
