@@ -1,15 +1,17 @@
 import * as Location from 'expo-location';
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
 import { DropDown } from '../../components/DropDown.js';
+import { DropDownSed } from "../../components/DropDownSed";
 import { PinCallout } from '../../components/PinCallout';
 
 import { mapStyles, pinStyles } from '../../assets/styles/Map.js';
 import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/utils.js';
 
+import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap.js';
@@ -22,8 +24,10 @@ export const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
 
+  const { user } = useContext(AuthContext);
   const {
     selectedFeeder, setSelectedFeeder,
+    selectedSed, setSelectedSed,
     pins, setPins,
     gaps, setGaps,
     region, setRegion,
@@ -31,7 +35,7 @@ export const Map = () => {
     feeders, setFeeders
   } = useDatos();
 
-  const { getPinsByFeeder, getGapsByFeeder, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion } = useMap();
+  const { getPinsByFeeder, getGapsByFeeder, getPinsBySed, getGapsBySed, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion, setRegionBySed } = useMap();
   const { fetchLocalFeeders } = useFeeder();
   const { fetchAndSelectPost } = usePost();
   const { fetchAndSelectSed } = useSed();
@@ -46,30 +50,70 @@ export const Map = () => {
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
   // ------------------- CARGA DE PINS Y GAPS -------------------
-  useEffect(() => {
-    if (!selectedFeeder) return;
 
-    const loadData = async () => {
-      setLoadingPins(true);
-      setLoadingGaps(true);
-      try {
-        const [pinsLoaded, gapsLoaded] = await Promise.all([
-          getPinsByFeeder(selectedFeeder.AlimInterno),
-          getGapsByFeeder(selectedFeeder.AlimInterno)
+useEffect(() => {
+  // Proyecto 1 (MT): necesita alimentador
+  if (user?.proyecto === 1 && !selectedFeeder) {
+    setPins([]);
+    setGaps([]);
+    return;
+  }
+
+  // Proyecto 0 (BT): necesita SED
+  if (user?.proyecto === 0 && !selectedSed) {
+    setPins([]);
+    setGaps([]);
+    return;
+  }
+
+  const loadData = async () => {
+    setLoadingPins(true);
+    setLoadingGaps(true);
+
+    try {
+      let pinsLoaded = [];
+      let gapsLoaded = [];
+
+      if (user?.proyecto === 1) {
+        // MEDIA TENSIÓN -----------------------------
+        const feederId = selectedFeeder.AlimInterno;
+
+        [pinsLoaded, gapsLoaded] = await Promise.all([
+          getPinsByFeeder(feederId),
+          getGapsByFeeder(feederId)
         ]);
-        if (Array.isArray(pinsLoaded)) setPins(pinsLoaded);
-        if (Array.isArray(gapsLoaded)) setGaps(gapsLoaded);
-        setRegionByFeeder(pinsLoaded);
-      } catch (err) {
-        console.warn("Error cargando pins/gaps:", err);
-      } finally {
-        setLoadingPins(false);
-        setLoadingGaps(false);
-      }
-    };
 
-    loadData();
-  }, [selectedFeeder]);
+      } else {
+        // BAJA TENSIÓN ------------------------------
+        const sedId = selectedSed.SedInterno;
+        console.log(sedId);
+        [pinsLoaded, gapsLoaded] = await Promise.all([
+          getPinsBySed(sedId),
+          getGapsBySed(sedId)
+        ]);
+      }
+
+      setPins(pinsLoaded);
+      setGaps(gapsLoaded);
+
+      //Region segun elementos alimentador o sed seleccionado
+      if (pinsLoaded.length > 0) {
+        if (user?.proyecto === 1) {
+          setRegionByFeeder(pinsLoaded);
+        } else {
+          setRegionBySed(pinsLoaded, selectedSed);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error al cargar datos:", error);
+    } finally {
+      setLoadingPins(false);
+      setLoadingGaps(false);
+    }
+  };
+
+  loadData();
+}, [selectedFeeder, selectedSed, user?.proyecto]);
 
   // ------------------- GPS EN TIEMPO REAL -------------------
   useEffect(() => {
@@ -173,18 +217,45 @@ export const Map = () => {
   };
 
   // ------------------- RENDER -------------------
-  if (!selectedFeeder) {
-    return (
-      <View style={styles.placeholderContainer}>
-        <Text style={styles.placeholderText}>Selecciona un alimentador para mostrar el mapa</Text>
+if ((user?.proyecto === 1 && !selectedFeeder) ||
+    (user?.proyecto === 0 && !selectedSed)) {
+  return (
+    <View style={styles.placeholderContainer}>
+      <Text style={styles.placeholderText}>
+        {user?.proyecto === 1
+          ? "Seleccione un alimentador"
+          : "Seleccione una SED"}
+      </Text>
+
+      {user?.proyecto === 1 && (
         <DropDown onSelectFeeder={setSelectedFeeder} />
-      </View>
-    );
-  }
+      )}
+
+      {user?.proyecto === 0 && (
+        <DropDownSed onSelectSed={setSelectedSed} />
+      )}
+
+      {/* Mapa vacío */}
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          latitude: -12.0464,
+          longitude: -77.0428,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+      />
+    </View>
+  );
+}
 
   return (
     <View style={{ flex: 1 }}>
-      <DropDown onSelectFeeder={setSelectedFeeder} />
+      {user?.proyecto === 0 ? (
+        <DropDownSed onSelectSed={setSelectedSed} />
+      ) : (
+        <DropDown onSelectFeeder={setSelectedFeeder} />
+      )}
 
       {(loadingPins || loadingGaps || loadingLocation) && (
         <View style={styles.loadingOverlay}>

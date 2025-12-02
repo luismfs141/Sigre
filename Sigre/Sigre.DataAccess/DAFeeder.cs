@@ -144,8 +144,8 @@ namespace Sigre.DataAccess
                     var tipificaciones = dATypification.DATIPI_GetByUser(x_usuario);
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
                     var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
-                    var archivos = dAFile.DAARCH_GetByFeeders(x_ids);
-                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_ids);
+                    var archivos = dAFile.DAARCH_GetByFeeders(x_ids);//Filtrar por subestacion falta
+                    var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_ids);//Filtrar por subestacion falta
 
                     // Materiales
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();
@@ -160,7 +160,7 @@ namespace Sigre.DataAccess
                     sqliteCtx.Vanos.AddRange(vanos);
                     sqliteCtx.Postes.AddRange(postes);
                     sqliteCtx.Seds.AddRange(seds);
-                    sqliteCtx.Switches.AddRange(switches);
+                    if(proyecto == 1) sqliteCtx.Switches.AddRange(switches);
                     sqliteCtx.Tipificaciones.AddRange(tipificaciones);
                     sqliteCtx.Archivos.AddRange(archivos);
                     sqliteCtx.Alimentadores.AddRange(alimentadores);
@@ -186,7 +186,9 @@ namespace Sigre.DataAccess
                         NodoInicial = p.NodoInicial,
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
-                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label
+                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label,
+                        IdSed = p.IdSed
+                        
                     }).ToList();
 
                     sqliteCtx.Pines.AddRange(pinesEntities);
