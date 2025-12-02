@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import sedIcon from '../assets/feederMap.png'; // coloca tu imagen de SED
+import { useDatos } from '../context/DatosContext';
 import { getAllSedsLocal } from '../database/offlineDB/seds'; // tu método creado
 
 export const DropDownSed = ({ onSelectSed }) => {
+  const { dbReady } = useDatos();
   const [modalVisible, setModalVisible] = useState(false);
   const [seds, setSeds] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const openModal = async () => {
+    if (!dbReady) {
+      alert("Primero debes descargar el modelo offline.");
+      return;
+    }
     setModalVisible(true);
     setLoading(true);
 

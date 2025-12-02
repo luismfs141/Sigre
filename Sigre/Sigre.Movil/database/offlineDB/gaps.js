@@ -21,6 +21,7 @@ export const getGapsByFeederLocal = async (feederId) => {
 
 export const getGapsBySedLocal = async (sedId) => {
   try {
+    sedId = Number(sedId);
     const rows = await runQuery(
       "SELECT * FROM Vanos WHERE VanoSubestacion = ?",
       [sedId]
@@ -33,7 +34,7 @@ export const getGapsBySedLocal = async (sedId) => {
 
     return rows;
   } catch (error) {
-    console.error(`❌ Error al obtener gaps locales para ela subestacion ${sedId}:`, error);
+    console.error(`❌ Error al obtener gaps locales para la subestacion ${sedId}:`, error);
     return [];
   }
 };

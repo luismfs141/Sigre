@@ -1,8 +1,37 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { isDatabaseAvailable, openDatabase } from "../database/offlineDB/db";
 
 const DatosContext = createContext();
 
 export const DatosProvider = ({ children }) => {
+
+  // 🔵 Estados agregados para BD
+  const [dbReady, setDbReady] = useState(false);
+  const [loadingDB, setLoadingDB] = useState(true);
+
+  const openLocalDB = async () => {
+    setLoadingDB(true);
+    const exists = await isDatabaseAvailable();
+
+    if (!exists) {
+      console.log("⚠ No existe base local");
+      setDbReady(false);
+      setLoadingDB(false);
+      return;
+    }
+
+    const db = await openDatabase();
+    if (db) setDbReady(true);
+
+    setLoadingDB(false);
+  };
+
+  // 🟢 intentar abrir BD al iniciar app
+  useEffect(() => {
+    openLocalDB();
+  }, []);
+
+  // -------------------- TUS ESTADOS ------------------------
   const [selectedFeeder, setSelectedFeeder] = useState(null);
   const [feeders, setFeeders] = useState([]);
   const [pins, setPins] = useState([]);
@@ -31,39 +60,24 @@ export const DatosProvider = ({ children }) => {
   return (
     <DatosContext.Provider
       value={{
-        // datos principales
-        selectedFeeder,
-        setSelectedFeeder,
+        // BD
+        dbReady,
+        loadingDB,
+        openLocalDB,
 
-        feeders,
-        setFeeders,
-
-        pins,
-        setPins,
-
-        gaps,
-        setGaps,
-
-        selectedPost,
-        setSelectedPost,
-
-        selectedSed,
-        setSelectedSed,
-
-        totalPins,
-        setTotalPins,
-
-        // item seleccionado
-        selectedItem,
-        setSelectedItem,
-
+        // Datos
+        selectedFeeder, setSelectedFeeder,
+        feeders, setFeeders,
+        pins, setPins,
+        gaps, setGaps,
+        selectedPost, setSelectedPost,
+        selectedSed, setSelectedSed,
+        totalPins, setTotalPins,
+        selectedItem, setSelectedItem,
         setSelectedPin,
         setSelectedGap,
-
         region, setRegion,
-
-        selectedProject,
-        setSelectedProject
+        selectedProject, setSelectedProject
       }}
     >
       {children}

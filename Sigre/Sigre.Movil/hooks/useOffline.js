@@ -11,7 +11,6 @@ export const useOffline = () => {
   const downloadDatabase = async (userId, feeders = [], Id) => {
     setLoading(true);
     try {
-      console.log(Id);
       const endpoint = "/Feeder/export";
       const res = await client.post(endpoint, { UserId: userId, Feeders: feeders, x_id: Id }, { responseType: "arraybuffer" });
 

@@ -143,12 +143,31 @@ export const useMap = () => {
     });
   };
 
+  const setRegionBySed = (pinsArray, sed) => {
+  if (pinsArray && pinsArray.length > 0) {
+    setRegion({
+      latitude: pinsArray[0].Latitude,
+      longitude: pinsArray[0].Longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01
+    });
+  } else if (sed) {
+    setRegion({
+      latitude: sed.SedLatitud,
+      longitude: sed.SedLongitud,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01
+    });
+  }
+};
+
   return {
     getPinsByFeeder,
     getPinsByRegion,
     getGapsByFeeder,
     getGapsBySed,
     getPinsBySed,
-    setRegionByFeeder
+    setRegionByFeeder,
+    setRegionBySed
   };
 };
