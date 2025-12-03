@@ -1,262 +1,20 @@
-// import * as FileSystem from "expo-file-system";
-
-// import { useLocalSearchParams, useRouter } from "expo-router";
-// import { useEffect, useState } from "react";
-
-// import {
-//   Image,
-//   ScrollView,
-//   StyleSheet,
-//   Text,
-//   TextInput,
-//   TouchableOpacity,
-//   View
-// } from "react-native";
-
-// import { Audio } from "expo-av";
-// import { CameraView, useCameraPermissions } from "expo-camera";
-// //const { File, Directory } = FileSystem;
-
-
-// export default function DeficiencyMediaScreen() {
-//   const router = useRouter();
-//   const { id, name, severity } = useLocalSearchParams();
-
-//   const [photos, setPhotos] = useState([]);
-//   const [audios, setAudios] = useState([]);
-//   const [note, setNote] = useState("");
-
-//   const [cameraVisible, setCameraVisible] = useState(false);
-//   const [cameraRef, setCameraRef] = useState(null);
-
-//   const [audioRecording, setAudioRecording] = useState(null);
-
-//   // Carpeta donde guardar todo
-//   const baseFolder = `${FileSystem.documentDirectory}def_${id}/`;
-
-//   // Permisos de cámara
-//   const [permission, requestPermission] = useCameraPermissions();
-
-//   useEffect(() => {
-//     prepareFolder();
-//   }, []);
-
-//   const prepareFolder = async () => {
-//   const folder = await FileSystem.getInfoAsync(baseFolder);
-
-//   if (!folder.exists) {
-//     await FileSystem.makeDirectoryAsync(baseFolder, { intermediates: true });
-//   }
-// };
-
-
-//   // ================================
-//   // 📸 TOMAR FOTO
-//   // ================================
-//   const takePhoto = async () => {
-//     if (!cameraRef) return;
-
-//     const result = await cameraRef.takePictureAsync();
-//     const filename = `${baseFolder}photo_${Date.now()}.jpg`;
-
-//     await FileSystem.copyAsync({
-//   from: result.uri,
-//   to: filename,
-// });
-
-
-
-//     setPhotos([...photos, filename]);
-//     setCameraVisible(false);
-//   };
-
-//   // ================================
-//   // 🎤 GRABAR AUDIO
-//   // ================================
-//   const startRecording = async () => {
-//     try {
-//       const { status } = await Audio.requestPermissionsAsync();
-//       if (status !== "granted") return;
-
-//       await Audio.setAudioModeAsync({
-//         allowsRecordingIOS: true,
-//         playsInSilentModeIOS: true,
-//       });
-
-//       const { recording } = await Audio.Recording.createAsync(
-//         Audio.RecordingOptionsPresets.HIGH_QUALITY
-//       );
-
-//       setAudioRecording(recording);
-
-//     } catch (err) {
-//       console.log("Error al iniciar grabación:", err);
-//     }
-//   };
-
-//   const stopRecording = async () => {
-//     try {
-//       await audioRecording.stopAndUnloadAsync();
-//       const uri = audioRecording.getURI();
-
-//       const filename = `${baseFolder}audio_${Date.now()}.m4a`;
-
-//       await FileSystem.moveAsync({
-//   from: uri,
-//   to: filename,
-// });
-
-
-
-//       setAudios([...audios, filename]);
-//       setAudioRecording(null);
-
-//     } catch (err) {
-//       console.log("Error al detener grabación:", err);
-//     }
-//   };
-
-//   // ================================
-//   // 💾 GUARDAR
-//   // ================================
-//   const handleSave = () => {
-//   // Aquí puedes guardar lo que quieras
-//   router.replace("/(drawer)/inspection");
-// };
-
-
-
-//   return (
-//     <View style={styles.container}>
-
-//       {/* ================================
-//           CABECERA
-//       =================================*/}
-//       <Text style={styles.title}>{name ?? "Deficiencia"}</Text>
-//       <Text style={styles.sub}>Severidad: {severity ?? "—"}</Text>
-//       <Text style={styles.path}>Ruta: {baseFolder}</Text>
-
-//       {/* ================================
-//           ZONA 1 - FOTOS
-//       =================================*/}
-//       <View style={styles.section}>
-//         <Text style={styles.sectionTitle}>📸 Fotografías</Text>
-
-//         {/* Botón Cámara */}
-//         <TouchableOpacity 
-//           style={styles.button}
-//           onPress={() => {
-//             if (!permission?.granted) requestPermission();
-//             else setCameraVisible(true);
-//           }}
-//         >
-//           <Text style={styles.buttonText}>Tomar foto</Text>
-//         </TouchableOpacity>
-
-//         {/* Cámara visible */}
-//         {cameraVisible && (
-//           <View style={styles.cameraContainer}>
-//             <CameraView 
-//               style={styles.camera}
-//               ref={setCameraRef}
-//             />
-//             <TouchableOpacity 
-//               style={styles.captureButton}
-//               onPress={takePhoto}
-//             >
-//               <Text style={styles.captureText}>Capturar</Text>
-//             </TouchableOpacity>
-//           </View>
-//         )}
-
-//         {/* Carrusel de fotos */}
-//         <ScrollView horizontal style={styles.carousel}>
-//           {photos.map((p, i) => (
-//             <Image 
-//               key={i} 
-//               source={{ uri: p }} 
-//               style={styles.photo}
-//             />
-//           ))}
-//         </ScrollView>
-//       </View>
-
-//       {/* ================================
-//           ZONA 2 - AUDIOS
-//       =================================*/}
-//       <View style={styles.section}>
-//         <Text style={styles.sectionTitle}>🎤 Audios</Text>
-
-//         <View style={styles.row}>
-//           {!audioRecording ? (
-//             <TouchableOpacity style={styles.buttonGreen} onPress={startRecording}>
-//               <Text style={styles.buttonText}>REC</Text>
-//             </TouchableOpacity>
-//           ) : (
-//             <TouchableOpacity style={styles.buttonRed} onPress={stopRecording}>
-//               <Text style={styles.buttonText}>STOP</Text>
-//             </TouchableOpacity>
-//           )}
-//         </View>
-
-//         {audios.map((a, i) => (
-//           <Text key={i} style={styles.audioItem}>
-//             🎧 {a}
-//           </Text>
-//         ))}
-//       </View>
-
-//       {/* ================================
-//           ZONA 3 - NOTA
-//       =================================*/}
-//       <View style={styles.section}>
-//         <Text style={styles.sectionTitle}>📝 Nota</Text>
-//         <TextInput
-//           style={styles.textArea}
-//           multiline
-//           value={note}
-//           onChangeText={setNote}
-//           placeholder="Escribe aquí..."
-//         />
-//       </View>
-
-//       {/* ================================
-//           BOTONES
-//       =================================*/}
-//       <View style={styles.bottomButtons}>
-//         <TouchableOpacity
-//   style={styles.cancelBtn}
-//   onPress={() => router.replace("/(drawer)/inspection")}
-// >
-//   <Text style={styles.bottomText}>Cancelar</Text>
-// </TouchableOpacity>
+import * as FS from "expo-file-system"; // SAF + read/write moderno
+import * as LegacyFS from "expo-file-system/legacy"; // copyAsync + sandbox
+const SAF = FS.StorageAccessFramework;
 
 
 
 
-//         <TouchableOpacity
-//     style={styles.saveBtn}
-//     onPress={handleSave}
-//   >
-//     <Text style={styles.bottomText}>Guardar</Text>
-//   </TouchableOpacity>
-//       </View>
-
-//     </View>
-//   );
-// }
 
 
 import Slider from "@react-native-community/slider";
-
 import { Alert } from "react-native";
 
 import { Audio } from "expo-av";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import * as FileSystem from "expo-file-system/legacy";
-
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
+
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 import {
   Image,
@@ -269,38 +27,51 @@ import {
   View
 } from "react-native";
 
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import ImageViewer from "react-native-image-zoom-viewer";
+
 
 export default function DeficiencyMediaScreen() {
   const router = useRouter();
-  const { id, name, severity } = useLocalSearchParams();
 
-  const [photos, setPhotos] = useState([]);
-  const [audios, setAudios] = useState([]);
-  const [note, setNote] = useState("");
-
-  const [cameraVisible, setCameraVisible] = useState(false);
-  const [cameraRef, setCameraRef] = useState(null);
-
-  const [recording, setRecording] = useState(null);
-
-  const baseFolder = `${FileSystem.documentDirectory}def_${id}/`;
 
   const [permission, requestPermission] = useCameraPermissions();
 
 
-  const [isPlaying, setIsPlaying] = useState(false);
+  // 📸 Fotos
+  const [photos, setPhotos] = useState([]);
 
-  const [sound, setSound] = useState(null);
-  const [currentAudioIndex, setCurrentAudioIndex] = useState(null);
-
+  // 🎤 Audios
+  const [audios, setAudios] = useState([]);
   const [audioProgress, setAudioProgress] = useState([]);
 
-  const [blink, setBlink] = useState(true);
+  // 📝 Nota
+  const [note, setNote] = useState("");
+
+  // 📷 Cámara
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraRef, setCameraRef] = useState(null);
+
+  // 🎤 Grabación
+  const [recording, setRecording] = useState(null);
+
+  // 🔊 Reproducción de audio
+  const [sound, setSound] = useState(null);
+  const [currentAudioIndex, setCurrentAudioIndex] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  const formatFileTimestamp = () => {
+  // 🔴 Parpadeo de grabando
+  const [blink, setBlink] = useState(true);
+
+  // Necesarios para slider de audio
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(1);
+
+
+
+
+  // ⏱ timestamp para archivos
+  function formatFileTimestamp() {
     const now = new Date();
     const yyyy = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, "0");
@@ -308,9 +79,83 @@ export default function DeficiencyMediaScreen() {
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
     const ss = String(now.getSeconds()).padStart(2, "0");
-
     return `${yyyy}${MM}${dd}_${hh}${mm}${ss}`;
-  };
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async function getRootUri() {
+    let uri = await AsyncStorage.getItem("SIGRE_ROOT_URI");
+    if (!uri) {
+      uri = await requestRootFolder();
+    }
+    return uri;
+  }
+
+
+
+
+
+  async function requestRootFolder() {
+    const perm = await SAF.requestDirectoryPermissionsAsync();
+
+    if (perm.granted) {
+      await AsyncStorage.setItem("SIGRE_ROOT_URI", perm.directoryUri);
+      return perm.directoryUri;
+    }
+    return null;
+  }
+
+
+  async function createFolder(parentUri, name) {
+    try {
+      return await SAF.createDirectoryAsync(parentUri, name);
+    } catch (err) {
+      if (String(err).includes("EEXIST")) {
+        return `${parentUri}/${name}`;
+      }
+      console.log("Error creando carpeta SAF:", parentUri, name, err);
+      throw err;
+    }
+  }
+
+
+
+
+  async function saveFileToSAF(folderUri, localFileUri, filename, mimeType) {
+    try {
+      const base64 = await FS.readAsStringAsync(localFileUri, { encoding: "base64" });
+
+      const newFileUri = await SAF.createFileAsync(folderUri, filename, mimeType);
+
+      await FS.writeAsStringAsync(newFileUri, base64, { encoding: "base64" });
+
+
+      return newFileUri;
+
+    } catch (err) {
+      console.log("Error guardando archivo en SAF:", err);
+      throw err;
+    }
+  }
+
+
+
+
+
+
+
+
 
 
 
@@ -324,8 +169,6 @@ export default function DeficiencyMediaScreen() {
 
   const getFileName = (uri) => uri.split("/").pop();
 
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(1);
 
   // MODAL
   const [showModal, setShowModal] = useState(false);
@@ -345,6 +188,8 @@ export default function DeficiencyMediaScreen() {
     return String(number).padStart(3, "0"); // convierte a 001, 002, 003
   };
 
+
+
   const takePhoto = async () => {
     if (!cameraRef) return;
 
@@ -352,19 +197,25 @@ export default function DeficiencyMediaScreen() {
 
     const timestamp = formatFileTimestamp();
     const nextNum = getNextPhotoNumber();
-    const filePath = `${FileSystem.documentDirectory}ALIM-SUBEST-FOT${nextNum}-${timestamp}.jpg`;
+    const filePath =
+      `${LegacyFS.documentDirectory}ALIM-SUBEST-FOT${nextNum}-${timestamp}.jpg`;
 
-
-
-
-    await FileSystem.copyAsync({
+    await LegacyFS.copyAsync({
       from: result.uri,
       to: filePath,
     });
 
+
+
+
+
+
     setPhotos(prev => [...prev, filePath]);
-    //setCameraVisible(false);
   };
+
+
+
+
 
   // ================================
   // 📷 ABRIR FOTO EN GRANDE
@@ -380,7 +231,7 @@ export default function DeficiencyMediaScreen() {
   const deletePhoto = async () => {
     const fileToDelete = photos[selectedPhotoIndex];
 
-    await FileSystem.deleteAsync(fileToDelete, { idempotent: true });
+    await FS.deleteAsync(fileToDelete, { idempotent: true });
 
     const updated = photos.filter((_, i) => i !== selectedPhotoIndex);
     setPhotos(updated);
@@ -434,24 +285,30 @@ export default function DeficiencyMediaScreen() {
 
       const timestamp = formatFileTimestamp();
       const nextNum = getNextAudioNumber();
-      const filePath = `${FileSystem.documentDirectory}ALIM-SUBEST-AUD${nextNum}-${timestamp}.m4a`;
+      const filePath =
+        `${LegacyFS.documentDirectory}ALIM-SUBEST-AUD${nextNum}-${timestamp}.m4a`;
+
+      await LegacyFS.copyAsync({
+        from: uri,
+        to: filePath,
+      });
 
 
 
-      await FileSystem.copyAsync({ from: uri, to: filePath });
 
-      // ✔ GUARDAR RUTA REAL DEL AUDIO 
+
+
       setAudios(prev => [...prev, filePath]);
-
-      // ✔ CREAR PROGRESO PARA ESE AUDIO
       setAudioProgress(prev => [...prev, { position: 0, duration: 1 }]);
-
       setRecording(null);
 
     } catch (err) {
       console.log("Error al detener grabación:", err);
     }
   };
+
+
+
 
 
 
@@ -585,7 +442,7 @@ export default function DeficiencyMediaScreen() {
       const filePath = audios[index];
 
       // borrar archivo físico
-      await FileSystem.deleteAsync(filePath, { idempotent: true });
+      await FS.deleteAsync(filePath, { idempotent: true });
 
       // borrar del array SIN duplicar
       setAudios(prev => prev.filter((_, i) => i !== index));
@@ -643,10 +500,70 @@ export default function DeficiencyMediaScreen() {
 
   const handleSave = async () => {
     const ok = await confirmStopRecording();
-    if (!ok) return; // usuario dijo NO
+    if (!ok) return;
 
-    router.replace("/(drawer)/inspection");
+    try {
+      // 1️⃣ Obtener carpeta raíz SIGRE elegida por el usuario
+      const rootUri = await getRootUri();
+      if (!rootUri) {
+        Alert.alert("Error", "No se eligió la carpeta raíz SIGRE");
+        return;
+      }
+
+      // 2️⃣ Crear estructura de carpetas SIGRE
+      const proyecto = "ProyectoX";
+      const alimentador = "Alim01";
+      const subestacion = "Sub01";
+      const elemento = "Elem01";
+      const codigoElemento = "COD123";
+      const deficiencia = "DEF001";
+
+      const proyectoUri = await createFolder(rootUri, proyecto);
+      const alimUri = await createFolder(proyectoUri, alimentador);
+      const subUri = await createFolder(alimUri, subestacion);
+      const elementoUri = await createFolder(subUri, elemento);
+      const codigoUri = await createFolder(elementoUri, codigoElemento);
+      const defUri = await createFolder(codigoUri, deficiencia);
+
+      const fotosUri = await createFolder(defUri, "Fotos");
+      const audiosUri = await createFolder(defUri, "Audios");
+
+      // 3️⃣ Guardar todas las fotografías
+      for (const photoUri of photos) {
+        const filename = photoUri.split("/").pop();
+        await saveFileToSAF(fotosUri, photoUri, filename, "image/jpeg");
+      }
+
+      // 4️⃣ Guardar todos los audios
+      for (const audioUri of audios) {
+        const filename = audioUri.split("/").pop();
+        await saveFileToSAF(audiosUri, audioUri, filename, "audio/mp4");
+      }
+
+      // 5️⃣ Guardar nota como archivo TXT (opcional)
+      if (note.trim() !== "") {
+        const noteFile = LegacyFS.documentDirectory + "nota_temp.txt";
+        await FS.writeAsStringAsync(noteFile, note, { encoding: "utf8" });
+
+        await saveFileToSAF(
+          defUri,
+          noteFile,
+          "nota.txt",
+          "text/plain"
+        );
+      }
+
+      Alert.alert("Listo", "Fotos, audios y nota guardados en SIGRE");
+
+      router.replace("/(drawer)/inspection");
+
+    } catch (err) {
+      console.log("Error guardando SAF:", err);
+      Alert.alert("Error", "No se pudo guardar.");
+    }
   };
+
+
 
 
 
@@ -912,18 +829,6 @@ export default function DeficiencyMediaScreen() {
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
