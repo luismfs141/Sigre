@@ -39,6 +39,9 @@
 // };
 
 // database/openDatabase.js
+
+
+
 import * as FileSystem from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
 
@@ -50,14 +53,56 @@ export const isDatabaseAvailable = async () => {
   return file.exists;
 };
 
+
+
+
+
+
+
+
+
+
+
+// export const openDatabase = async () => {
+//   try {
+//     const exists = await isDatabaseAvailable();
+//     if (!exists) {
+//       console.log("⚠ Base no existe aún.");
+//       return null;
+//     }
+
+//     if (!db) {
+//       db = await SQLite.openDatabaseAsync("sigre_offline.db");
+//       console.log("✔ SQLite abierta");
+//     }
+
+//     return db;
+
+//   } catch (err) {
+//     console.error("❌ Error abriendo BD:", err);
+//     return null;
+//   }
+// };
+
 export const openDatabase = async () => {
   try {
-    const exists = await isDatabaseAvailable();
-    if (!exists) {
-      console.log("⚠ Base no existe aún.");
-      return null;
+    // Asegurar carpeta /SQLite
+    const dir = FileSystem.documentDirectory + "SQLite";
+    const dirInfo = await FileSystem.getInfoAsync(dir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     }
 
+    // Revisar si BD existe
+    const exists = await isDatabaseAvailable();
+
+    // Si NO existe → copiar desde assets
+    if (!exists) {
+      console.log("⚠ BD no existe, copiando...");
+      await copyDatabaseFromAssets();
+    }
+
+    // Abrir BD
     if (!db) {
       db = await SQLite.openDatabaseAsync("sigre_offline.db");
       console.log("✔ SQLite abierta");
@@ -70,6 +115,8 @@ export const openDatabase = async () => {
     return null;
   }
 };
+
+
 
 export const runQuery = async (sql, params = []) => {
   try {

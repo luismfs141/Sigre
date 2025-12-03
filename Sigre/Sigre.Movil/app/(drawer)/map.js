@@ -51,69 +51,69 @@ export const Map = () => {
 
   // ------------------- CARGA DE PINS Y GAPS -------------------
 
-useEffect(() => {
-  // Proyecto 1 (MT): necesita alimentador
-  if (user?.proyecto === 1 && !selectedFeeder) {
-    setPins([]);
-    setGaps([]);
-    return;
-  }
-
-  // Proyecto 0 (BT): necesita SED
-  if (user?.proyecto === 0 && !selectedSed) {
-    setPins([]);
-    setGaps([]);
-    return;
-  }
-
-  const loadData = async () => {
-    setLoadingPins(true);
-    setLoadingGaps(true);
-
-    try {
-      let pinsLoaded = [];
-      let gapsLoaded = [];
-
-      if (user?.proyecto === 1) {
-        // MEDIA TENSIÓN -----------------------------
-        const feederId = selectedFeeder.AlimInterno;
-
-        [pinsLoaded, gapsLoaded] = await Promise.all([
-          getPinsByFeeder(feederId),
-          getGapsByFeeder(feederId)
-        ]);
-
-      } else {
-        // BAJA TENSIÓN ------------------------------
-        const sedId = selectedSed.SedInterno;
-        console.log(sedId);
-        [pinsLoaded, gapsLoaded] = await Promise.all([
-          getPinsBySed(sedId),
-          getGapsBySed(sedId)
-        ]);
-      }
-
-      setPins(pinsLoaded);
-      setGaps(gapsLoaded);
-
-      //Region segun elementos alimentador o sed seleccionado
-      if (pinsLoaded.length > 0) {
-        if (user?.proyecto === 1) {
-          setRegionByFeeder(pinsLoaded);
-        } else {
-          setRegionBySed(pinsLoaded, selectedSed);
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error al cargar datos:", error);
-    } finally {
-      setLoadingPins(false);
-      setLoadingGaps(false);
+  useEffect(() => {
+    // Proyecto 1 (MT): necesita alimentador
+    if (user?.proyecto === 1 && !selectedFeeder) {
+      setPins([]);
+      setGaps([]);
+      return;
     }
-  };
 
-  loadData();
-}, [selectedFeeder, selectedSed, user?.proyecto]);
+    // Proyecto 0 (BT): necesita SED
+    if (user?.proyecto === 0 && !selectedSed) {
+      setPins([]);
+      setGaps([]);
+      return;
+    }
+
+    const loadData = async () => {
+      setLoadingPins(true);
+      setLoadingGaps(true);
+
+      try {
+        let pinsLoaded = [];
+        let gapsLoaded = [];
+
+        if (user?.proyecto === 1) {
+          // MEDIA TENSIÓN -----------------------------
+          const feederId = selectedFeeder.AlimInterno;
+
+          [pinsLoaded, gapsLoaded] = await Promise.all([
+            getPinsByFeeder(feederId),
+            getGapsByFeeder(feederId)
+          ]);
+
+        } else {
+          // BAJA TENSIÓN ------------------------------
+          const sedId = selectedSed.SedInterno;
+          console.log(sedId);
+          [pinsLoaded, gapsLoaded] = await Promise.all([
+            getPinsBySed(sedId),
+            getGapsBySed(sedId)
+          ]);
+        }
+
+        setPins(pinsLoaded);
+        setGaps(gapsLoaded);
+
+        //Region segun elementos alimentador o sed seleccionado
+        if (pinsLoaded.length > 0) {
+          if (user?.proyecto === 1) {
+            setRegionByFeeder(pinsLoaded);
+          } else {
+            setRegionBySed(pinsLoaded, selectedSed);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error al cargar datos:", error);
+      } finally {
+        setLoadingPins(false);
+        setLoadingGaps(false);
+      }
+    };
+
+    loadData();
+  }, [selectedFeeder, selectedSed, user?.proyecto]);
 
   // ------------------- GPS EN TIEMPO REAL -------------------
   useEffect(() => {
@@ -205,7 +205,7 @@ useEffect(() => {
             onPress: async () => {
               if (item.VanoCodigo) setSelectedItem(item);
               else if (item.Type === 5) await fetchAndSelectPost(item.IdOriginal);
-              else if (![7,8].includes(item.Type)) await fetchAndSelectSed(item.IdOriginal);
+              else if (![7, 8].includes(item.Type)) await fetchAndSelectSed(item.IdOriginal);
               router.push("/(drawer)/inspection");
             }
           }
@@ -217,37 +217,37 @@ useEffect(() => {
   };
 
   // ------------------- RENDER -------------------
-if ((user?.proyecto === 1 && !selectedFeeder) ||
+  if ((user?.proyecto === 1 && !selectedFeeder) ||
     (user?.proyecto === 0 && !selectedSed)) {
-  return (
-    <View style={styles.placeholderContainer}>
-      <Text style={styles.placeholderText}>
-        {user?.proyecto === 1
-          ? "Seleccione un alimentador"
-          : "Seleccione una SED"}
-      </Text>
+    return (
+      <View style={styles.placeholderContainer}>
+        <Text style={styles.placeholderText}>
+          {user?.proyecto === 1
+            ? "Seleccione un alimentador"
+            : "Seleccione una SED"}
+        </Text>
 
-      {user?.proyecto === 1 && (
-        <DropDown onSelectFeeder={setSelectedFeeder} />
-      )}
+        {user?.proyecto === 1 && (
+          <DropDown onSelectFeeder={setSelectedFeeder} />
+        )}
 
-      {user?.proyecto === 0 && (
-        <DropDownSed onSelectSed={setSelectedSed} />
-      )}
+        {user?.proyecto === 0 && (
+          <DropDownSed onSelectSed={setSelectedSed} />
+        )}
 
-      {/* Mapa vacío */}
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          latitude: -12.0464,
-          longitude: -77.0428,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      />
-    </View>
-  );
-}
+        {/* Mapa vacío */}
+        <MapView
+          style={styles.map}
+          initialRegion={{
+            latitude: -12.0464,
+            longitude: -77.0428,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -263,7 +263,7 @@ if ((user?.proyecto === 1 && !selectedFeeder) ||
         </View>
       )}
 
-      <MapView
+      {/* <MapView
         ref={mapRef}
         style={mapStyles.mapContainer}
         region={region}
@@ -275,22 +275,49 @@ if ((user?.proyecto === 1 && !selectedFeeder) ||
           setRegion(reg);
           getPinsByRegion(reg);
         }}
+      > */}
+
+
+      <MapView
+        ref={mapRef}
+        style={mapStyles.mapContainer}
+        region={region}
+        initialRegion={region}
+        mapType="satellite"
+        showsUserLocation={true}      // 👈 ACTIVAR EL PUNTO NATIVO
+        followsUserLocation={false}   // (opcional)
+        showsMyLocationButton={false} // (en Android pone un botón azul feo)
+        onTouchStart={() => setIsUserInteracting(true)}
+        onPanDrag={() => setIsUserInteracting(true)}
+        onRegionChangeComplete={(reg) => {
+          setRegion(reg);
+          getPinsByRegion(reg);
+        }}
       >
+
+
+
+{/* 
         {userLocation && (
-          <Marker coordinate={userLocation} anchor={{ x:0.5, y:0.5 }} tracksViewChanges>
+          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
             <View style={{ alignItems: "center", justifyContent: "center" }}>
               <Image source={require("../../assets/transparent.png")}
-                     style={{ width: 34, height: 34, tintColor: "#0066FF", transform: [{ rotate: `${heading}deg` }] }}/>
-              <View style={{ width:16, height:16, backgroundColor:"#4285F4", borderRadius:8, borderWidth:3, borderColor:"white", position:"absolute" }} />
+                style={{ width: 34, height: 34, tintColor: "#0066FF", transform: [{ rotate: `${heading}deg` }] }} />
+              <View style={{ width: 16, height: 16, backgroundColor: "#4285F4", borderRadius: 8, borderWidth: 3, borderColor: "white", position: "absolute" }} />
             </View>
           </Marker>
-        )}
+        )} */}
 
-        {memoGaps.map((gap,i) => (
+
+
+
+
+
+        {memoGaps.map((gap, i) => (
           <Polyline
             key={i}
-            coordinates={[ { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-                           { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin } ]}
+            coordinates={[{ latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
+            { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }]}
             strokeWidth={3}
             strokeColor={getGapColorByInspected(gap)}
             tappable
@@ -298,14 +325,14 @@ if ((user?.proyecto === 1 && !selectedFeeder) ||
           />
         ))}
 
-        {memoPins.map((pin,i) => {
+        {memoPins.map((pin, i) => {
           const cleanLabel = formatLabel(pin.Label);
           const showLabel = Number(pin.Type) !== 8 && cleanLabel?.length > 0;
 
           if (Number(pin.Type) === 8) return (
             <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} tracksViewChanges pointerEvents="none">
               <View style={pinStyles.pinWrapper}>
-                <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain"/>
+                <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain" />
               </View>
             </Marker>
           );
@@ -313,14 +340,14 @@ if ((user?.proyecto === 1 && !selectedFeeder) ||
           return (
             <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} tracksViewChanges onPress={() => onMarkerPress(pin)}>
               <View style={pinStyles.pinWrapper}>
-                <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain"/>
+                <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain" />
                 {showLabel && (
                   <View style={pinStyles.labelBox}>
                     <Text style={pinStyles.labelText}>{cleanLabel}</Text>
                   </View>
                 )}
               </View>
-              <PinCallout pin={pin}/>
+              <PinCallout pin={pin} />
             </Marker>
           );
         })}
@@ -346,9 +373,9 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   btnImg: { width: 40, height: 40, resizeMode: 'contain' },
-  placeholderContainer: { flex:1, justifyContent:"center", alignItems:"center", padding:20 },
-  placeholderText: { fontSize:16, color:"#555", marginBottom:20, textAlign:"center" },
-  loadingOverlay: { position:'absolute', top:'50%', left:'50%', zIndex:100 }
+  placeholderContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
+  placeholderText: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
+  loadingOverlay: { position: 'absolute', top: '50%', left: '50%', zIndex: 100 }
 });
 
 export default Map;

@@ -66,13 +66,13 @@ export const useMap = () => {
   // MOSTRAR SOLO LOS PINS EN LA REGION VISIBLE
   // --------------------------------------------------------------
   const getPinsByRegion = (region) => {
-      if (!Array.isArray(totalPins)) return setPins([]);
+    if (!Array.isArray(totalPins)) return setPins([]);
 
-  // Si el zoom no es suficiente → no mostrar pines
-  if (region.latitudeDelta > 0.008) {
-    setPins([]);
-    return;
-  }
+    // Si el zoom no es suficiente → no mostrar pines
+    if (region.latitudeDelta > 0.008) {
+      setPins([]);
+      return;
+    }
 
 
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
@@ -91,7 +91,7 @@ export const useMap = () => {
 
     setPins(visiblePins);
   };
-    
+
 
   // --------------------------------------------------------------
   // GAPS (no causan lag)
@@ -129,6 +129,22 @@ export const useMap = () => {
     return data;
   };
 
+
+  // --------------------------------------------------------------
+  // SET REGION POR COORDENADAS (GPS)
+  // --------------------------------------------------------------
+  const setRegionByCoordinate = (lat, lon) => {
+    if (!lat || !lon) return;
+
+    setRegion({
+      latitude: lat,
+      longitude: lon,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    });
+  };
+
+
   // --------------------------------------------------------------
   // SET REGION AL CENTRAR ALIMENTADOR
   // --------------------------------------------------------------
@@ -144,22 +160,22 @@ export const useMap = () => {
   };
 
   const setRegionBySed = (pinsArray, sed) => {
-  if (pinsArray && pinsArray.length > 0) {
-    setRegion({
-      latitude: pinsArray[0].Latitude,
-      longitude: pinsArray[0].Longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01
-    });
-  } else if (sed) {
-    setRegion({
-      latitude: sed.SedLatitud,
-      longitude: sed.SedLongitud,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01
-    });
-  }
-};
+    if (pinsArray && pinsArray.length > 0) {
+      setRegion({
+        latitude: pinsArray[0].Latitude,
+        longitude: pinsArray[0].Longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01
+      });
+    } else if (sed) {
+      setRegion({
+        latitude: sed.SedLatitud,
+        longitude: sed.SedLongitud,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01
+      });
+    }
+  };
 
   return {
     getPinsByFeeder,
@@ -168,6 +184,8 @@ export const useMap = () => {
     getGapsBySed,
     getPinsBySed,
     setRegionByFeeder,
-    setRegionBySed
+    setRegionBySed,
+    setRegionByCoordinate
   };
+
 };
