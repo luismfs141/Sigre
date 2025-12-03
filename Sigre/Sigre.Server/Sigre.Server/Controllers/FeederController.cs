@@ -52,12 +52,21 @@ namespace Sigre.Server.Controllers
             {
                 DAFeeder dAFeeder = new DAFeeder();
 
-                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(request.Feeders, request.UserId, request.x_id);
+                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(
+                    request.Feeders,
+                    request.UserId,
+                    request.x_id
+                );
 
                 if (fileBytes == null || fileBytes.Length == 0)
                     return NotFound("No se generó el archivo SQLite.");
 
-                return File(fileBytes, "application/octet-stream", "sigre_offline.db");
+                // Nombre dinámico
+                string fileName = string.IsNullOrEmpty(request.FileName)
+                    ? "sigre_offline.db"
+                    : request.FileName;
+
+                return File(fileBytes, "application/octet-stream", fileName);
             }
             catch (Exception ex)
             {
@@ -78,5 +87,7 @@ namespace Sigre.Server.Controllers
         public int UserId { get; set; }
         public List<int> Feeders { get; set; } = new();
         public int x_id { get; set; }
+
+        public string FileName { get; set; }
     }
 }
