@@ -326,7 +326,20 @@ export const Map = () => {
         ))}
 
         {memoPins.map((pin, i) => {
-          const cleanLabel = formatLabel(pin.Label);
+          //const cleanLabel = formatLabel(pin.Label);
+          const cleanLabel = formatLabel(pin.ElementCode);
+
+
+
+
+
+
+
+
+
+
+          
+
           const showLabel = Number(pin.Type) !== 8 && cleanLabel?.length > 0;
 
           if (Number(pin.Type) === 8) return (
