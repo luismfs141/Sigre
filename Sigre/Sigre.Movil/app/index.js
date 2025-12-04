@@ -37,7 +37,7 @@ export default function Index() {
   // Si hay usuario → redirigir al drawer
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/(drawer)/map");
+      router.replace("/(drawer)/sync");
     }
   }, [loading, user]);
 
