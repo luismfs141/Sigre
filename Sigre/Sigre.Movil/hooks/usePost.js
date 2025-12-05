@@ -4,13 +4,12 @@ import { getPostById } from "../database/offlineDB/posts";
 export const usePost = () => {
   const { setSelectedItem } = useDatos();
 
-  const fetchAndSelectPost = async (id) => {
+  const getPostData = async (id) =>{
     let data = await getPostById(id);
-    setSelectedItem(data);
     return data;
-  };
+  }
 
   return {
-    fetchAndSelectPost
+    getPostData
   };
 };

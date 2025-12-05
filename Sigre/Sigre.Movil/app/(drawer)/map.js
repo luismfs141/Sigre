@@ -37,7 +37,7 @@ export const Map = () => {
 
   const { getPinsByFeeder, getGapsByFeeder, getPinsBySed, getGapsBySed, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion, setRegionBySed } = useMap();
   const { fetchLocalFeeders } = useFeeder();
-  const { fetchAndSelectPost } = usePost();
+  const { fetchAndSelectPost, getPostData } = usePost();
   const { fetchAndSelectSed } = useSed();
 
   const [loadingPins, setLoadingPins] = useState(false);
@@ -192,29 +192,49 @@ export const Map = () => {
 
   const onMarkerPress = async (item) => {
     try {
-      let tipoElemento = item.VanoCodigo ? "Vano" : item.ElementCode ? "Elemento" : "Desconocido";
-      let codigo = item.VanoCodigo || item.ElementCode || "";
+      let tipoElemento = "";
+      let codigoElemento = "";
+      let datoElemento = null;
 
+      // --- Lógica corta y optimizada ---
+      if (item.Type === 5) {
+        const data = await getPostData(item.IdOriginal);  // 🔹 devuelve array
+        datoElemento = data[0];                // 🔹 usar el objeto real
+        tipoElemento = "Poste";
+        codigoElemento = datoElemento.PostCodigoNodo;
+
+      } else if (!item.Type && item.VanoCodigo) {
+        tipoElemento = "Vano";
+        codigoElemento = item.VanoCodigo;
+        datoElemento = item;                      // 🔹 el vano ya es el dato
+
+      } else {
+        tipoElemento = "Desconocido";
+        codigoElemento = "";
+        datoElemento = item;
+      }
+
+      // --- Alerta ---
       Alert.alert(
         "Elemento seleccionado",
-        `Tipo: ${tipoElemento}\nCódigo: ${codigo}`,
+        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
         [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Inspeccionar",
             onPress: async () => {
-              if (item.VanoCodigo) setSelectedItem(item);
-              else if (item.Type === 5) await fetchAndSelectPost(item.IdOriginal);
-              else if (![7, 8].includes(item.Type)) await fetchAndSelectSed(item.IdOriginal);
+              setSelectedItem(datoElemento);
               router.push("/(drawer)/inspection");
             }
           }
         ]
       );
+
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
     }
   };
+
 
   // ------------------- RENDER -------------------
   if ((user?.proyecto === 1 && !selectedFeeder) ||
