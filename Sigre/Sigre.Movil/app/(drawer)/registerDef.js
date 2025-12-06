@@ -1,41 +1,40 @@
-import * as FileSystem from "expo-file-system"; // API moderna
-import { useEffect, useState } from "react";
-const SAF = FileSystem.StorageAccessFramework;
+// ⚙️ Filesystem + SAF (Android)
+import * as FS from "expo-file-system";
+import { StorageAccessFramework as SAF } from "expo-file-system/legacy";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
+import { Alert } from "react-native";
+
 import { Audio } from "expo-av";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
-import ImageViewer from "react-native-image-zoom-viewer";
+import { useEffect, useState } from "react";
+
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 import {
-  Alert,
   Image,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import ImageViewer from "react-native-image-zoom-viewer";
+
 export default function DeficiencyMediaScreen() {
   const router = useRouter();
 
-  // Permiso de cámara
   const [permission, requestPermission] = useCameraPermissions();
 
-  // 📸 Fotos
-  const [photos, setPhotos] = useState([]); // URIs locales
+  // 📸 Fotos (URIs temporales de cámara o SAF)
+  const [photos, setPhotos] = useState([]);
 
   // 🎤 Audios
-  const [audios, setAudios] = useState([]); // URIs locales
-  const [audioProgress, setAudioProgress] = useState([]); // { position, duration }
-
-  // 📝 Nota
-  const [note, setNote] = useState("");
+  const [audios, setAudios] = useState([]);
+  const [audioProgress, setAudioProgress] = useState([]);
 
   // 📷 Cámara
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -49,27 +48,18 @@ export default function DeficiencyMediaScreen() {
   const [currentAudioIndex, setCurrentAudioIndex] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  // 🔴 Parpadeo de indicador de grabación
+  // 🔴 Parpadeo (para futuro)
   const [blink, setBlink] = useState(true);
 
-  // Efecto para parpadear el punto rojo cuando hay grabación
-  useEffect(() => {
-    if (!recording) {
-      setBlink(true);
-      return;
-    }
-    const id = setInterval(() => {
-      setBlink((prev) => !prev);
-    }, 500);
-    return () => clearInterval(id);
-  }, [recording]);
+  // MODAL
+  const [showModal, setShowModal] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   // ================================
-  // Utilidades generales
+  // HELPERS
   // ================================
 
-  // Timestamp para nombres de archivos
-  function formatFileTimestamp() {
+  function formatFileTimestampMs() {
     const now = new Date();
     const yyyy = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, "0");
@@ -77,122 +67,193 @@ export default function DeficiencyMediaScreen() {
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
     const ss = String(now.getSeconds()).padStart(2, "0");
-    return `${yyyy}${MM}${dd}_${hh}${mm}${ss}`;
+    const ms = String(now.getMilliseconds()).padStart(3, "0");
+    return `${yyyy}${MM}${dd}_${hh}${mm}${ss}${ms}`;
   }
 
   const getFileName = (uri) => {
-    if (!uri) return "archivo";
     const parts = uri.split("/");
-    return parts[parts.length - 1];
+    return parts[parts.length - 1] || "archivo";
   };
 
-  // ================================
-  // Storage Access Framework (SAF)
-  // ================================
+  const isTempFile = (uri) => uri.startsWith("file://");
+  const isSafFile = (uri) => uri.startsWith("content://");
 
+  // 🔐 Cargar / pedir carpeta raíz SIGRE (pública) una sola vez
   async function getRootUri() {
-    let uri = await AsyncStorage.getItem("SIGRE_ROOT_URI");
-    if (!uri) {
-      uri = await requestRootFolder();
-    }
-    return uri;
-  }
-
-  async function requestRootFolder() {
-    const perm = await SAF.requestDirectoryPermissionsAsync();
-    if (perm.granted) {
-      await AsyncStorage.setItem("SIGRE_ROOT_URI", perm.directoryUri);
-      return perm.directoryUri;
-    }
-    return null;
-  }
-
-  async function createFolder(parentUri, name) {
     try {
-      return await SAF.createDirectoryAsync(parentUri, name);
-    } catch (err) {
-      // Si ya existe, devolvemos la ruta existente
-      if (String(err).includes("EEXIST")) {
-        return `${parentUri}/${name}`;
+      if (!SAF || !SAF.requestDirectoryPermissionsAsync) {
+        Alert.alert(
+          "No soportado",
+          "StorageAccessFramework no está disponible en esta plataforma."
+        );
+        return null;
       }
-      console.log("Error creando carpeta SAF:", parentUri, name, err);
+
+      let uri = await AsyncStorage.getItem("SIGRE_ROOT_URI");
+
+      if (!uri) {
+        const perm = await SAF.requestDirectoryPermissionsAsync();
+        if (!perm.granted) {
+          return null;
+        }
+
+        uri = perm.directoryUri;
+        await AsyncStorage.setItem("SIGRE_ROOT_URI", uri);
+      }
+
+      return uri;
+    } catch (err) {
+      console.log("Error en getRootUri:", err);
       throw err;
     }
   }
 
-  async function saveFileToSAF(folderUri, localFileUri, filename, mimeType) {
+  // Crear estructura:
+  // root/SIGRE/Proyecto/Alim/Sub/TipoElemento/Elemento/Deficiencia/{Fotos,Audios}
+  async function ensureMediaDirectories(rootUri) {
+    const proyecto = "ProyectoX";
+    const alimentador = "Alim01";
+    const subestacion = "Sub01";
+    const tipoElemento = "TipoElemento";
+    const elemento = "Elem01";
+    const deficiencia = "DEF001";
+
+    const segments = [
+      "SIGRE",
+      proyecto,
+      alimentador,
+      subestacion,
+      tipoElemento,
+      elemento,
+      deficiencia,
+    ];
+
+    let currentUri = rootUri;
+
+    for (const name of segments) {
+      try {
+        currentUri = await SAF.createDirectoryAsync(currentUri, name);
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        if (msg.includes("EEXIST") || msg.includes("already exists")) {
+          currentUri = `${currentUri}/${name}`;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // Fotos
+    let fotosUri = currentUri;
     try {
-      const base64 = await FileSystem.readAsStringAsync(localFileUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const newFileUri = await SAF.createFileAsync(
-        folderUri,
-        filename,
-        mimeType
-      );
-
-      await FileSystem.writeAsStringAsync(newFileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      return newFileUri;
+      fotosUri = await SAF.createDirectoryAsync(currentUri, "Fotos");
     } catch (err) {
-      console.log("Error guardando archivo en SAF:", err);
-      throw err;
+      const msg = String((err && err.message) || err);
+      if (msg.includes("EEXIST") || msg.includes("already exists")) {
+        fotosUri = `${currentUri}/Fotos`;
+      } else {
+        throw err;
+      }
+    }
+
+    // Audios
+    let audiosUri = currentUri;
+    try {
+      audiosUri = await SAF.createDirectoryAsync(currentUri, "Audios");
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      if (msg.includes("EEXIST") || msg.includes("already exists")) {
+        audiosUri = `${currentUri}/Audios`;
+      } else {
+        throw err;
+      }
+    }
+
+    return { fotosUri, audiosUri };
+  }
+
+  // Buscar nombre libre: baseName.ext → baseName (2).ext, (3), etc.
+  async function getUniqueSafFileUri(folderUri, baseName, ext, mime) {
+    let n = 1;
+
+    while (true) {
+      const suffix = n === 1 ? "" : ` (${n})`;
+      const fileName = `${baseName}${suffix}${ext}`;
+
+      try {
+        const fileUri = await SAF.createFileAsync(folderUri, fileName, mime);
+        return fileUri;
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        if (msg.includes("EEXIST") || msg.includes("already exists")) {
+          n += 1;
+          continue;
+        }
+        throw err;
+      }
     }
   }
 
   // ================================
-  // Inicialización / limpieza mínima
+  // CARGAR MEDIA EXISTENTE AL ENTRAR
   // ================================
   useEffect(() => {
-    // Limpieza defensiva de arrays por si llegan valores raros
-    setAudios((prev) => prev.filter((a) => typeof a === "string"));
-    setAudioProgress((prev) => prev.filter((a) => a && typeof a === "object"));
+    (async () => {
+      try {
+        const rootUri = await getRootUri();
+        if (!rootUri) return;
+
+        const { fotosUri, audiosUri } = await ensureMediaDirectories(rootUri);
+
+        // 📸 Cargar fotos existentes
+        try {
+          const photoUris = (await SAF.readDirectoryAsync(fotosUri)) || [];
+          setPhotos(photoUris);
+        } catch (err) {
+          console.log("⚠️ Error leyendo directorio Fotos:", err);
+        }
+
+        // 🎤 Cargar audios existentes
+        try {
+          const audioUris = (await SAF.readDirectoryAsync(audiosUri)) || [];
+          setAudios(audioUris);
+          setAudioProgress(
+            audioUris.map(() => ({ position: 0, duration: 1 }))
+          );
+        } catch (err) {
+          console.log("⚠️ Error leyendo directorio Audios:", err);
+        }
+      } catch (err) {
+        console.log("Error inicializando media:", err);
+      }
+    })();
   }, []);
 
   // ================================
-  // 📸 FOTOS
+  // 📸 TOMAR FOTO
   // ================================
-
-  const getNextPhotoNumber = () => {
-    const number = photos.length + 1;
-    return String(number).padStart(3, "0"); // 001, 002, 003...
-  };
-
   const takePhoto = async () => {
     if (!cameraRef) return;
-
     const result = await cameraRef.takePictureAsync({ quality: 0.9 });
-
-    const timestamp = formatFileTimestamp();
-    const nextNum = getNextPhotoNumber();
-
-    // Usamos la URI temporal directamente.
-    // Podrías usarla tal cual o, si quisieras, moverla a documentDirectory
-    // SIN copyAsync, pero no es necesario para que funcione bien.
-    const fileUri = result.uri + `?name=ALIM-SUBEST-FOT${nextNum}-${timestamp}`;
-
-    setPhotos((prev) => [...prev, fileUri]);
+    setPhotos((prev) => [...prev, result.uri]); // file://
   };
 
+  // ================================
+  // 📷 MODAL FOTO
+  // ================================
   const openPhoto = (index) => {
     setSelectedPhotoIndex(index);
     setShowModal(true);
   };
 
-  const [showModal, setShowModal] = useState(false);
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-
   const deletePhoto = async () => {
-    const fileToDelete = photos[selectedPhotoIndex];
+    const uri = photos[selectedPhotoIndex];
 
-    // Intentamos borrar el archivo local (si es que está bajo control del sandbox)
     try {
-      await FileSystem.deleteAsync(fileToDelete, { idempotent: true });
+      await FS.deleteAsync(uri, { idempotent: true });
     } catch (err) {
-      console.log("Error al eliminar foto local (puede ser normal):", err);
+      console.log("⚠️ Error borrando foto física:", err);
     }
 
     const updated = photos.filter((_, i) => i !== selectedPhotoIndex);
@@ -203,15 +264,8 @@ export default function DeficiencyMediaScreen() {
   // ================================
   // 🎤 AUDIO
   // ================================
-
-  const getNextAudioNumber = () => {
-    const number = audios.length + 1;
-    return String(number).padStart(3, "0");
-  };
-
   const startRecording = async () => {
     try {
-      // Detener audio en reproducción si lo hubiera
       if (sound) {
         await sound.stopAsync();
         await sound.unloadAsync();
@@ -243,14 +297,9 @@ export default function DeficiencyMediaScreen() {
 
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
+      if (!uri) return;
 
-      const timestamp = formatFileTimestamp();
-      const nextNum = getNextAudioNumber();
-
-      // Igual que con la foto, usamos la URI retornada + sufijo en query para nombre
-      const fileUri = uri + `?name=ALIM-SUBEST-AUD${nextNum}-${timestamp}.m4a`;
-
-      setAudios((prev) => [...prev, fileUri]);
+      setAudios((prev) => [...prev, uri]); // file://
       setAudioProgress((prev) => [...prev, { position: 0, duration: 1 }]);
       setRecording(null);
     } catch (err) {
@@ -264,8 +313,8 @@ export default function DeficiencyMediaScreen() {
     setAudioProgress((prev) => {
       const updated = [...prev];
       updated[index] = {
-        position: status.positionMillis,
-        duration: status.durationMillis ?? 1,
+        position: status.positionMillis || 0,
+        duration: status.durationMillis || 1,
       };
       return updated;
     });
@@ -275,33 +324,29 @@ export default function DeficiencyMediaScreen() {
         const updated = [...prev];
         updated[index] = {
           position: 0,
-          duration: status.durationMillis ?? 1,
+          duration: status.durationMillis || 1,
         };
         return updated;
       });
 
       setCurrentAudioIndex(null);
-      setIsPaused(false);
     }
   };
 
-  const playOrPauseAudio = async (uri, index) => {
+  const playAudio = async (uri, index) => {
     try {
-      // Si es el mismo audio y estaba en pausa → continuar
       if (currentAudioIndex === index && sound && isPaused) {
         await sound.playAsync();
         setIsPaused(false);
         return;
       }
 
-      // Si es el mismo audio y NO estaba en pausa → pausar
       if (currentAudioIndex === index && sound && !isPaused) {
         await sound.pauseAsync();
         setIsPaused(true);
         return;
       }
 
-      // Si cambiamos de audio, detener el anterior
       if (sound) {
         await sound.stopAsync();
         await sound.unloadAsync();
@@ -312,7 +357,7 @@ export default function DeficiencyMediaScreen() {
         { uri },
         {
           shouldPlay: true,
-          positionMillis: audioProgress[index]?.position ?? 0,
+          positionMillis: audioProgress[index]?.position || 0,
         }
       );
 
@@ -321,67 +366,34 @@ export default function DeficiencyMediaScreen() {
       setAudioProgress((prev) => {
         const updated = [...prev];
         updated[index] = {
-          position: audioProgress[index]?.position ?? 0,
-          duration: status.durationMillis ?? 1,
+          position: audioProgress[index]?.position || 0,
+          duration: status.durationMillis || 1,
         };
         return updated;
       });
 
-      newSound.setOnPlaybackStatusUpdate((statusUpdate) =>
-        onPlaybackStatusUpdate(statusUpdate, index)
+      newSound.setOnPlaybackStatusUpdate((st) =>
+        onPlaybackStatusUpdate(st, index)
       );
 
       setSound(newSound);
       setCurrentAudioIndex(index);
       setIsPaused(false);
     } catch (e) {
-      console.log("Error al reproducir audio:", e);
+      console.log("Error play:", e);
     }
   };
 
   const seekAudio = async (value, index) => {
     if (index !== currentAudioIndex) return;
-    if (!sound) return;
-
-    await sound.setPositionAsync(value);
-
+    if (sound) {
+      await sound.setPositionAsync(value);
+    }
     setAudioProgress((prev) => {
       const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        position: value,
-      };
+      updated[index].position = value;
       return updated;
     });
-  };
-
-  const deleteAudio = async (index) => {
-    try {
-      const filePath = audios[index];
-
-      try {
-        await FileSystem.deleteAsync(filePath, { idempotent: true });
-      } catch (err) {
-        console.log("Error al eliminar audio local (puede ser normal):", err);
-      }
-
-      setAudios((prev) => prev.filter((_, i) => i !== index));
-      setAudioProgress((prev) => prev.filter((_, i) => i !== index));
-
-      if (currentAudioIndex === index) {
-        if (sound) {
-          await sound.stopAsync();
-          await sound.unloadAsync();
-        }
-        setSound(null);
-        setCurrentAudioIndex(null);
-        setIsPaused(false);
-      } else if (currentAudioIndex > index) {
-        setCurrentAudioIndex((prev) => prev - 1);
-      }
-    } catch (err) {
-      console.log("Error al eliminar audio:", err);
-    }
   };
 
   const formatTime = (ms) => {
@@ -392,10 +404,33 @@ export default function DeficiencyMediaScreen() {
     return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 
-  // ================================
-  // 💾 GUARDAR / SALIR
-  // ================================
+  const deleteAudio = async (index) => {
+    const uri = audios[index];
 
+    try {
+      await FS.deleteAsync(uri, { idempotent: true });
+    } catch (err) {
+      console.log("⚠️ Error al eliminar audio físico:", err);
+    }
+
+    setAudios((prev) => prev.filter((_, i) => i !== index));
+    setAudioProgress((prev) => prev.filter((_, i) => i !== index));
+
+    if (currentAudioIndex === index) {
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+      }
+      setCurrentAudioIndex(null);
+      setSound(null);
+    } else if (currentAudioIndex !== null && currentAudioIndex > index) {
+      setCurrentAudioIndex(currentAudioIndex - 1);
+    }
+  };
+
+  // ================================
+  // 💾 GUARDAR
+  // ================================
   const confirmStopRecording = async () => {
     if (!recording) return true;
 
@@ -428,56 +463,80 @@ export default function DeficiencyMediaScreen() {
     try {
       const rootUri = await getRootUri();
       if (!rootUri) {
-        Alert.alert("Error", "No se eligió la carpeta raíz SIGRE");
+        Alert.alert("Error", "No se eligió carpeta raíz SIGRE.");
         return;
       }
 
-      // TODO: reemplazar estos valores quemados por datos reales
-      const proyecto = "ProyectoX";
-      const alimentador = "Alim01";
-      const subestacion = "Sub01";
-      const elemento = "Elem01";
-      const codigoElemento = "COD123";
-      const deficiencia = "DEF001";
+      const { fotosUri, audiosUri } = await ensureMediaDirectories(rootUri);
 
-      const proyectoUri = await createFolder(rootUri, proyecto);
-      const alimUri = await createFolder(proyectoUri, alimentador);
-      const subUri = await createFolder(alimUri, subestacion);
-      const elementoUri = await createFolder(subUri, elemento);
-      const codigoUri = await createFolder(elementoUri, codigoElemento);
-      const defUri = await createFolder(codigoUri, deficiencia);
+      // 📸 Copiar solo fotos temporales (file://)
+      for (let i = 0; i < photos.length; i++) {
+        const srcUri = photos[i];
 
-      const fotosUri = await createFolder(defUri, "Fotos");
-      const audiosUri = await createFolder(defUri, "Audios");
+        if (!isTempFile(srcUri)) continue; // ya está en SAF
 
-      // Guardar fotos en SAF
-      for (const photoUri of photos) {
-        const filename = getFileName(photoUri);
-        await saveFileToSAF(fotosUri, photoUri, filename, "image/jpeg");
-      }
+        const timestamp = formatFileTimestampMs();
+        const baseName = `FOT-${timestamp}`;
+        const ext = ".jpg";
 
-      // Guardar audios en SAF
-      for (const audioUri of audios) {
-        const filename = getFileName(audioUri);
-        await saveFileToSAF(audiosUri, audioUri, filename, "audio/mp4");
-      }
+        const destFileUri = await getUniqueSafFileUri(
+          fotosUri,
+          baseName,
+          ext,
+          "image/jpeg"
+        );
 
-      // Guardar nota en SAF
-      if (note.trim() !== "") {
-        const tempNoteFile =
-          (FileSystem.documentDirectory || "") + "nota_temp.txt";
-
-        await FileSystem.writeAsStringAsync(tempNoteFile, note, {
-          encoding: FileSystem.EncodingType.UTF8,
+        const base64 = await FS.readAsStringAsync(srcUri, {
+          encoding: FS.EncodingType.Base64,
         });
 
-        await saveFileToSAF(defUri, tempNoteFile, "nota.txt", "text/plain");
+        await FS.writeAsStringAsync(destFileUri, base64, {
+          encoding: FS.EncodingType.Base64,
+        });
+
+        try {
+          await FS.deleteAsync(srcUri, { idempotent: true });
+        } catch (err) {
+          console.log("⚠️ Error borrando foto temporal:", err);
+        }
       }
 
-      Alert.alert("Listo", "Fotos, audios y nota guardados en SIGRE");
+      // 🎤 Copiar solo audios temporales (file://)
+      for (let i = 0; i < audios.length; i++) {
+        const srcUri = audios[i];
+
+        if (!isTempFile(srcUri)) continue;
+
+        const timestamp = formatFileTimestampMs();
+        const baseName = `AUD-${timestamp}`;
+        const ext = ".m4a";
+
+        const destFileUri = await getUniqueSafFileUri(
+          audiosUri,
+          baseName,
+          ext,
+          "audio/mp4"
+        );
+
+        const base64 = await FS.readAsStringAsync(srcUri, {
+          encoding: FS.EncodingType.Base64,
+        });
+
+        await FS.writeAsStringAsync(destFileUri, base64, {
+          encoding: FS.EncodingType.Base64,
+        });
+
+        try {
+          await FS.deleteAsync(srcUri, { idempotent: true });
+        } catch (err) {
+          console.log("⚠️ Error borrando audio temporal:", err);
+        }
+      }
+
+      Alert.alert("Listo", "Fotos y audios guardados en la carpeta SIGRE.");
       router.replace("/(drawer)/inspection");
     } catch (err) {
-      console.log("Error guardando SAF:", err);
+      console.log("Error guardando en SAF:", err);
       Alert.alert("Error", "No se pudo guardar.");
     }
   };
@@ -503,6 +562,7 @@ export default function DeficiencyMediaScreen() {
               saveToLocalByLongPress={false}
             />
 
+            {/* BORRAR */}
             <TouchableOpacity
               onPress={deletePhoto}
               style={{
@@ -519,6 +579,7 @@ export default function DeficiencyMediaScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* CERRAR */}
             <TouchableOpacity
               onPress={() => setShowModal(false)}
               style={{
@@ -587,10 +648,7 @@ export default function DeficiencyMediaScreen() {
           <Text style={styles.sectionTitle}>🎤 Audios</Text>
 
           {!recording ? (
-            <TouchableOpacity
-              style={styles.buttonGreen}
-              onPress={startRecording}
-            >
+            <TouchableOpacity style={styles.buttonGreen} onPress={startRecording}>
               <Text style={styles.buttonText}>REC</Text>
             </TouchableOpacity>
           ) : (
@@ -627,7 +685,7 @@ export default function DeficiencyMediaScreen() {
           {audios.map((uri, i) => (
             <View key={i} style={styles.audioContainer}>
               <TouchableOpacity
-                onPress={() => playOrPauseAudio(uri, i)}
+                onPress={() => playAudio(uri, i)}
                 style={styles.audioPlayButton}
               >
                 <Text style={{ color: "white" }}>
@@ -638,7 +696,6 @@ export default function DeficiencyMediaScreen() {
               <View style={{ flex: 1 }}>
                 <Text
                   style={{ fontSize: 12, fontWeight: "bold", color: "#222" }}
-                  numberOfLines={1}
                 >
                   {getFileName(uri)}
                 </Text>
@@ -651,8 +708,8 @@ export default function DeficiencyMediaScreen() {
                 <Slider
                   style={{ width: "100%" }}
                   minimumValue={0}
-                  maximumValue={audioProgress[i]?.duration ?? 1}
-                  value={audioProgress[i]?.position ?? 0}
+                  maximumValue={audioProgress[i]?.duration || 1}
+                  value={audioProgress[i]?.position || 0}
                   onSlidingComplete={(v) => seekAudio(v, i)}
                   minimumTrackTintColor="#007bff"
                   maximumTrackTintColor="#ccc"
@@ -669,25 +726,7 @@ export default function DeficiencyMediaScreen() {
           ))}
         </View>
 
-        {/* NOTA */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📝 Nota</Text>
-          <TextInput
-            style={styles.textArea}
-            multiline
-            value={note}
-            onChangeText={(t) => {
-              if (t.length <= 144) setNote(t);
-            }}
-            textAlignVertical="top"
-            maxLength={144}
-          />
-          <View style={styles.charCounterContainer}>
-            <Text style={styles.charCounter}>{note.length}/144</Text>
-          </View>
-        </View>
-
-        {/* BOTONES ABAJO */}
+        {/* BOTONES */}
         <View style={styles.bottomButtons}>
           <TouchableOpacity
             style={styles.cancelBtn}
@@ -713,25 +752,6 @@ export default function DeficiencyMediaScreen() {
    ESTILOS
 ================================== */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: "#f5f5f5",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-  sub: {
-    fontSize: 16,
-    marginTop: 5,
-  },
-  path: {
-    fontSize: 12,
-    color: "#555",
-    marginTop: 3,
-    marginBottom: 15,
-  },
   section: {
     marginBottom: 20,
   },
@@ -786,6 +806,14 @@ const styles = StyleSheet.create({
   captureText: {
     fontWeight: "bold",
   },
+  closeCameraButton: {
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 10,
+    position: "absolute",
+    top: 10,
+    right: 10,
+    borderRadius: 6,
+  },
   carousel: {
     height: 100,
   },
@@ -795,12 +823,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
-  textArea: {
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 5,
-    height: 120,
-    textAlignVertical: "top",
+  audioContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    gap: 10,
+  },
+  audioPlayButton: {
+    backgroundColor: "#007bff",
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 25,
   },
   bottomButtons: {
     flexDirection: "row",
@@ -824,41 +859,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "bold",
   },
-  closeCameraButton: {
-    backgroundColor: "rgba(0,0,0,0.6)",
-    padding: 10,
-    position: "absolute",
-    top: 10,
-    right: 10,
-    borderRadius: 6,
-  },
-  audioContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    gap: 10,
-  },
-  audioPlayButton: {
-    backgroundColor: "#007bff",
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 25,
-  },
   scrollContent: {
     padding: 15,
     paddingBottom: 40,
     backgroundColor: "#f5f5f5",
-  },
-  charCounterContainer: {
-    width: "100%",
-    alignItems: "flex-end",
-    marginTop: 4,
-    paddingRight: 4,
-  },
-  charCounter: {
-    fontSize: 12,
-    color: "#555",
   },
 });

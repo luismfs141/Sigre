@@ -1,34 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-  <!-- 📍 Ubicación -->
-  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-
-  <!-- 📷 Cámara / Audio -->
-  <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.RECORD_AUDIO" />
-  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
-  <!-- 🎧/📸 Android 13+ (lectura de media) -->
-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-  <!-- 🌐 Otros -->
-  <uses-permission android:name="android.permission.INTERNET" />
-  <uses-permission android:name="android.permission.VIBRATE" />
-  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-  <!-- ❌ NADA de READ_/WRITE_EXTERNAL_STORAGE
-       ❌ NADA de requestLegacyExternalStorage -->
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+  <uses-permission android:name="android.permission.VIBRATE"/>
 
   <queries>
     <intent>
-      <action android:name="android.intent.action.VIEW" />
-      <category android:name="android.intent.category.BROWSABLE" />
-      <data android:scheme="https" />
+      <action android:name="android.intent.action.VIEW"/>
+      <category android:name="android.intent.category.BROWSABLE"/>
+      <data android:scheme="https"/>
     </intent>
   </queries>
 
@@ -42,21 +33,12 @@
     android:supportsRtl="true"
     android:enableOnBackInvokedCallback="false">
 
-    <!-- 🔑 GOOGLE MAPS API KEY -->
-    <meta-data
-      android:name="com.google.android.geo.API_KEY"
-      android:value="AIzaSyBxvwyvpOZ9D0yd00Kwb_9Kg_ke7pEy8-M" />
+    <meta-data android:name="com.google.android.geo.API_KEY"
+               android:value="AIzaSyBxvwyvpOZ9D0yd00Kwb_9Kg_ke7pEy8-M"/>
 
-    <!-- 🔧 Expo Updates (desactivado) -->
-    <meta-data
-      android:name="expo.modules.updates.ENABLED"
-      android:value="false" />
-    <meta-data
-      android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH"
-      android:value="ALWAYS" />
-    <meta-data
-      android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS"
-      android:value="0" />
+    <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
 
     <activity
       android:name=".MainActivity"
@@ -68,21 +50,19 @@
       android:screenOrientation="portrait">
 
       <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
 
       <intent-filter>
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="sigremovil" />
-        <data android:scheme="exp+sigremovil" />
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="sigremovil"/>
+        <data android:scheme="exp+sigremovil"/>
       </intent-filter>
     </activity>
 
-    <uses-library
-      android:name="org.apache.http.legacy"
-      android:required="false" />
+    <uses-library android:name="org.apache.http.legacy" android:required="false"/>
   </application>
 </manifest>
