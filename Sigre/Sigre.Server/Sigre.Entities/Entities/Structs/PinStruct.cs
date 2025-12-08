@@ -21,11 +21,11 @@ namespace Sigre.Entities.Structs
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public int IdAlimentador { get; set; }
+        public int? IdSed { get; set; }
         public string ElementCode { get; set; }
         public bool Inspeccionado { get; set; }
         public bool Tercero { get; set; }
         public string? NodoInicial { get; set; }
         public string? NodoFinal { get; set; }
-        public int? IdSed { get; set; }
     }
 }

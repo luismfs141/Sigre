@@ -52,21 +52,44 @@ namespace Sigre.Server.Controllers
             {
                 DAFeeder dAFeeder = new DAFeeder();
 
-                byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(
-                    request.Feeders,
-                    request.UserId,
-                    request.x_id
-                );
+                //BAJA TENSION
+                if(request.Project == 0)
+                {
+                    byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqliteBT(
+                    request.Ids,
+                    request.UserId
+                    );
 
-                if (fileBytes == null || fileBytes.Length == 0)
-                    return NotFound("No se generó el archivo SQLite.");
+                    if (fileBytes == null || fileBytes.Length == 0)
+                        return NotFound("No se generó el archivo SQLite.");
 
-                // Nombre dinámico
-                string fileName = string.IsNullOrEmpty(request.FileName)
-                    ? "sigre_offline.db"
-                    : request.FileName;
+                    // Nombre dinámico
+                    string fileName = string.IsNullOrEmpty(request.FileName)
+                        ? "sigre_offline.db"
+                        : request.FileName;
 
-                return File(fileBytes, "application/octet-stream", fileName);
+                    return File(fileBytes, "application/octet-stream", fileName);
+                }
+
+                //MEDIA TENSION
+                else
+                {
+                    byte[] fileBytes = dAFeeder.DAFE_CreateDatabaseSqlite(
+                    request.Ids,
+                    request.UserId
+                    );
+
+                    if (fileBytes == null || fileBytes.Length == 0)
+                        return NotFound("No se generó el archivo SQLite.");
+
+                    // Nombre dinámico
+                    string fileName = string.IsNullOrEmpty(request.FileName)
+                        ? "sigre_offline.db"
+                        : request.FileName;
+
+                    return File(fileBytes, "application/octet-stream", fileName);
+                }
+
             }
             catch (Exception ex)
             {
@@ -85,8 +108,8 @@ namespace Sigre.Server.Controllers
     public class DatabaseExportRequest
     {
         public int UserId { get; set; }
-        public List<int> Feeders { get; set; } = new();
-        public int x_id { get; set; }
+        public List<int> Ids { get; set; } = new();
+        public int Project { get; set; }
 
         public string FileName { get; set; }
     }

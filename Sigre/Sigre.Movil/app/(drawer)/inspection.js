@@ -1,67 +1,98 @@
-import { useRouter } from "expo-router";
-
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
-import { useState } from "react";
-import { Button, Dimensions, FlatList, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Button,
+  Dimensions,
+  FlatList,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import DataModal from "../../components/Modal/DataModal";
+import ListaDefModal from "../../components/Modal/ListaDefModal";
+import PhotoModal from "../../components/Modal/PhotoModal";
 import { useDatos } from "../../context/DatosContext";
+import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem } = useDatos();
+  const { selectedItem, selectedProject } = useDatos();
   const insets = useSafeAreaInsets();
-  const screenWidth = Dimensions.get('window').width;
-const router = useRouter();
+  const screenWidth = Dimensions.get("window").width;
+  const router = useRouter();
 
-  if (!selectedItem) {
-    return (
-      <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text>No hay elemento seleccionado</Text>
-      </SafeAreaView>
-    );
-  }
+  const { fetchTypificationsByElement } = useTypification();
 
   const [items, setItems] = useState([
     {
       id: 0,
       type: "general",
       name: "Datos Generales",
-      data: { elementCode: selectedItem.ElementCode },
+      data: { elementCode: selectedItem?.PostCodigoNodo },
       photos: [],
       audio: null
-    },
-    { id: 1, type: "def", name: "Deficiencia 1", data: { severity: "Alta" }, photos: [], audio: null },
-    { id: 2, type: "def", name: "Deficiencia 2", data: { severity: "Media" }, photos: [], audio: null },
+    }
   ]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [photoOverlayVisible, setPhotoOverlayVisible] = useState(false);
-  const [currentItem, setCurrentItem] = useState(null);
   const [newDefModalVisible, setNewDefModalVisible] = useState(false);
+  const [currentItem, setCurrentItem] = useState(null);
+  const [availableDefs, setAvailableDefs] = useState([]);
+  const [tableId, setTableId] = useState(null);
 
-  const availableDefs = [
-    { id: 1, name: "Deficiencia A" },
-    { id: 2, name: "Deficiencia B" },
-    { id: 3, name: "Deficiencia C" },
-  ];
+  // -------------------- Cargar tipificaciones por elemento --------------------
+  useEffect(() => {
+    if (!selectedItem) return;
 
-  const addNewDeficiency = (def) => {
-    const newDef = {
-      id: Date.now(),
-      type: "def",
-      name: def?.name || "Sin Deficiencia",
-      data: {},
-      photos: [],
-      audio: null,
+    // Determinar tableId según tipo de elemento
+    const isPost = selectedItem.PostCodigoNodo?.startsWith("PTO");
+    const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano
+    setTableId(tid);
+
+    const loadDefs = async () => {
+      const defs = await fetchTypificationsByElement(tid);
+      setAvailableDefs(defs);
+
+      // Limpiar deficiencias previas del estado items
+      setItems(prev => prev.filter(i => i.type !== "def"));
     };
-    setItems((prev) => [...prev, newDef]);
+
+    loadDefs();
+  }, [selectedItem]);
+
+  // -------------------- IDs ya usados --------------------
+  const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);
+
+  // -------------------- Agregar nueva deficiencia --------------------
+  const addNewDeficiency = (def) => {
+    console.log(def);
+    const newDef = {
+      id: def.id,
+      type: "def",
+      defId: def.TypificationId ?? def.id,
+      name: def.code,
+      data: { 
+        severity: "",
+        detail: def.detail
+      },
+      photos: [],
+      audio: null
+    };
+
+    setItems(prev => [...prev, newDef]);
     setNewDefModalVisible(false);
   };
-
+  // -------------------- Render item --------------------
   const renderItem = ({ item }) => (
     <View style={[styles.itemCard, { width: screenWidth }]}>
       <View style={styles.itemHeader}>
         <Text style={styles.itemTitle}>{item.name}</Text>
         <View style={styles.itemButtons}>
+          {/* Botón formulario */}
           <TouchableOpacity
             style={styles.buttonWrapper}
             onPress={() => {
@@ -72,31 +103,32 @@ const router = useRouter();
             <MaterialIcons name="assignment" size={36} color="#007bff" />
           </TouchableOpacity>
 
+          {/* Botón multimedia */}
           <TouchableOpacity
-  style={styles.buttonWrapper}
-  onPress={() => {
-    router.push({
-      pathname: "/(drawer)/registerDef",
-      params: {
-        id: item.id,
-        name: item.name,
-        severity: item.data?.severity ?? "",
-      }
-    });
-  }}
->
-  <FontAwesome5 name="camera" size={36} color="#28a745" />
-</TouchableOpacity>
-
+            style={styles.buttonWrapper}
+            onPress={() => {
+              router.push({
+                pathname: "/(drawer)/registerDef",
+                params: {
+                  id: item.id,
+                  name: item.name,
+                  severity: item.data?.severity ?? ""
+                }
+              });
+            }}
+          >
+            <FontAwesome5 name="camera" size={36} color="#28a745" />
+          </TouchableOpacity>
         </View>
       </View>
 
+      {/* Datos adicionales */}
       {item.type === "general" && item.data?.elementCode && (
         <Text style={{ marginTop: 4 }}>Código: {item.data.elementCode}</Text>
       )}
 
-      {item.type === "def" && item.data?.severity && (
-        <Text style={{ marginTop: 4 }}>Severidad: {item.data.severity}</Text>
+      {item.type === "def" && (
+        <Text style={{ marginTop: 4 }}>{item.data.detail}</Text>
       )}
     </View>
   );
@@ -110,46 +142,31 @@ const router = useRouter();
         contentContainerStyle={{ paddingBottom: 20 }}
       />
 
+      {/* Botón nueva deficiencia */}
       <View style={{ padding: 8, backgroundColor: "#fff" }}>
         <Button title="Nueva Deficiencia" onPress={() => setNewDefModalVisible(true)} />
       </View>
 
-      {/* Modales */}
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={{ fontSize: 16, fontWeight: "bold" }}>Registrar Datos - {currentItem?.name}</Text>
-            <Text>Formulario de ejemplo...</Text>
-            <Button title="Cerrar" onPress={() => setModalVisible(false)} />
-          </View>
-        </View>
-      </Modal>
+      {/* -------------------- MODALS -------------------- */}
+      <DataModal
+        visible={modalVisible}
+        item={currentItem}
+        onClose={() => setModalVisible(false)}
+      />
 
-      <Modal visible={photoOverlayVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={{ fontSize: 16, fontWeight: "bold" }}>Multimedia - {currentItem?.name}</Text>
-            <Text>Tomar hasta 4 fotos y grabar audio</Text>
-            <Button title="Cerrar" onPress={() => setPhotoOverlayVisible(false)} />
-          </View>
-        </View>
-      </Modal>
+      <PhotoModal
+        visible={photoOverlayVisible}
+        item={currentItem}
+        onClose={() => setPhotoOverlayVisible(false)}
+      />
 
-      <Modal visible={newDefModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContent}>
-            <TouchableOpacity onPress={() => addNewDeficiency(null)}>
-              <Text style={styles.modalItem}>Sin Deficiencia</Text>
-            </TouchableOpacity>
-            {availableDefs.map((def) => (
-              <TouchableOpacity key={def.id} onPress={() => addNewDeficiency(def)}>
-                <Text style={styles.modalItem}>{def.name}</Text>
-              </TouchableOpacity>
-            ))}
-            <Button title="Cerrar" onPress={() => setNewDefModalVisible(false)} />
-          </ScrollView>
-        </View>
-      </Modal>
+      <ListaDefModal
+        visible={newDefModalVisible}
+        defs={availableDefs.filter(d => !usedDefIds.includes(d.TypificationId ?? d.id))}
+        usedIds={usedDefIds}
+        onSelect={addNewDeficiency}
+        onClose={() => setNewDefModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -165,7 +182,7 @@ const styles = StyleSheet.create({
   itemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center", // centrado vertical
+    alignItems: "center"
   },
   itemTitle: {
     fontWeight: "bold",
@@ -174,28 +191,11 @@ const styles = StyleSheet.create({
   itemButtons: {
     flexDirection: "row",
     gap: 12,
-    alignItems: "center", // centrado vertical
+    alignItems: "center",
     top: "15%"
   },
   buttonWrapper: {
     justifyContent: "center",
     alignItems: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    margin: 20,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 16,
-  },
-  modalItem: {
-    padding: 12,
-    fontSize: 16,
-    borderBottomWidth: 0.5,
-    borderColor: "#ccc",
-  },
+  }
 });

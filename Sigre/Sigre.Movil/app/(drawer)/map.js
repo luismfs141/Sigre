@@ -198,15 +198,15 @@ export const Map = () => {
 
       // --- Lógica corta y optimizada ---
       if (item.Type === 5) {
-        const data = await getPostData(item.IdOriginal);  // 🔹 devuelve array
-        datoElemento = data[0];                // 🔹 usar el objeto real
+        const data = await getPostData(item.IdOriginal);
+        datoElemento = data[0];
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
 
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
         codigoElemento = item.VanoCodigo;
-        datoElemento = item;                      // 🔹 el vano ya es el dato
+        datoElemento = item;
 
       } else {
         tipoElemento = "Desconocido";

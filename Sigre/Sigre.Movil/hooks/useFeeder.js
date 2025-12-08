@@ -55,6 +55,7 @@ export function useFeeder(userId = null) {
 
   /** 🔹 Obtener alimentadores por usuario */
 const getFeedersByUser = useCallback(async (id = userId) => {
+  console.log(id);
   if (!id) return [];
   try {
     setLoading(true);

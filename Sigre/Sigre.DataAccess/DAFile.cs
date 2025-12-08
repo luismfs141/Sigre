@@ -66,6 +66,22 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
+        public List<Archivo> DAARCH_GetBySeds(List<int> x_seds)
+        {
+            using var ctx = new SigreContext();
+
+            var query =
+                from ar in ctx.Archivos
+                join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
+                join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno
+                join s in ctx.Seds on p.PostSubestacion equals s.SedInterno
+                where df.DefiTipoElemento == "POST"
+                      && x_seds.Contains(s.SedInterno)
+                select ar;
+
+            return query.ToList();
+        }
+
         public Archivo DAARCH_GetTableData()
         {
             SigreContext ctx = new SigreContext();

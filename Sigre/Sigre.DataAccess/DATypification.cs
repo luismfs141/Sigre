@@ -77,5 +77,29 @@ namespace Sigre.DataAccess
 
             return query.ToList();
         }
+
+        public List<TypificationStruct> DATIPI_GetByBT()
+        {
+            using var ctx = new SigreContext();
+
+
+            var query =
+                from ti in ctx.Tipificaciones
+                join cd in ctx.Codigos on ti.CodiInterno equals cd.CodiInterno
+                join cm in ctx.Componentes on cd.CompInterno equals cm.CompInterno
+                join tb in ctx.Tablas on cm.TablInterno equals tb.TablInterno
+                where new[] { 6, 7, 8, 9 }.Contains(tb.TablInterno)
+                select new TypificationStruct
+                {
+                    TableId = tb.TablInterno,
+                    Table = tb.TablNombre,
+                    Component = cm.CompComponente,
+                    Code = cd.CodiCodigo,
+                    Typification = ti.TipoDescripcion,
+                    TypificationId = ti.TipiInterno,
+                };
+
+            return query.ToList();
+        }
     }
 }

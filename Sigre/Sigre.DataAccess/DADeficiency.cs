@@ -160,6 +160,54 @@ namespace Sigre.DataAccess
             return query.ToList();
         }
 
+        public List<PinStruct> DADEFI_GetPinsBySubestacion(List<int> x_seds)
+        {
+            using var ctx = new SigreContext();
+
+            // DEFICIENCIAS DE POST
+            var postQuery =
+                from s in ctx.Seds
+                join a in ctx.Alimentadores on s.AlimInterno equals a.AlimInterno
+                join p in ctx.Postes on s.SedInterno equals p.PostSubestacion
+                join d in ctx.Deficiencias on p.PostInterno equals d.DefiIdElemento
+                where d.DefiTipoElemento == "POST"
+                      && x_seds.Contains(s.SedInterno)
+                select new PinStruct
+                {
+                    Id = d.DefiInterno,
+                    IdAlimentador = a.AlimInterno,
+                    IdSed = s.SedInterno,
+                    Label = "",
+                    Type = ElectricElement.Deficiency,
+                    Latitude = d.DefiLatitud,
+                    Longitude = d.DefiLongitud,
+                    Inspeccionado = d.DefiInspeccionado
+                };
+
+            // DEFICIENCIAS DE VANO
+            var vanoQuery =
+                from s in ctx.Seds
+                join a in ctx.Alimentadores on s.AlimInterno equals a.AlimInterno
+                join v in ctx.Vanos on s.SedInterno equals v.VanoSubestacion
+                join d in ctx.Deficiencias on v.VanoInterno equals d.DefiIdElemento
+                where d.DefiTipoElemento == "VANO"
+                      && x_seds.Contains(s.SedInterno)
+                select new PinStruct
+                {
+                    Id = d.DefiInterno,
+                    IdAlimentador = a.AlimInterno,
+                    IdSed = s.SedInterno,
+                    Label = "",
+                    Type = ElectricElement.Deficiency,
+                    Latitude = d.DefiLatitud,
+                    Longitude = d.DefiLongitud,
+                    Inspeccionado = d.DefiInspeccionado
+                };
+
+            return postQuery.Union(vanoQuery).ToList();
+        }
+
+
         public List<Deficiencia> DADEFI_GetByFeeder(int x_feeder_id)
         {
             SigreContext ctx = new SigreContext();

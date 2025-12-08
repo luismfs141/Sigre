@@ -1,106 +1,36 @@
-// import React, { createContext, useContext, useEffect, useState } from "react";
-// import { isDatabaseAvailable, openDatabase } from "../database/offlineDB/db";
-
-// const DatosContext = createContext();
-
-// export const DatosProvider = ({ children }) => {
-
-//   // 🔵 Estados agregados para BD
-//   const [dbReady, setDbReady] = useState(false);
-//   const [loadingDB, setLoadingDB] = useState(true);
-
-//   const openLocalDB = async () => {
-//     setLoadingDB(true);
-//     const exists = await isDatabaseAvailable();
-
-//     if (!exists) {
-//       console.log("⚠ No existe base local");
-//       setDbReady(false);
-//       setLoadingDB(false);
-//       return;
-//     }
-
-//     const db = await openDatabase();
-//     if (db) setDbReady(true);
-
-//     setLoadingDB(false);
-//   };
-
-//   // 🟢 intentar abrir BD al iniciar app
-//   useEffect(() => {
-//     openLocalDB();
-//   }, []);
-
-//   // -------------------- TUS ESTADOS ------------------------
-//   const [selectedFeeder, setSelectedFeeder] = useState(null);
-//   const [feeders, setFeeders] = useState([]);
-//   const [pins, setPins] = useState([]);
-//   const [gaps, setGaps] = useState([]);
-//   const [selectedPost, setSelectedPost] = useState([]);
-//   const [selectedSed, setSelectedSed] = useState([]);
-//   const [totalPins, setTotalPins] = useState([]);
-//   const [selectedItem, setSelectedItem] = useState([]);
-//   const [selectedProject, setSelectedProject] = useState(0);
-
-//   const [region, setRegion] = useState({
-//     latitude: -12.0464,
-//     longitude: -77.0428,
-//     latitudeDelta: 0.05,
-//     longitudeDelta: 0.05
-//   });
-
-//   const setSelectedPin = (pin) => {
-//     setSelectedItem({ ...pin, type: "pin" });
-//   };
-
-//   const setSelectedGap = (gap) => {
-//     setSelectedItem({ ...gap, type: "gap" });
-//   };
-
-//   return (
-//     <DatosContext.Provider
-//       value={{
-//         // BD
-//         dbReady,
-//         loadingDB,
-//         openLocalDB,
-
-//         // Datos
-//         selectedFeeder, setSelectedFeeder,
-//         feeders, setFeeders,
-//         pins, setPins,
-//         gaps, setGaps,
-//         selectedPost, setSelectedPost,
-//         selectedSed, setSelectedSed,
-//         totalPins, setTotalPins,
-//         selectedItem, setSelectedItem,
-//         setSelectedPin,
-//         setSelectedGap,
-//         region, setRegion,
-//         selectedProject, setSelectedProject
-//       }}
-//     >
-//       {children}
-//     </DatosContext.Provider>
-//   );
-// };
-
-// export const useDatos = () => useContext(DatosContext);
-
-// context/DatosContext.js
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { isDatabaseAvailable, openDatabase } from "../database/offlineDB/db";
+import { closeDatabase, isDatabaseAvailable, openDatabase } from "../database/offlineDB/db";
 
 const DatosContext = createContext();
 
 export const DatosProvider = ({ children }) => {
 
-  // BD dinámica
-  const [dbName, setDbName] = useState(null); // <--- NUEVO
+  // ------------------ ESTADO BD -------------------------
+  const [dbName, setDbName] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [loadingDB, setLoadingDB] = useState(true);
 
-  // Abre BD existente (solo si sabemos el nombre)
+  // -------------------------------------------------------
+  // Cargar última base al iniciar APP
+  // -------------------------------------------------------
+  const loadLastDatabaseName = async () => {
+    try {
+      const savedName = await AsyncStorage.getItem("db_name");
+      if (savedName) {
+        console.log("📦 Última base cargada:", savedName);
+        setDbName(savedName);
+      } else {
+        console.log("⚠ No hay base previa guardada.");
+      }
+    } catch (err) {
+      console.log("❌ Error leyendo db_name:", err);
+    }
+  };
+
+  // -------------------------------------------------------
+  // Abrir la base existente
+  // -------------------------------------------------------
   const openLocalDB = async () => {
     setLoadingDB(true);
 
@@ -111,19 +41,18 @@ export const DatosProvider = ({ children }) => {
       return;
     }
 
-    const exists = await isDatabaseAvailable(dbName); // usa la función del db.js
+    const exists = await isDatabaseAvailable(dbName);
     if (!exists) {
-      console.log("⚠ No existe base local:", dbName);
+      console.log("⚠ No existe la base local:", dbName);
       setDbReady(false);
       setLoadingDB(false);
       return;
     }
 
-    // Asegurar que openDatabase reciba el nombre correcto
     try {
-      const db = await openDatabase(dbName);
+      await openDatabase(dbName);
       console.log("ready:", dbName);
-      if (db) setDbReady(true);
+      setDbReady(true);
     } catch (err) {
       console.error("openLocalDB -> error:", err);
       setDbReady(false);
@@ -132,11 +61,52 @@ export const DatosProvider = ({ children }) => {
     setLoadingDB(false);
   };
 
-  // Intentar abrir al inicio solo si ya recordamos el nombre
+  // -------------------------------------------------------
+  // Comprobar base antes de cada pantalla
+  // -------------------------------------------------------
+  const checkDatabase = async () => {
+    if (!dbName) return false;
+    const exists = await isDatabaseAvailable(dbName);
+    if (!exists) {
+      console.warn("❌ checkDatabase -> La base NO existe:", dbName);
+      setDbReady(false);
+      return false;
+    }
+    return true;
+  };
+
+  // -------------------------------------------------------
+  // Cerrar BD actual
+  // -------------------------------------------------------
+  const closeLocalDatabase = async () => {
+    try {
+      await closeDatabase();
+    } catch (err) {
+      console.log("❌ Error cerrando DB:", err);
+    }
+  };
+
+  // -------------------------------------------------------
+  // Cambiar a nueva base descargada
+  // -------------------------------------------------------
+  const setNewDatabase = async (newName) => {
+    console.log("🔄 setNewDatabase ejecutado:", newName);
+
+    await closeLocalDatabase();       // cerrar actual
+    await AsyncStorage.setItem("db_name", newName); // guardar nombre
+    setDbName(newName);               // disparar openLocalDB automáticamente
+  };
+
+  // Cuando cambia dbName → abrir base
   useEffect(() => {
     if (dbName) openLocalDB();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbName]);
+
+  // Al iniciar app → cargar última base
+  useEffect(() => {
+    loadLastDatabaseName();
+  }, []);
 
   // -------------------- ESTADOS DE DATOS ------------------------
   const [selectedFeeder, setSelectedFeeder] = useState(null);
@@ -156,13 +126,8 @@ export const DatosProvider = ({ children }) => {
     longitudeDelta: 0.05
   });
 
-  const setSelectedPin = (pin) => {
-    setSelectedItem({ ...pin, type: "pin" });
-  };
-
-  const setSelectedGap = (gap) => {
-    setSelectedItem({ ...gap, type: "gap" });
-  };
+  const setSelectedPin = (pin) => setSelectedItem({ ...pin, type: "pin" });
+  const setSelectedGap = (gap) => setSelectedItem({ ...gap, type: "gap" });
 
   return (
     <DatosContext.Provider
@@ -170,9 +135,11 @@ export const DatosProvider = ({ children }) => {
         // BD
         dbReady,
         loadingDB,
-        dbName,            // <--- EXPUESTO
-        setDbName,         // <--- USADO AL DESCARGAR BD NUEVA
+        dbName,
+        setDbName,
         openLocalDB,
+        checkDatabase,
+        setNewDatabase,
 
         // Datos
         selectedFeeder, setSelectedFeeder,
@@ -186,7 +153,7 @@ export const DatosProvider = ({ children }) => {
         setSelectedPin,
         setSelectedGap,
         region, setRegion,
-        selectedProject, setSelectedProject
+        selectedProject, setSelectedProject,
       }}
     >
       {children}
