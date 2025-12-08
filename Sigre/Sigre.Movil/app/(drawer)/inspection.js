@@ -19,12 +19,12 @@ import { useDatos } from "../../context/DatosContext";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem, selectedProject } = useDatos();
+  const { selectedItem } = useDatos();
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
 
-  const { fetchTypificationsByElement } = useTypification();
+  const { fetchTypificationsByTypeElement, fetchTypificationsByElement } = useTypification();
 
   const [items, setItems] = useState([
     {
@@ -44,21 +44,41 @@ export default function Inspection() {
   const [availableDefs, setAvailableDefs] = useState([]);
   const [tableId, setTableId] = useState(null);
 
-  // -------------------- Cargar tipificaciones por elemento --------------------
+  // -------------------- Cargar tipificaciones por tipo y por elemento --------------------
   useEffect(() => {
     if (!selectedItem) return;
 
-    // Determinar tableId según tipo de elemento
     const isPost = selectedItem.PostCodigoNodo?.startsWith("PTO");
     const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano
     setTableId(tid);
 
     const loadDefs = async () => {
-      const defs = await fetchTypificationsByElement(tid);
-      setAvailableDefs(defs);
+      try {
+        // 1️⃣ Tipificaciones disponibles para agregar
+        const defsByType = await fetchTypificationsByTypeElement(tid);
 
-      // Limpiar deficiencias previas del estado items
-      setItems(prev => prev.filter(i => i.type !== "def"));
+        // 2️⃣ Tipificaciones ya asociadas al elemento
+        const defsByElement = await fetchTypificationsByElement(selectedItem.id, tid);
+
+        // Mapear las existentes al formato de items
+        const existingDefs = defsByElement.map(def => ({
+          id: def.TypificationId,
+          type: "def",
+          defId: def.TypificationId,
+          name: def.code,
+          data: { severity: "", detail: def.detail },
+          photos: [],
+          audio: null
+        }));
+
+        // Limpiar deficiencias previas y agregar las existentes
+        setItems(prev => [...prev.filter(i => i.type !== "def"), ...existingDefs]);
+
+        // Guardar todas las tipificaciones disponibles
+        setAvailableDefs(defsByType);
+      } catch (error) {
+        console.error("Error cargando tipificaciones:", error);
+      }
     };
 
     loadDefs();
@@ -69,7 +89,6 @@ export default function Inspection() {
 
   // -------------------- Agregar nueva deficiencia --------------------
   const addNewDeficiency = (def) => {
-    console.log(def);
     const newDef = {
       id: def.id,
       type: "def",
@@ -86,6 +105,7 @@ export default function Inspection() {
     setItems(prev => [...prev, newDef]);
     setNewDefModalVisible(false);
   };
+
   // -------------------- Render item --------------------
   const renderItem = ({ item }) => (
     <View style={[styles.itemCard, { width: screenWidth }]}>
