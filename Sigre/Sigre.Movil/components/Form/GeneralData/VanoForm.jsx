@@ -1,47 +1,59 @@
 // DataGeneral/VanoForm.jsx
 import { useState } from "react";
-import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function VanoForm({ data, onSave }) {
   const [form, setForm] = useState({
     VanoInterno: data.VanoInterno ?? "",
     EstadoOffLine: data.EstadoOffLine ?? "",
     VanoCodigo: data.VanoCodigo ?? "",
-    VanoLatitudIni: data.VanoLatitudIni ?? "",
-    VanoLongitudIni: data.VanoLongitudIni ?? "",
-    VanoLatitudFin: data.VanoLatitudFin ?? "",
-    VanoLongitudFin: data.VanoLongitudFin ?? "",
-    AlimInterno: data.AlimInterno ?? "",
     VanoEtiqueta: data.VanoEtiqueta ?? "",
     VanoTerceros: data.VanoTerceros ?? "",
-    VanoMaterial: data.VanoMaterial ?? "",
     VanoNodoInicial: data.VanoNodoInicial ?? "",
     VanoNodoFinal: data.VanoNodoFinal ?? "",
     VanoInspeccionado: data.VanoInspeccionado ?? "",
-    VanoSubestacion: data.VanoSubestacion ?? "",
-    VanoEsMt: data.VanoEsMt ?? "",
-    VanoEsBt: data.VanoEsBt ?? "",
-    AlimInternoNavigationAlimInterno: data.AlimInternoNavigationAlimInterno ?? ""
   });
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  // 🔒 Campos bloqueados
+  const lockedFields = [
+    "VanoInterno",
+    "VanoCodigo",
+    "VanoInspeccionado",
+    "EstadoOffLine"
+  ];
+
+  // 📌 Orden de los campos visibles
+  const orderedFields = [
+    "VanoCodigo",
+    "VanoEtiqueta",
+    "VanoNodoInicial",
+    "VanoNodoFinal",
+    "VanoInterno",
+  ];
 
   return (
     <View>
       <Text style={styles.sectionTitle}>Vano</Text>
 
-      {Object.keys(form).map((key) => (
-        <View key={key} style={styles.row}>
-          <Text style={styles.label}>{key}</Text>
-          <TextInput
-            style={styles.input}
-            value={form[key] !== null && form[key] !== undefined ? String(form[key]) : ""}
-            onChangeText={(v) => update(key, v)}
-          />
-        </View>
-      ))}
+      {/* Render dinámico */}
+      {orderedFields.map((key) => {
+        const isLocked = lockedFields.includes(key);
 
-      <Button title="Guardar Vano (temporal)" onPress={() => onSave?.(form)} />
+        return (
+          <View key={key} style={styles.row}>
+            <Text style={styles.label}>{key}</Text>
+
+            <TextInput
+              style={[styles.input, isLocked && styles.lockedInput]}
+              value={form[key] !== null && form[key] !== undefined ? String(form[key]) : ""}
+              onChangeText={(v) => update(key, v)}
+              editable={!isLocked}
+            />
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -57,5 +69,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 4,
     backgroundColor: "#f7f7f7"
-  }
+  },
+  lockedInput: {
+    backgroundColor: "#ececec",
+    color: "#777",
+  },
 });

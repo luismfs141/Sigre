@@ -1,6 +1,6 @@
 // DataGeneral/SedForm.jsx
 import { useState } from "react";
-import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function SedForm({ data, onSave }) {
   const [form, setForm] = useState({
@@ -44,8 +44,6 @@ export default function SedForm({ data, onSave }) {
           />
         </View>
       ))}
-
-      <Button title="Guardar SED (temporal)" onPress={() => onSave?.(form)} />
     </View>
   );
 }

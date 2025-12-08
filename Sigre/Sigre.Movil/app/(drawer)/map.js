@@ -52,18 +52,24 @@ export const Map = () => {
   // ------------------- CARGA DE PINS Y GAPS -------------------
 
   useEffect(() => {
-    // Proyecto 1 (MT): necesita alimentador
-    if (user?.proyecto === 1 && !selectedFeeder) {
-      setPins([]);
-      setGaps([]);
-      return;
+
+    // MEDIA TENSIÓN → si no hay alimentador, no cargar nada
+    if (user?.proyecto === 1) {
+      if (!selectedFeeder) {
+        setPins([]);
+        setGaps([]);
+        return;
+      }
     }
 
-    // Proyecto 0 (BT): necesita SED
-    if (user?.proyecto === 0 && !selectedSed) {
-      setPins([]);
-      setGaps([]);
-      return;
+    // BAJA TENSIÓN → si no hay SED, no cargar nada
+    if (user?.proyecto === 0) {
+      if (!selectedSed || !selectedSed.SedInterno) {
+        console.warn("⚠ Esperando selección de SED...");
+        setPins([]);
+        setGaps([]);
+        return;
+      }
     }
 
     const loadData = async () => {
@@ -75,18 +81,20 @@ export const Map = () => {
         let gapsLoaded = [];
 
         if (user?.proyecto === 1) {
-          // MEDIA TENSIÓN -----------------------------
           const feederId = selectedFeeder.AlimInterno;
 
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsByFeeder(feederId),
             getGapsByFeeder(feederId)
           ]);
-
         } else {
-          // BAJA TENSIÓN ------------------------------
           const sedId = selectedSed.SedInterno;
-          console.log(sedId);
+
+          if (!sedId || isNaN(sedId)) {
+            console.warn("⚠ sedId inválido:", sedId);
+            return;
+          }
+
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsBySed(sedId),
             getGapsBySed(sedId)
@@ -96,7 +104,6 @@ export const Map = () => {
         setPins(pinsLoaded);
         setGaps(gapsLoaded);
 
-        //Region segun elementos alimentador o sed seleccionado
         if (pinsLoaded.length > 0) {
           if (user?.proyecto === 1) {
             setRegionByFeeder(pinsLoaded);
@@ -113,6 +120,7 @@ export const Map = () => {
     };
 
     loadData();
+
   }, [selectedFeeder, selectedSed, user?.proyecto]);
 
   // ------------------- GPS EN TIEMPO REAL -------------------
@@ -314,9 +322,6 @@ export const Map = () => {
           getPinsByRegion(reg);
         }}
       >
-
-
-
 {/* 
         {userLocation && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
@@ -327,11 +332,6 @@ export const Map = () => {
             </View>
           </Marker>
         )} */}
-
-
-
-
-
 
         {memoGaps.map((gap, i) => (
           <Polyline
@@ -363,7 +363,7 @@ export const Map = () => {
           const showLabel = Number(pin.Type) !== 8 && cleanLabel?.length > 0;
 
           if (Number(pin.Type) === 8) return (
-            <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} tracksViewChanges pointerEvents="none">
+            <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} draggable tracksViewChanges pointerEvents="none">
               <View style={pinStyles.pinWrapper}>
                 <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain" />
               </View>
