@@ -7,15 +7,14 @@
     "icon": "./assets/images/icon.png",
     "scheme": "sigremovil",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.luisfoco141.SigreMovil",
       "permissions": [
         "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
         "RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -24,7 +23,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDn2GMLm9UkM-bHJqmAxUUNfMCRgys37No"
+          "apiKey": "AIzaSyBxvwyvpOZ9D0yd00Kwb_9Kg_ke7pEy8-M"
         }
       },
       "adaptiveIcon": {
@@ -34,8 +33,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.luisfoco141.SigreMovil"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -65,7 +63,9 @@
           "locationAlwaysAndWhenInUsePermission": "Permitir a SIGRE acceder a tu ubicación para mostrar tu posición en el mapa."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-asset",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

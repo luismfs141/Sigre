@@ -1,19 +1,17 @@
-
-
 {
   "cli": {
     "version": ">= 3.21.0"
   },
 
   "build": {
-
-
-    
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "ENVIRONMENT": "development"
       }
     },
 
@@ -21,15 +19,20 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "ENVIRONMENT": "preview"
       }
     },
 
     "production": {
       "distribution": "store",
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "ENVIRONMENT": "production"
       }
     }
   }
 }
-
