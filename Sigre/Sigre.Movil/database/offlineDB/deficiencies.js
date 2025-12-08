@@ -1,4 +1,6 @@
-export const getDeficiencyIdElement = async (idElement, typeElement, idTypification) => {
+import { runQuery } from "./db";
+
+export const getDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
   try {
     const deficiency = await runQuery(
       `SELECT *

@@ -1,3 +1,4 @@
+// Inspection.jsx
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -12,10 +13,12 @@ import {
   View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DataModal from "../../components/Modal/DataModal";
+import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
+import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
 import ListaDefModal from "../../components/Modal/ListaDefModal";
 import PhotoModal from "../../components/Modal/PhotoModal";
 import { useDatos } from "../../context/DatosContext";
+import { useDeficiency } from "../../hooks/useDeficiency";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
@@ -25,56 +28,66 @@ export default function Inspection() {
   const router = useRouter();
 
   const { fetchTypificationsByTypeElement, fetchTypificationsByElement } = useTypification();
+  const { fetchDeficiencyByTypificationElement } = useDeficiency();
 
-  const [items, setItems] = useState([
-    {
-      id: 0,
-      type: "general",
-      name: "Datos Generales",
-      data: { elementCode: selectedItem?.PostCodigoNodo },
-      photos: [],
-      audio: null
-    }
-  ]);
-
-  const [modalVisible, setModalVisible] = useState(false);
-  const [photoOverlayVisible, setPhotoOverlayVisible] = useState(false);
-  const [newDefModalVisible, setNewDefModalVisible] = useState(false);
-  const [currentItem, setCurrentItem] = useState(null);
+  const [items, setItems] = useState([]);
   const [availableDefs, setAvailableDefs] = useState([]);
   const [tableId, setTableId] = useState(null);
 
-  // -------------------- Cargar tipificaciones por tipo y por elemento --------------------
-  useEffect(() => {
-    if (!selectedItem) return;
+  const [modalGeneralVisible, setModalGeneralVisible] = useState(false);
+  const [modalDeficiencyVisible, setModalDeficiencyVisible] = useState(false);
+  const [photoOverlayVisible, setPhotoOverlayVisible] = useState(false);
+  const [newDefModalVisible, setNewDefModalVisible] = useState(false);
 
-    const isPost = selectedItem.PostCodigoNodo?.startsWith("PTO");
-    const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano
+  const [currentItem, setCurrentItem] = useState(null);
+  const [currentDeficiency, setCurrentDeficiency] = useState(null);
+
+  // Cargar inicial: el primer item siempre datos generales
+  useEffect(() => {
+    if (!selectedItem) {
+      setItems([]);
+      return;
+    }
+
+    const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
+    const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano (según tu lógica previa)
     setTableId(tid);
 
     const loadDefs = async () => {
       try {
-        // 1️⃣ Tipificaciones disponibles para agregar
+        // Tipificaciones disponibles
         const defsByType = await fetchTypificationsByTypeElement(tid);
 
-        // 2️⃣ Tipificaciones ya asociadas al elemento
+        // Tipificaciones ya asociadas al elemento
         const defsByElement = await fetchTypificationsByElement(selectedItem.id, tid);
 
-        // Mapear las existentes al formato de items
+        // Mapear existentes (def) al formato esperado por la lista
         const existingDefs = defsByElement.map(def => ({
-          id: def.TypificationId,
+          id: def.TypificationId ?? def.id,
           type: "def",
-          defId: def.TypificationId,
-          name: def.code,
-          data: { severity: "", detail: def.detail },
+          defId: def.TypificationId ?? def.id,
+          name: def.code ?? def.name ?? `Def ${def.TypificationId ?? def.id}`,
+          data: {
+            detail: def.detail ?? def.description ?? "",
+            elementId: selectedItem.id,
+            elementType: tid,
+            typificationId: def.TypificationId ?? def.id
+          },
           photos: [],
           audio: null
         }));
 
-        // Limpiar deficiencias previas y agregar las existentes
-        setItems(prev => [...prev.filter(i => i.type !== "def"), ...existingDefs]);
+        // Primer item: datos generales
+        const generalItem = {
+          id: "general",
+          type: "general",
+          name: "Datos Generales",
+          data: selectedItem, // enviamos todo el objeto original
+          photos: [],
+          audio: null
+        };
 
-        // Guardar todas las tipificaciones disponibles
+        setItems([generalItem, ...existingDefs]);
         setAvailableDefs(defsByType);
       } catch (error) {
         console.error("Error cargando tipificaciones:", error);
@@ -84,19 +97,49 @@ export default function Inspection() {
     loadDefs();
   }, [selectedItem]);
 
-  // -------------------- IDs ya usados --------------------
+  // IDs ya usados (para filtrar ListaDefModal)
   const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);
 
-  // -------------------- Agregar nueva deficiencia --------------------
+  // Abrir modal apropiado según tipo del item
+  const openFormModal = async (item) => {
+    setCurrentItem(item);
+
+    if (item.type === "general") {
+      setModalGeneralVisible(true);
+      return;
+    }
+
+    if (item.type === "def") {
+      // Intentar cargar deficiencia asociada a este elemento y tipificación
+      try {
+        const elementId = item.data.elementId ?? item.data.elementId ?? currentItem?.data?.id ?? null;
+        const elementType = item.data.elementType ?? item.data.elementType ?? tableId;
+        const typificationId = item.data.typificationId ?? item.defId ?? item.data?.defId;
+
+        const defs = await fetchDeficiencyByTypificationElement(elementId, elementType, typificationId);
+        const defToOpen = defs?.[0] ?? null;
+
+        setCurrentDeficiency(defToOpen);
+      } catch (err) {
+        console.warn("No se pudo cargar la deficiencia:", err);
+        setCurrentDeficiency(null);
+      }
+      setModalDeficiencyVisible(true);
+    }
+  };
+
+  // Añadir deficiencia desde lista modal (ListaDefModal)
   const addNewDeficiency = (def) => {
     const newDef = {
-      id: def.id,
+      id: def.id ?? def.TypificationId,
       type: "def",
       defId: def.TypificationId ?? def.id,
-      name: def.code,
-      data: { 
-        severity: "",
-        detail: def.detail
+      name: def.code ?? def.name,
+      data: {
+        detail: def.detail ?? "",
+        elementId: selectedItem?.id,
+        elementType: tableId,
+        typificationId: def.TypificationId ?? def.id
       },
       photos: [],
       audio: null
@@ -106,7 +149,6 @@ export default function Inspection() {
     setNewDefModalVisible(false);
   };
 
-  // -------------------- Render item --------------------
   const renderItem = ({ item }) => (
     <View style={[styles.itemCard, { width: screenWidth }]}>
       <View style={styles.itemHeader}>
@@ -115,10 +157,7 @@ export default function Inspection() {
           {/* Botón formulario */}
           <TouchableOpacity
             style={styles.buttonWrapper}
-            onPress={() => {
-              setCurrentItem(item);
-              setModalVisible(true);
-            }}
+            onPress={() => openFormModal(item)}
           >
             <MaterialIcons name="assignment" size={36} color="#007bff" />
           </TouchableOpacity>
@@ -143,8 +182,14 @@ export default function Inspection() {
       </View>
 
       {/* Datos adicionales */}
-      {item.type === "general" && item.data?.elementCode && (
-        <Text style={{ marginTop: 4 }}>Código: {item.data.elementCode}</Text>
+      {item.type === "general" && item.data?.PostCodigoNodo && (
+        <Text style={{ marginTop: 4 }}>Código: {item.data.PostCodigoNodo}</Text>
+      )}
+      {item.type === "general" && item.data?.VanoCodigo && (
+        <Text style={{ marginTop: 4 }}>Código: {item.data.VanoCodigo}</Text>
+      )}
+      {item.type === "general" && item.data?.SedCodigo && (
+        <Text style={{ marginTop: 4 }}>Código: {item.data.SedCodigo}</Text>
       )}
 
       {item.type === "def" && (
@@ -167,11 +212,51 @@ export default function Inspection() {
         <Button title="Nueva Deficiencia" onPress={() => setNewDefModalVisible(true)} />
       </View>
 
-      {/* -------------------- MODALS -------------------- */}
-      <DataModal
-        visible={modalVisible}
+      {/* Modales */}
+      <DataGeneralModal
+        visible={modalGeneralVisible}
         item={currentItem}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalGeneralVisible(false);
+          setCurrentItem(null);
+        }}
+        onSave={(updated) => {
+          // Reemplaza item general en la lista si necesitas(sin persistir aquí)
+          setItems(prev => prev.map(it => it.type === "general" ? { ...it, data: updated } : it));
+          setModalGeneralVisible(false);
+        }}
+      />
+
+      <DeficiencyModal
+        visible={modalDeficiencyVisible}
+        onClose={() => {
+          setModalDeficiencyVisible(false);
+          setCurrentDeficiency(null);
+          setCurrentItem(null);
+        }}
+        deficiency={currentDeficiency}
+        item={currentItem}
+        onSave={(saved) => {
+          // actualizar lista de deficiencias en memoria si quieres
+          setItems(prev => {
+            const exists = prev.find(p => p.type === "def" && (p.defId === (saved.DefiCodDef ?? saved.DefiInterno)));
+            if (exists) {
+              return prev.map(p => p === exists ? ({ ...p, data: saved }) : p);
+            }
+            // si es nueva
+            const newEntry = {
+              id: saved.DefiInterno ?? Date.now(),
+              type: "def",
+              defId: saved.DefiCodDef ?? saved.DefiInterno,
+              name: saved.DefiCodDef ?? `Def ${saved.DefiInterno}`,
+              data: { detail: saved.DefiObservacion ?? "", ...saved },
+              photos: [],
+              audio: null
+            };
+            return [...prev, newEntry];
+          });
+          setModalDeficiencyVisible(false);
+        }}
       />
 
       <PhotoModal
@@ -193,11 +278,11 @@ export default function Inspection() {
 
 const styles = StyleSheet.create({
   itemCard: {
-    paddingVertical: 4,
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#f8f8f8",
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#ddd",
   },
   itemHeader: {
     flexDirection: "row",
@@ -212,10 +297,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
-    top: "15%"
   },
   buttonWrapper: {
     justifyContent: "center",
     alignItems: "center",
+    marginLeft: 8
   }
 });

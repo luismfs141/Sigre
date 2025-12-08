@@ -1,12 +1,9 @@
 import { useDatos } from "../context/DatosContext";
-import { runQuery } from "../database/offlineDB/db";
+import { getTypificationByIdElement, getTypificationByTypeElement } from "../database/offlineDB/typification";
 
 export const useTypification = () => {
   const { checkDatabase } = useDatos();
 
-  /**
-   * Obtiene tipificaciones según el tipo de elemento (TableId)
-   */
   const fetchTypificationsByTypeElement = async (tableId) => {
     const dbOk = await checkDatabase();
     if (!dbOk) {
@@ -15,16 +12,7 @@ export const useTypification = () => {
     }
 
     try {
-      const typifications = await runQuery(
-        "SELECT * FROM Tipificaciones WHERE TableId = ?",
-        [tableId]
-      );
-
-      if (!typifications || typifications.length === 0) {
-        console.warn(`⚠ No hay tipificaciones para TableId ${tableId}`);
-        return [];
-      }
-
+      const typifications = await getTypificationByTypeElement(tableId);
       return typifications;
     } catch (error) {
       console.error("❌ Error al obtener tipificaciones por tipo de elemento:", error);
@@ -32,9 +20,6 @@ export const useTypification = () => {
     }
   };
 
-  /**
-   * Obtiene tipificaciones asociadas a un elemento específico
-   */
   const fetchTypificationsByElement = async (idElement, typeElement) => {
     const dbOk = await checkDatabase();
     if (!dbOk) {
@@ -43,19 +28,7 @@ export const useTypification = () => {
     }
 
     try {
-      const typifications = await runQuery(
-        `SELECT t.*
-         FROM Tipificaciones t
-         INNER JOIN Deficiencias d ON t.TypificationId = d.tipiInterno
-         WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ?`,
-        [idElement, typeElement]
-      );
-
-      if (!typifications || typifications.length === 0) {
-        console.warn(`⚠ No se encontraron tipificaciones para el elemento ${idElement}`);
-        return [];
-      }
-
+      const typifications = await getTypificationByIdElement(idElement, typeElement);
       return typifications;
     } catch (error) {
       console.error("❌ Error al obtener tipificaciones por elemento:", error);
