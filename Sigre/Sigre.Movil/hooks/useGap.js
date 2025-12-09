@@ -1,9 +1,10 @@
 // hooks/useGap.js
 import { useState } from "react";
 import {
-    getGapsByFeederLocal,
-    getGapsBySedLocal,
-    saveOrUpdateVano
+  getGapsByFeederLocal,
+  getGapsBySedLocal,
+  getVanoByIdLocal,
+  saveOrUpdateVano
 } from "../database/offlineDB/gaps";
 
 export const useGap = () => {
@@ -58,11 +59,28 @@ export const useGap = () => {
     }
   };
 
+    // ------------------- OBTENER VANO POR VanoInterno -------------------
+    const fetchVanoById = async (vanoInterno) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const vano = await getVanoByIdLocal(vanoInterno);
+        return vano;
+      } catch (err) {
+        console.error("❌ Error cargando vano por ID:", err);
+        setError(err);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    };
+
   return {
     loading,
     error,
     fetchGapsByFeeder,
     fetchGapsBySed,
     saveVano,
+    fetchVanoById,
   };
 };

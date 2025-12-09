@@ -107,3 +107,25 @@ export const saveOrUpdateVano = async (vano) => {
     throw error;
   }
 };
+
+export const getVanoByIdLocal = async (vanoInterno) => {
+  try {
+    if (!vanoInterno) return null;
+
+    const rows = await runQuery(
+      "SELECT * FROM Vanos WHERE VanoInterno = ?",
+      [vanoInterno]
+    );
+
+    if (!rows || rows.length === 0) {
+      console.warn(`⚠ No se encontró el vano con VanoInterno=${vanoInterno}`);
+      return null;
+    }
+
+    // Devolvemos solo el primer resultado (VanoInterno es único)
+    return rows[0];
+  } catch (error) {
+    console.error(`❌ Error al obtener vano ${vanoInterno}:`, error);
+    return null;
+  }
+};

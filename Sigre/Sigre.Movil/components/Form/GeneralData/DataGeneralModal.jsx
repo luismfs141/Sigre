@@ -1,4 +1,4 @@
-// DataGeneralModal.jsx
+import { useRef } from "react";
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import PosteForm from "./PosteForm";
 import SedForm from "./SedForm";
@@ -8,6 +8,17 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
   if (!item?.data) return null;
 
   const data = item.data;
+
+  const formRef = useRef(null);
+
+  const handleSave = async () => {
+    if (formRef.current?.save) {
+      const savedData = await formRef.current.save();
+      onSave?.(savedData);
+    } else {
+      onSave?.(data); // fallback
+    }
+  };
 
   const isPoste = Object.prototype.hasOwnProperty.call(data, "PostInterno");
   const isVano  = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
@@ -21,18 +32,17 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
           <ScrollView style={{ flexGrow: 0 }}>
             <Text style={styles.title}>Datos Generales</Text>
 
-            {isPoste && <PosteForm data={data} onSave={onSave} />}
-            {isVano && <VanoForm data={data} onSave={onSave} />}
-            {isSed && <SedForm data={data} onSave={onSave} />}
+            {isPoste && <PosteForm data={data} ref={formRef} />}
+            {isVano && <VanoForm data={data} ref={formRef} />}
+            {isSed && <SedForm data={data} ref={formRef} />}
           </ScrollView>
 
-          {/* 🔥 Botones estilo profesional */}
           <View style={styles.buttons}>
             <TouchableOpacity style={styles.btnCancel} onPress={onClose}>
               <Text style={styles.btnText}>Cancelar</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnSave} onPress={onSave}>
+            <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
               <Text style={styles.btnText}>Guardar</Text>
             </TouchableOpacity>
           </View>
@@ -42,6 +52,7 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   overlay: {
