@@ -1,6 +1,25 @@
-import { useRef } from "react"; // ya lo tienes via useState/useEffect, solo confirma
-import ViewShot, { captureRef } from "react-native-view-shot";
-import utm from "utm";
+
+
+// Opción A (recomendada)
+import * as utm from "utm";
+
+
+// y deja tu función igual:
+function formatUtmFromLatLon(latitude, longitude) {
+  try {
+    const { easting, northing, zoneNum, zoneLetter } = utm.fromLatLon(
+      latitude,
+      longitude
+    );
+    return `UTM ${zoneNum}${zoneLetter} ${Math.round(easting)}E ${Math.round(
+      northing
+    )}N`;
+  } catch (e) {
+    console.log("Error convirtiendo a UTM:", e);
+    return "";
+  }
+}
+
 
 
 
@@ -50,6 +69,18 @@ const PATH_CONFIG = {
   deficiencia: "DEF001",
 };
 
+const SLOT_LABELS = [
+  "Frontal",
+  "P. derecho",
+  "P. izquierdo",
+  "Panorámico",
+  "Medidor",
+  "Adicional",
+];
+
+const REQUIRED_SLOTS = [0, 1, 2, 3]; // obligatorios
+
+
 // Construye la ruta relativa que queremos guardar en ArchNombre
 function buildRelativePath(tipoCarpeta, fileName) {
   const {
@@ -89,8 +120,15 @@ export default function DeficiencyMediaScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
 
-  // 📸 Fotos (URIs: temporales + SAF)
-  const [photos, setPhotos] = useState([]);
+  // 📸 Fotos: 6 slots fijos (pueden ser null)
+  const [photos, setPhotos] = useState(Array(6).fill(null));
+
+  // miniaturas (podemos guardar base64 para asegurar que se vea)
+  const [photoThumbs, setPhotoThumbs] = useState(Array(6).fill(null));
+
+  // Metadatos por slot (misma longitud)
+  const [photoMeta, setPhotoMeta] = useState(Array(6).fill(null));
+
 
   // 🎤 Audios
   const [audios, setAudios] = useState([]);
@@ -99,6 +137,9 @@ export default function DeficiencyMediaScreen() {
   // 📷 Cámara
   const [cameraVisible, setCameraVisible] = useState(false);
   const [cameraRef, setCameraRef] = useState(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
+
 
   // 🎤 Grabación
   const [recording, setRecording] = useState(null);
@@ -115,15 +156,31 @@ export default function DeficiencyMediaScreen() {
   const [showModal, setShowModal] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
+  const [currentSlotIndex, setCurrentSlotIndex] = useState(null); // 0..5
+  const [captureMode, setCaptureMode] = useState(null); // "sequence" | "single"
+  const [capturedPhoto, setCapturedPhoto] = useState(null); // { uri, meta }
+  const [isPreview, setIsPreview] = useState(false);
+  const [zoom, setZoom] = useState(0);
 
-  const viewShotRef = useRef(null);
 
-  // Datos para armar la marca de agua
-  const [watermarkData, setWatermarkData] = useState(null);
+
+
 
   // ================================
   // HELPERS
   // ================================
+  function findNextRequiredSlot(startIndex = 0, currentPhotos = photos) {
+    for (let i = startIndex; i < REQUIRED_SLOTS.length; i++) {
+      const idx = REQUIRED_SLOTS[i];
+      if (!currentPhotos[idx]) {
+        return idx;
+      }
+    }
+    return null;
+  }
+
+
+
 
   // Timestamp: 20251206_145233123 (para nombres de archivo)
   function formatFileTimestampMs() {
@@ -138,32 +195,20 @@ export default function DeficiencyMediaScreen() {
     return `${yyyy}${MM}${dd}_${hh}${mm}${ss}${ms}`;
   }
 
-  // Convierte lat/long a texto UTM
-  function formatUtmFromLatLon(latitude, longitude) {
-    try {
-      const { easting, northing, zoneNum, zoneLetter } = utm.fromLatLon(
-        latitude,
-        longitude
-      );
-      // Ejemplo: "UTM 18L 765432E 8201234N"
-      return `UTM ${zoneNum}${zoneLetter} ${Math.round(
-        easting
-      )}E ${Math.round(northing)}N`;
-    } catch (e) {
-      console.log("Error convirtiendo a UTM:", e);
-      return "";
-    }
-  }
 
-  // Fecha legible para marca de agua
+
   function formatWatermarkDate(date = new Date()) {
     const yyyy = date.getFullYear();
     const MM = String(date.getMonth() + 1).padStart(2, "0");
     const dd = String(date.getDate()).padStart(2, "0");
-    const hh = String(date.getHours()).padStart(2, "0");
-    const mm = String(date.getMinutes()).padStart(2, "0");
-    return `${dd}/${MM}/${yyyy} ${hh}:${mm}`;
+    // Solo fecha, sin hora
+    return `${dd}/${MM}/${yyyy}`;
   }
+
+
+
+
+
 
 
 
@@ -340,10 +385,34 @@ export default function DeficiencyMediaScreen() {
 
         try {
           const photoUris = await SAF.readDirectoryAsync(fotosUri);
-          setPhotos(photoUris);
+
+          // Mapeamos a 6 slots según el sufijo -N.jpg
+          const slots = Array(6).fill(null);
+
+          for (const uri of photoUris) {
+            const name = getFileName(uri); // ya tienes la función
+            const match = name.match(/-(\d+)\.(jpg|jpeg|png)$/i);
+            if (match) {
+              const pos = parseInt(match[1], 10);
+              if (pos >= 1 && pos <= 6) {
+                slots[pos - 1] = uri;
+                continue;
+              }
+            }
+            // si no matchea, lo ponemos en el primer hueco libre
+            const freeIndex = slots.findIndex((s) => !s);
+            if (freeIndex !== -1) {
+              slots[freeIndex] = uri;
+            }
+          }
+
+          setPhotos(slots);
+          setPhotoThumbs(slots);   // 👈 para que también se vean al reabrir
+          // photoMeta se quedará vacío por ahora para fotos anteriores
         } catch (err) {
           console.log("⚠️ Error leyendo Fotos SAF:", err);
         }
+
 
         try {
           const audioUris = await SAF.readDirectoryAsync(audiosUri);
@@ -364,67 +433,140 @@ export default function DeficiencyMediaScreen() {
   // 📸 TOMAR FOTO
   // ================================
   const takePhoto = async () => {
-    if (!cameraRef) return;
+    if (!cameraRef || currentSlotIndex === null) return;
 
-    // Asegurar GPS y permiso de ubicación
-    const gpsOk = await ensureGpsReady();
-    if (!gpsOk) return;
+    // Evitar doble tap mientras dispara
+    if (!isCameraReady || isTakingPhoto) {
+      console.log("Cámara no lista o ya capturando...");
+      return;
+    }
 
-    // 1) Sacar foto normal
-    const result = await cameraRef.takePictureAsync({ quality: 0.9 });
-    const rawUri = result.uri;
+    setIsTakingPhoto(true);
 
-    // 2) Obtener posición actual
-    const position = await Location.getCurrentPositionAsync({});
-    const { latitude, longitude } = position.coords || {};
+    try {
+      const gpsOk = await ensureGpsReady();
+      if (!gpsOk) return;
 
-    // 3) Preparar texto de marca de agua
-    const utmText =
-      latitude != null && longitude != null
-        ? formatUtmFromLatLon(latitude, longitude)
-        : "";
-    const fechaText = formatWatermarkDate(new Date());
+      const position = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = position.coords || {};
 
-    // 4) Guardar en estado para que ViewShot renderice
-    setWatermarkData({
-      uri: rawUri,
-      utm: utmText,
-      fecha: fechaText,
+      const result = await cameraRef.takePictureAsync({
+        quality: 1,
+        ratio: "16:9",
+        skipProcessing: false,
+      });
+
+      const uri = result.uri;
+      const ahora = new Date();
+      const timestamp = formatFileTimestampMs();   // 👈 NUEVO
+
+      const meta = {
+        utmText:
+          latitude != null && longitude != null
+            ? formatUtmFromLatLon(latitude, longitude)
+            : "",
+        fechaLegible: formatWatermarkDate(ahora),
+        latitude: latitude || null,
+        longitude: longitude || null,
+        archFech: formatDateTimeSQLite(ahora),
+        fileTimestamp: timestamp,                 // 👈 guardamos aquí
+      };
+
+
+      setCapturedPhoto({ uri, meta });
+      setIsPreview(true);
+    } catch (err) {
+      console.log("Error al tomar foto:", err);
+      Alert.alert(
+        "Error",
+        "No se pudo capturar la foto. Inténtalo nuevamente."
+      );
+    } finally {
+      setIsTakingPhoto(false);
+    }
+  };
+
+
+
+  const retryCapture = () => {
+    if (capturedPhoto?.uri) {
+      FS.deleteAsync(capturedPhoto.uri, { idempotent: true }).catch(() => { });
+    }
+    setCapturedPhoto(null);
+    setIsPreview(false);
+  };
+
+
+  const confirmCapturedPhoto = async () => {
+    if (!capturedPhoto || currentSlotIndex === null) return;
+
+    const srcUri = capturedPhoto.uri;
+    let thumbUri = srcUri;
+
+    // Intentamos generar una miniatura base64 para asegurar que el <Image> la pueda mostrar
+    try {
+      if (srcUri.startsWith("file://")) {
+        const base64 = await FS.readAsStringAsync(srcUri, {
+          encoding: "base64",
+        });
+        thumbUri = `data:image/jpeg;base64,${base64}`;
+      }
+    } catch (err) {
+      console.log("⚠️ Error generando thumbnail:", err);
+    }
+
+    setPhotos((prev) => {
+      const copy = [...prev];
+      copy[currentSlotIndex] = srcUri;
+      return copy;
     });
 
-    // 5) Esperar un frame para que se pinte el ViewShot y capturarlo
-    setTimeout(async () => {
-      try {
-        if (!viewShotRef.current) {
-          // Si por algún motivo no está, guardamos la foto cruda
-          setPhotos((prev) => [...prev, rawUri]);
-          return;
-        }
+    setPhotoThumbs((prev) => {
+      const copy = [...prev];
+      copy[currentSlotIndex] = thumbUri;
+      return copy;
+    });
 
-        const watermarkedUri = await captureRef(viewShotRef.current, {
-          format: "jpg",
-          quality: 0.9,
-        });
+    setPhotoMeta((prev) => {
+      const copy = [...prev];
+      copy[currentSlotIndex] = capturedPhoto.meta;
+      return copy;
+    });
 
-        // Usar la foto con marca de agua en lugar de la original
-        setPhotos((prev) => [...prev, watermarkedUri]);
+    // para calcular siguiente slot en modo secuencia
+    const nextStatePhotos = (prev => {
+      const copy = [...prev];
+      copy[currentSlotIndex] = srcUri;
+      return copy;
+    })(photos);
 
-        // Opcional: borrar la foto original sin marca
-        try {
-          await FS.deleteAsync(rawUri, { idempotent: true });
-        } catch (err) {
-          console.log("⚠️ Error borrando foto original:", err);
-        }
-      } catch (e) {
-        console.log("Error generando foto con marca de agua:", e);
-        // fallback: usamos la original
-        setPhotos((prev) => [...prev, rawUri]);
-      } finally {
-        // limpiar estado para que no se siga pintando el ViewShot
-        setWatermarkData(null);
+    // limpiamos preview
+    setCapturedPhoto(null);
+    setIsPreview(false);
+
+    if (captureMode === "sequence") {
+      const nextIndex = findNextRequiredSlot(
+        REQUIRED_SLOTS.indexOf(currentSlotIndex) + 1,
+        nextStatePhotos
+      );
+      if (nextIndex !== null) {
+        setCurrentSlotIndex(nextIndex);
+        // dejamos la cámara abierta
+      } else {
+        setCameraVisible(false);
+        setCaptureMode(null);
+        setCurrentSlotIndex(null);
       }
-    }, 0);
+    } else {
+      setCameraVisible(false);
+      setCaptureMode(null);
+      setCurrentSlotIndex(null);
+    }
   };
+
+
+
+
 
 
   // ================================
@@ -444,10 +586,29 @@ export default function DeficiencyMediaScreen() {
       console.log("⚠️ Error borrando foto:", err);
     }
 
-    const updated = photos.filter((_, i) => i !== selectedPhotoIndex);
-    setPhotos(updated);
+    // Dejamos el slot vacío, sin mover el resto
+    setPhotos((prev) => {
+      const copy = [...prev];
+      copy[selectedPhotoIndex] = null;
+      return copy;
+    });
+
+    setPhotoMeta((prev) => {
+      const copy = [...prev];
+      copy[selectedPhotoIndex] = null;
+      return copy;
+    });
+
     setShowModal(false);
+    
+    setPhotoThumbs((prev) => {
+  const copy = [...prev];
+  copy[selectedPhotoIndex] = null;
+  return copy;
+});
+
   };
+
 
   // ================================
   // 🎤 AUDIO (grabar)
@@ -676,8 +837,12 @@ export default function DeficiencyMediaScreen() {
         const srcUri = photos[i];
         if (!srcUri || srcUri.startsWith("content://")) continue;
 
-        const timestamp = formatFileTimestampMs();
-        const fileName = `FOT-${timestamp}-0.jpg`; // sufijo -0
+        const meta = photoMeta[i] || {};
+        const timestamp = meta.fileTimestamp || formatFileTimestampMs();
+        const fileName = `FOT-${timestamp}-${i + 1}.jpg`; // slot 1..6
+
+
+
         const destFileUri = await getUniqueSafFileUri(
           fotosUri,
           fileName,
@@ -693,15 +858,16 @@ export default function DeficiencyMediaScreen() {
         });
 
         const relativePath = buildRelativePath("Fotos", fileName);
-        const archFech = formatDateTimeSQLite(new Date());
+
+        const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
         await insertArchivoLocal({
-          archTipo: 0, // foto
+          archTipo: 0,
           archTabla: "Deficiencias",
           archCodTabla,
           archNombre: relativePath,
-          archLatit: latitude || null,
-          archLong: longitude || null,
+          archLatit: meta.latitude ?? null,
+          archLong: meta.longitude ?? null,
           archFech,
           archActiv: 1,
         });
@@ -713,13 +879,15 @@ export default function DeficiencyMediaScreen() {
         }
       }
 
+
       // 🎤 Audios
       for (let i = 0; i < audios.length; i++) {
         const srcUri = audios[i];
         if (!srcUri || srcUri.startsWith("content://")) continue;
 
         const timestamp = formatFileTimestampMs();
-        const fileName = `AUD-${timestamp}-1.m4a`; // sufijo -1
+        const fileName = `AUD-${timestamp}-0.m4a`; // 0 para audio
+
         const destFileUri = await getUniqueSafFileUri(
           audiosUri,
           fileName,
@@ -765,6 +933,47 @@ export default function DeficiencyMediaScreen() {
 
 
 
+  const handleSlotPress = (index) => {
+    const uri = photos[index];
+    if (uri) {
+      openPhoto(index);
+    } else {
+      if (!permission?.granted) {
+        requestPermission();
+        return;
+      }
+      setCaptureMode("single");
+      setCurrentSlotIndex(index);
+      setCapturedPhoto(null);
+      setIsPreview(false);
+
+      // 🔹 resetear estados de cámara
+      setIsCameraReady(false);
+      setIsTakingPhoto(false);
+
+      setCameraVisible(true);
+    }
+  };
+
+
+  const canSave =
+    photos[0] && photos[1] && photos[2] && photos[3]; // 4 primeros llenos
+
+
+
+
+
+
+  // Fotos sin nulos para el visor
+  const nonEmptyPhotos = photos.filter((p) => !!p);
+
+  // Índice dentro del arreglo filtrado que corresponde a la foto seleccionada
+  const initialIndex = nonEmptyPhotos.findIndex(
+    (u) => u === photos[selectedPhotoIndex]
+  );
+
+
+
 
 
   // ================================
@@ -773,55 +982,135 @@ export default function DeficiencyMediaScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
 
-      {/* Vista oculta usada para generar la foto con marca de agua */}
-      {watermarkData && (
-        <ViewShot
-          ref={viewShotRef}
-          style={{ position: "absolute", left: -9999, width: 400, height: 300 }}
-          options={{ format: "jpg", quality: 0.9 }}
+      {/* 📷 CÁMARA FULL SCREEN */}
+      {cameraVisible && (
+        <Modal
+          visible={cameraVisible}
+          transparent={false}
+          animationType="slide"
+          onRequestClose={() => {
+            setCameraVisible(false);
+            setCaptureMode(null);
+            setCurrentSlotIndex(null);
+            setCapturedPhoto(null);
+            setIsPreview(false);
+            setIsCameraReady(false);
+            setIsTakingPhoto(false);
+          }}
+
         >
-          <View style={{ flex: 1 }}>
-            <Image
-              source={{ uri: watermarkData.uri }}
-              style={{ flex: 1, resizeMode: "cover" }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                bottom: 8,
-                left: 8,
-                right: 8,
-                padding: 4,
-                backgroundColor: "rgba(0,0,0,0.5)",
-                borderRadius: 4,
-              }}
-            >
-              <Text style={{ color: "white", fontSize: 10 }}>
-                {watermarkData.utm}
-              </Text>
-              <Text style={{ color: "white", fontSize: 10 }}>
-                {watermarkData.fecha}
-              </Text>
+          <View style={styles.cameraOverlay}>
+            <Text style={styles.cameraTitle}>
+              {currentSlotIndex !== null
+                ? `Foto ${SLOT_LABELS[currentSlotIndex]}`
+                : "Foto"}
+            </Text>
+
+            {/* Vista de cámara o preview */}
+            {!isPreview ? (
+              <CameraView
+                style={styles.cameraLive}
+                ref={setCameraRef}
+                mode="picture"
+                enableHighQualityPhotos
+                ratio="16:9"
+                zoom={zoom}
+                onCameraReady={() => setIsCameraReady(true)}
+              />
+            ) : (
+              capturedPhoto && (
+                <Image
+                  source={{ uri: capturedPhoto.uri }}
+                  style={styles.cameraLive}
+                  resizeMode="contain"
+                />
+              )
+            )}
+
+
+
+            {/* Slider de zoom solo cuando está la cámara activa */}
+            {!isPreview && (
+              <View style={styles.zoomContainer}>
+                <Text style={{ color: "white", marginBottom: 4 }}>Zoom</Text>
+                <Slider
+                  style={{ width: "80%" }}
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={zoom}
+                  onValueChange={setZoom}
+                  minimumTrackTintColor="#fff"
+                  maximumTrackTintColor="#555"
+                  thumbTintColor="#fff"
+                />
+              </View>
+            )}
+
+            {/* Botones inferiores */}
+            <View style={styles.cameraButtonsRow}>
+              <TouchableOpacity
+                style={styles.cameraCloseBtnRow}
+                onPress={() => {
+                  setCameraVisible(false);
+                  setCaptureMode(null);
+                  setCurrentSlotIndex(null);
+                  setCapturedPhoto(null);
+                  setIsPreview(false);
+                  setIsCameraReady(false);
+                  setIsTakingPhoto(false);
+                }}
+              >
+                <Text style={{ color: "white", fontWeight: "bold" }}>Cerrar</Text>
+              </TouchableOpacity>
+
+
+              {!isPreview ? (
+                <TouchableOpacity
+                  style={styles.captureButtonCircle}
+                  onPress={takePhoto}
+                >
+                  <View style={styles.captureInnerCircle} />
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.cameraSecondaryBtn}
+                    onPress={retryCapture}
+                  >
+                    <Text style={styles.cameraSecondaryText}>Repetir</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cameraPrimaryBtn}
+                    onPress={confirmCapturedPhoto}
+                  >
+                    <Text style={styles.cameraPrimaryText}>
+                      {captureMode === "single" || currentSlotIndex === 3
+                        ? "Aceptar"
+                        : "Siguiente"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
-        </ViewShot>
+        </Modal>
       )}
-
-
-
-
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* MODAL FOTO */}
+
         <Modal
           visible={showModal}
           transparent
           onRequestClose={() => setShowModal(false)}
         >
+
           <View style={{ flex: 1, backgroundColor: "black" }}>
+
             <ImageViewer
-              imageUrls={photos.map((p) => ({ url: p }))}
-              index={selectedPhotoIndex}
+              imageUrls={nonEmptyPhotos.map((p) => ({ url: p }))}
+              index={initialIndex < 0 ? 0 : initialIndex}
               enableSwipeDown
               onSwipeDown={() => setShowModal(false)}
               saveToLocalByLongPress={false}
@@ -849,42 +1138,88 @@ export default function DeficiencyMediaScreen() {
           <TouchableOpacity
             style={styles.button}
             onPress={() => {
-              if (!permission?.granted) requestPermission();
-              else setCameraVisible(true);
+              if (!permission?.granted) {
+                requestPermission();
+                return;
+              }
+
+              const firstEmpty = findNextRequiredSlot(0);
+              if (firstEmpty === null) {
+                Alert.alert(
+                  "Fotos completas",
+                  "Ya tomaste las 4 fotos obligatorias (Frontal, P. derecho, P. izquierdo y Panorámico)."
+                );
+                return;
+              }
+
+              setCaptureMode("sequence");
+              setCurrentSlotIndex(firstEmpty);
+              setCapturedPhoto(null);
+              setIsPreview(false);
+
+              // 🔹 IMPORTANTE: resetear estados de la cámara
+              setIsCameraReady(false);
+              setIsTakingPhoto(false);
+
+              setCameraVisible(true);
             }}
           >
             <Text style={styles.buttonText}>Tomar foto</Text>
           </TouchableOpacity>
 
-          {cameraVisible && (
-            <View style={styles.cameraContainer}>
-              <CameraView style={styles.camera} ref={setCameraRef} />
 
-              <TouchableOpacity
-                style={styles.captureButton}
-                onPress={takePhoto}
-              >
-                <Text style={styles.captureText}>Capturar</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.closeCameraButton}
-                onPress={() => setCameraVisible(false)}
-              >
-                <Text style={{ color: "white", fontWeight: "bold" }}>
-                  Cerrar
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+
 
           <ScrollView horizontal style={styles.carousel}>
-            {photos.map((p, i) => (
-              <TouchableOpacity key={i} onPress={() => openPhoto(i)}>
-                <Image source={{ uri: p }} style={styles.photo} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+  {Array.from({ length: 6 }).map((_, i) => {
+    const uri = photos[i];
+    const thumbUri = photoThumbs[i] || uri;
+    const meta = photoMeta[i];          // 👈 volvemos a definirla
+
+    return (
+      <View key={i} style={{ marginRight: 10, alignItems: "center" }}>
+        <TouchableOpacity
+          onPress={() => handleSlotPress(i)}
+          style={[
+            styles.photoSlot,
+            !thumbUri && styles.photoSlotEmpty,
+          ]}
+        >
+          {thumbUri ? (
+            <Image
+              source={{ uri: thumbUri }}
+              style={styles.photo}
+              resizeMode="cover"
+              onError={(e) =>
+                console.log(
+                  "❌ Error cargando miniatura",
+                  thumbUri,
+                  e.nativeEvent
+                )
+              }
+            />
+          ) : (
+            <Text style={styles.plusText}>+</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Subtítulo fijo del slot */}
+        <Text style={styles.slotLabel}>{SLOT_LABELS[i]}</Text>
+
+        {/* Nombre de archivo */}
+        {meta?.fileTimestamp && (       // 👈 optional chaining
+          <Text style={{ fontSize: 10, textAlign: "center" }}>
+            {`FOT-${meta.fileTimestamp}-${i + 1}.jpg`}
+          </Text>
+        )}
+      </View>
+    );
+  })}
+</ScrollView>
+
+
+
         </View>
 
         {/* AUDIOS */}
@@ -968,9 +1303,14 @@ export default function DeficiencyMediaScreen() {
             <Text style={styles.bottomText}>Cancelar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <TouchableOpacity
+            style={[styles.saveBtn, !canSave && { backgroundColor: "#aaa" }]}
+            onPress={canSave ? handleSave : () => { }}
+            disabled={!canSave}
+          >
             <Text style={styles.bottomText}>Guardar</Text>
           </TouchableOpacity>
+
         </View>
       </ScrollView>
     </View>
@@ -1021,9 +1361,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: 10,
   },
-  camera: {
-    flex: 1,
-  },
+
   captureButton: {
     backgroundColor: "#fff",
     padding: 10,
@@ -1044,14 +1382,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   carousel: {
-    height: 100,
+    paddingVertical: 5,
   },
+
   photo: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    marginRight: 10,
+    width: "100%",   // 👈 en vez de 100
+    height: "100%",  // 👈 en vez de 100
   },
+
+
   audioContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1131,4 +1470,130 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 30,
   },
+
+  photoSlot: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#eee",
+  },
+
+  photoSlotEmpty: {
+    borderWidth: 1,
+    borderColor: "#aaa",
+  },
+  plusText: {
+    fontSize: 32,
+    color: "#777",
+  },
+  slotLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  cameraOverlay: {
+    flex: 1,
+    backgroundColor: "black",
+    paddingTop: 40,
+    paddingHorizontal: 10,
+    alignItems: "center",
+  },
+
+  cameraTitle: {
+    color: "white",
+    fontSize: 18,
+    marginBottom: 10,
+  },
+
+  cameraLive: {
+    width: "100%",
+    height: "70%",   // casi toda la pantalla
+  },
+
+
+  zoomContainer: {
+    position: "absolute",
+    bottom: 140,          // antes 100 → lo subimos
+    width: "100%",
+    alignItems: "center",
+  },
+  cameraButtonsRow: {
+    position: "absolute",
+    bottom: 60,           // antes 20 → lo subimos para que no choque con la barra
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+  },
+
+
+
+  captureButtonCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 4,
+    borderColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  captureInnerCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "white",
+  },
+
+  cameraPrimaryBtn: {
+    backgroundColor: "#007bff",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  cameraPrimaryText: {
+    color: "white",
+    fontWeight: "bold",
+  },
+  cameraSecondaryBtn: {
+    backgroundColor: "#555",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  cameraSecondaryText: {
+    color: "white",
+    fontWeight: "bold",
+  },
+  cameraCloseBtnRow: {
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+
+
+
+  // contenedor que ocupa casi toda la pantalla
+  cameraWrapper: {
+    flex: 1,
+    width: "100%",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "black",
+  },
+
+  // cámara (preview en vivo)
+  cameraView: {
+    flex: 1,
+  },
+
+  cameraPreview: {
+    flex: 1,
+    width: "100%",
+  },
+
 });

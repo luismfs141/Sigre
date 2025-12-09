@@ -22,7 +22,7 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem } = useDatos();
+  const { selectedItem } = useDatos(); //poste sub o vano
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
@@ -49,28 +49,19 @@ export default function Inspection() {
       return;
     }
 
-    // Detectar ID REAL del elemento
-    const elementId =
-      selectedItem.PostInterno ??
-      selectedItem.VanoInterno ??
-      selectedItem.SedInterno ??
-      null;
-
-    if (!elementId) {
-      console.warn("⚠ No se encontró el ID del elemento");
-      setItems([]);
-      return;
-    }
-
     const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
-    const tid = isPost ? 8 : 9;
+    const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano (según tu lógica previa)
     setTableId(tid);
 
     const loadDefs = async () => {
       try {
+        // Tipificaciones disponibles
         const defsByType = await fetchTypificationsByTypeElement(tid);
-        const defsByElement = await fetchTypificationsByElement(elementId, tid);
 
+        // Tipificaciones ya asociadas al elemento
+        const defsByElement = await fetchTypificationsByElement(selectedItem.id, tid);
+
+        // Mapear existentes (def) al formato esperado por la lista
         const existingDefs = defsByElement.map(def => ({
           id: def.TypificationId ?? def.id,
           type: "def",
@@ -78,7 +69,7 @@ export default function Inspection() {
           name: def.code ?? def.name ?? `Def ${def.TypificationId ?? def.id}`,
           data: {
             detail: def.detail ?? def.description ?? "",
-            elementId,
+            elementId: selectedItem.id,
             elementType: tid,
             typificationId: def.TypificationId ?? def.id
           },
@@ -86,11 +77,12 @@ export default function Inspection() {
           audio: null
         }));
 
+        // Primer item: datos generales
         const generalItem = {
           id: "general",
           type: "general",
           name: "Datos Generales",
-          data: selectedItem,
+          data: selectedItem, // enviamos todo el objeto original
           photos: [],
           audio: null
         };
@@ -104,7 +96,6 @@ export default function Inspection() {
 
     loadDefs();
   }, [selectedItem]);
-
 
   // IDs ya usados (para filtrar ListaDefModal)
   const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);
@@ -167,9 +158,12 @@ export default function Inspection() {
           <TouchableOpacity
             style={styles.buttonWrapper}
             onPress={() => openFormModal(item)}
-          >
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            >
             <MaterialIcons name="assignment" size={36} color="#007bff" />
           </TouchableOpacity>
+
+          
 
           {/* Botón multimedia */}
           <TouchableOpacity

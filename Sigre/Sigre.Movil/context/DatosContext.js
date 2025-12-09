@@ -108,6 +108,17 @@ export const DatosProvider = ({ children }) => {
     loadLastDatabaseName();
   }, []);
 
+
+
+
+
+
+
+
+
+
+
+  //GLOBALES = SELECTE DEFICIENCIAS
   // -------------------- ESTADOS DE DATOS ------------------------
   const [selectedFeeder, setSelectedFeeder] = useState(null);
   const [feeders, setFeeders] = useState([]);
@@ -142,17 +153,32 @@ export const DatosProvider = ({ children }) => {
         setNewDatabase,
 
         // Datos
+        //////////////////////////////////// alimentador
         selectedFeeder, setSelectedFeeder,
         feeders, setFeeders,
         pins, setPins,
         gaps, setGaps,
+
+
+        //borrar
         selectedPost, setSelectedPost,
+
+        ///////////// subestacion
         selectedSed, setSelectedSed,
+
+
+
+
         totalPins, setTotalPins,
         selectedItem, setSelectedItem,
         setSelectedPin,
         setSelectedGap,
         region, setRegion,
+
+
+
+
+        ////////////////////////////// proyecto
         selectedProject, setSelectedProject,
       }}
     >
