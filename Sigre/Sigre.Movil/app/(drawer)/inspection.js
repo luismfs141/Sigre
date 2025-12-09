@@ -49,19 +49,28 @@ export default function Inspection() {
       return;
     }
 
+    // Detectar ID REAL del elemento
+    const elementId =
+      selectedItem.PostInterno ??
+      selectedItem.VanoInterno ??
+      selectedItem.SedInterno ??
+      null;
+
+    if (!elementId) {
+      console.warn("⚠ No se encontró el ID del elemento");
+      setItems([]);
+      return;
+    }
+
     const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
-    const tid = isPost ? 8 : 9; // 8=Poste, 9=Vano (según tu lógica previa)
+    const tid = isPost ? 8 : 9;
     setTableId(tid);
 
     const loadDefs = async () => {
       try {
-        // Tipificaciones disponibles
         const defsByType = await fetchTypificationsByTypeElement(tid);
+        const defsByElement = await fetchTypificationsByElement(elementId, tid);
 
-        // Tipificaciones ya asociadas al elemento
-        const defsByElement = await fetchTypificationsByElement(selectedItem.id, tid);
-
-        // Mapear existentes (def) al formato esperado por la lista
         const existingDefs = defsByElement.map(def => ({
           id: def.TypificationId ?? def.id,
           type: "def",
@@ -69,7 +78,7 @@ export default function Inspection() {
           name: def.code ?? def.name ?? `Def ${def.TypificationId ?? def.id}`,
           data: {
             detail: def.detail ?? def.description ?? "",
-            elementId: selectedItem.id,
+            elementId,
             elementType: tid,
             typificationId: def.TypificationId ?? def.id
           },
@@ -77,12 +86,11 @@ export default function Inspection() {
           audio: null
         }));
 
-        // Primer item: datos generales
         const generalItem = {
           id: "general",
           type: "general",
           name: "Datos Generales",
-          data: selectedItem, // enviamos todo el objeto original
+          data: selectedItem,
           photos: [],
           audio: null
         };
@@ -96,6 +104,7 @@ export default function Inspection() {
 
     loadDefs();
   }, [selectedItem]);
+
 
   // IDs ya usados (para filtrar ListaDefModal)
   const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);

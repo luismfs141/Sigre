@@ -1,3 +1,4 @@
+// Map.js
 import * as Location from 'expo-location';
 import { useRouter } from "expo-router";
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,12 +14,13 @@ import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/uti
 
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
-import { useFeeder } from '../../hooks/useFeeder.js';
+import { useGap } from '../../hooks/useGap.js';
 import { useMap } from '../../hooks/useMap.js';
+import { usePin } from '../../hooks/usePin.js';
 import { usePost } from '../../hooks/usePost.js';
-import { useSed } from '../../hooks/useSed.js';
 
-const ZOOM_THRESHOLD = 0.007;
+// ------------------- ZOOM PARA ETIQUETAS -------------------
+const ZOOM_THRESHOLD = 0.00025;
 
 export const Map = () => {
   const router = useRouter();
@@ -31,14 +33,14 @@ export const Map = () => {
     pins, setPins,
     gaps, setGaps,
     region, setRegion,
-    setSelectedItem, setSelectedPin, setSelectedGap,
-    feeders, setFeeders
+    setSelectedItem,
   } = useDatos();
 
-  const { getPinsByFeeder, getGapsByFeeder, getPinsBySed, getGapsBySed, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion, setRegionBySed } = useMap();
-  const { fetchLocalFeeders } = useFeeder();
-  const { fetchAndSelectPost, getPostData } = usePost();
-  const { fetchAndSelectSed } = useSed();
+  const { getPinsByRegion, setRegionByCoordinate, setRegionByFeeder, setRegionBySed } = useMap();
+  const { getPostData } = usePost();
+
+  const { fetchPinsByFeeder, fetchPinsBySed } = usePin();
+  const { fetchGapsByFeeder, fetchGapsBySed } = useGap();
 
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
@@ -46,112 +48,81 @@ export const Map = () => {
   const [heading, setHeading] = useState(0);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
-  const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
+  const shouldShowPins = region?.latitudeDelta >= ZOOM_THRESHOLD;
 
   // ------------------- CARGA DE PINS Y GAPS -------------------
+  const loadData = async () => {
+    setLoadingPins(true);
+    setLoadingGaps(true);
+    try {
+      let pinsLoaded = [];
+      let gapsLoaded = [];
 
-  useEffect(() => {
-    // Proyecto 1 (MT): necesita alimentador
-    if (user?.proyecto === 1 && !selectedFeeder) {
-      setPins([]);
-      setGaps([]);
-      return;
-    }
-
-    // Proyecto 0 (BT): necesita SED
-    if (user?.proyecto === 0 && !selectedSed) {
-      setPins([]);
-      setGaps([]);
-      return;
-    }
-
-    const loadData = async () => {
-      setLoadingPins(true);
-      setLoadingGaps(true);
-
-      try {
-        let pinsLoaded = [];
-        let gapsLoaded = [];
-
-        if (user?.proyecto === 1) {
-          // MEDIA TENSIÓN -----------------------------
-          const feederId = selectedFeeder.AlimInterno;
-
-          [pinsLoaded, gapsLoaded] = await Promise.all([
-            getPinsByFeeder(feederId),
-            getGapsByFeeder(feederId)
-          ]);
-
-        } else {
-          // BAJA TENSIÓN ------------------------------
-          const sedId = selectedSed.SedInterno;
-          console.log(sedId);
-          [pinsLoaded, gapsLoaded] = await Promise.all([
-            getPinsBySed(sedId),
-            getGapsBySed(sedId)
-          ]);
-        }
-
-        setPins(pinsLoaded);
-        setGaps(gapsLoaded);
-
-        //Region segun elementos alimentador o sed seleccionado
-        if (pinsLoaded.length > 0) {
-          if (user?.proyecto === 1) {
-            setRegionByFeeder(pinsLoaded);
-          } else {
-            setRegionBySed(pinsLoaded, selectedSed);
-          }
-        }
-      } catch (error) {
-        console.error("❌ Error al cargar datos:", error);
-      } finally {
-        setLoadingPins(false);
-        setLoadingGaps(false);
+      if (user?.proyecto === 1 && selectedFeeder) {
+        pinsLoaded = await fetchPinsByFeeder(selectedFeeder.AlimInterno);
+        gapsLoaded = await fetchGapsByFeeder(selectedFeeder.AlimInterno);
+      } else if (user?.proyecto === 0 && selectedSed?.SedInterno) {
+        pinsLoaded = await fetchPinsBySed(selectedSed.SedInterno);
+        gapsLoaded = await fetchGapsBySed(selectedSed.SedInterno);
       }
-    };
 
-    loadData();
-  }, [selectedFeeder, selectedSed, user?.proyecto]);
+      setPins(pinsLoaded);
+      setGaps(gapsLoaded.map(g => ({
+        ...g,
+        VanoLatitudIni: Number(g.VanoLatitudIni),
+        VanoLongitudIni: Number(g.VanoLongitudIni),
+        VanoLatitudFin: Number(g.VanoLatitudFin),
+        VanoLongitudFin: Number(g.VanoLongitudFin),
+      })));
 
-  // ------------------- GPS EN TIEMPO REAL -------------------
+      // ------------------- CENTRAR REGIÓN -------------------
+      if (pinsLoaded.length > 0) {
+        if (user?.proyecto === 1) setRegionByFeeder(pinsLoaded, true); // true = zoom cercano
+        else setRegionBySed(pinsLoaded, selectedSed, true);
+      }
+
+    } catch (err) {
+      console.error("Error cargando datos:", err);
+    } finally {
+      setLoadingPins(false);
+      setLoadingGaps(false);
+    }
+  };
+
   useEffect(() => {
-    let subscription;
+    if (mapReady) loadData();
+  }, [selectedFeeder, selectedSed, mapReady]);
+
+  // ------------------- GPS Y ORIENTACIÓN -------------------
+  useEffect(() => {
+    let subscriptionLocation, subscriptionHeading;
+
     const initLocation = async () => {
       try {
         setLoadingLocation(true);
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
 
-        subscription = await Location.watchPositionAsync(
+        subscriptionLocation = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Highest, timeInterval: 1000, distanceInterval: 1 },
-          (loc) => {
-            if (loc?.coords) setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          }
+          loc => loc?.coords && setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
         );
+
+        subscriptionHeading = await Location.watchHeadingAsync(h => setHeading(h.trueHeading || 0));
       } catch (err) {
-        console.warn("Error GPS:", err);
+        console.warn("Error GPS/Heading:", err);
       } finally {
         setLoadingLocation(false);
       }
     };
-    initLocation();
-    return () => subscription && subscription.remove();
-  }, []);
 
-  // ------------------- ORIENTACIÓN DEL CELULAR -------------------
-  useEffect(() => {
-    let headingSub;
-    const initHeading = async () => {
-      try {
-        headingSub = await Location.watchHeadingAsync((e) => setHeading(e.trueHeading || 0));
-      } catch (err) {
-        console.warn("Error heading:", err);
-      }
+    initLocation();
+    return () => {
+      subscriptionLocation?.remove();
+      subscriptionHeading?.remove();
     };
-    initHeading();
-    return () => headingSub && headingSub.remove();
   }, []);
 
   // ------------------- IR A UBICACIÓN DEL USUARIO -------------------
@@ -167,8 +138,8 @@ export const Map = () => {
       const newRegion = {
         latitude: coords.latitude,
         longitude: coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
+        latitudeDelta: 0.0025,
+        longitudeDelta: 0.0025,
       };
       mapRef.current?.animateToRegion(newRegion, 600);
       setRegionByCoordinate(coords.latitude, coords.longitude);
@@ -179,15 +150,13 @@ export const Map = () => {
     }
   };
 
-  // ------------------- MEMOIZACIÓN DE PINS Y GAPS -------------------
+  // ------------------- MEMOIZACIÓN DE PINS -------------------
   const memoPins = useMemo(() => {
-    if (!shouldShowPins || !Array.isArray(pins)) return [];
-    return pins.filter(p => p.Type !== 0 && p.Latitude && p.Longitude);
-  }, [pins, shouldShowPins]);
+    if (!Array.isArray(pins)) return [];
+    return pins.filter(p => p.Latitude && p.Longitude);
+  }, [pins]);
 
-  const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
-
-  // ------------------- FUNCIONES AUXILIARES -------------------
+  // ------------------- AUXILIARES -------------------
   const formatLabel = (label) => label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
@@ -196,25 +165,21 @@ export const Map = () => {
       let codigoElemento = "";
       let datoElemento = null;
 
-      // --- Lógica corta y optimizada ---
       if (item.Type === 5) {
         const data = await getPostData(item.IdOriginal);
         datoElemento = data[0];
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
-
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
         codigoElemento = item.VanoCodigo;
         datoElemento = item;
-
       } else {
         tipoElemento = "Desconocido";
         codigoElemento = "";
         datoElemento = item;
       }
 
-      // --- Alerta ---
       Alert.alert(
         "Elemento seleccionado",
         `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
@@ -222,48 +187,31 @@ export const Map = () => {
           { text: "Cancelar", style: "cancel" },
           {
             text: "Inspeccionar",
-            onPress: async () => {
+            onPress: () => {
               setSelectedItem(datoElemento);
               router.push("/(drawer)/inspection");
             }
           }
         ]
       );
-
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
     }
   };
 
-
   // ------------------- RENDER -------------------
   if ((user?.proyecto === 1 && !selectedFeeder) ||
-    (user?.proyecto === 0 && !selectedSed)) {
+      (user?.proyecto === 0 && !selectedSed)) {
     return (
       <View style={styles.placeholderContainer}>
         <Text style={styles.placeholderText}>
-          {user?.proyecto === 1
-            ? "Seleccione un alimentador"
-            : "Seleccione una SED"}
+          {user?.proyecto === 1 ? "Seleccione un alimentador" : "Seleccione una SED"}
         </Text>
-
-        {user?.proyecto === 1 && (
-          <DropDown onSelectFeeder={setSelectedFeeder} />
-        )}
-
-        {user?.proyecto === 0 && (
-          <DropDownSed onSelectSed={setSelectedSed} />
-        )}
-
-        {/* Mapa vacío */}
+        {user?.proyecto === 1 && <DropDown onSelectFeeder={setSelectedFeeder} />}
+        {user?.proyecto === 0 && <DropDownSed onSelectSed={setSelectedSed} />}
         <MapView
           style={styles.map}
-          initialRegion={{
-            latitude: -12.0464,
-            longitude: -77.0428,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
+          initialRegion={{ latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
         />
       </View>
     );
@@ -283,61 +231,31 @@ export const Map = () => {
         </View>
       )}
 
-      {/* <MapView
-        ref={mapRef}
-        style={mapStyles.mapContainer}
-        region={region}
-        initialRegion={region}
-        mapType="satellite"
-        onTouchStart={() => setIsUserInteracting(true)}
-        onPanDrag={() => setIsUserInteracting(true)}
-        onRegionChangeComplete={(reg) => {
-          setRegion(reg);
-          getPinsByRegion(reg);
-        }}
-      > */}
-
-
       <MapView
         ref={mapRef}
         style={mapStyles.mapContainer}
         region={region}
-        initialRegion={region}
         mapType="satellite"
-        showsUserLocation={true}      // 👈 ACTIVAR EL PUNTO NATIVO
-        followsUserLocation={false}   // (opcional)
-        showsMyLocationButton={false} // (en Android pone un botón azul feo)
+        showsUserLocation={true}
+        onMapReady={() => setMapReady(true)}
         onTouchStart={() => setIsUserInteracting(true)}
         onPanDrag={() => setIsUserInteracting(true)}
         onRegionChangeComplete={(reg) => {
           setRegion(reg);
-          getPinsByRegion(reg);
+
+          if (reg.latitudeDelta < ZOOM_THRESHOLD) {
+            getPinsByRegion(reg);
+          }
         }}
       >
-
-
-
-{/* 
-        {userLocation && (
-          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
-            <View style={{ alignItems: "center", justifyContent: "center" }}>
-              <Image source={require("../../assets/transparent.png")}
-                style={{ width: 34, height: 34, tintColor: "#0066FF", transform: [{ rotate: `${heading}deg` }] }} />
-              <View style={{ width: 16, height: 16, backgroundColor: "#4285F4", borderRadius: 8, borderWidth: 3, borderColor: "white", position: "absolute" }} />
-            </View>
-          </Marker>
-        )} */}
-
-
-
-
-
-
-        {memoGaps.map((gap, i) => (
+        {/* GAPS */}
+        {Array.isArray(gaps) && gaps.map((gap, i) => (
           <Polyline
             key={i}
-            coordinates={[{ latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-            { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }]}
+            coordinates={[
+              { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
+              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }
+            ]}
             strokeWidth={3}
             strokeColor={getGapColorByInspected(gap)}
             tappable
@@ -345,33 +263,18 @@ export const Map = () => {
           />
         ))}
 
+        {/* PINS */}
         {memoPins.map((pin, i) => {
-          //const cleanLabel = formatLabel(pin.Label);
           const cleanLabel = formatLabel(pin.ElementCode);
-
-
-
-
-
-
-
-
-
-
-          
-
-          const showLabel = Number(pin.Type) !== 8 && cleanLabel?.length > 0;
-
-          if (Number(pin.Type) === 8) return (
-            <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} tracksViewChanges pointerEvents="none">
-              <View style={pinStyles.pinWrapper}>
-                <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain" />
-              </View>
-            </Marker>
-          );
+          const showLabel = shouldShowPins && Number(pin.Type) !== 8 && cleanLabel?.length > 0;
 
           return (
-            <Marker key={pin.Id || i} coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }} tracksViewChanges onPress={() => onMarkerPress(pin)}>
+            <Marker
+              key={pin.Id || i}
+              coordinate={{ latitude: pin.Latitude, longitude: pin.Longitude }}
+              tracksViewChanges
+              onPress={() => onMarkerPress(pin)}
+            >
               <View style={pinStyles.pinWrapper}>
                 <Image source={getSourceImageFromType2(pin)} style={pinStyles.pinIcon} resizeMode="contain" />
                 {showLabel && (

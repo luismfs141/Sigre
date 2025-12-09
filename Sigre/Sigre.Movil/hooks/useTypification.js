@@ -12,8 +12,7 @@ export const useTypification = () => {
     }
 
     try {
-      const typifications = await getTypificationByTypeElement(tableId);
-      return typifications;
+      return await getTypificationByTypeElement(tableId);
     } catch (error) {
       console.error("❌ Error al obtener tipificaciones por tipo de elemento:", error);
       return [];
@@ -27,9 +26,14 @@ export const useTypification = () => {
       return [];
     }
 
+    // ⚠ PARCHE QUE EVITA EL CRASH
+    if (!idElement) {
+      console.warn("⚠ No se encontraron tipificaciones para el elemento undefined");
+      return [];
+    }
+
     try {
-      const typifications = await getTypificationByIdElement(idElement, typeElement);
-      return typifications;
+      return await getTypificationByIdElement(idElement, typeElement);
     } catch (error) {
       console.error("❌ Error al obtener tipificaciones por elemento:", error);
       return [];

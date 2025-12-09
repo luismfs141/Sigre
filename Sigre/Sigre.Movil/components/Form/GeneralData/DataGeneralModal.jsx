@@ -1,52 +1,100 @@
-// DataGeneralModal.jsx
-import { Button, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef } from "react";
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import PosteForm from "./PosteForm";
 import SedForm from "./SedForm";
 import VanoForm from "./VanoForm";
 
 export default function DataGeneralModal({ visible, item, onClose, onSave }) {
   if (!item?.data) return null;
+
   const data = item.data;
 
+  const formRef = useRef(null);
+
+  const handleSave = async () => {
+    if (formRef.current?.save) {
+      const savedData = await formRef.current.save();
+      onSave?.(savedData);
+    } else {
+      onSave?.(data); // fallback
+    }
+  };
+
   const isPoste = Object.prototype.hasOwnProperty.call(data, "PostInterno");
-  const isVano = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
-  const isSed = Object.prototype.hasOwnProperty.call(data, "SedInterno");
+  const isVano  = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
+  const isSed   = Object.prototype.hasOwnProperty.call(data, "SedInterno");
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <ScrollView>
+
+          <ScrollView style={{ flexGrow: 0 }}>
             <Text style={styles.title}>Datos Generales</Text>
 
-            {isPoste && <PosteForm data={data} onSave={onSave} />}
-            {isVano && <VanoForm data={data} onSave={onSave} />}
-            {isSed && <SedForm data={data} onSave={onSave} />}
+            {isPoste && <PosteForm data={data} ref={formRef} />}
+            {isVano && <VanoForm data={data} ref={formRef} />}
+            {isSed && <SedForm data={data} ref={formRef} />}
           </ScrollView>
 
-          <Button title="Cerrar" onPress={onClose} />
+          <View style={styles.buttons}>
+            <TouchableOpacity style={styles.btnCancel} onPress={onClose}>
+              <Text style={styles.btnText}>Cancelar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+              <Text style={styles.btnText}>Guardar</Text>
+            </TouchableOpacity>
+          </View>
+
         </View>
       </View>
     </Modal>
   );
 }
 
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "#0008",
     justifyContent: "center",
-    padding: 16
+    padding: 12
   },
   container: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 16,
-    maxHeight: "88%"
+    padding: 12,
+    maxHeight: "90%"
   },
   title: {
-    fontWeight: "bold",
     fontSize: 20,
-    marginBottom: 12
+    fontWeight: "700",
+    marginBottom: 10
+  },
+
+  // 🔥 Botones del estilo que quieres
+  buttons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12
+  },
+  btnCancel: {
+    backgroundColor: "#c0392b",
+    padding: 12,
+    borderRadius: 8,
+    width: "48%",
+    alignItems: "center"
+  },
+  btnSave: {
+    backgroundColor: "#27ae60",
+    padding: 12,
+    borderRadius: 8,
+    width: "48%",
+    alignItems: "center"
+  },
+  btnText: {
+    color: "#fff",
+    fontWeight: "600"
   }
 });

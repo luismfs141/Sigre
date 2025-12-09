@@ -1,62 +1,46 @@
 // useMap.js
 import { useDatos } from "../context/DatosContext";
-import { getGapsByFeederLocal, getGapsBySedLocal } from "../database/offlineDB/gaps";
-import { getPinsByFeederLocal, getPinsBySedLocal } from "../database/offlineDB/pins";
+import { useGap } from "./useGap";
+import { usePin } from "./usePin";
 
 export const useMap = () => {
-  const {
-    setPins,
-    setGaps,
-    setRegion,
-    totalPins,
-    setTotalPins
-  } = useDatos();
+  const { setPins, setGaps, setRegion, totalPins, setTotalPins } = useDatos();
+  const { fetchGapsByFeeder, fetchGapsBySed } = useGap();
+  const { fetchPinsByFeeder, fetchPinsBySed } = usePin();
 
   // --------------------------------------------------------------
-  // CARGAR TODOS LOS PINS DEL ALIMENTADOR (NO SE MUESTRAN AÚN)
+  // CARGAR TODOS LOS PINS DEL ALIMENTADOR
   // --------------------------------------------------------------
   const getPinsByFeeder = async (feederId) => {
     try {
-      let data = await getPinsByFeederLocal(feederId);
-      if (!Array.isArray(data)) data = [];
+      const pins = await fetchPinsByFeeder(feederId);
 
-      const pinsFiltered = data
-        .filter(p => p.Type !== 0)
-        .map(p => ({
-          ...p,
-          Latitude: Number(p.Latitude),
-          Longitude: Number(p.Longitude)
-        }));
+      // Filtrar por Type !== 0
+      const pinsFiltered = pins.filter(p => p.Type !== 0);
 
       setTotalPins(pinsFiltered);
       return pinsFiltered;
     } catch (err) {
-      console.error("❌ Error cargando pines offline:", err);
+      console.error("❌ Error cargando pines del feeder:", err);
       setTotalPins([]);
       return [];
     }
   };
 
   // --------------------------------------------------------------
-  // CARGAR TODOS LOS PINS DE LA SUBESTACION (NO SE MUESTRAN AÚN)
+  // CARGAR TODOS LOS PINS DE LA SUBESTACION
   // --------------------------------------------------------------
   const getPinsBySed = async (sedId) => {
     try {
-      let data = await getPinsBySedLocal(sedId);
-      if (!Array.isArray(data)) data = [];
+      const pins = await fetchPinsBySed(sedId);
 
-      const pinsFiltered = data
-        .filter(p => p.Type !== 0)
-        .map(p => ({
-          ...p,
-          Latitude: Number(p.Latitude),
-          Longitude: Number(p.Longitude)
-        }));
+      // Filtrar por Type !== 0
+      const pinsFiltered = pins.filter(p => p.Type !== 0);
 
       setTotalPins(pinsFiltered);
       return pinsFiltered;
     } catch (err) {
-      console.error("❌ Error cargando pines offline:", err);
+      console.error("❌ Error cargando pines de la SED:", err);
       setTotalPins([]);
       return [];
     }
@@ -68,15 +52,12 @@ export const useMap = () => {
   const getPinsByRegion = (region) => {
     if (!Array.isArray(totalPins)) return setPins([]);
 
-    // Si el zoom no es suficiente → no mostrar pines
     if (region.latitudeDelta > 0.008) {
       setPins([]);
       return;
     }
 
-
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
-
     const minLat = latitude - latitudeDelta * 0.6;
     const maxLat = latitude + latitudeDelta * 0.6;
     const minLng = longitude - longitudeDelta * 0.6;
@@ -92,43 +73,32 @@ export const useMap = () => {
     setPins(visiblePins);
   };
 
-
   // --------------------------------------------------------------
   // GAPS (no causan lag)
   // --------------------------------------------------------------
   const getGapsByFeeder = async (feederId) => {
-    let data = await getGapsByFeederLocal(feederId);
-    if (!Array.isArray(data)) data = [];
-
-    setGaps(data.map(g => ({
-      ...g,
-      VanoLatitudIni: Number(g.VanoLatitudIni),
-      VanoLongitudIni: Number(g.VanoLongitudIni),
-      VanoLatitudFin: Number(g.VanoLatitudFin),
-      VanoLongitudFin: Number(g.VanoLongitudFin)
-    })));
-
-    return data;
+    try {
+      const gaps = await fetchGapsByFeeder(feederId);
+      setGaps(gaps);
+      return gaps;
+    } catch (err) {
+      console.error("❌ Error cargando gaps por feeder:", err);
+      setGaps([]);
+      return [];
+    }
   };
 
-  // --------------------------------------------------------------
-  // GAPS POR SUBESTACION(no causan lag)
-  // --------------------------------------------------------------
   const getGapsBySed = async (sedId) => {
-    let data = await getGapsBySedLocal(sedId);
-    if (!Array.isArray(data)) data = [];
-
-    setGaps(data.map(g => ({
-      ...g,
-      VanoLatitudIni: Number(g.VanoLatitudIni),
-      VanoLongitudIni: Number(g.VanoLongitudIni),
-      VanoLatitudFin: Number(g.VanoLatitudFin),
-      VanoLongitudFin: Number(g.VanoLongitudFin)
-    })));
-
-    return data;
+    try {
+      const gaps = await fetchGapsBySed(sedId);
+      setGaps(gaps);
+      return gaps;
+    } catch (err) {
+      console.error("❌ Error cargando gaps por SED:", err);
+      setGaps([]);
+      return [];
+    }
   };
-
 
   // --------------------------------------------------------------
   // SET REGION POR COORDENADAS (GPS)
@@ -144,9 +114,8 @@ export const useMap = () => {
     });
   };
 
-
   // --------------------------------------------------------------
-  // SET REGION AL CENTRAR ALIMENTADOR
+  // CENTRAR REGION POR ALIMENTADOR
   // --------------------------------------------------------------
   const setRegionByFeeder = (pinsArray) => {
     if (!pinsArray || pinsArray.length === 0) return;
@@ -159,6 +128,9 @@ export const useMap = () => {
     });
   };
 
+  // --------------------------------------------------------------
+  // CENTRAR REGION POR SED
+  // --------------------------------------------------------------
   const setRegionBySed = (pinsArray, sed) => {
     if (pinsArray && pinsArray.length > 0) {
       setRegion({
@@ -179,13 +151,12 @@ export const useMap = () => {
 
   return {
     getPinsByFeeder,
+    getPinsBySed,
     getPinsByRegion,
     getGapsByFeeder,
     getGapsBySed,
-    getPinsBySed,
     setRegionByFeeder,
     setRegionBySed,
     setRegionByCoordinate
   };
-
 };
