@@ -1,5 +1,5 @@
 import { useDatos } from "../context/DatosContext";
-import { getDeficiencyByTypificationElement } from "../database/offlineDB/deficiencies";
+import { getDeficiencyByTypificationElement, saveOrUpdateDeficiency } from "../database/offlineDB/deficiencies";
 
 export const useDeficiency = () => {
   const { checkDatabase } = useDatos();
@@ -23,7 +23,27 @@ export const useDeficiency = () => {
     }
   };
 
+  /**
+   * 💾 Guarda o actualiza una deficiencia
+   */
+  const saveDeficiency = async (deficiency) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible. No se puede guardar la deficiencia.");
+      return null;
+    }
+
+    try {
+      const result = await saveOrUpdateDeficiency(deficiency);
+      return result; // DefiInterno actualizado o insertId
+    } catch (error) {
+      console.error("❌ Error al guardar la deficiencia:", error);
+      return null;
+    }
+  };
+
   return {
-    fetchDeficiencyByTypificationElement
+    fetchDeficiencyByTypificationElement,
+    saveDeficiency
   };
 };

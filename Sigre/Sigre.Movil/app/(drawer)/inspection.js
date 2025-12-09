@@ -6,13 +6,13 @@ import {
   Button,
   Dimensions,
   FlatList,
-  SafeAreaView,
+  //SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
 import ListaDefModal from "../../components/Modal/ListaDefModal";
@@ -66,18 +66,24 @@ export default function Inspection() {
     const tid = isPost ? 8 : 9;
     setTableId(tid);
 
+    const typeElement =
+      selectedItem.PostInterno ? "POST" :
+      selectedItem.VanoInterno ? "VANO" :
+      selectedItem.SedInterno ? "SED" :
+      null;
+
     const loadDefs = async () => {
       try {
         const defsByType = await fetchTypificationsByTypeElement(tid);
-        const defsByElement = await fetchTypificationsByElement(elementId, tid);
+        const defsByElement = await fetchTypificationsByElement(elementId, typeElement);
 
         const existingDefs = defsByElement.map(def => ({
           id: def.TypificationId ?? def.id,
           type: "def",
-          defId: def.TypificationId ?? def.id,
-          name: def.code ?? def.name ?? `Def ${def.TypificationId ?? def.id}`,
+          defId: def.Code,
+          name: def.Code,
           data: {
-            detail: def.detail ?? def.description ?? "",
+            detail: def.Typification,
             elementId,
             elementType: tid,
             typificationId: def.TypificationId ?? def.id
@@ -110,7 +116,7 @@ export default function Inspection() {
   const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);
 
   // Abrir modal apropiado según tipo del item
-  const openFormModal = async (item) => {
+  const openFormModal = (item) => {
     setCurrentItem(item);
 
     if (item.type === "general") {
@@ -119,36 +125,62 @@ export default function Inspection() {
     }
 
     if (item.type === "def") {
-      // Intentar cargar deficiencia asociada a este elemento y tipificación
-      try {
-        const elementId = item.data.elementId ?? item.data.elementId ?? currentItem?.data?.id ?? null;
-        const elementType = item.data.elementType ?? item.data.elementType ?? tableId;
-        const typificationId = item.data.typificationId ?? item.defId ?? item.data?.defId;
+      // Determinar elementId y elementType
+      let elementId = null;
+      let elementType = null;
 
-        const defs = await fetchDeficiencyByTypificationElement(elementId, elementType, typificationId);
-        const defToOpen = defs?.[0] ?? null;
-
-        setCurrentDeficiency(defToOpen);
-      } catch (err) {
-        console.warn("No se pudo cargar la deficiencia:", err);
-        setCurrentDeficiency(null);
+      if (selectedItem?.PostInterno) {
+        elementId = selectedItem.PostInterno;
+        elementType = "POST";
+      } else if (selectedItem?.VanoInterno) {
+        elementId = selectedItem.VanoInterno;
+        elementType = "VANO";
+      } else if (selectedItem?.SedInterno) {
+        elementId = selectedItem.SedInterno;
+        elementType = "SED";
       }
+
+      // Enviar al modal: code + data (puede estar vacío)
+      const defForModal = {
+        DefiCodigoElemento: item.data?.typificationCode ?? item.defId,
+        elementId,
+        elementType,
+        ...item.data // si hay datos existentes
+      };
+
+      setCurrentDeficiency(defForModal);
       setModalDeficiencyVisible(true);
     }
   };
 
-  // Añadir deficiencia desde lista modal (ListaDefModal)
   const addNewDeficiency = (def) => {
+    // Determinar elementId y elementType
+    let elementId = null;
+    let elementType = null;
+
+    if (selectedItem?.PostInterno) {
+      elementId = selectedItem.PostInterno;
+      elementType = "POST";
+    } else if (selectedItem?.VanoInterno) {
+      elementId = selectedItem.VanoInterno;
+      elementType = "VANO";
+    } else if (selectedItem?.SedInterno) {
+      elementId = selectedItem.SedInterno;
+      elementType = "SED";
+    }
+
     const newDef = {
-      id: def.id ?? def.TypificationId,
+      id: def.id ?? def.TypificationId ?? Date.now(),
       type: "def",
       defId: def.TypificationId ?? def.id,
       name: def.code ?? def.name,
       data: {
         detail: def.detail ?? "",
-        elementId: selectedItem?.id,
-        elementType: tableId,
-        typificationId: def.TypificationId ?? def.id
+        elementId,
+        elementType,
+        typificationId: def.TypificationId ?? def.id,
+        typificationCode: def.code,
+        tableId: def.tableId
       },
       photos: [],
       audio: null

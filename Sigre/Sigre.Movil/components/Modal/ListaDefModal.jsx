@@ -11,6 +11,7 @@ export default function ListaDefModal({ visible, defs, usedIds, onSelect, onClos
     code: d.Code ?? d.code,
     short: d.Component ?? d.short,
     detail: d.Typification ?? d.detail,
+    tableId: d.TableId
   }));
 
   const available = mappedDefs.filter(d => !usedIds.includes(d.id));

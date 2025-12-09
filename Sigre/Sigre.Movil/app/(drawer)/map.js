@@ -160,44 +160,45 @@ export const Map = () => {
   const formatLabel = (label) => label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
-    try {
-      let tipoElemento = "";
-      let codigoElemento = "";
-      let datoElemento = null;
+  try {
+    let tipoElemento = "";
+    let codigoElemento = "";
+    let datoElemento = null;
 
-      if (item.Type === 5) {
-        const data = await getPostData(item.IdOriginal);
-        datoElemento = data[0];
-        tipoElemento = "Poste";
-        codigoElemento = datoElemento.PostCodigoNodo;
-      } else if (!item.Type && item.VanoCodigo) {
-        tipoElemento = "Vano";
-        codigoElemento = item.VanoCodigo;
-        datoElemento = item;
-      } else {
-        tipoElemento = "Desconocido";
-        codigoElemento = "";
-        datoElemento = item;
-      }
-
-      Alert.alert(
-        "Elemento seleccionado",
-        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Inspeccionar",
-            onPress: () => {
-              setSelectedItem(datoElemento);
-              router.push("/(drawer)/inspection");
-            }
-          }
-        ]
-      );
-    } catch (err) {
-      console.warn("Error al seleccionar marker:", err);
+    if (item.Type === 5) {
+      const data = await getPostData(item.IdOriginal);
+      datoElemento = data; // ya es un objeto, no un array
+      tipoElemento = "Poste";
+      codigoElemento = datoElemento.PostCodigoNodo;
+    } else if (!item.Type && item.VanoCodigo) {
+      tipoElemento = "Vano";
+      codigoElemento = item.VanoCodigo;
+      datoElemento = item;
+    } else {
+      tipoElemento = "Desconocido";
+      codigoElemento = "";
+      datoElemento = item;
     }
-  };
+
+    Alert.alert(
+      "Elemento seleccionado",
+      `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Inspeccionar",
+          onPress: () => {
+            setSelectedItem(datoElemento);
+            router.push("/(drawer)/inspection");
+          }
+        }
+      ]
+    );
+  } catch (err) {
+    console.warn("Error al seleccionar marker:", err);
+  }
+};
+
 
   // ------------------- RENDER -------------------
   if ((user?.proyecto === 1 && !selectedFeeder) ||

@@ -8,13 +8,17 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
   if (!item?.data) return null;
 
   const data = item.data;
-
   const formRef = useRef(null);
 
   const handleSave = async () => {
     if (formRef.current?.save) {
-      const savedData = await formRef.current.save();
-      onSave?.(savedData);
+      try {
+        const savedData = await formRef.current.save();
+        onSave?.(savedData);
+      } catch (err) {
+        console.warn("⚠ Error guardando datos del formulario:", err);
+        onSave?.(data); // fallback seguro
+      }
     } else {
       onSave?.(data); // fallback
     }
@@ -28,7 +32,6 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
-
           <ScrollView style={{ flexGrow: 0 }}>
             <Text style={styles.title}>Datos Generales</Text>
 
@@ -46,13 +49,11 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
               <Text style={styles.btnText}>Guardar</Text>
             </TouchableOpacity>
           </View>
-
         </View>
       </View>
     </Modal>
   );
 }
-
 
 const styles = StyleSheet.create({
   overlay: {
@@ -72,8 +73,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 10
   },
-
-  // 🔥 Botones del estilo que quieres
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",
