@@ -1,3 +1,11 @@
+import { useRef } from "react"; // ya lo tienes via useState/useEffect, solo confirma
+import ViewShot, { captureRef } from "react-native-view-shot";
+import utm from "utm";
+
+
+
+
+
 // ⚙️ FileSystem (legacy para poder usar readAsStringAsync, deleteAsync, etc.)
 import * as FS from "expo-file-system/legacy";
 // SAF (carpeta pública Android) también desde legacy
@@ -107,6 +115,12 @@ export default function DeficiencyMediaScreen() {
   const [showModal, setShowModal] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
+
+  const viewShotRef = useRef(null);
+
+  // Datos para armar la marca de agua
+  const [watermarkData, setWatermarkData] = useState(null);
+
   // ================================
   // HELPERS
   // ================================
@@ -123,6 +137,35 @@ export default function DeficiencyMediaScreen() {
     const ms = String(now.getMilliseconds()).padStart(3, "0");
     return `${yyyy}${MM}${dd}_${hh}${mm}${ss}${ms}`;
   }
+
+  // Convierte lat/long a texto UTM
+  function formatUtmFromLatLon(latitude, longitude) {
+    try {
+      const { easting, northing, zoneNum, zoneLetter } = utm.fromLatLon(
+        latitude,
+        longitude
+      );
+      // Ejemplo: "UTM 18L 765432E 8201234N"
+      return `UTM ${zoneNum}${zoneLetter} ${Math.round(
+        easting
+      )}E ${Math.round(northing)}N`;
+    } catch (e) {
+      console.log("Error convirtiendo a UTM:", e);
+      return "";
+    }
+  }
+
+  // Fecha legible para marca de agua
+  function formatWatermarkDate(date = new Date()) {
+    const yyyy = date.getFullYear();
+    const MM = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${dd}/${MM}/${yyyy} ${hh}:${mm}`;
+  }
+
+
 
   // Nombre bonito desde cualquier URI (file:// o content://)
   function getFileName(uri) {
@@ -323,12 +366,66 @@ export default function DeficiencyMediaScreen() {
   const takePhoto = async () => {
     if (!cameraRef) return;
 
+    // Asegurar GPS y permiso de ubicación
     const gpsOk = await ensureGpsReady();
     if (!gpsOk) return;
 
+    // 1) Sacar foto normal
     const result = await cameraRef.takePictureAsync({ quality: 0.9 });
-    setPhotos((prev) => [...prev, result.uri]); // uri temporal file://
+    const rawUri = result.uri;
+
+    // 2) Obtener posición actual
+    const position = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = position.coords || {};
+
+    // 3) Preparar texto de marca de agua
+    const utmText =
+      latitude != null && longitude != null
+        ? formatUtmFromLatLon(latitude, longitude)
+        : "";
+    const fechaText = formatWatermarkDate(new Date());
+
+    // 4) Guardar en estado para que ViewShot renderice
+    setWatermarkData({
+      uri: rawUri,
+      utm: utmText,
+      fecha: fechaText,
+    });
+
+    // 5) Esperar un frame para que se pinte el ViewShot y capturarlo
+    setTimeout(async () => {
+      try {
+        if (!viewShotRef.current) {
+          // Si por algún motivo no está, guardamos la foto cruda
+          setPhotos((prev) => [...prev, rawUri]);
+          return;
+        }
+
+        const watermarkedUri = await captureRef(viewShotRef.current, {
+          format: "jpg",
+          quality: 0.9,
+        });
+
+        // Usar la foto con marca de agua en lugar de la original
+        setPhotos((prev) => [...prev, watermarkedUri]);
+
+        // Opcional: borrar la foto original sin marca
+        try {
+          await FS.deleteAsync(rawUri, { idempotent: true });
+        } catch (err) {
+          console.log("⚠️ Error borrando foto original:", err);
+        }
+      } catch (e) {
+        console.log("Error generando foto con marca de agua:", e);
+        // fallback: usamos la original
+        setPhotos((prev) => [...prev, rawUri]);
+      } finally {
+        // limpiar estado para que no se siga pintando el ViewShot
+        setWatermarkData(null);
+      }
+    }, 0);
   };
+
 
   // ================================
   // 📷 MODAL FOTO
@@ -666,11 +763,54 @@ export default function DeficiencyMediaScreen() {
     }
   };
 
+
+
+
+
   // ================================
   // UI
   // ================================
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
+
+      {/* Vista oculta usada para generar la foto con marca de agua */}
+      {watermarkData && (
+        <ViewShot
+          ref={viewShotRef}
+          style={{ position: "absolute", left: -9999, width: 400, height: 300 }}
+          options={{ format: "jpg", quality: 0.9 }}
+        >
+          <View style={{ flex: 1 }}>
+            <Image
+              source={{ uri: watermarkData.uri }}
+              style={{ flex: 1, resizeMode: "cover" }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                right: 8,
+                padding: 4,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                borderRadius: 4,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 10 }}>
+                {watermarkData.utm}
+              </Text>
+              <Text style={{ color: "white", fontSize: 10 }}>
+                {watermarkData.fecha}
+              </Text>
+            </View>
+          </View>
+        </ViewShot>
+      )}
+
+
+
+
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* MODAL FOTO */}
         <Modal
