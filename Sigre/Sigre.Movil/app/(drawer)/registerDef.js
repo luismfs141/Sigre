@@ -1,5 +1,6 @@
-// ⚙️ Filesystem + SAF (Android)
-import * as FS from "expo-file-system";
+// ⚙️ FileSystem (legacy para poder usar readAsStringAsync, deleteAsync, etc.)
+import * as FS from "expo-file-system/legacy";
+// SAF (carpeta pública Android) también desde legacy
 import { StorageAccessFramework as SAF } from "expo-file-system/legacy";
 
 import Slider from "@react-native-community/slider";
@@ -22,14 +23,65 @@ import {
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 import ImageViewer from "react-native-image-zoom-viewer";
+
+// 👇 ajusta la ruta según dónde esté este archivo
+import {
+  getNextArchCodTablaLocal,
+  insertArchivoLocal,
+} from "../../database/offlineDB/files";
+
+// Config actual de ruta (luego lo harás dinámico con IDs reales)
+const PATH_CONFIG = {
+  proyecto: "ProyectoX",
+  alimentador: "Alim01",
+  subestacion: "Sub01",
+  tipoElemento: "TipoElemento",
+  elemento: "Elem01",
+  deficiencia: "DEF001",
+};
+
+// Construye la ruta relativa que queremos guardar en ArchNombre
+function buildRelativePath(tipoCarpeta, fileName) {
+  const {
+    proyecto,
+    alimentador,
+    subestacion,
+    tipoElemento,
+    elemento,
+    deficiencia,
+  } = PATH_CONFIG;
+
+  return [
+    "SIGRE",
+    proyecto,
+    alimentador,
+    subestacion,
+    tipoElemento,
+    elemento,
+    deficiencia,
+    tipoCarpeta, // "Fotos" | "Audios"
+    fileName,
+  ].join("/");
+}
+
+// Fecha para SQLite: "YYYY-MM-DD HH:mm:ss"
+function formatDateTimeSQLite(date = new Date()) {
+  const yyyy = date.getFullYear();
+  const MM = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${MM}-${dd} ${hh}:${mm}:${ss}`;
+}
 
 export default function DeficiencyMediaScreen() {
   const router = useRouter();
-
   const [permission, requestPermission] = useCameraPermissions();
 
-  // 📸 Fotos (URIs temporales de cámara o SAF)
+  // 📸 Fotos (URIs: temporales + SAF)
   const [photos, setPhotos] = useState([]);
 
   // 🎤 Audios
@@ -43,15 +95,15 @@ export default function DeficiencyMediaScreen() {
   // 🎤 Grabación
   const [recording, setRecording] = useState(null);
 
-  // 🔊 Reproducción de audio
+  // 🔊 Reproducción
   const [sound, setSound] = useState(null);
   const [currentAudioIndex, setCurrentAudioIndex] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  // 🔴 Parpadeo (para futuro)
+  // 🔴 Indicador REC
   const [blink, setBlink] = useState(true);
 
-  // MODAL
+  // Modal fotos
   const [showModal, setShowModal] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
@@ -59,6 +111,7 @@ export default function DeficiencyMediaScreen() {
   // HELPERS
   // ================================
 
+  // Timestamp: 20251206_145233123 (para nombres de archivo)
   function formatFileTimestampMs() {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -71,15 +124,44 @@ export default function DeficiencyMediaScreen() {
     return `${yyyy}${MM}${dd}_${hh}${mm}${ss}${ms}`;
   }
 
-  const getFileName = (uri) => {
-    const parts = uri.split("/");
-    return parts[parts.length - 1] || "archivo";
-  };
+  // Nombre bonito desde cualquier URI (file:// o content://)
+  function getFileName(uri) {
+    if (!uri) return "";
+    const decoded = decodeURIComponent(uri.split("?")[0]);
+    const parts = decoded.split("/");
+    return parts[parts.length - 1] || "";
+  }
 
-  const isTempFile = (uri) => uri.startsWith("file://");
-  const isSafFile = (uri) => uri.startsWith("content://");
+  // ---- SAF helpers ----
 
-  // 🔐 Cargar / pedir carpeta raíz SIGRE (pública) una sola vez
+  // Obtener nombre de carpeta/archivo desde una SAF URI
+  function getNameFromSafUri(uri) {
+    const decoded = decodeURIComponent(uri.split("?")[0]);
+    const parts = decoded.split("/");
+    const last = parts[parts.length - 1];
+    const segments = last.split("/");
+    return segments[segments.length - 1];
+  }
+
+  // Encuentra o crea subcarpeta dentro de parentUri
+  async function findOrCreateSubdir(parentUri, dirName) {
+    try {
+      const entries = await SAF.readDirectoryAsync(parentUri);
+      for (const entryUri of entries) {
+        const name = getNameFromSafUri(entryUri);
+        if (name === dirName) {
+          return entryUri; // ya existe
+        }
+      }
+    } catch (err) {
+      console.log("⚠️ Error leyendo directorio SAF:", err);
+    }
+
+    const newDirUri = await SAF.makeDirectoryAsync(parentUri, dirName);
+    return newDirUri;
+  }
+
+  // Pide (una sola vez) la carpeta raíz para SIGRE
   async function getRootUri() {
     try {
       if (!SAF || !SAF.requestDirectoryPermissionsAsync) {
@@ -91,13 +173,11 @@ export default function DeficiencyMediaScreen() {
       }
 
       let uri = await AsyncStorage.getItem("SIGRE_ROOT_URI");
-
       if (!uri) {
-        const perm = await SAF.requestDirectoryPermissionsAsync();
+        const perm = await SAF.requestDirectoryPermissionsAsync(null);
         if (!perm.granted) {
           return null;
         }
-
         uri = perm.directoryUri;
         await AsyncStorage.setItem("SIGRE_ROOT_URI", uri);
       }
@@ -105,19 +185,21 @@ export default function DeficiencyMediaScreen() {
       return uri;
     } catch (err) {
       console.log("Error en getRootUri:", err);
-      throw err;
+      return null;
     }
   }
 
-  // Crear estructura:
-  // root/SIGRE/Proyecto/Alim/Sub/TipoElemento/Elemento/Deficiencia/{Fotos,Audios}
+  // Crea estructura:
+  // [root]/SIGRE/ProyectoX/Alim01/Sub01/TipoElemento/Elem01/DEF001/{Fotos,Audios}
   async function ensureMediaDirectories(rootUri) {
-    const proyecto = "ProyectoX";
-    const alimentador = "Alim01";
-    const subestacion = "Sub01";
-    const tipoElemento = "TipoElemento";
-    const elemento = "Elem01";
-    const deficiencia = "DEF001";
+    const {
+      proyecto,
+      alimentador,
+      subestacion,
+      tipoElemento,
+      elemento,
+      deficiencia,
+    } = PATH_CONFIG;
 
     const segments = [
       "SIGRE",
@@ -132,61 +214,39 @@ export default function DeficiencyMediaScreen() {
     let currentUri = rootUri;
 
     for (const name of segments) {
-      try {
-        currentUri = await SAF.createDirectoryAsync(currentUri, name);
-      } catch (err) {
-        const msg = String((err && err.message) || err);
-        if (msg.includes("EEXIST") || msg.includes("already exists")) {
-          currentUri = `${currentUri}/${name}`;
-        } else {
-          throw err;
-        }
-      }
+      currentUri = await findOrCreateSubdir(currentUri, name);
     }
 
-    // Fotos
-    let fotosUri = currentUri;
-    try {
-      fotosUri = await SAF.createDirectoryAsync(currentUri, "Fotos");
-    } catch (err) {
-      const msg = String((err && err.message) || err);
-      if (msg.includes("EEXIST") || msg.includes("already exists")) {
-        fotosUri = `${currentUri}/Fotos`;
-      } else {
-        throw err;
-      }
-    }
-
-    // Audios
-    let audiosUri = currentUri;
-    try {
-      audiosUri = await SAF.createDirectoryAsync(currentUri, "Audios");
-    } catch (err) {
-      const msg = String((err && err.message) || err);
-      if (msg.includes("EEXIST") || msg.includes("already exists")) {
-        audiosUri = `${currentUri}/Audios`;
-      } else {
-        throw err;
-      }
-    }
+    const fotosUri = await findOrCreateSubdir(currentUri, "Fotos");
+    const audiosUri = await findOrCreateSubdir(currentUri, "Audios");
 
     return { fotosUri, audiosUri };
   }
 
-  // Buscar nombre libre: baseName.ext → baseName (2).ext, (3), etc.
-  async function getUniqueSafFileUri(folderUri, baseName, ext, mime) {
-    let n = 1;
+  // Buscar nombre libre: baseName.ext → baseName.ext, baseName (2).ext, ...
+  async function getUniqueSafFileUri(folderUri, baseNameWithExt, mimeType) {
+    const dotIndex = baseNameWithExt.lastIndexOf(".");
+    let main = baseNameWithExt;
+    let ext = "";
+    if (dotIndex !== -1) {
+      main = baseNameWithExt.slice(0, dotIndex);
+      ext = baseNameWithExt.slice(dotIndex);
+    }
 
+    let n = 1;
     while (true) {
       const suffix = n === 1 ? "" : ` (${n})`;
-      const fileName = `${baseName}${suffix}${ext}`;
-
+      const fileName = `${main}${suffix}${ext}`;
       try {
-        const fileUri = await SAF.createFileAsync(folderUri, fileName, mime);
+        const fileUri = await SAF.createFileAsync(folderUri, fileName, mimeType);
         return fileUri;
       } catch (err) {
-        const msg = String((err && err.message) || err);
-        if (msg.includes("EEXIST") || msg.includes("already exists")) {
+        const msg = String(err || "");
+        if (
+          msg.includes("EEXIST") ||
+          msg.includes("Already") ||
+          msg.includes("exist")
+        ) {
           n += 1;
           continue;
         }
@@ -194,6 +254,35 @@ export default function DeficiencyMediaScreen() {
       }
     }
   }
+
+  // Verifica que el GPS esté activo y con permisos
+  const ensureGpsReady = async () => {
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          "GPS desactivado",
+          "Activa el GPS para poder registrar fotos y audios."
+        );
+        return false;
+      }
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permiso de ubicación",
+          "Debes otorgar permiso de ubicación para registrar fotos y audios."
+        );
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.log("Error comprobando GPS:", err);
+      Alert.alert("Error", "No se pudo comprobar el estado del GPS.");
+      return false;
+    }
+  };
 
   // ================================
   // CARGAR MEDIA EXISTENTE AL ENTRAR
@@ -206,23 +295,21 @@ export default function DeficiencyMediaScreen() {
 
         const { fotosUri, audiosUri } = await ensureMediaDirectories(rootUri);
 
-        // 📸 Cargar fotos existentes
         try {
-          const photoUris = (await SAF.readDirectoryAsync(fotosUri)) || [];
+          const photoUris = await SAF.readDirectoryAsync(fotosUri);
           setPhotos(photoUris);
         } catch (err) {
-          console.log("⚠️ Error leyendo directorio Fotos:", err);
+          console.log("⚠️ Error leyendo Fotos SAF:", err);
         }
 
-        // 🎤 Cargar audios existentes
         try {
-          const audioUris = (await SAF.readDirectoryAsync(audiosUri)) || [];
+          const audioUris = await SAF.readDirectoryAsync(audiosUri);
           setAudios(audioUris);
           setAudioProgress(
             audioUris.map(() => ({ position: 0, duration: 1 }))
           );
         } catch (err) {
-          console.log("⚠️ Error leyendo directorio Audios:", err);
+          console.log("⚠️ Error leyendo Audios SAF:", err);
         }
       } catch (err) {
         console.log("Error inicializando media:", err);
@@ -235,8 +322,12 @@ export default function DeficiencyMediaScreen() {
   // ================================
   const takePhoto = async () => {
     if (!cameraRef) return;
+
+    const gpsOk = await ensureGpsReady();
+    if (!gpsOk) return;
+
     const result = await cameraRef.takePictureAsync({ quality: 0.9 });
-    setPhotos((prev) => [...prev, result.uri]); // file://
+    setPhotos((prev) => [...prev, result.uri]); // uri temporal file://
   };
 
   // ================================
@@ -253,7 +344,7 @@ export default function DeficiencyMediaScreen() {
     try {
       await FS.deleteAsync(uri, { idempotent: true });
     } catch (err) {
-      console.log("⚠️ Error borrando foto física:", err);
+      console.log("⚠️ Error borrando foto:", err);
     }
 
     const updated = photos.filter((_, i) => i !== selectedPhotoIndex);
@@ -262,10 +353,13 @@ export default function DeficiencyMediaScreen() {
   };
 
   // ================================
-  // 🎤 AUDIO
+  // 🎤 AUDIO (grabar)
   // ================================
   const startRecording = async () => {
     try {
+      const gpsOk = await ensureGpsReady();
+      if (!gpsOk) return;
+
       if (sound) {
         await sound.stopAsync();
         await sound.unloadAsync();
@@ -299,7 +393,7 @@ export default function DeficiencyMediaScreen() {
       const uri = recording.getURI();
       if (!uri) return;
 
-      setAudios((prev) => [...prev, uri]); // file://
+      setAudios((prev) => [...prev, uri]); // uri temporal file://
       setAudioProgress((prev) => [...prev, { position: 0, duration: 1 }]);
       setRecording(null);
     } catch (err) {
@@ -307,8 +401,11 @@ export default function DeficiencyMediaScreen() {
     }
   };
 
+  // ================================
+  // 🔊 REPRODUCCIÓN
+  // ================================
   const onPlaybackStatusUpdate = (status, index) => {
-    if (!status.isLoaded) return;
+    if (!status || !status.isLoaded) return;
 
     setAudioProgress((prev) => {
       const updated = [...prev];
@@ -328,7 +425,6 @@ export default function DeficiencyMediaScreen() {
         };
         return updated;
       });
-
       setCurrentAudioIndex(null);
     }
   };
@@ -372,8 +468,8 @@ export default function DeficiencyMediaScreen() {
         return updated;
       });
 
-      newSound.setOnPlaybackStatusUpdate((st) =>
-        onPlaybackStatusUpdate(st, index)
+      newSound.setOnPlaybackStatusUpdate((s) =>
+        onPlaybackStatusUpdate(s, index)
       );
 
       setSound(newSound);
@@ -391,7 +487,10 @@ export default function DeficiencyMediaScreen() {
     }
     setAudioProgress((prev) => {
       const updated = [...prev];
-      updated[index].position = value;
+      updated[index] = {
+        ...updated[index],
+        position: value,
+      };
       return updated;
     });
   };
@@ -410,7 +509,7 @@ export default function DeficiencyMediaScreen() {
     try {
       await FS.deleteAsync(uri, { idempotent: true });
     } catch (err) {
-      console.log("⚠️ Error al eliminar audio físico:", err);
+      console.log("⚠️ Error al eliminar audio:", err);
     }
 
     setAudios((prev) => prev.filter((_, i) => i !== index));
@@ -429,7 +528,7 @@ export default function DeficiencyMediaScreen() {
   };
 
   // ================================
-  // 💾 GUARDAR
+  // 💾 GUARDAR A CARPETA PÚBLICA + ARCHIVOS
   // ================================
   const confirmStopRecording = async () => {
     if (!recording) return true;
@@ -439,11 +538,7 @@ export default function DeficiencyMediaScreen() {
         "Grabación en curso",
         "Hay una grabación activa. ¿Deseas detenerla antes de salir?",
         [
-          {
-            text: "No",
-            style: "cancel",
-            onPress: () => resolve(false),
-          },
+          { text: "No", style: "cancel", onPress: () => resolve(false) },
           {
             text: "Sí, detener",
             onPress: async () => {
@@ -457,8 +552,11 @@ export default function DeficiencyMediaScreen() {
   };
 
   const handleSave = async () => {
-    const ok = await confirmStopRecording();
-    if (!ok) return;
+    const okRec = await confirmStopRecording();
+    if (!okRec) return;
+
+    const gpsOk = await ensureGpsReady();
+    if (!gpsOk) return;
 
     try {
       const rootUri = await getRootUri();
@@ -469,29 +567,46 @@ export default function DeficiencyMediaScreen() {
 
       const { fotosUri, audiosUri } = await ensureMediaDirectories(rootUri);
 
-      // 📸 Copiar solo fotos temporales (file://)
+      // Coordenadas actuales (se usarán para todas las fotos/audios de este guardado)
+      const position = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = position.coords || {};
+
+      // Código de deficiencia (ArchCodTabla) - por ahora incremental global
+      const archCodTabla = await getNextArchCodTablaLocal();
+
+      // 📸 Fotos
       for (let i = 0; i < photos.length; i++) {
         const srcUri = photos[i];
-
-        if (!isTempFile(srcUri)) continue; // ya está en SAF
+        if (!srcUri || srcUri.startsWith("content://")) continue;
 
         const timestamp = formatFileTimestampMs();
-        const baseName = `FOT-${timestamp}`;
-        const ext = ".jpg";
-
+        const fileName = `FOT-${timestamp}-0.jpg`; // sufijo -0
         const destFileUri = await getUniqueSafFileUri(
           fotosUri,
-          baseName,
-          ext,
+          fileName,
           "image/jpeg"
         );
 
         const base64 = await FS.readAsStringAsync(srcUri, {
-          encoding: FS.EncodingType.Base64,
+          encoding: "base64",
         });
 
-        await FS.writeAsStringAsync(destFileUri, base64, {
-          encoding: FS.EncodingType.Base64,
+        await SAF.writeAsStringAsync(destFileUri, base64, {
+          encoding: "base64",
+        });
+
+        const relativePath = buildRelativePath("Fotos", fileName);
+        const archFech = formatDateTimeSQLite(new Date());
+
+        await insertArchivoLocal({
+          archTipo: 0, // foto
+          archTabla: "Deficiencias",
+          archCodTabla,
+          archNombre: relativePath,
+          archLatit: latitude || null,
+          archLong: longitude || null,
+          archFech,
+          archActiv: 1,
         });
 
         try {
@@ -501,29 +616,39 @@ export default function DeficiencyMediaScreen() {
         }
       }
 
-      // 🎤 Copiar solo audios temporales (file://)
+      // 🎤 Audios
       for (let i = 0; i < audios.length; i++) {
         const srcUri = audios[i];
-
-        if (!isTempFile(srcUri)) continue;
+        if (!srcUri || srcUri.startsWith("content://")) continue;
 
         const timestamp = formatFileTimestampMs();
-        const baseName = `AUD-${timestamp}`;
-        const ext = ".m4a";
-
+        const fileName = `AUD-${timestamp}-1.m4a`; // sufijo -1
         const destFileUri = await getUniqueSafFileUri(
           audiosUri,
-          baseName,
-          ext,
+          fileName,
           "audio/mp4"
         );
 
         const base64 = await FS.readAsStringAsync(srcUri, {
-          encoding: FS.EncodingType.Base64,
+          encoding: "base64",
         });
 
-        await FS.writeAsStringAsync(destFileUri, base64, {
-          encoding: FS.EncodingType.Base64,
+        await SAF.writeAsStringAsync(destFileUri, base64, {
+          encoding: "base64",
+        });
+
+        const relativePath = buildRelativePath("Audios", fileName);
+        const archFech = formatDateTimeSQLite(new Date());
+
+        await insertArchivoLocal({
+          archTipo: 1, // audio
+          archTabla: "Deficiencias",
+          archCodTabla,
+          archNombre: relativePath,
+          archLatit: latitude || null,
+          archLong: longitude || null,
+          archFech,
+          archActiv: 1,
         });
 
         try {
@@ -533,7 +658,7 @@ export default function DeficiencyMediaScreen() {
         }
       }
 
-      Alert.alert("Listo", "Fotos y audios guardados en la carpeta SIGRE.");
+      Alert.alert("Listo", "Fotos y audios guardados en la carpeta pública.");
       router.replace("/(drawer)/inspection");
     } catch (err) {
       console.log("Error guardando en SAF:", err);
@@ -547,7 +672,7 @@ export default function DeficiencyMediaScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* MODAL DE FOTO */}
+        {/* MODAL FOTO */}
         <Modal
           visible={showModal}
           transparent
@@ -562,41 +687,20 @@ export default function DeficiencyMediaScreen() {
               saveToLocalByLongPress={false}
             />
 
-            {/* BORRAR */}
-            <TouchableOpacity
-              onPress={deletePhoto}
-              style={{
-                position: "absolute",
-                top: 40,
-                right: 20,
-                backgroundColor: "rgba(255,0,0,0.8)",
-                padding: 10,
-                borderRadius: 30,
-              }}
-            >
+            <TouchableOpacity onPress={deletePhoto} style={styles.modalDelete}>
               <Text style={{ color: "white", fontWeight: "bold" }}>
                 Eliminar
               </Text>
             </TouchableOpacity>
 
-            {/* CERRAR */}
             <TouchableOpacity
               onPress={() => setShowModal(false)}
-              style={{
-                position: "absolute",
-                top: 40,
-                left: 20,
-                backgroundColor: "rgba(0,0,0,0.5)",
-                padding: 10,
-                borderRadius: 30,
-              }}
+              style={styles.modalClose}
             >
               <Text style={{ color: "white", fontWeight: "bold" }}>Cerrar</Text>
             </TouchableOpacity>
           </View>
         </Modal>
-
-        <View style={{ height: 10 }} />
 
         {/* FOTOS */}
         <View style={styles.section}>
@@ -658,23 +762,12 @@ export default function DeficiencyMediaScreen() {
           )}
 
           {recording && (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 5,
-              }}
-            >
+            <View style={styles.recordingRow}>
               <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: blink ? "red" : "transparent",
-                  borderWidth: 1,
-                  borderColor: "red",
-                  marginRight: 6,
-                }}
+                style={[
+                  styles.recDot,
+                  { backgroundColor: blink ? "red" : "transparent" },
+                ]}
               />
               <Text style={{ color: "red", fontWeight: "bold" }}>
                 Grabando...
@@ -694,13 +787,9 @@ export default function DeficiencyMediaScreen() {
               </TouchableOpacity>
 
               <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 12, fontWeight: "bold", color: "#222" }}
-                >
-                  {getFileName(uri)}
-                </Text>
+                <Text style={styles.audioTitle}>{getFileName(uri)}</Text>
 
-                <Text style={{ fontSize: 12, color: "#444" }}>
+                <Text style={styles.audioTime}>
                   {formatTime(audioProgress[i]?.position)} /{" "}
                   {formatTime(audioProgress[i]?.duration)}
                 </Text>
@@ -837,6 +926,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 25,
   },
+  recordingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 5,
+  },
+  recDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "red",
+    marginRight: 6,
+  },
+  audioTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#222",
+  },
+  audioTime: {
+    fontSize: 12,
+    color: "#444",
+  },
   bottomButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -863,5 +974,21 @@ const styles = StyleSheet.create({
     padding: 15,
     paddingBottom: 40,
     backgroundColor: "#f5f5f5",
+  },
+  modalDelete: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    backgroundColor: "rgba(255,0,0,0.8)",
+    padding: 10,
+    borderRadius: 30,
+  },
+  modalClose: {
+    position: "absolute",
+    top: 40,
+    left: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 10,
+    borderRadius: 30,
   },
 });
