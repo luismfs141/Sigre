@@ -1,6 +1,8 @@
 import { useDatos } from "../../context/DatosContext";
 
 
+
+
 // Opción A (recomendada)
 import * as utm from "utm";
 
@@ -34,8 +36,15 @@ import { StorageAccessFramework as SAF } from "expo-file-system/legacy";
 import Slider from "@react-native-community/slider";
 import { Alert } from "react-native";
 
+
+
 import { Audio } from "expo-av";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+
+
+
+
+
 import { useEffect, useState } from "react";
 
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -81,8 +90,32 @@ const SLOT_LABELS = [
 
 const REQUIRED_SLOTS = [0, 1, 2, 3]; // obligatorios
 
+////////////////////////////////////////////////////////////////////////////////////////////
+// // Construye la ruta relativa que queremos guardar en ArchNombre
+// function buildRelativePath(tipoCarpeta, fileName) {
+//   const {
+//     proyecto,
+//     alimentador,
+//     subestacion,
+//     tipoElemento,
+//     elemento,
+//     deficiencia,
+//   } = PATH_CONFIG;
 
-// Construye la ruta relativa que queremos guardar en ArchNombre
+//   return [
+//     "SIGRE",
+//     proyecto,
+//     alimentador,
+//     subestacion,
+//     tipoElemento,
+//     elemento,
+//     deficiencia,
+//     tipoCarpeta, // "Fotos" | "Audios"
+//     fileName,
+//   ].join("/");
+// }
+////////////////////////////////////////////////////////////////////////////////////////////
+
 function buildRelativePath(tipoCarpeta, fileName) {
   const {
     proyecto,
@@ -93,7 +126,7 @@ function buildRelativePath(tipoCarpeta, fileName) {
     deficiencia,
   } = PATH_CONFIG;
 
-  return [
+  const path = [
     "SIGRE",
     proyecto,
     alimentador,
@@ -104,7 +137,33 @@ function buildRelativePath(tipoCarpeta, fileName) {
     tipoCarpeta, // "Fotos" | "Audios"
     fileName,
   ].join("/");
+
+  console.log("[buildRelativePath] ",
+    "\n  tipoCarpeta:", tipoCarpeta,
+    "\n  fileName:", fileName,
+    "\n  PATH_CONFIG:", {
+      proyecto,
+      alimentador,
+      subestacion,
+      tipoElemento,
+      elemento,
+      deficiencia,
+    },
+    "\n  => relativePath:", path
+  );
+
+  return path;
 }
+
+
+
+
+
+
+
+
+
+
 
 // Fecha para SQLite: "YYYY-MM-DD HH:mm:ss"
 function formatDateTimeSQLite(date = new Date()) {
@@ -129,27 +188,55 @@ export default function DeficiencyMediaScreen() {
     selectedSed,
   } = useDatos();
 
+  // 🔗 Leemos el código de deficiencia que viene desde Inspection
+  const { defCode } = useLocalSearchParams();
 
-
-
-    // Código del elemento (poste, vano o sed)
+  // Código del elemento (poste, vano, sed)
   const elementCode =
     selectedItem?.PostCodigoNodo ||
     selectedItem?.VanoCodigo ||
     selectedItem?.SedCodigo ||
     "SIN_CODIGO";
 
-  // 👇 Asumo que selectedProject, selectedFeeder y selectedSed ya traen EL CÓDIGO (string).
-  // Si alguno viene como objeto, luego ajustamos estas líneas puntuales.
-  const projectCode = selectedProject || "SIN_PROYECTO";
-  const feederCode = selectedFeeder || "SIN_ALIM";
-  const sedCode = selectedSed || "SIN_SED";
+  // Código de proyecto / alimentador / subestación
+  const projectCode =
+    selectedProject !== null && selectedProject !== undefined
+      ? String(selectedProject)
+      : "SIN_PROYECTO";
 
-  // Actualizamos el PATH_CONFIG global con lo que viene del contexto
+  const feederCode =
+    typeof selectedFeeder === "string"
+      ? selectedFeeder
+      : selectedFeeder?.AlimInterno || "SIN_ALIM";
+
+  const sedCode =
+    typeof selectedSed === "string"
+      ? selectedSed
+      : selectedSed?.SedInterno || "SIN_SED";
+
+  // Tipo de elemento (para la carpeta)
+  const tipoElemento =
+    selectedItem?.PostCodigoNodo
+      ? "Poste"
+      : selectedItem?.VanoCodigo
+      ? "Vano"
+      : selectedItem?.SedCodigo
+      ? "Subestacion"
+      : "Desconocido";
+
+  // Código de deficiencia (para la carpeta)
+  const deficiencyCode = (defCode || "DEF_SIN_COD").toString();
+
+  // Actualizamos el PATH_CONFIG global con lo que viene del contexto + params
   PATH_CONFIG.proyecto = projectCode;
   PATH_CONFIG.alimentador = feederCode;
   PATH_CONFIG.subestacion = sedCode;
+  PATH_CONFIG.tipoElemento = tipoElemento;
   PATH_CONFIG.elemento = elementCode;
+  PATH_CONFIG.deficiencia = deficiencyCode;
+
+  console.log("PATH_CONFIG usado en media:", PATH_CONFIG);
+
 
 
 
@@ -464,7 +551,7 @@ export default function DeficiencyMediaScreen() {
         console.log("Error inicializando media:", err);
       }
     })();
-  }, [projectCode, feederCode, sedCode, elementCode]);
+  }, [projectCode, feederCode, sedCode, tipoElemento, elementCode, deficiencyCode]);
 
   // ================================
   // 📸 TOMAR FOTO

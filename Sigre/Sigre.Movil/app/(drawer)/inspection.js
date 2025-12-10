@@ -22,7 +22,7 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem } = useDatos(); 
+  const { selectedItem } = useDatos();
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
@@ -158,15 +158,19 @@ export default function Inspection() {
           <TouchableOpacity
             style={styles.buttonWrapper}
             onPress={() => openFormModal(item)}
-            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            >
+          >
             <MaterialIcons name="assignment" size={36} color="#007bff" />
           </TouchableOpacity>
 
-          
+
+
+
+
+
+
 
           {/* Botón multimedia */}
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.buttonWrapper}
             onPress={() => {
               router.push({
@@ -180,7 +184,37 @@ export default function Inspection() {
             }}
           >
             <FontAwesome5 name="camera" size={36} color="#28a745" />
+          </TouchableOpacity> */}
+
+
+          <TouchableOpacity
+            style={styles.buttonWrapper}
+            onPress={() => {
+              // Código de la deficiencia:
+              // - si viene de una def guardada: item.data.DefiCodDef
+              // - si viene de la lista nueva: item.name (o el campo que uses)
+              const defCode =
+                item?.data?.DefiCodDef ??
+                item?.name ??
+                (item?.defId ? `DEF_${item.defId}` : "DEF_SIN_COD");
+
+              router.push({
+                pathname: "/(drawer)/registerDef",
+                params: {
+                  id: item.id,
+                  name: item.name,
+                  severity: item.data?.severity ?? "",
+                  defCode,          // 👈 AQUÍ MANDAMOS EL CÓDIGO
+                },
+              });
+            }}
+          >
+            <FontAwesome5 name="camera" size={36} color="#28a745" />
           </TouchableOpacity>
+
+
+
+
         </View>
       </View>
 
