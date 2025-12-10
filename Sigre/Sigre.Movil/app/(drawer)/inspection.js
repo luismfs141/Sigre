@@ -22,7 +22,7 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem } = useDatos(); //poste sub o vano
+  const { selectedItem } = useDatos(); 
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();

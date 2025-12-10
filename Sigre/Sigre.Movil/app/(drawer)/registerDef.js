@@ -1,3 +1,4 @@
+import { useDatos } from "../../context/DatosContext";
 
 
 // Opción A (recomendada)
@@ -120,8 +121,44 @@ export default function DeficiencyMediaScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
 
+  // 🔗 Traemos todo lo que necesitamos del contexto
+  const {
+    selectedItem,
+    selectedProject,
+    selectedFeeder,
+    selectedSed,
+  } = useDatos();
+
+
+
+
+    // Código del elemento (poste, vano o sed)
+  const elementCode =
+    selectedItem?.PostCodigoNodo ||
+    selectedItem?.VanoCodigo ||
+    selectedItem?.SedCodigo ||
+    "SIN_CODIGO";
+
+  // 👇 Asumo que selectedProject, selectedFeeder y selectedSed ya traen EL CÓDIGO (string).
+  // Si alguno viene como objeto, luego ajustamos estas líneas puntuales.
+  const projectCode = selectedProject || "SIN_PROYECTO";
+  const feederCode = selectedFeeder || "SIN_ALIM";
+  const sedCode = selectedSed || "SIN_SED";
+
+  // Actualizamos el PATH_CONFIG global con lo que viene del contexto
+  PATH_CONFIG.proyecto = projectCode;
+  PATH_CONFIG.alimentador = feederCode;
+  PATH_CONFIG.subestacion = sedCode;
+  PATH_CONFIG.elemento = elementCode;
+
+
+
+
+
+
   // 📸 Fotos: 6 slots fijos (pueden ser null)
   const [photos, setPhotos] = useState(Array(6).fill(null));
+
 
   // miniaturas (podemos guardar base64 para asegurar que se vea)
   const [photoThumbs, setPhotoThumbs] = useState(Array(6).fill(null));
@@ -410,7 +447,7 @@ export default function DeficiencyMediaScreen() {
           setPhotoThumbs(slots);   // 👈 para que también se vean al reabrir
           // photoMeta se quedará vacío por ahora para fotos anteriores
         } catch (err) {
-          console.log("⚠️ Error leyendo Fotos SAF:", err);
+          console.log("Error inicializando media:", err);
         }
 
 
@@ -427,7 +464,7 @@ export default function DeficiencyMediaScreen() {
         console.log("Error inicializando media:", err);
       }
     })();
-  }, []);
+  }, [projectCode, feederCode, sedCode, elementCode]);
 
   // ================================
   // 📸 TOMAR FOTO
@@ -600,12 +637,12 @@ export default function DeficiencyMediaScreen() {
     });
 
     setShowModal(false);
-    
+
     setPhotoThumbs((prev) => {
-  const copy = [...prev];
-  copy[selectedPhotoIndex] = null;
-  return copy;
-});
+      const copy = [...prev];
+      copy[selectedPhotoIndex] = null;
+      return copy;
+    });
 
   };
 
@@ -1172,51 +1209,51 @@ export default function DeficiencyMediaScreen() {
 
 
           <ScrollView horizontal style={styles.carousel}>
-  {Array.from({ length: 6 }).map((_, i) => {
-    const uri = photos[i];
-    const thumbUri = photoThumbs[i] || uri;
-    const meta = photoMeta[i];          // 👈 volvemos a definirla
+            {Array.from({ length: 6 }).map((_, i) => {
+              const uri = photos[i];
+              const thumbUri = photoThumbs[i] || uri;
+              const meta = photoMeta[i];          // 👈 volvemos a definirla
 
-    return (
-      <View key={i} style={{ marginRight: 10, alignItems: "center" }}>
-        <TouchableOpacity
-          onPress={() => handleSlotPress(i)}
-          style={[
-            styles.photoSlot,
-            !thumbUri && styles.photoSlotEmpty,
-          ]}
-        >
-          {thumbUri ? (
-            <Image
-              source={{ uri: thumbUri }}
-              style={styles.photo}
-              resizeMode="cover"
-              onError={(e) =>
-                console.log(
-                  "❌ Error cargando miniatura",
-                  thumbUri,
-                  e.nativeEvent
-                )
-              }
-            />
-          ) : (
-            <Text style={styles.plusText}>+</Text>
-          )}
-        </TouchableOpacity>
+              return (
+                <View key={i} style={{ marginRight: 10, alignItems: "center" }}>
+                  <TouchableOpacity
+                    onPress={() => handleSlotPress(i)}
+                    style={[
+                      styles.photoSlot,
+                      !thumbUri && styles.photoSlotEmpty,
+                    ]}
+                  >
+                    {thumbUri ? (
+                      <Image
+                        source={{ uri: thumbUri }}
+                        style={styles.photo}
+                        resizeMode="cover"
+                        onError={(e) =>
+                          console.log(
+                            "❌ Error cargando miniatura",
+                            thumbUri,
+                            e.nativeEvent
+                          )
+                        }
+                      />
+                    ) : (
+                      <Text style={styles.plusText}>+</Text>
+                    )}
+                  </TouchableOpacity>
 
-        {/* Subtítulo fijo del slot */}
-        <Text style={styles.slotLabel}>{SLOT_LABELS[i]}</Text>
+                  {/* Subtítulo fijo del slot */}
+                  <Text style={styles.slotLabel}>{SLOT_LABELS[i]}</Text>
 
-        {/* Nombre de archivo */}
-        {meta?.fileTimestamp && (       // 👈 optional chaining
-          <Text style={{ fontSize: 10, textAlign: "center" }}>
-            {`FOT-${meta.fileTimestamp}-${i + 1}.jpg`}
-          </Text>
-        )}
-      </View>
-    );
-  })}
-</ScrollView>
+                  {/* Nombre de archivo */}
+                  {meta?.fileTimestamp && (       // 👈 optional chaining
+                    <Text style={{ fontSize: 10, textAlign: "center" }}>
+                      {`FOT-${meta.fileTimestamp}-${i + 1}.jpg`}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
 
 
 
