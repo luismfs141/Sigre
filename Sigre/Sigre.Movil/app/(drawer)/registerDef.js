@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 
 
@@ -142,13 +144,13 @@ function buildRelativePath(tipoCarpeta, fileName) {
     "\n  tipoCarpeta:", tipoCarpeta,
     "\n  fileName:", fileName,
     "\n  PATH_CONFIG:", {
-      proyecto,
-      alimentador,
-      subestacion,
-      tipoElemento,
-      elemento,
-      deficiencia,
-    },
+    proyecto,
+    alimentador,
+    subestacion,
+    tipoElemento,
+    elemento,
+    deficiencia,
+  },
     "\n  => relativePath:", path
   );
 
@@ -183,10 +185,12 @@ export default function DeficiencyMediaScreen() {
   // 🔗 Traemos todo lo que necesitamos del contexto
   const {
     selectedItem,
-    selectedProject,
     selectedFeeder,
     selectedSed,
   } = useDatos();
+
+  const { user } = useContext(AuthContext);
+
 
   // 🔗 Leemos el código de deficiencia que viene desde Inspection
   const { defCode } = useLocalSearchParams();
@@ -199,10 +203,17 @@ export default function DeficiencyMediaScreen() {
     "SIN_CODIGO";
 
   // Código de proyecto / alimentador / subestación
-  const projectCode =
-    selectedProject !== null && selectedProject !== undefined
-      ? String(selectedProject)
-      : "SIN_PROYECTO";
+  const projectCode = (() => {
+    const p = user?.proyecto;
+
+    // aquí decides cómo quieres que se llame la carpeta
+    if (p === 0) return "BT";          // Baja Tensión
+    if (p === 1) return "MT";          // Media Tensión
+
+    // fallback por si cambia a futuro
+    return p !== undefined && p !== null ? String(p) : "SIN_PROYECTO";
+  })();
+
 
   const feederCode =
     typeof selectedFeeder === "string"
@@ -219,10 +230,10 @@ export default function DeficiencyMediaScreen() {
     selectedItem?.PostCodigoNodo
       ? "Poste"
       : selectedItem?.VanoCodigo
-      ? "Vano"
-      : selectedItem?.SedCodigo
-      ? "Subestacion"
-      : "Desconocido";
+        ? "Vano"
+        : selectedItem?.SedCodigo
+          ? "Subestacion"
+          : "Desconocido";
 
   // Código de deficiencia (para la carpeta)
   const deficiencyCode = (defCode || "DEF_SIN_COD").toString();
@@ -238,6 +249,18 @@ export default function DeficiencyMediaScreen() {
   console.log("PATH_CONFIG usado en media:", PATH_CONFIG);
 
 
+  // 👇 LOG EXTRA: ruta base como carpeta
+  const rutaBase = [
+    "SIGRE",
+    projectCode,
+    feederCode,
+    sedCode,
+    tipoElemento,
+    elementCode,
+    deficiencyCode,
+  ].join("/");
+
+  console.log("📂 Ruta base de media:", rutaBase);
 
 
 
@@ -358,20 +381,25 @@ export default function DeficiencyMediaScreen() {
   // Encuentra o crea subcarpeta dentro de parentUri
   async function findOrCreateSubdir(parentUri, dirName) {
     try {
+      // 👈 AQUI forzamos que siempre sea string
+      const nameStr = String(dirName);
+
       const entries = await SAF.readDirectoryAsync(parentUri);
       for (const entryUri of entries) {
         const name = getNameFromSafUri(entryUri);
-        if (name === dirName) {
+        if (name === nameStr) {
           return entryUri; // ya existe
         }
       }
-    } catch (err) {
-      console.log("⚠️ Error leyendo directorio SAF:", err);
-    }
 
-    const newDirUri = await SAF.makeDirectoryAsync(parentUri, dirName);
-    return newDirUri;
+      const newDirUri = await SAF.makeDirectoryAsync(parentUri, nameStr);
+      return newDirUri;
+    } catch (err) {
+      console.log("⚠️ Error leyendo/creando directorio SAF:", err);
+      throw err;
+    }
   }
+
 
   // Pide (una sola vez) la carpeta raíz para SIGRE
   async function getRootUri() {
@@ -415,13 +443,16 @@ export default function DeficiencyMediaScreen() {
 
     const segments = [
       "SIGRE",
-      proyecto,
-      alimentador,
-      subestacion,
-      tipoElemento,
-      elemento,
-      deficiencia,
+      String(proyecto),
+      String(alimentador),
+      String(subestacion),
+      String(tipoElemento),
+      String(elemento),
+      String(deficiencia),
     ];
+
+    console.log("[ensureMediaDirectories] rootUri:", rootUri);
+    console.log("[ensureMediaDirectories] segments:", segments);
 
     let currentUri = rootUri;
 
@@ -434,6 +465,7 @@ export default function DeficiencyMediaScreen() {
 
     return { fotosUri, audiosUri };
   }
+
 
   // Buscar nombre libre: baseName.ext → baseName.ext, baseName (2).ext, ...
   async function getUniqueSafFileUri(folderUri, baseNameWithExt, mimeType) {
