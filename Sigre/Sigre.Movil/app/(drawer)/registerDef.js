@@ -44,7 +44,7 @@ import { Alert } from "react-native";
 
 import { Audio } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-
+import { useFiles } from "../../hooks/useFiles";
 
 
 
@@ -67,11 +67,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import ImageViewer from "react-native-image-zoom-viewer";
 
-// 👇 ajusta la ruta según dónde esté este archivo
-import {
-  getNextArchCodTablaLocal,
-  insertArchivoLocal,
-} from "../../database/offlineDB/files";
+
 
 // Config actual de ruta (luego lo harás dinámico con IDs reales)
 const PATH_CONFIG = {
@@ -177,6 +173,7 @@ function formatDateTimeSQLite(date = new Date()) {
 export default function DeficiencyMediaScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
+  const { getNextArchCodTabla, saveArchivoLocal } = useFiles();
 
   // ✅ AQUÍ van los hooks:
   const { findFeederById } = useFeeder();       // hook custom
@@ -1330,7 +1327,7 @@ export default function DeficiencyMediaScreen() {
       const { latitude, longitude } = position.coords || {};
 
       // Código de deficiencia (ArchCodTabla) - por ahora incremental global
-      const archCodTabla = await getNextArchCodTablaLocal();
+      const archCodTabla = await getNextArchCodTabla();
 
       // 📸 Fotos
       for (let i = 0; i < photos.length; i++) {
@@ -1361,7 +1358,7 @@ export default function DeficiencyMediaScreen() {
 
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
-        await insertArchivoLocal({
+        await saveArchivoLocal({
           archTipo: 0,
           archTabla: "Deficiencias",
           archCodTabla,
@@ -1409,8 +1406,8 @@ export default function DeficiencyMediaScreen() {
 
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
-        await insertArchivoLocal({
-          archTipo: 1, // audio
+        await saveArchivoLocal({
+          archTipo: 1,
           archTabla: "Deficiencias",
           archCodTabla,
           archNombre: relativePath,
