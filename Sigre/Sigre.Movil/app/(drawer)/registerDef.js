@@ -178,7 +178,7 @@ export default function DeficiencyMediaScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
 
-// ✅ AQUÍ van los hooks:
+  // ✅ AQUÍ van los hooks:
   const { findFeederById } = useFeeder();       // hook custom
   const [feederCode, setFeederCode] = useState("SIN_ALIM"); // state local
 
@@ -204,7 +204,7 @@ export default function DeficiencyMediaScreen() {
     console.log("[DefMedia] selectedFeeder = NULL en contexto");
   }
 
-  
+
 
 
 
@@ -499,10 +499,28 @@ export default function DeficiencyMediaScreen() {
 
 
 
+  // 🔁 Código REAL de la SED para la carpeta (2755, 3481, 2459, ...)
+  // prioridad: selectedSed.SedCodi / SedCodigo
+  // fallback: selectedItem.SedCodi / SedCodigo
   const sedCode =
     typeof selectedSed === "string"
       ? selectedSed
-      : selectedSed?.SedInterno || "SIN_SED";
+      : selectedSed?.SedCodi ||
+      selectedSed?.SedCodigo ||
+      selectedItem?.SedCodi ||
+      selectedItem?.SedCodigo ||
+      "SIN_SED";
+
+  console.log("[DefMedia] sedCode usado para carpeta:", {
+    selectedSed,
+    selectedItemSed: {
+      SedInterno: selectedItem?.SedInterno,
+      SedCodi: selectedItem?.SedCodi,
+      SedCodigo: selectedItem?.SedCodigo,
+    },
+    sedCode,
+  });
+
 
   // Tipo de elemento (para la carpeta)
   const tipoElemento =
@@ -525,9 +543,9 @@ export default function DeficiencyMediaScreen() {
   PATH_CONFIG.elemento = elementCode;
   PATH_CONFIG.deficiencia = deficiencyCode;
 
-  
 
-  
+
+
 
   // Ruta base solo para log
   const rutaBase = [
