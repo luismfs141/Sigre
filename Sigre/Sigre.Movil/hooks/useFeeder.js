@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../config";
-import { getAllFeedersLocal } from "../database/offlineDB/feeders";
+import {
+  getAllFeedersLocal
+} from "../database/offlineDB/feeders";
 
 export function useFeeder(userId = null) {
   const [feeders, setFeeders] = useState([]);
@@ -10,7 +12,7 @@ export function useFeeder(userId = null) {
   const [error, setError] = useState(null);
   const API_BASE = API_URL;
 
-//////////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////
   /** 🔹 Obtener todos los alimentadores */
   const fetchFeeders = useCallback(async () => {
     try {
@@ -21,7 +23,7 @@ export function useFeeder(userId = null) {
       const data = await res.json();
 
       setFeeders(data);
-  
+
     } catch (err) {
       console.error("useFeeder.fetchFeeders:", err);
       setError(err.message);
@@ -31,7 +33,7 @@ export function useFeeder(userId = null) {
   }, [API_BASE]);
 
 
-//////////////////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
 
 
   // /** 🔹 Obtener alimentadores por usuario */
@@ -54,25 +56,25 @@ export function useFeeder(userId = null) {
 
 
   /** 🔹 Obtener alimentadores por usuario */
-const getFeedersByUser = useCallback(async (id = userId) => {
-  console.log(id);
-  if (!id) return [];
-  try {
-    setLoading(true);
-    setError(null);
-    const res = await fetch(`${API_BASE}Feeder/GetFeedersByUser?idUser=${id}`);
-    if (!res.ok) throw new Error("Error al obtener alimentadores por usuario");
-    const data = await res.json();
-    setFeedersByUser(data);
-    return data; // 👈 muy importante
-  } catch (err) {
-    console.error("useFeeder.getFeedersByUser:", err);
-    setError(err.message);
-    return [];
-  } finally {
-    setLoading(false);
-  }
-}, [API_BASE, userId]);
+  const getFeedersByUser = useCallback(async (id = userId) => {
+    console.log(id);
+    if (!id) return [];
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`${API_BASE}Feeder/GetFeedersByUser?idUser=${id}`);
+      if (!res.ok) throw new Error("Error al obtener alimentadores por usuario");
+      const data = await res.json();
+      setFeedersByUser(data);
+      return data;
+    } catch (err) {
+      console.error("useFeeder.getFeedersByUser:", err);
+      setError(err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, userId]);
 
 
 
@@ -93,33 +95,33 @@ const getFeedersByUser = useCallback(async (id = userId) => {
   }, [API_BASE]);
 
   /** 🔹 Obtener todos los alimentadores locales*/
-const fetchLocalFeeders = useCallback(async () => {
-  try {
-    setLoading(true);
-    setError(null);
+  const fetchLocalFeeders = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    // Obtener todos los alimentadores desde la base local
-    const localData = await getAllFeedersLocal();
+      // Obtener todos los alimentadores desde la base local
+      const localData = await getAllFeedersLocal();
 
-    if (!localData || localData.length === 0) {
-      console.warn("⚠ No hay alimentadores locales");
-      setFeeders([]);
+      if (!localData || localData.length === 0) {
+        console.warn("⚠ No hay alimentadores locales");
+        setFeeders([]);
+        return [];
+      }
+
+      setFeeders(localData);
+      console.log("✅ Alimentadores locales cargados:", localData);
+      return localData;
+    } catch (err) {
+      console.error("❌ Error al obtener alimentadores locales:", err);
+      setError(err.message);
       return [];
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    setFeeders(localData);
-    console.log("✅ Alimentadores locales cargados:", localData);
-    return localData;
-  } catch (err) {
-    console.error("❌ Error al obtener alimentadores locales:", err);
-    setError(err.message);
-    return [];
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
- /** 🔹 Obtener SEDs por alimentador */
+  /** 🔹 Obtener SEDs por alimentador */
   const fetchSedsByFeeder = useCallback(async (idFeeder) => {
     if (!idFeeder) return [];
     try {
@@ -141,17 +143,60 @@ const fetchLocalFeeders = useCallback(async () => {
     }
   }, [API_BASE]);
 
-///////////////////////////////////////////////////////////////////////////////
-//   /** 🔹 Cargar lista inicial (todos o por usuario) */
-// useEffect(() => {
-//   fetchLocalFeeders();
-// }, [fetchLocalFeeders]);
 
 
-useEffect(() => {
-  fetchFeeders(); // forza carga desde API
-}, []);
-/////////////////////////////////////////////////////////////////////////////////
+
+  // 👇 justo después de fetchLocalFeeders, por ejemplo
+const findFeederById = useCallback(
+  async (alimInt) => {
+    if (!alimInt) return null;
+
+    // 1️⃣ Buscar primero en el estado `feeders` (si ya cargaste locales o de API)
+    if (Array.isArray(feeders) && feeders.length > 0) {
+      const fromState = feeders.find((f) => {
+        const rawId = f.id ?? f.AlimInterno ?? f.alimInterno ?? null;
+        return rawId != null && Number(rawId) === Number(alimInt);
+      });
+
+      if (fromState) {
+        console.log("[useFeeder.findFeederById] encontrado en state:", fromState);
+        return fromState;
+      }
+    }
+
+    // 2️⃣ Si no está en memoria, probamos leer de la BD local
+    try {
+      const localData = await getAllFeedersLocal();
+      if (!Array.isArray(localData)) return null;
+
+      const fromDB = localData.find((f) => {
+        const rawId = f.id ?? f.AlimInterno ?? f.alimInterno ?? null;
+        return rawId != null && Number(rawId) === Number(alimInt);
+      });
+
+      console.log("[useFeeder.findFeederById] encontrado en BD local:", fromDB);
+      return fromDB || null;
+    } catch (err) {
+      console.error("[useFeeder.findFeederById] error:", err);
+      return null;
+    }
+  },
+  [feeders]
+);
+
+
+
+  ///////////////////////////////////////////////////////////////////////////////
+  //   /** 🔹 Cargar lista inicial (todos o por usuario) */
+  // useEffect(() => {
+  //   fetchLocalFeeders();
+  // }, [fetchLocalFeeders]);
+
+
+  useEffect(() => {
+    fetchFeeders(); // forza carga desde API
+  }, [fetchFeeders]);
+  /////////////////////////////////////////////////////////////////////////////////
 
   return {
     feeders,
@@ -164,5 +209,9 @@ useEffect(() => {
     fetchLocalFeeders,
     seds,
     fetchSedsByFeeder,
+    findFeederById,
   };
 }
+
+
+

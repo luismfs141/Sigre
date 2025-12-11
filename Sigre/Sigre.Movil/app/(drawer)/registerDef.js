@@ -1,3 +1,5 @@
+import { useFeeder } from "../../hooks/useFeeder";
+
 import { useContext } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
@@ -20,7 +22,7 @@ function formatUtmFromLatLon(latitude, longitude) {
       northing
     )}N`;
   } catch (e) {
-    console.log("Error convirtiendo a UTM:", e);
+    //console.log("Error convirtiendo a UTM:", e);
     return "";
   }
 }
@@ -161,12 +163,6 @@ function buildRelativePath(tipoCarpeta, fileName) {
 
 
 
-
-
-
-
-
-
 // Fecha para SQLite: "YYYY-MM-DD HH:mm:ss"
 function formatDateTimeSQLite(date = new Date()) {
   const yyyy = date.getFullYear();
@@ -182,12 +178,36 @@ export default function DeficiencyMediaScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
 
+// ✅ AQUÍ van los hooks:
+  const { findFeederById } = useFeeder();       // hook custom
+  const [feederCode, setFeederCode] = useState("SIN_ALIM"); // state local
+
   // 🔗 Traemos todo lo que necesitamos del contexto
   const {
     selectedItem,
     selectedFeeder,
     selectedSed,
+    feeders,
   } = useDatos();
+
+
+
+
+  if (selectedFeeder) {
+    console.log("[DefMedia] selectedFeeder detalle:", {
+      type: typeof selectedFeeder,
+      id: selectedFeeder.id ?? null,
+      name: selectedFeeder.name ?? null,
+      alimEtiqueta: selectedFeeder.alimEtiqueta ?? null,
+    });
+  } else {
+    console.log("[DefMedia] selectedFeeder = NULL en contexto");
+  }
+
+  
+
+
+
 
   const { user } = useContext(AuthContext);
 
@@ -215,10 +235,269 @@ export default function DeficiencyMediaScreen() {
   })();
 
 
-  const feederCode =
-    typeof selectedFeeder === "string"
-      ? selectedFeeder
-      : selectedFeeder?.AlimInterno || "SIN_ALIM";
+  // const feederCode = (() => {
+  //   const alimInt = selectedItem?.AlimInterno ?? null;
+
+  //   // 👀 LOG para ver qué hay en feeders
+  //   console.log(
+  //     "[DefMedia] feeders length:",
+  //     feeders?.length ?? 0
+  //   );
+  //   if (feeders && feeders.length > 0) {
+  //     console.log(
+  //       "[DefMedia] ejemplo feeders[0]:",
+  //       feeders[0],
+  //       "keys:",
+  //       Object.keys(feeders[0] || {})
+  //     );
+  //   }
+
+
+
+
+  //   // 🔍 DEBUG RESUMEN DE ALIMENTADOR
+  //   console.log("[DefMedia][DEBUG FINAL FEEDER]", {
+  //     alimInt: selectedItem?.AlimInterno ?? null,
+  //     alimEtiquetaItem: selectedItem?.AlimEtiqueta ?? null,
+  //     // otros campos posibles que pudieran venir
+  //     alimNombItem: selectedItem?.AlimNombre ?? null,
+  //     alimDescItem: selectedItem?.AlimDescripcion ?? null,
+
+  //     feederCodeFinal: feederCode,
+  //     feedersLength: feeders?.length ?? 0,
+  //     // mostramos hasta 3 alimentadores si es que hubiera
+  //     feedersSample: feeders?.slice ? feeders.slice(0, 3) : feeders,
+  //     selectedFeederCrudo: selectedFeeder,
+  //   });
+
+
+
+
+
+
+
+
+  //   // 🔍 Intentar recuperar el alimentador desde la lista global
+  //   const findFromFeeders = () => {
+  //     if (!feeders || feeders.length === 0 || alimInt == null) {
+  //       console.log(
+  //         "[DefMedia] findFromFeeders: sin feeders o alimInt null",
+  //         { alimInt }
+  //       );
+  //       return null;
+  //     }
+
+  //     const found = feeders.find((f) => {
+  //       const rawId =
+  //         f.id ??
+  //         f.AlimInterno ??
+  //         f.alimInterno ??
+  //         f.alim_id ??
+  //         null;
+
+  //       if (rawId == null) return false;
+
+  //       // comparamos como números para evitar problemas "46" vs 46
+  //       return Number(rawId) === Number(alimInt);
+  //     });
+
+  //     if (found) {
+  //       console.log(
+  //         "[DefMedia] feeder encontrado en feeders[] por AlimInterno:",
+  //         { alimInt, found }
+  //       );
+  //     } else {
+  //       console.log(
+  //         "[DefMedia] NO se encontró en feeders[] un alimentador con AlimInterno:",
+  //         alimInt
+  //       );
+  //     }
+
+  //     return found || null;
+  //   };
+
+  //   // 1) Preferimos el selectedFeeder del contexto
+  //   let effectiveFeeder = selectedFeeder || null;
+
+  //   // 2) Si no hay, intentamos reconstruirlo desde feeders[]
+  //   if (!effectiveFeeder) {
+  //     effectiveFeeder = findFromFeeders();
+  //   }
+
+  //   // 3) Si AÚN no hay nada, usamos lo que traiga el propio item
+  //   if (!effectiveFeeder) {
+  //     if (selectedItem?.AlimEtiqueta) {
+  //       console.log(
+  //         "[DefMedia] feederCode desde selectedItem.AlimEtiqueta:",
+  //         selectedItem.AlimEtiqueta
+  //       );
+  //       return String(selectedItem.AlimEtiqueta);
+  //     }
+
+  //     if (alimInt != null) {
+  //       console.log(
+  //         "[DefMedia] feederCode desde selectedItem.AlimInterno (solo id):",
+  //         alimInt
+  //       );
+  //       return String(alimInt);
+  //     }
+
+  //     console.log(
+  //       "[DefMedia] SIN_ALIM (no hay selectedFeeder, ni feeders[], ni campos en selectedItem)"
+  //     );
+  //     return "SIN_ALIM";
+  //   }
+
+  //   // 4) Ya tenemos un effectiveFeeder (de contexto o de feeders[])
+  //   console.log("[DefMedia] effectiveFeeder detalle:", {
+  //     type: typeof effectiveFeeder,
+  //     id: effectiveFeeder?.id ?? null,
+  //     name: effectiveFeeder?.name ?? null,
+  //     alimEtiqueta:
+  //       effectiveFeeder?.alimEtiqueta ?? effectiveFeeder?.AlimEtiqueta ?? null,
+  //     descripcion:
+  //       effectiveFeeder?.Descripcion ?? effectiveFeeder?.descripcion ?? null,
+  //     keys: effectiveFeeder ? Object.keys(effectiveFeeder) : null,
+  //   });
+
+  //   // Si es string directo (ya es el nombre)
+  //   if (typeof effectiveFeeder === "string") {
+  //     console.log("[DefMedia] feederCode desde string:", effectiveFeeder);
+  //     return effectiveFeeder;
+  //   }
+
+  //   // 🟢 PRIORIDAD 1: name (lo que tú mapeaste para mostrar)
+  //   if (effectiveFeeder?.name) {
+  //     console.log(
+  //       "[DefMedia] feederCode desde effectiveFeeder.name:",
+  //       effectiveFeeder.name
+  //     );
+  //     return String(effectiveFeeder.name);
+  //   }
+
+  //   // 🟠 PRIORIDAD 2: etiqueta
+  //   if (effectiveFeeder?.alimEtiqueta || effectiveFeeder?.AlimEtiqueta) {
+  //     const etq =
+  //       effectiveFeeder.alimEtiqueta ?? effectiveFeeder.AlimEtiqueta;
+  //     console.log(
+  //       "[DefMedia] feederCode desde effectiveFeeder.alimEtiqueta:",
+  //       etq
+  //     );
+  //     return String(etq);
+  //   }
+
+  //   // 🔵 PRIORIDAD 3: descripción
+  //   if (effectiveFeeder?.Descripcion || effectiveFeeder?.descripcion) {
+  //     const desc =
+  //       effectiveFeeder.Descripcion ?? effectiveFeeder.descripcion;
+  //     console.log(
+  //       "[DefMedia] feederCode desde effectiveFeeder.Descripcion:",
+  //       desc
+  //     );
+  //     return String(desc);
+  //   }
+
+  //   // 🔴 ÚLTIMO recurso: id numérico
+  //   if (effectiveFeeder?.id != null) {
+  //     console.log(
+  //       "[DefMedia] feederCode desde effectiveFeeder.id (último recurso):",
+  //       effectiveFeeder.id
+  //     );
+  //     return String(effectiveFeeder.id);
+  //   }
+
+  //   console.log(
+  //     "[DefMedia] SIN_ALIM (effectiveFeeder sin campos útiles)",
+  //     effectiveFeeder
+  //   );
+  //   return "SIN_ALIM";
+  // })();
+
+  // 🔄 Resolver el nombre/código del alimentador para la carpeta
+  useEffect(() => {
+    const alimInt = selectedItem?.AlimInterno ?? null;
+
+    console.log("[DefMedia] useEffect FEEDER resolve =>", {
+      alimInt,
+      selectedFeeder,
+      selectedItemAlimEtiqueta: selectedItem?.AlimEtiqueta,
+    });
+
+    // 1️⃣ Si tenemos selectedFeeder en contexto, usamos eso primero
+    if (selectedFeeder) {
+      if (typeof selectedFeeder === "string") {
+        console.log("[DefMedia] feederCode desde selectedFeeder (string):", selectedFeeder);
+        setFeederCode(String(selectedFeeder));
+        return;
+      }
+
+      const nameFromSelected =
+        selectedFeeder.name ??
+        selectedFeeder.AlimEtiqueta ??
+        selectedFeeder.alimEtiqueta ??
+        selectedFeeder.Descripcion ??
+        selectedFeeder.descripcion ??
+        null;
+
+      if (nameFromSelected) {
+        console.log("[DefMedia] feederCode desde selectedFeeder (obj):", nameFromSelected);
+        setFeederCode(String(nameFromSelected));
+        return;
+      }
+    }
+
+    // 2️⃣ Si el item tiene etiqueta directa, úsala como nombre de carpeta
+    if (selectedItem?.AlimEtiqueta) {
+      console.log(
+        "[DefMedia] feederCode desde selectedItem.AlimEtiqueta:",
+        selectedItem.AlimEtiqueta
+      );
+      setFeederCode(String(selectedItem.AlimEtiqueta));
+      return;
+    }
+
+    // 3️⃣ Si tenemos id interno (AlimInterno), buscamos en SQLite / memoria
+    if (alimInt != null) {
+      (async () => {
+        console.log("[DefMedia] Buscando feeder por alimInt:", alimInt);
+        const found = await findFeederById(alimInt);
+
+        console.log("[DefMedia] resultado findFeederById:", found);
+
+        if (found) {
+          const alias =
+            found.AlimEtiqueta ??
+            found.alimEtiqueta ??
+            found.Descripcion ??
+            found.descripcion ??
+            found.name ??
+            alimInt;
+
+          console.log("[DefMedia] feederCode final desde DB:", alias);
+          setFeederCode(String(alias));
+        } else {
+          console.log(
+            "[DefMedia] NO se encontró alimentador en DB, se usa solo id:",
+            alimInt
+          );
+          setFeederCode(String(alimInt));
+        }
+      })();
+
+      return;
+    }
+
+    // 4️⃣ Si no hay nada de nada
+    console.log("[DefMedia] SIN_ALIM (no se pudo resolver alimentador)");
+    setFeederCode("SIN_ALIM");
+  }, [selectedFeeder, selectedItem, findFeederById]);
+
+
+
+
+
+
+
 
   const sedCode =
     typeof selectedSed === "string"
@@ -240,27 +519,28 @@ export default function DeficiencyMediaScreen() {
 
   // Actualizamos el PATH_CONFIG global con lo que viene del contexto + params
   PATH_CONFIG.proyecto = projectCode;
-  PATH_CONFIG.alimentador = feederCode;
+  PATH_CONFIG.alimentador = feederCode;   // 👈 AQUÍ VA EL NUEVO
   PATH_CONFIG.subestacion = sedCode;
   PATH_CONFIG.tipoElemento = tipoElemento;
   PATH_CONFIG.elemento = elementCode;
   PATH_CONFIG.deficiencia = deficiencyCode;
 
-  console.log("PATH_CONFIG usado en media:", PATH_CONFIG);
+  
 
+  
 
-  // 👇 LOG EXTRA: ruta base como carpeta
+  // Ruta base solo para log
   const rutaBase = [
     "SIGRE",
     projectCode,
-    feederCode,
+    feederCode,     // 👈 aquí también
     sedCode,
     tipoElemento,
     elementCode,
     deficiencyCode,
   ].join("/");
 
-  console.log("📂 Ruta base de media:", rutaBase);
+
 
 
 
@@ -280,6 +560,10 @@ export default function DeficiencyMediaScreen() {
   // 🎤 Audios
   const [audios, setAudios] = useState([]);
   const [audioProgress, setAudioProgress] = useState([]);
+
+  // Metadatos por audio (lat/lon, fecha, timestamp para nombre)
+  const [audioMeta, setAudioMeta] = useState([]);
+
 
   // 📷 Cámara
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -395,7 +679,7 @@ export default function DeficiencyMediaScreen() {
       const newDirUri = await SAF.makeDirectoryAsync(parentUri, nameStr);
       return newDirUri;
     } catch (err) {
-      console.log("⚠️ Error leyendo/creando directorio SAF:", err);
+      //console.log("⚠️ Error leyendo/creando directorio SAF:", err);
       throw err;
     }
   }
@@ -424,7 +708,7 @@ export default function DeficiencyMediaScreen() {
 
       return uri;
     } catch (err) {
-      console.log("Error en getRootUri:", err);
+      //console.log("Error en getRootUri:", err);
       return null;
     }
   }
@@ -451,8 +735,13 @@ export default function DeficiencyMediaScreen() {
       String(deficiencia),
     ];
 
+    // 🔍 LOGS para ver ruta de carpetas
     console.log("[ensureMediaDirectories] rootUri:", rootUri);
     console.log("[ensureMediaDirectories] segments:", segments);
+    console.log(
+      "[ensureMediaDirectories] ruta lógica:",
+      segments.join("/")
+    );
 
     let currentUri = rootUri;
 
@@ -463,8 +752,12 @@ export default function DeficiencyMediaScreen() {
     const fotosUri = await findOrCreateSubdir(currentUri, "Fotos");
     const audiosUri = await findOrCreateSubdir(currentUri, "Audios");
 
+    console.log("[ensureMediaDirectories] fotosUri:", fotosUri);
+    console.log("[ensureMediaDirectories] audiosUri:", audiosUri);
+
     return { fotosUri, audiosUri };
   }
+
 
 
   // Buscar nombre libre: baseName.ext → baseName.ext, baseName (2).ext, ...
@@ -522,7 +815,7 @@ export default function DeficiencyMediaScreen() {
 
       return true;
     } catch (err) {
-      console.log("Error comprobando GPS:", err);
+      //console.log("Error comprobando GPS:", err);
       Alert.alert("Error", "No se pudo comprobar el estado del GPS.");
       return false;
     }
@@ -566,7 +859,7 @@ export default function DeficiencyMediaScreen() {
           setPhotoThumbs(slots);   // 👈 para que también se vean al reabrir
           // photoMeta se quedará vacío por ahora para fotos anteriores
         } catch (err) {
-          console.log("Error inicializando media:", err);
+          //console.log("Error inicializando media:", err);
         }
 
 
@@ -576,11 +869,15 @@ export default function DeficiencyMediaScreen() {
           setAudioProgress(
             audioUris.map(() => ({ position: 0, duration: 1 }))
           );
+          setAudioMeta(audioUris.map(() => null));
+
+
+
         } catch (err) {
-          console.log("⚠️ Error leyendo Audios SAF:", err);
+          //console.log("⚠️ Error leyendo Audios SAF:", err);
         }
       } catch (err) {
-        console.log("Error inicializando media:", err);
+        //console.log("Error inicializando media:", err);
       }
     })();
   }, [projectCode, feederCode, sedCode, tipoElemento, elementCode, deficiencyCode]);
@@ -593,7 +890,7 @@ export default function DeficiencyMediaScreen() {
 
     // Evitar doble tap mientras dispara
     if (!isCameraReady || isTakingPhoto) {
-      console.log("Cámara no lista o ya capturando...");
+      //console.log("Cámara no lista o ya capturando...");
       return;
     }
 
@@ -632,7 +929,7 @@ export default function DeficiencyMediaScreen() {
       setCapturedPhoto({ uri, meta });
       setIsPreview(true);
     } catch (err) {
-      console.log("Error al tomar foto:", err);
+      //console.log("Error al tomar foto:", err);
       Alert.alert(
         "Error",
         "No se pudo capturar la foto. Inténtalo nuevamente."
@@ -668,7 +965,7 @@ export default function DeficiencyMediaScreen() {
         thumbUri = `data:image/jpeg;base64,${base64}`;
       }
     } catch (err) {
-      console.log("⚠️ Error generando thumbnail:", err);
+      //console.log("⚠️ Error generando thumbnail:", err);
     }
 
     setPhotos((prev) => {
@@ -739,7 +1036,7 @@ export default function DeficiencyMediaScreen() {
     try {
       await FS.deleteAsync(uri, { idempotent: true });
     } catch (err) {
-      console.log("⚠️ Error borrando foto:", err);
+      //console.log("⚠️ Error borrando foto:", err);
     }
 
     // Dejamos el slot vacío, sin mover el resto
@@ -795,7 +1092,7 @@ export default function DeficiencyMediaScreen() {
 
       setRecording(recording);
     } catch (err) {
-      console.log("Error al iniciar grabación:", err);
+      //console.log("Error al iniciar grabación:", err);
     }
   };
 
@@ -807,11 +1104,37 @@ export default function DeficiencyMediaScreen() {
       const uri = recording.getURI();
       if (!uri) return;
 
+      // Tomamos fecha y coordenadas para ESTE audio
+      let latitude = null;
+      let longitude = null;
+      try {
+        const position = await Location.getCurrentPositionAsync({});
+        latitude = position.coords?.latitude ?? null;
+        longitude = position.coords?.longitude ?? null;
+      } catch (err) {
+        // si falla, se queda en null
+      }
+
+      const ahora = new Date();
+      const timestamp = formatFileTimestampMs();
+
       setAudios((prev) => [...prev, uri]); // uri temporal file://
       setAudioProgress((prev) => [...prev, { position: 0, duration: 1 }]);
+
+      setAudioMeta((prev) => [
+        ...prev,
+        {
+          latitude,
+          longitude,
+          archFech: formatDateTimeSQLite(ahora),
+          fileTimestamp: timestamp,
+        },
+      ]);
+
       setRecording(null);
+
     } catch (err) {
-      console.log("Error al detener grabación:", err);
+      //console.log("Error al detener grabación:", err);
     }
   };
 
@@ -890,7 +1213,7 @@ export default function DeficiencyMediaScreen() {
       setCurrentAudioIndex(index);
       setIsPaused(false);
     } catch (e) {
-      console.log("Error play:", e);
+      //console.log("Error play:", e);
     }
   };
 
@@ -923,11 +1246,14 @@ export default function DeficiencyMediaScreen() {
     try {
       await FS.deleteAsync(uri, { idempotent: true });
     } catch (err) {
-      console.log("⚠️ Error al eliminar audio:", err);
+      //console.log("⚠️ Error al eliminar audio:", err);
     }
 
     setAudios((prev) => prev.filter((_, i) => i !== index));
     setAudioProgress((prev) => prev.filter((_, i) => i !== index));
+
+    setAudioMeta((prev) => prev.filter((_, i) => i !== index));
+
 
     if (currentAudioIndex === index) {
       if (sound) {
@@ -1031,7 +1357,7 @@ export default function DeficiencyMediaScreen() {
         try {
           await FS.deleteAsync(srcUri, { idempotent: true });
         } catch (err) {
-          console.log("⚠️ Error borrando foto temporal:", err);
+          //console.log("⚠️ Error borrando foto temporal:", err);
         }
       }
 
@@ -1041,8 +1367,11 @@ export default function DeficiencyMediaScreen() {
         const srcUri = audios[i];
         if (!srcUri || srcUri.startsWith("content://")) continue;
 
-        const timestamp = formatFileTimestampMs();
-        const fileName = `AUD-${timestamp}-0.m4a`; // 0 para audio
+        const meta = audioMeta[i] || {};
+
+        // Nombre: AUD-<timestamp>-<i+1>.m4a
+        const timestamp = meta.fileTimestamp || formatFileTimestampMs();
+        const fileName = `AUD-${timestamp}-${i + 1}.m4a`;
 
         const destFileUri = await getUniqueSafFileUri(
           audiosUri,
@@ -1059,15 +1388,16 @@ export default function DeficiencyMediaScreen() {
         });
 
         const relativePath = buildRelativePath("Audios", fileName);
-        const archFech = formatDateTimeSQLite(new Date());
+
+        const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
         await insertArchivoLocal({
           archTipo: 1, // audio
           archTabla: "Deficiencias",
           archCodTabla,
           archNombre: relativePath,
-          archLatit: latitude || null,
-          archLong: longitude || null,
+          archLatit: meta.latitude ?? latitude ?? null,
+          archLong: meta.longitude ?? longitude ?? null,
           archFech,
           archActiv: 1,
         });
@@ -1075,14 +1405,15 @@ export default function DeficiencyMediaScreen() {
         try {
           await FS.deleteAsync(srcUri, { idempotent: true });
         } catch (err) {
-          console.log("⚠️ Error borrando audio temporal:", err);
+          //console.log("⚠️ Error borrando audio temporal:", err);
         }
       }
+
 
       Alert.alert("Listo", "Fotos y audios guardados en la carpeta pública.");
       router.replace("/(drawer)/inspection");
     } catch (err) {
-      console.log("Error guardando en SAF:", err);
+      //console.log("Error guardando en SAF:", err);
       Alert.alert("Error", "No se pudo guardar.");
     }
   };
@@ -1348,11 +1679,7 @@ export default function DeficiencyMediaScreen() {
                         style={styles.photo}
                         resizeMode="cover"
                         onError={(e) =>
-                          console.log(
-                            "❌ Error cargando miniatura",
-                            thumbUri,
-                            e.nativeEvent
-                          )
+                          console.log("❌ Error cargando miniatura", thumbUri, e.nativeEvent)
                         }
                       />
                     ) : (
