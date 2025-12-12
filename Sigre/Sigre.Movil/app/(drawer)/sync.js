@@ -23,9 +23,11 @@ import { useOffline } from "../../hooks/useOffline";
 
 export default function Sync() {
 
-  const { user } = useContext(AuthContext); 
+  const { user } = useContext(AuthContext);
   const { offlineLoading, downloadDatabase } = useOffline();
-  const { dbName, setDbName } = useDatos();
+  const { dbName, setDbName, selectedFeeder, setSelectedFeeder } = useDatos();
+
+
 
   const {
     feedersByUser,
@@ -42,7 +44,7 @@ export default function Sync() {
   const [modalSubVisible, setModalSubVisible] = useState(false);
 
   // Proyecto 0
-  const [selectedFeeder, setSelectedFeeder] = useState(null);
+  //const [selectedFeeder, setSelectedFeeder] = useState(null);
   const [substationsByFeeder, setSubstationsByFeeder] = useState([]);
   const [selectedSubstations, setSelectedSubstations] = useState([]);
   const [searchSed, setSearchSed] = useState("");
@@ -81,38 +83,51 @@ export default function Sync() {
       // PROYECTO 0 — BAJA TENSIÓN
       //──────────────────────
       if (user?.proyecto === 0) {
-        if (!selectedFeeder)
-          return Alert.alert("Selecciona un alimentador");
+  if (!selectedFeeder)
+    return Alert.alert("Selecciona un alimentador");
 
-        if (selectedSubstations.length === 0)
-          return Alert.alert("Selecciona al menos una subestación");
+  if (selectedSubstations.length === 0)
+    return Alert.alert("Selecciona al menos una subestación");
 
-        const sedsIds = selectedSubstations.map(s => parseInt(s.id));
+  const sedsIds = selectedSubstations.map(s => parseInt(s.id));
 
-        nombreBase = `sigre_offline_${Date.now()}.db`;
-        //URI EXPORT
+  nombreBase = `sigre_offline_${Date.now()}.db`;
 
-        const fileUri = await downloadDatabase(
-          user.id,
-          sedsIds,
-          0,
-          nombreBase
-        );
+  const fileUri = await downloadDatabase(
+    user.id,
+    sedsIds,
+    0,
+    nombreBase
+  );
 
-        if (!fileUri) throw new Error("Descarga fallida");
+  if (!fileUri) throw new Error("Descarga fallida");
 
-        await closeDatabase();
-        await new Promise(r => setTimeout(r, 150));
+  await closeDatabase();
+  await new Promise(r => setTimeout(r, 150));
 
-        await setDbName(`${nombreBase}`);
+  await setDbName(`${nombreBase}`);
 
-        setSelectedFeeders([]);
-        setSelectedSubstations([]);
-        setSelectedFeeder(null);
+  setSelectedFeeders([]);
+  setSelectedSubstations([]);
+  // ❌ NO pongas setSelectedFeeder(null) aquí
+  // Lo dejamos tal cual, porque este es justo el alimentador activo para la base descargada
 
-        setDbExists(true);
-        return Alert.alert("Éxito", "Base descargada correctamente.");
-      }
+  setDbExists(true);
+  return Alert.alert("Éxito", "Base descargada correctamente.");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       //──────────────────────
       // PROYECTO 1 — MEDIA TENSIÓN
@@ -205,6 +220,10 @@ export default function Sync() {
     // Proyecto 0 = uno solo
     if (user?.proyecto === 0) {
       setSelectedFeeder(obj);
+
+      console.log("✅ Alimentador seleccionado (global):", obj);
+
+
       setSelectedFeeders([obj]);
 
       await AsyncStorage.setItem("selectedFeeders", JSON.stringify([obj]));
