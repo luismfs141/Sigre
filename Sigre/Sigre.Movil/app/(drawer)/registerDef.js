@@ -119,6 +119,30 @@ function buildRelativePath(tipoCarpeta, fileName) {
   return path;
 }
 
+function buildRelativePathWithRoot(rootFolder, tipoCarpeta, fileName) {
+  const {
+    proyecto,
+    alimentador,
+    subestacion,
+    tipoElemento,
+    elemento,
+    deficiencia,
+  } = PATH_CONFIG;
+
+  return [
+    String(rootFolder), // "SIGRE" | "BORRADOS"
+    String(proyecto),
+    String(alimentador),
+    String(subestacion),
+    String(tipoElemento),
+    String(elemento),
+    String(deficiencia),
+    String(tipoCarpeta), // "Fotos" | "Audios"
+    String(fileName),
+  ].join("/");
+}
+
+
 // Fecha para SQLite: "YYYY-MM-DD HH:mm:ss"
 function formatDateTimeSQLite(date = new Date()) {
   const yyyy = date.getFullYear();
@@ -1410,6 +1434,7 @@ export default function DeficiencyMediaScreen() {
         await safeDeleteUri(srcUri);
       }
 
+
       // ==========================
       // 🎤 AUDIOS - guardar nuevos (sin tocar si no hay nuevos)
       // ==========================
@@ -1419,21 +1444,24 @@ export default function DeficiencyMediaScreen() {
 
       for (const item of newAudioItems) {
         const srcUri = item.uri;
-        const meta = item.meta;
+        const meta = item.meta || {};
 
         const timestamp = meta.fileTimestamp || formatFileTimestampMs();
-        const fileName = `AUD-${timestamp}-0.m4a`;
+        const requestedName = `AUD-${timestamp}-0.m4a`;
 
         const destFileUri = await getUniqueSafFileUri(
           audiosUri,
-          fileName,
+          requestedName,
           "audio/mp4"
         );
+
+        // ✅ nombre REAL (puede venir con " (2)")
+        const realFileName = getNameFromSafUri(destFileUri);
 
         const base64 = await readFileAsBase64Generic(srcUri);
         await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
-        const relativePath = buildRelativePath("Audios", fileName);
+        const relativePath = buildRelativePathWithRoot("SIGRE", "Audios", realFileName);
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
         await saveArchivoLocal({
@@ -1449,6 +1477,7 @@ export default function DeficiencyMediaScreen() {
 
         await safeDeleteUri(srcUri);
       }
+
 
       // ==========================
       // ✅ Determinar qué EXISTENTES se mantienen
@@ -1517,9 +1546,10 @@ export default function DeficiencyMediaScreen() {
       for (const rec of toDeleteAudioRecords) {
         const fileName = rec.ArchNombre.split("/").pop();
         const srcUri = audioUris.find((u) => getFileName(u) === fileName);
-        const newRelative = rec.ArchNombre.replace(/^SIGRE/, "BORRADOS");
 
-        // ✅ Solo crear BORRADOS/Audios si hay archivo físico para mover
+        let newRelative = rec.ArchNombre.replace(/^SIGRE/, "BORRADOS"); // fallback
+
+        // ✅ Solo si hay archivo físico, lo movemos y actualizamos ruta REAL
         if (srcUri) {
           if (!borradosAudiosUri) {
             borradosAudiosUri = await getMediaDirUri(rootUri, "BORRADOS", "Audios", true);
@@ -1532,10 +1562,15 @@ export default function DeficiencyMediaScreen() {
               "audio/mp4"
             );
 
+            const realFileName = getNameFromSafUri(destFileUri);
+
             const base64 = await readFileAsBase64Generic(srcUri);
             await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
             await safeDeleteUri(srcUri);
+
+            // ✅ DB debe reflejar el nombre REAL en BORRADOS
+            newRelative = buildRelativePathWithRoot("BORRADOS", "Audios", realFileName);
           } catch (err) {
             console.log("⚠️ Error moviendo audio a BORRADOS:", rec.ArchNombre, err);
           }
@@ -1546,6 +1581,7 @@ export default function DeficiencyMediaScreen() {
         await markArchivoAsDeleted(rec.ArchInterno, newRelative);
       }
 
+
       Alert.alert("Listo", "Cambios guardados en la carpeta pública.");
       router.replace("/(drawer)/inspection");
     } catch (err) {
@@ -1553,6 +1589,8 @@ export default function DeficiencyMediaScreen() {
       Alert.alert("Error", "No se pudo guardar.");
     }
   };
+
+
 
 
   // Limpieza de archivos temporales al cancelar
@@ -1923,6 +1961,15 @@ export default function DeficiencyMediaScreen() {
             onPress={async () => {
               const ok = await confirmStopRecording();
               if (!ok) return;
+              // 🔇 detén reproducción si está sonando
+              if (sound) {
+                try { await sound.stopAsync(); } catch { }
+                try { await sound.unloadAsync(); } catch { }
+                setSound(null);
+                setCurrentAudioIndex(null);
+                setIsPaused(false);
+              }
+
               await cleanupNewMedia();
 
               // 🔥 clave: recarga desde disco/DB para “pisar” cualquier estado cacheado
