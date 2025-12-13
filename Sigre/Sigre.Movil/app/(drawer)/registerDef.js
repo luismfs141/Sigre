@@ -1,6 +1,8 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { useFeeder } from "../../hooks/useFeeder";
 
-import { useContext } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
+
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 
@@ -35,7 +37,6 @@ import { Audio } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFiles } from "../../hooks/useFiles";
 
-import { useEffect, useState } from "react";
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 
@@ -242,9 +243,38 @@ async function getRootUri() {
 // Crea estructura:
 // [root]/<rootFolder>/Proyecto/Alim/Sub/TipoElemento/Elemento/DEF/{Fotos,Audios}
 // rootFolder = "SIGRE" (activos) o "BORRADOS" (lógico borrado)
-async function ensureMediaDirectories(rootUri, rootFolder = "SIGRE") {
-  const { proyecto, alimentador, subestacion, tipoElemento, elemento, deficiencia } =
-    PATH_CONFIG;
+
+// ✅ Buscar subcarpeta SIN crearla
+async function findSubdir(parentUri, dirName) {
+  try {
+    const nameStr = String(dirName);
+    const entries = await SAF.readDirectoryAsync(parentUri);
+    for (const entryUri of entries) {
+      const name = getNameFromSafUri(entryUri);
+      if (name === nameStr) return entryUri;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// ✅ Caminar por una ruta SAF (crear o NO crear)
+async function walkSafPath(rootUri, segments, create = false) {
+  let currentUri = rootUri;
+  for (const seg of segments) {
+    currentUri = create
+      ? await findOrCreateSubdir(currentUri, seg)
+      : await findSubdir(currentUri, seg);
+
+    if (!currentUri) return null; // si no existe y no creamos, aborta
+  }
+  return currentUri;
+}
+
+// ✅ URI de la carpeta de la deficiencia (SIN Fotos/Audios)
+async function getDeficiencyBaseUri(rootUri, rootFolder = "SIGRE", create = false) {
+  const { proyecto, alimentador, subestacion, tipoElemento, elemento, deficiencia } = PATH_CONFIG;
 
   const segments = [
     String(rootFolder),
@@ -256,25 +286,45 @@ async function ensureMediaDirectories(rootUri, rootFolder = "SIGRE") {
     String(deficiencia),
   ];
 
-  console.log("[ensureMediaDirectories] rootUri:", rootUri);
-  console.log("[ensureMediaDirectories] rootFolder:", rootFolder);
-  console.log("[ensureMediaDirectories] segments:", segments);
-  console.log("[ensureMediaDirectories] ruta lógica:", segments.join("/"));
-
-  let currentUri = rootUri;
-
-  for (const name of segments) {
-    currentUri = await findOrCreateSubdir(currentUri, name);
-  }
-
-  const fotosUri = await findOrCreateSubdir(currentUri, "Fotos");
-  const audiosUri = await findOrCreateSubdir(currentUri, "Audios");
-
-  console.log("[ensureMediaDirectories] (" + rootFolder + ") fotosUri:", fotosUri);
-  console.log("[ensureMediaDirectories] (" + rootFolder + ") audiosUri:", audiosUri);
-
-  return { fotosUri, audiosUri };
+  return await walkSafPath(rootUri, segments, create);
 }
+
+// ✅ URI de Fotos o Audios (crear solo si create=true)
+async function getMediaDirUri(rootUri, rootFolder = "SIGRE", mediaName = "Fotos", create = false) {
+  const baseUri = await getDeficiencyBaseUri(rootUri, rootFolder, create);
+  if (!baseUri) return null;
+
+  return create
+    ? await findOrCreateSubdir(baseUri, mediaName)
+    : await findSubdir(baseUri, mediaName);
+}
+
+// ✅ Leer directorio sin reventar
+async function safeReadDirectory(uri) {
+  if (!uri) return [];
+  try {
+    return await SAF.readDirectoryAsync(uri);
+  } catch {
+    return [];
+  }
+}
+
+// ✅ Borrar archivo SAF (content://) o file://
+async function safeDeleteUri(uri) {
+  if (!uri) return;
+  try {
+    // si existe deleteAsync en SAF, úsalo primero
+    if (uri.startsWith("content://") && SAF?.deleteAsync) {
+      await SAF.deleteAsync(uri);
+      return;
+    }
+  } catch { }
+
+  try {
+    await FS.deleteAsync(uri, { idempotent: true });
+  } catch { }
+}
+
 
 // Buscar nombre libre: baseName.ext → baseName.ext, baseName (2).ext, ...
 async function getUniqueSafFileUri(folderUri, baseNameWithExt, mimeType) {
@@ -460,10 +510,10 @@ export default function DeficiencyMediaScreen() {
     typeof selectedSed === "string"
       ? selectedSed
       : selectedSed?.SedCodi ||
-        selectedSed?.SedCodigo ||
-        selectedItem?.SedCodi ||
-        selectedItem?.SedCodigo ||
-        "SIN_SED";
+      selectedSed?.SedCodigo ||
+      selectedItem?.SedCodi ||
+      selectedItem?.SedCodigo ||
+      "SIN_SED";
 
   console.log("[DefMedia] sedCode usado para carpeta:", {
     selectedSed,
@@ -480,10 +530,10 @@ export default function DeficiencyMediaScreen() {
     selectedItem?.PostCodigoNodo
       ? "Poste"
       : selectedItem?.VanoCodigo
-      ? "Vano"
-      : selectedItem?.SedCodigo
-      ? "Subestacion"
-      : "Desconocido";
+        ? "Vano"
+        : selectedItem?.SedCodigo
+          ? "Subestacion"
+          : "Desconocido";
 
   // Código de deficiencia
   const deficiencyCode = (defCode || "DEF_SIN_COD").toString();
@@ -534,6 +584,15 @@ export default function DeficiencyMediaScreen() {
 
   // 🔴 Indicador REC
   const [blink, setBlink] = useState(true);
+  useEffect(() => {
+    if (!recording) {
+      setBlink(true);
+      return;
+    }
+    const id = setInterval(() => setBlink((b) => !b), 500);
+    return () => clearInterval(id);
+  }, [recording]);
+
 
   // Modal fotos
   const [showModal, setShowModal] = useState(false);
@@ -544,6 +603,35 @@ export default function DeficiencyMediaScreen() {
   const [capturedPhoto, setCapturedPhoto] = useState(null); // { uri, meta }
   const [isPreview, setIsPreview] = useState(false);
   const [zoom, setZoom] = useState(0);
+
+  const [initialSnapshot, setInitialSnapshot] = useState(null);
+
+  const restoreInitialSnapshot = async () => {
+    if (!initialSnapshot) return;
+
+    setPhotos([...(initialSnapshot.photos ?? Array(6).fill(null))]);
+    setPhotoThumbs([...(initialSnapshot.photoThumbs ?? Array(6).fill(null))]);
+    setPhotoMeta([...(initialSnapshot.photoMeta ?? Array(6).fill(null))]);
+
+
+    setAudios([...(initialSnapshot.audios ?? [])]);
+    setAudioProgress([...(initialSnapshot.audioProgress ?? [])]);
+    setAudioMeta([...(initialSnapshot.audioMeta ?? [])]);
+
+
+    setCurrentArchCodTabla(initialSnapshot.archCodTabla ?? null);
+
+    // limpia estados de cámara/visor por seguridad
+    setShowModal(false);
+    setCameraVisible(false);
+    setCaptureMode(null);
+    setCurrentSlotIndex(null);
+    setCapturedPhoto(null);
+    setIsPreview(false);
+    setIsCameraReady(false);
+    setIsTakingPhoto(false);
+  };
+
 
   // ================================
   // HELPERS
@@ -559,218 +647,221 @@ export default function DeficiencyMediaScreen() {
   }
 
   // ================================
-  // CARGAR MEDIA EXISTENTE AL ENTRAR
+  // CARGAR MEDIA (SIEMPRE QUE LA PANTALLA ENTRE EN FOCO)
   // ================================
-  useEffect(() => {
+  const loadExistingMedia = useCallback(async () => {
     if (!feederCode || feederCode === "SIN_ALIM") return;
-    (async () => {
-      try {
-        const rootUri = await getRootUri();
-        if (!rootUri) return;
 
-        // Directorios activos (SIGRE)
-        const { fotosUri, audiosUri } = await ensureMediaDirectories(
-          rootUri,
-          "SIGRE"
-        );
+    console.log("[DefMedia] 🔄 loadExistingMedia() RUN", {
+      projectCode,
+      feederCode,
+      sedCode,
+      tipoElemento,
+      elementCode,
+      deficiencyCode,
+      t: new Date().toISOString(),
+    });
 
-        // Archivos físicos en las carpetas
-        let photoUris = [];
-        let audioUris = [];
+    try {
+      const rootUri = await getRootUri();
+      if (!rootUri) return;
 
-        try {
-          photoUris = await SAF.readDirectoryAsync(fotosUri);
-        } catch (err) {
-          console.log("⚠️ Error leyendo Fotos SAF:", err);
+      // Directorios activos (SIGRE)
+      const fotosUri = await getMediaDirUri(rootUri, "SIGRE", "Fotos", false);
+      const audiosUri = await getMediaDirUri(rootUri, "SIGRE", "Audios", false);
+
+      // Archivos físicos en las carpetas
+      const photoUris = await safeReadDirectory(fotosUri);
+      const audioUris = await safeReadDirectory(audiosUri);
+
+      const baseRelative = [
+        "SIGRE",
+        PATH_CONFIG.proyecto,
+        PATH_CONFIG.alimentador,
+        PATH_CONFIG.subestacion,
+        PATH_CONFIG.tipoElemento,
+        PATH_CONFIG.elemento,
+        PATH_CONFIG.deficiencia,
+      ].join("/");
+
+      const fotosPrefix = `${baseRelative}/Fotos/`;
+      const audiosPrefix = `${baseRelative}/Audios/`;
+
+      const dbPhotoRows = await getArchivosByBasePath(fotosPrefix);
+      const dbAudioRows = await getArchivosByBasePath(audiosPrefix);
+
+      console.log("[DefMedia] dbPhotoRows:", dbPhotoRows);
+      console.log("[DefMedia] dbAudioRows:", dbAudioRows);
+
+      const archCodFromDb =
+        dbPhotoRows[0]?.ArchCodTabla ?? dbAudioRows[0]?.ArchCodTabla ?? null;
+
+      setCurrentArchCodTabla(archCodFromDb != null ? Number(archCodFromDb) : null);
+
+      let finalPhotos = Array(6).fill(null);
+      let finalThumbs = Array(6).fill(null);
+      let finalPhotoMeta = Array(6).fill(null);
+
+      let finalAudios = [];
+      let finalAudioMeta = [];
+      let finalAudioProgress = [];
+
+      // --- FOTOS ---
+      if (dbPhotoRows && dbPhotoRows.length > 0) {
+        const slots = Array(6).fill(null);
+        const metaSlots = Array(6).fill(null);
+        const thumbSlots = Array(6).fill(null);
+        const initialPhotoRecs = [];
+
+        for (const row of dbPhotoRows) {
+          const slotNum = parseInt(row.ArchTipo, 10);
+          if (!Number.isFinite(slotNum) || slotNum < 1 || slotNum > 6) continue;
+
+          const fileName = row.ArchNombre.split("/").pop();
+          const uri = photoUris.find((u) => getFileName(u) === fileName);
+
+          if (!uri) continue;
+
+          const ts = extractTimestampFromFileName(fileName);
+
+          slots[slotNum - 1] = uri;
+          metaSlots[slotNum - 1] = {
+            latitude: row.ArchLatitud ?? null,
+            longitude: row.ArchLongitud ?? null,
+            archFech: row.ArchFecha ?? null,
+            fileTimestamp: ts,
+            archInterno: row.ArchInterno,
+            originalRelativePath: row.ArchNombre,
+            isExisting: true,
+          };
+
+          try {
+            const base64 = await readFileAsBase64Generic(uri);
+            thumbSlots[slotNum - 1] = `data:image/jpeg;base64,${base64}`;
+          } catch {
+            thumbSlots[slotNum - 1] = uri;
+          }
+
+          initialPhotoRecs.push({
+            ArchInterno: row.ArchInterno,
+            ArchTipo: row.ArchTipo,
+            ArchNombre: row.ArchNombre,
+            ArchCodTabla: row.ArchCodTabla,
+          });
         }
 
-        try {
-          audioUris = await SAF.readDirectoryAsync(audiosUri);
-        } catch (err) {
-          console.log("⚠️ Error leyendo Audios SAF:", err);
-        }
+        setPhotos(slots);
+        setPhotoThumbs(thumbSlots);
+        setPhotoMeta(metaSlots);
+        setInitialPhotoRecords(initialPhotoRecs);
 
-        const baseRelative = [
-          "SIGRE",
-          PATH_CONFIG.proyecto,
-          PATH_CONFIG.alimentador,
-          PATH_CONFIG.subestacion,
-          PATH_CONFIG.tipoElemento,
-          PATH_CONFIG.elemento,
-          PATH_CONFIG.deficiencia,
-        ].join("/");
+        finalPhotos = slots;
+        finalThumbs = thumbSlots;
+        finalPhotoMeta = metaSlots;
+      } else {
+        // fallback: leer desde carpeta si no hay DB
+        const slots = Array(6).fill(null);
 
-        const fotosPrefix = `${baseRelative}/Fotos/`;
-        const audiosPrefix = `${baseRelative}/Audios/`;
-
-        const dbPhotoRows = await getArchivosByBasePath(fotosPrefix);
-        const dbAudioRows = await getArchivosByBasePath(audiosPrefix);
-
-        console.log("[DefMedia] dbPhotoRows:", dbPhotoRows);
-        console.log("[DefMedia] dbAudioRows:", dbAudioRows);
-
-        const archCodFromDb =
-          dbPhotoRows[0]?.ArchCodTabla ?? dbAudioRows[0]?.ArchCodTabla ?? null;
-        setCurrentArchCodTabla(
-          archCodFromDb != null ? Number(archCodFromDb) : null
-        );
-
-        // --- FOTOS ---
-        if (dbPhotoRows && dbPhotoRows.length > 0) {
-          const slots = Array(6).fill(null);
-          const metaSlots = Array(6).fill(null);
-          const thumbSlots = Array(6).fill(null);
-          const initialPhotoRecs = [];
-
-          for (const row of dbPhotoRows) {
-            const slotNum = parseInt(row.ArchTipo, 10);
-            if (!Number.isFinite(slotNum) || slotNum < 1 || slotNum > 6) {
+        for (const uri of photoUris) {
+          const name = getFileName(uri);
+          const match = name.match(/-(\d+)\.(jpg|jpeg|png)$/i);
+          if (match) {
+            const pos = parseInt(match[1], 10);
+            if (pos >= 1 && pos <= 6 && !slots[pos - 1]) {
+              slots[pos - 1] = uri;
               continue;
             }
-
-            const fileName = row.ArchNombre.split("/").pop();
-            const uri = photoUris.find((u) => getFileName(u) === fileName);
-
-            if (!uri) {
-              console.log(
-                "[DefMedia] Foto en DB sin archivo físico:",
-                row.ArchNombre
-              );
-              continue;
-            }
-
-            const ts = extractTimestampFromFileName(fileName);
-
-            slots[slotNum - 1] = uri;
-            metaSlots[slotNum - 1] = {
-              latitude: row.ArchLatitud ?? null,
-              longitude: row.ArchLongitud ?? null,
-              archFech: row.ArchFecha ?? null,
-              fileTimestamp: ts,
-              archInterno: row.ArchInterno,
-              originalRelativePath: row.ArchNombre,
-              isExisting: true,
-            };
-
-            // thumbnail en base64 para que tanto mini como visor funcionen
-            try {
-              const base64 = await readFileAsBase64Generic(uri);
-              thumbSlots[slotNum - 1] = `data:image/jpeg;base64,${base64}`;
-            } catch (err) {
-              console.log(
-                "⚠️ Error generando thumbnail desde SAF (foto existente):",
-                err
-              );
-              thumbSlots[slotNum - 1] = uri; // fallback
-            }
-
-            initialPhotoRecs.push({
-              ArchInterno: row.ArchInterno,
-              ArchTipo: row.ArchTipo,
-              ArchNombre: row.ArchNombre,
-              ArchCodTabla: row.ArchCodTabla,
-            });
           }
-
-          setPhotos(slots);
-          setPhotoThumbs(thumbSlots);
-          setPhotoMeta(metaSlots);
-          setInitialPhotoRecords(initialPhotoRecs);
-        } else {
-          // No hay registros en DB, pero puede haber fotos en la carpeta
-          const slots = Array(6).fill(null);
-
-          for (const uri of photoUris) {
-            const name = getFileName(uri);
-            const match = name.match(/-(\d+)\.(jpg|jpeg|png)$/i);
-            if (match) {
-              const pos = parseInt(match[1], 10);
-              if (pos >= 1 && pos <= 6 && !slots[pos - 1]) {
-                slots[pos - 1] = uri;
-                continue;
-              }
-            }
-            const freeIndex = slots.findIndex((s) => !s);
-            if (freeIndex !== -1) {
-              slots[freeIndex] = uri;
-            }
-          }
-
-          const thumbSlots = Array(6).fill(null);
-          for (let i = 0; i < slots.length; i++) {
-            const uri = slots[i];
-            if (!uri) continue;
-            try {
-              const base64 = await readFileAsBase64Generic(uri);
-              thumbSlots[i] = `data:image/jpeg;base64,${base64}`;
-            } catch (err) {
-              console.log(
-                "⚠️ Error generando thumbnail desde SAF (foto sin DB):",
-                err
-              );
-              thumbSlots[i] = uri;
-            }
-          }
-
-          setPhotos(slots);
-          setPhotoThumbs(thumbSlots);
-          setPhotoMeta(Array(6).fill(null));
-          setInitialPhotoRecords([]);
+          const freeIndex = slots.findIndex((s) => !s);
+          if (freeIndex !== -1) slots[freeIndex] = uri;
         }
 
-        // --- AUDIOS ---
-        if (dbAudioRows && dbAudioRows.length > 0) {
-          const audioList = [];
-          const audioMetaList = [];
-          const initialAudioRecs = [];
-
-          for (const row of dbAudioRows) {
-            const fileName = row.ArchNombre.split("/").pop();
-            const uri = audioUris.find((u) => getFileName(u) === fileName);
-
-            if (!uri) {
-              console.log(
-                "[DefMedia] Audio en DB sin archivo físico:",
-                row.ArchNombre
-              );
-              continue;
-            }
-
-            const ts = extractTimestampFromFileName(fileName);
-
-            audioList.push(uri);
-            audioMetaList.push({
-              latitude: row.ArchLatitud ?? null,
-              longitude: row.ArchLongitud ?? null,
-              archFech: row.ArchFecha ?? null,
-              fileTimestamp: ts,
-              archInterno: row.ArchInterno,
-              originalRelativePath: row.ArchNombre,
-              isExisting: true,
-            });
-
-            initialAudioRecs.push({
-              ArchInterno: row.ArchInterno,
-              ArchTipo: row.ArchTipo,
-              ArchNombre: row.ArchNombre,
-              ArchCodTabla: row.ArchCodTabla,
-            });
+        const thumbSlots = Array(6).fill(null);
+        for (let i = 0; i < slots.length; i++) {
+          const uri = slots[i];
+          if (!uri) continue;
+          try {
+            const base64 = await readFileAsBase64Generic(uri);
+            thumbSlots[i] = `data:image/jpeg;base64,${base64}`;
+          } catch {
+            thumbSlots[i] = uri;
           }
-
-          setAudios(audioList);
-          setAudioProgress(audioList.map(() => ({ position: 0, duration: 1 })));
-          setAudioMeta(audioMetaList);
-          setInitialAudioRecords(initialAudioRecs);
-        } else {
-          setAudios(audioUris);
-          setAudioProgress(audioUris.map(() => ({ position: 0, duration: 1 })));
-          setAudioMeta(audioUris.map(() => null));
-          setInitialAudioRecords([]);
         }
-      } catch (err) {
-        console.log("Error inicializando media:", err);
+
+        setPhotos(slots);
+        setPhotoThumbs(thumbSlots);
+        setPhotoMeta(Array(6).fill(null));
+        setInitialPhotoRecords([]);
+
+        finalPhotos = slots;
+        finalThumbs = thumbSlots;
+        finalPhotoMeta = Array(6).fill(null);
       }
-    })();
+
+      // --- AUDIOS (lo dejo igual que tu lógica actual) ---
+      if (dbAudioRows && dbAudioRows.length > 0) {
+        const audioList = [];
+        const audioMetaList = [];
+        const initialAudioRecs = [];
+
+        for (const row of dbAudioRows) {
+          const fileName = row.ArchNombre.split("/").pop();
+          const uri = audioUris.find((u) => getFileName(u) === fileName);
+          if (!uri) continue;
+
+          const ts = extractTimestampFromFileName(fileName);
+
+          audioList.push(uri);
+          audioMetaList.push({
+            latitude: row.ArchLatitud ?? null,
+            longitude: row.ArchLongitud ?? null,
+            archFech: row.ArchFecha ?? null,
+            fileTimestamp: ts,
+            archInterno: row.ArchInterno,
+            originalRelativePath: row.ArchNombre,
+            isExisting: true,
+          });
+
+          initialAudioRecs.push({
+            ArchInterno: row.ArchInterno,
+            ArchTipo: row.ArchTipo,
+            ArchNombre: row.ArchNombre,
+            ArchCodTabla: row.ArchCodTabla,
+          });
+        }
+
+        setAudios(audioList);
+        setAudioProgress(audioList.map(() => ({ position: 0, duration: 1 })));
+        setAudioMeta(audioMetaList);
+        setInitialAudioRecords(initialAudioRecs);
+
+        finalAudios = audioList;
+        finalAudioMeta = audioMetaList;
+        finalAudioProgress = audioList.map(() => ({ position: 0, duration: 1 }));
+      } else {
+        setAudios(audioUris);
+        setAudioProgress(audioUris.map(() => ({ position: 0, duration: 1 })));
+        setAudioMeta(audioUris.map(() => null));
+        setInitialAudioRecords([]);
+
+        finalAudios = audioUris;
+        finalAudioMeta = audioUris.map(() => null);
+        finalAudioProgress = audioUris.map(() => ({ position: 0, duration: 1 }));
+      }
+
+      // ✅ snapshot SIEMPRE desde lo que está realmente en disco/DB
+      setInitialSnapshot({
+        photos: [...finalPhotos],
+        photoThumbs: [...finalThumbs],
+        photoMeta: [...finalPhotoMeta],
+        audios: [...finalAudios],
+        audioMeta: [...finalAudioMeta],
+        audioProgress: [...finalAudioProgress],
+        archCodTabla: archCodFromDb != null ? Number(archCodFromDb) : null,
+      });
+    } catch (err) {
+      console.log("Error inicializando media:", err);
+    }
   }, [
     projectCode,
     feederCode,
@@ -780,6 +871,14 @@ export default function DeficiencyMediaScreen() {
     deficiencyCode,
     getArchivosByBasePath,
   ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadExistingMedia();
+      return () => { };
+    }, [loadExistingMedia])
+  );
+
 
   // ================================
   // 📸 TOMAR FOTO
@@ -832,7 +931,7 @@ export default function DeficiencyMediaScreen() {
 
   const retryCapture = () => {
     if (capturedPhoto?.uri) {
-      FS.deleteAsync(capturedPhoto.uri, { idempotent: true }).catch(() => {});
+      FS.deleteAsync(capturedPhoto.uri, { idempotent: true }).catch(() => { });
     }
     setCapturedPhoto(null);
     setIsPreview(false);
@@ -996,7 +1095,7 @@ export default function DeficiencyMediaScreen() {
         const position = await Location.getCurrentPositionAsync({});
         latitude = position.coords?.latitude ?? null;
         longitude = position.coords?.longitude ?? null;
-      } catch (err) {}
+      } catch (err) { }
 
       const ahora = new Date();
       const timestamp = formatFileTimestampMs();
@@ -1067,7 +1166,7 @@ export default function DeficiencyMediaScreen() {
         await sound.unloadAsync();
       }
 
-            // 👇 preparar URI reproducible (content:// → file:// temporal usando copyAsync)
+      // 👇 preparar URI reproducible (content:// → file:// temporal usando copyAsync)
       let playableUri = uri;
       if (uri && uri.startsWith("content://")) {
         try {
@@ -1221,29 +1320,42 @@ export default function DeficiencyMediaScreen() {
         return;
       }
 
-      const { fotosUri, audiosUri } = await ensureMediaDirectories(
-        rootUri,
-        "SIGRE"
-      );
-
-      // BORRADOS se crea solo si hace falta
-      let borradosFotosUri = null;
-      let borradosAudiosUri = null;
-
-      let photoUris = [];
-      let audioUris = [];
-
-      try {
-        photoUris = await SAF.readDirectoryAsync(fotosUri);
-      } catch (err) {
-        console.log("⚠️ Error leyendo Fotos SIGRE:", err);
+      // ✅ Detectar QUÉ se va a escribir realmente
+      const newPhotoItems = [];
+      for (let i = 0; i < photos.length; i++) {
+        const uri = photos[i];
+        const meta = photoMeta[i];
+        const isNew = uri && uri.startsWith("file://") && (!meta || !meta.archInterno);
+        if (isNew) newPhotoItems.push({ index: i, uri, meta: meta || {} });
       }
 
-      try {
-        audioUris = await SAF.readDirectoryAsync(audiosUri);
-      } catch (err) {
-        console.log("⚠️ Error leyendo Audios SIGRE:", err);
+      const newAudioItems = [];
+      for (let i = 0; i < audios.length; i++) {
+        const uri = audios[i];
+        const meta = audioMeta[i];
+        const isNew = uri && uri.startsWith("file://") && (!meta || !meta.archInterno);
+        if (isNew) newAudioItems.push({ index: i, uri, meta: meta || {} });
       }
+
+      const willWritePhotos = newPhotoItems.length > 0;
+      const willWriteAudios = newAudioItems.length > 0;
+
+      // ✅ Obtener URIs existentes SIN crear
+      const fotosUriExisting = await getMediaDirUri(rootUri, "SIGRE", "Fotos", false);
+      const audiosUriExisting = await getMediaDirUri(rootUri, "SIGRE", "Audios", false);
+
+      // ✅ Crear SOLO si toca escribir
+      const fotosUri = willWritePhotos
+        ? (fotosUriExisting || await getMediaDirUri(rootUri, "SIGRE", "Fotos", true))
+        : fotosUriExisting;
+
+      const audiosUri = willWriteAudios
+        ? (audiosUriExisting || await getMediaDirUri(rootUri, "SIGRE", "Audios", true))
+        : audiosUriExisting;
+
+      // ✅ Listado físico SOLO si la carpeta existe
+      const photoUris = await safeReadDirectory(fotosUriExisting);
+      const audioUris = await safeReadDirectory(audiosUriExisting);
 
       const position = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = position.coords || {};
@@ -1257,20 +1369,17 @@ export default function DeficiencyMediaScreen() {
       const keptArchInternos = new Set();
 
       // ==========================
-      // 📸 FOTOS
+      // 📸 FOTOS - guardar nuevas
       // ==========================
-      for (let i = 0; i < photos.length; i++) {
-        const srcUri = photos[i];
-        const meta = photoMeta[i] || {};
+      if (willWritePhotos && !fotosUri) {
+        throw new Error("No se pudo crear/obtener carpeta Fotos.");
+      }
+
+      for (const item of newPhotoItems) {
+        const i = item.index;
+        const srcUri = item.uri;
+        const meta = item.meta;
         const slotSuffix = i + 1;
-
-        // foto existente, no fue removida → se mantiene
-        if (meta.archInterno) {
-          keptArchInternos.add(meta.archInterno);
-          continue;
-        }
-
-        if (!srcUri || srcUri.startsWith("content://")) continue;
 
         const timestamp = meta.fileTimestamp || formatFileTimestampMs();
         const fileName = `FOT-${timestamp}-${slotSuffix}.jpg`;
@@ -1282,9 +1391,7 @@ export default function DeficiencyMediaScreen() {
         );
 
         const base64 = await readFileAsBase64Generic(srcUri);
-        await SAF.writeAsStringAsync(destFileUri, base64, {
-          encoding: "base64",
-        });
+        await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
         const relativePath = buildRelativePath("Fotos", fileName);
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
@@ -1300,29 +1407,21 @@ export default function DeficiencyMediaScreen() {
           archActiv: 1,
         });
 
-        try {
-          await FS.deleteAsync(srcUri, { idempotent: true });
-        } catch (err) {
-          console.log("⚠️ Error borrando foto temporal:", err);
-        }
+        await safeDeleteUri(srcUri);
       }
 
       // ==========================
-      // 🎤 AUDIOS
+      // 🎤 AUDIOS - guardar nuevos (sin tocar si no hay nuevos)
       // ==========================
-      for (let i = 0; i < audios.length; i++) {
-        const srcUri = audios[i];
-        const meta = audioMeta[i] || {};
+      if (willWriteAudios && !audiosUri) {
+        throw new Error("No se pudo crear/obtener carpeta Audios.");
+      }
 
-        if (meta.archInterno) {
-          keptArchInternos.add(meta.archInterno);
-          continue;
-        }
-
-        if (!srcUri || srcUri.startsWith("content://")) continue;
+      for (const item of newAudioItems) {
+        const srcUri = item.uri;
+        const meta = item.meta;
 
         const timestamp = meta.fileTimestamp || formatFileTimestampMs();
-        // 👇 todos los audios con sufijo -0 (como acordamos)
         const fileName = `AUD-${timestamp}-0.m4a`;
 
         const destFileUri = await getUniqueSafFileUri(
@@ -1332,15 +1431,13 @@ export default function DeficiencyMediaScreen() {
         );
 
         const base64 = await readFileAsBase64Generic(srcUri);
-        await SAF.writeAsStringAsync(destFileUri, base64, {
-          encoding: "base64",
-        });
+        await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
         const relativePath = buildRelativePath("Audios", fileName);
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
         await saveArchivoLocal({
-          archTipo: 0, // todos los audios van con 0
+          archTipo: 0,
           archTabla: "Deficiencias",
           archCodTabla,
           archNombre: relativePath,
@@ -1350,15 +1447,24 @@ export default function DeficiencyMediaScreen() {
           archActiv: 1,
         });
 
-        try {
-          await FS.deleteAsync(srcUri, { idempotent: true });
-        } catch (err) {
-          console.log("⚠️ Error borrando audio temporal:", err);
-        }
+        await safeDeleteUri(srcUri);
       }
 
       // ==========================
-      // 🗑️ BORRADOS (DB + FS)
+      // ✅ Determinar qué EXISTENTES se mantienen
+      // (en base a meta.archInterno actual)
+      // ==========================
+      for (let i = 0; i < photoMeta.length; i++) {
+        const m = photoMeta[i];
+        if (m?.archInterno) keptArchInternos.add(m.archInterno);
+      }
+      for (let i = 0; i < audioMeta.length; i++) {
+        const m = audioMeta[i];
+        if (m?.archInterno) keptArchInternos.add(m.archInterno);
+      }
+
+      // ==========================
+      // 🗑️ BORRADOS (solo carpeta necesaria)
       // ==========================
       const toDeletePhotoRecords = initialPhotoRecords.filter(
         (r) => !keptArchInternos.has(r.ArchInterno)
@@ -1371,19 +1477,19 @@ export default function DeficiencyMediaScreen() {
       console.log("[DefMedia] Audios a borrar (DB):", toDeleteAudioRecords);
 
       // --- Fotos borradas ---
-      for (const rec of toDeletePhotoRecords) {
-        // Creamos BORRADOS solo si hace falta (lazy)
-        if (!borradosFotosUri || !borradosAudiosUri) {
-          const dirs = await ensureMediaDirectories(rootUri, "BORRADOS");
-          borradosFotosUri = dirs.fotosUri;
-          borradosAudiosUri = dirs.audiosUri;
-        }
+      let borradosFotosUri = null;
 
+      for (const rec of toDeletePhotoRecords) {
         const fileName = rec.ArchNombre.split("/").pop();
         const srcUri = photoUris.find((u) => getFileName(u) === fileName);
         const newRelative = rec.ArchNombre.replace(/^SIGRE/, "BORRADOS");
 
+        // ✅ Solo crear BORRADOS/Fotos si hay archivo físico para mover
         if (srcUri) {
+          if (!borradosFotosUri) {
+            borradosFotosUri = await getMediaDirUri(rootUri, "BORRADOS", "Fotos", true);
+          }
+
           try {
             const destFileUri = await getUniqueSafFileUri(
               borradosFotosUri,
@@ -1392,41 +1498,33 @@ export default function DeficiencyMediaScreen() {
             );
 
             const base64 = await readFileAsBase64Generic(srcUri);
-            await SAF.writeAsStringAsync(destFileUri, base64, {
-              encoding: "base64",
-            });
+            await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
-            await FS.deleteAsync(srcUri, { idempotent: true });
+            await safeDeleteUri(srcUri);
           } catch (err) {
-            console.log(
-              "⚠️ Error moviendo foto a BORRADOS:",
-              rec.ArchNombre,
-              err
-            );
+            console.log("⚠️ Error moviendo foto a BORRADOS:", rec.ArchNombre, err);
           }
         } else {
-          console.log(
-            "[DefMedia] Foto para BORRADOS sin archivo físico:",
-            rec.ArchNombre
-          );
+          console.log("[DefMedia] Foto para BORRADOS sin archivo físico:", rec.ArchNombre);
         }
 
         await markArchivoAsDeleted(rec.ArchInterno, newRelative);
       }
 
       // --- Audios borrados ---
-      for (const rec of toDeleteAudioRecords) {
-        if (!borradosFotosUri || !borradosAudiosUri) {
-          const dirs = await ensureMediaDirectories(rootUri, "BORRADOS");
-          borradosFotosUri = dirs.fotosUri;
-          borradosAudiosUri = dirs.audiosUri;
-        }
+      let borradosAudiosUri = null;
 
+      for (const rec of toDeleteAudioRecords) {
         const fileName = rec.ArchNombre.split("/").pop();
         const srcUri = audioUris.find((u) => getFileName(u) === fileName);
         const newRelative = rec.ArchNombre.replace(/^SIGRE/, "BORRADOS");
 
+        // ✅ Solo crear BORRADOS/Audios si hay archivo físico para mover
         if (srcUri) {
+          if (!borradosAudiosUri) {
+            borradosAudiosUri = await getMediaDirUri(rootUri, "BORRADOS", "Audios", true);
+          }
+
           try {
             const destFileUri = await getUniqueSafFileUri(
               borradosAudiosUri,
@@ -1435,35 +1533,27 @@ export default function DeficiencyMediaScreen() {
             );
 
             const base64 = await readFileAsBase64Generic(srcUri);
-            await SAF.writeAsStringAsync(destFileUri, base64, {
-              encoding: "base64",
-            });
+            await SAF.writeAsStringAsync(destFileUri, base64, { encoding: "base64" });
 
-            await FS.deleteAsync(srcUri, { idempotent: true });
+            await safeDeleteUri(srcUri);
           } catch (err) {
-            console.log(
-              "⚠️ Error moviendo audio a BORRADOS:",
-              rec.ArchNombre,
-              err
-            );
+            console.log("⚠️ Error moviendo audio a BORRADOS:", rec.ArchNombre, err);
           }
         } else {
-          console.log(
-            "[DefMedia] Audio para BORRADOS sin archivo físico:",
-            rec.ArchNombre
-          );
+          console.log("[DefMedia] Audio para BORRADOS sin archivo físico:", rec.ArchNombre);
         }
 
         await markArchivoAsDeleted(rec.ArchInterno, newRelative);
       }
 
-      Alert.alert("Listo", "Fotos y audios guardados en la carpeta pública.");
+      Alert.alert("Listo", "Cambios guardados en la carpeta pública.");
       router.replace("/(drawer)/inspection");
     } catch (err) {
       console.log("Error guardando en SAF:", err);
       Alert.alert("Error", "No se pudo guardar.");
     }
   };
+
 
   // Limpieza de archivos temporales al cancelar
   const cleanupNewMedia = async () => {
@@ -1834,15 +1924,21 @@ export default function DeficiencyMediaScreen() {
               const ok = await confirmStopRecording();
               if (!ok) return;
               await cleanupNewMedia();
+
+              // 🔥 clave: recarga desde disco/DB para “pisar” cualquier estado cacheado
+              await loadExistingMedia();
+
               router.replace("/(drawer)/inspection");
+
             }}
+
           >
             <Text style={styles.bottomText}>Cancelar</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.saveBtn, !canSave && { backgroundColor: "#aaa" }]}
-            onPress={canSave ? handleSave : () => {}}
+            onPress={canSave ? handleSave : () => { }}
             disabled={!canSave}
           >
             <Text style={styles.bottomText}>Guardar</Text>
