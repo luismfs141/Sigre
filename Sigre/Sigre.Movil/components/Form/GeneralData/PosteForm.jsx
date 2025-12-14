@@ -1,55 +1,67 @@
-import { FontAwesome5 } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { usePost } from "../../../hooks/usePost";
+import SelectModal from "../../SelectModal";
 
 const PosteForm = forwardRef(({ data }, ref) => {
-  const {
-    getArmadoMaterialsPost,
-    getMaterialsPost,
-    getTipoRetenidasPost,
-    getMaterialsRetenidasPost,
-    savePost
-  } = usePost();
+  const { getArmadoMaterialsPost, getMaterialsPost, getTipoRetenidasPost, getMaterialsRetenidasPost, savePost } = usePost();
 
+  // =========================
+  // STATE FORM
+  // =========================
   const [form, setForm] = useState({
-    PostInterno: data.PostInterno ?? "",
-    EstadoOffLine: data.EstadoOffLine ?? "",
-    PostEtiqueta: data.PostEtiqueta ?? "",
-    PostLatitud: data.PostLatitud ?? "",
-    PostLongitud: data.PostLongitud ?? "",
-    PostCodigoNodo: data.PostCodigoNodo ?? "",
-    PostTerceros: data.PostTerceros ?? "",
-    PostMaterial: data.PostMaterial ?? "",
-    PostInspeccionado: data.PostInspeccionado ?? "",
-    PostRetenidaTipo: data.PostRetenidaTipo ?? "",
-    PostRetenidaMaterial: data.PostRetenidaMaterial ?? "",
-    PostArmadoTipo: data.PostArmadoTipo ?? "",
-    PostArmadoMaterial: data.PostArmadoMaterial ?? "",
+    PostInterno: data?.PostInterno ?? "",
+    EstadoOffLine: data?.EstadoOffLine ?? "",
+    PostEtiqueta: data?.PostEtiqueta ?? "",
+    PostLatitud: data?.PostLatitud ?? "",
+    PostLongitud: data?.PostLongitud ?? "",
+    PostCodigoNodo: data?.PostCodigoNodo ?? "",
+    PostTerceros: data?.PostTerceros ?? "",
+    PostMaterial: data?.PostMaterial ?? "",
+    PostRetenidaTipo: data?.PostRetenidaTipo ?? "",
+    PostRetenidaMaterial: data?.PostRetenidaMaterial ?? "",
+    PostArmadoMaterial: data?.PostArmadoMaterial ?? ""
   });
 
-  const update = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
+  const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // 🔹 Exponer método save al ref del modal
+  // =========================
+  // EXPOSE SAVE
+  // =========================
   useImperativeHandle(ref, () => ({
     save: async () => {
-      try {
-        const id = await savePost(form);
-        return { ...form, PostInterno: id };
-      } catch (e) {
-        console.warn("⚠ Error al guardar el poste:", e);
-        return form; // fallback seguro
-      }
+      const id = await savePost(form);
+      return { ...form, PostInterno: id };
     }
   }));
 
+  // =========================
+  // DATA
+  // =========================
+  const [postMaterials, setPostMaterials] = useState([]);
+  const [armadoMaterials, setArmadoMaterials] = useState([]);
+  const [retenidaTipos, setRetenidaTipos] = useState([]);
+  const [retenidaMaterials, setRetenidaMaterials] = useState([]);
+  const [selectConfig, setSelectConfig] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      setPostMaterials(await getMaterialsPost() ?? []);
+      setArmadoMaterials(await getArmadoMaterialsPost() ?? []);
+      setRetenidaTipos(await getTipoRetenidasPost() ?? []);
+      setRetenidaMaterials(await getMaterialsRetenidasPost() ?? []);
+    })();
+  }, []);
+
+  // =========================
+  // CONFIG
+  // =========================
   const lockedFields = [
     "PostInterno",
     "PostLatitud",
     "PostLongitud",
     "EstadoOffLine",
-    "PostCodigoNodo",
+    "PostCodigoNodo"
   ];
 
   const orderedFields = [
@@ -62,93 +74,183 @@ const PosteForm = forwardRef(({ data }, ref) => {
     "PostTerceros",
     "PostLatitud",
     "PostLongitud",
-    "PostInterno",
+    "PostInterno"
   ];
 
-  const [postMaterials, setPostMaterials] = useState([]);
-  const [armadoMaterials, setArmadoMaterials] = useState([]);
-  const [retenidaTipos, setRetenidaTipos] = useState([]);
-  const [retenidaMaterials, setRetenidaMaterials] = useState([]);
+  const labels = {
+    PostCodigoNodo: "Código del nodo",
+    PostEtiqueta: "Etiqueta",
+    PostMaterial: "Material del poste",
+    PostArmadoMaterial: "Material armado",
+    PostRetenidaTipo: "Tipo de retenida",
+    PostRetenidaMaterial: "Material de retenida",
+    PostTerceros: "Terceros",
+    PostLatitud: "Latitud",
+    PostLongitud: "Longitud",
+    PostInterno: "ID interno"
+  };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setPostMaterials((await getMaterialsPost()) ?? []);
-        setArmadoMaterials((await getArmadoMaterialsPost()) ?? []);
-        setRetenidaTipos((await getTipoRetenidasPost()) ?? []);
-        setRetenidaMaterials((await getMaterialsRetenidasPost()) ?? []);
-      } catch (e) {
-        console.log("ERROR CARGANDO PICKERS:", e);
-      }
-    })();
-  }, []);
-
-  const renderPicker = (items, key, labelKey, valueKey, placeholder, isLocked) => (
-    <View style={styles.pickerWrapper}>
-      <Picker
-        enabled={!isLocked}
-        selectedValue={form[key] ?? ""}
-        onValueChange={(v) => update(key, v)}
+  // =========================
+  // COMPONENTS
+  // =========================
+  const SelectInput = ({ label, value, placeholder, locked, onPress }) => (
+    <View style={styles.row}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity
+        style={[styles.select, locked && styles.locked]}
+        disabled={locked}
+        onPress={onPress}
       >
-        <Picker.Item label={placeholder} value="" />
-        {(items ?? []).map((item) => (
-          <Picker.Item
-            key={item?.[valueKey] ?? Math.random().toString()}
-            label={item?.[labelKey] ?? ""}
-            value={item?.[valueKey] ?? ""}
-          />
-        ))}
-      </Picker>
+        <Text style={{ color: value ? "#000" : "#999" }}>
+          {value || placeholder}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
-  const renderField = (key, isLocked) => {
-    switch (key) {
-      case "PostMaterial":
-        return renderPicker(postMaterials, key, "PosmtNombre", "PosmtInterno", "Seleccione material", isLocked);
-      case "PostArmadoMaterial":
-        return renderPicker(armadoMaterials, key, "ArmmtNombre", "ArmmtInterno", "Seleccione material armado", isLocked);
-      case "PostRetenidaTipo":
-        return renderPicker(retenidaTipos, key, "RtntpNombre", "RtntpInterno", "Seleccione tipo de retenida", isLocked);
-      case "PostRetenidaMaterial":
-        return renderPicker(retenidaMaterials, key, "RtnmtNombre", "RtnmtInterno", "Seleccione material de retenida", isLocked);
-      default:
-        return (
-          <TextInput
-            style={[styles.input, isLocked && styles.lockedInput]}
-            editable={!isLocked}
-            value={form[key] ? String(form[key]) : ""}
-            onChangeText={(v) => update(key, v)}
-          />
-        );
+  const renderField = (key) => {
+    const locked = lockedFields.includes(key);
+
+    if (key === "PostMaterial") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={postMaterials.find(i => String(i.PosmtInterno) === String(form.PostMaterial))?.PosmtNombre}
+          placeholder="Seleccione material"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: postMaterials,
+              labelKey: "PosmtNombre",
+              valueKey: "PosmtInterno"
+            })
+          }
+        />
+      );
     }
+
+    if (key === "PostArmadoMaterial") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={armadoMaterials.find(i => String(i.ArmmtInterno) === String(form.PostArmadoMaterial))?.ArmmtNombre}
+          placeholder="Seleccione armado"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: armadoMaterials,
+              labelKey: "ArmmtNombre",
+              valueKey: "ArmmtInterno"
+            })
+          }
+        />
+      );
+    }
+
+    if (key === "PostRetenidaTipo") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={retenidaTipos.find(i => String(i.RtntpInterno) === String(form.PostRetenidaTipo))?.RtntpNombre}
+          placeholder="Seleccione tipo"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: retenidaTipos,
+              labelKey: "RtntpNombre",
+              valueKey: "RtntpInterno"
+            })
+          }
+        />
+      );
+    }
+
+    if (key === "PostRetenidaMaterial") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={retenidaMaterials.find(i => String(i.RtnmtInterno) === String(form.PostRetenidaMaterial))?.RtnmtNombre}
+          placeholder="Seleccione material"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: retenidaMaterials,
+              labelKey: "RtnmtNombre",
+              valueKey: "RtnmtInterno"
+            })
+          }
+        />
+      );
+    }
+
+    return (
+      <View key={key} style={styles.row}>
+        <Text style={styles.label}>{labels[key]}</Text>
+        <TextInput
+          style={[styles.input, locked && styles.locked]}
+          editable={!locked}
+          value={form[key] ? String(form[key]) : ""}
+          onChangeText={(v) => update(key, v)}
+        />
+      </View>
+    );
   };
 
+  // =========================
+  // RENDER
+  // =========================
   return (
     <View style={{ padding: 10 }}>
-      {orderedFields.map((key) => {
-        const isLocked = lockedFields.includes(key);
-        return (
-          <View key={key} style={styles.row}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{key}</Text>
-              {isLocked && <FontAwesome5 name="lock" size={14} color="#777" style={{ marginLeft: 6 }} />}
-            </View>
-            {renderField(key, isLocked)}
-          </View>
-        );
-      })}
+      {orderedFields.map(key => renderField(key))}
+
+      <SelectModal
+        visible={!!selectConfig}
+        title={selectConfig?.title}
+        items={selectConfig?.items}
+        labelKey={selectConfig?.labelKey}
+        valueKey={selectConfig?.valueKey}
+        selectedValue={form?.[selectConfig?.field]}
+        onSelect={(v) => update(selectConfig.field, v)}
+        onClose={() => setSelectConfig(null)}
+      />
     </View>
   );
 });
 
 export default PosteForm;
 
+// =========================
 const styles = StyleSheet.create({
-  row: { marginBottom: 12 },
-  label: { fontWeight: "600" },
-  labelRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: "#ddd", padding: 8, borderRadius: 6, backgroundColor: "#f7f7f7" },
-  lockedInput: { backgroundColor: "#ececec", color: "#777" },
-  pickerWrapper: { borderWidth: 1, borderColor: "#ddd", borderRadius: 6, backgroundColor: "#fff", marginTop: 4 },
+  row: { marginBottom: 14 },
+  label: { fontWeight: "600", marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: "#f7f7f7"
+  },
+  select: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 12,
+    borderRadius: 6,
+    backgroundColor: "#fff"
+  },
+  locked: {
+    backgroundColor: "#ececec",
+    color: "#777"
+  }
 });

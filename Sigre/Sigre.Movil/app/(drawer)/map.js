@@ -13,10 +13,8 @@ import { getGapColorByInspected, getSourceImageFromType2 } from '../../utils/uti
 
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
-import { useFeeder } from '../../hooks/useFeeder.js';
 import { useMap } from '../../hooks/useMap.js';
 import { usePost } from '../../hooks/usePost.js';
-import { useSed } from '../../hooks/useSed.js';
 
 const ZOOM_THRESHOLD = 0.007;
 
@@ -36,9 +34,7 @@ export const Map = () => {
   } = useDatos();
 
   const { getPinsByFeeder, getGapsByFeeder, getPinsBySed, getGapsBySed, setRegionByCoordinate, setRegionByFeeder, getPinsByRegion, setRegionBySed } = useMap();
-  const { fetchLocalFeeders } = useFeeder();
-  const { fetchAndSelectPost, getPostData } = usePost();
-  const { fetchAndSelectSed } = useSed();
+  const { getPostData } = usePost();
 
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
@@ -191,45 +187,26 @@ export const Map = () => {
   const formatLabel = (label) => label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
-  try {
-    let tipoElemento = "";
-    let codigoElemento = "";
-    let datoElemento = null;
+    try {
+      let tipoElemento = "";
+      let codigoElemento = "";
+      let datoElemento = null;
 
-
-
-
-
-
-
-
-      // --- Lógica corta y optimizada ---
       if (item.Type === 5) {
         const data = await getPostData(item.IdOriginal);
-        datoElemento = data[0];
+        datoElemento = data; // ya es un objeto, no un array
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
-
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
         codigoElemento = item.VanoCodigo;
         datoElemento = item;
-
       } else {
         tipoElemento = "Desconocido";
         codigoElemento = "";
         datoElemento = item;
       }
 
-
-
-
-
-
-      
-
-
-      // --- Alerta ---
       Alert.alert(
         "Elemento seleccionado",
         `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
@@ -237,14 +214,13 @@ export const Map = () => {
           { text: "Cancelar", style: "cancel" },
           {
             text: "Inspeccionar",
-            onPress: async () => {
+            onPress: () => {
               setSelectedItem(datoElemento);
               router.push("/(drawer)/inspection");
             }
           }
         ]
       );
-
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
     }
