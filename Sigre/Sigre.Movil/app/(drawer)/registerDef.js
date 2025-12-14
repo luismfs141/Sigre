@@ -1,5 +1,10 @@
 import { useFocusEffect } from "@react-navigation/native";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useFeeder } from "../../hooks/useFeeder";
+
+import { Image } from "react-native";
+
+
 
 import { useCallback, useContext, useEffect, useState } from "react";
 
@@ -41,13 +46,12 @@ import { useFiles } from "../../hooks/useFiles";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 import {
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -228,12 +232,19 @@ async function findOrCreateSubdir(parentUri, dirName) {
 async function readFileAsBase64Generic(uri) {
   if (!uri) return "";
   try {
+    // ✅ content:// (SAF) => leer con SAF
+    if (uri.startsWith("content://") && SAF?.readAsStringAsync) {
+      return await SAF.readAsStringAsync(uri, { encoding: "base64" });
+    }
+
+    // ✅ file:// => leer con FS
     return await FS.readAsStringAsync(uri, { encoding: "base64" });
   } catch (err) {
     console.log("⚠️ Error leyendo base64 genérico:", uri, err);
     throw err;
   }
 }
+
 
 
 // Pide (una sola vez) la carpeta raíz para SIGRE
@@ -423,16 +434,7 @@ export default function DeficiencyMediaScreen() {
 
   const { selectedItem, selectedFeeder, selectedSed, feeders } = useDatos();
 
-  if (selectedFeeder) {
-    console.log("[DefMedia] selectedFeeder detalle:", {
-      type: typeof selectedFeeder,
-      id: selectedFeeder.id ?? null,
-      name: selectedFeeder.name ?? null,
-      alimEtiqueta: selectedFeeder.alimEtiqueta ?? null,
-    });
-  } else {
-    console.log("[DefMedia] selectedFeeder = NULL en contexto");
-  }
+
 
   const { user } = useContext(AuthContext);
 
@@ -454,20 +456,18 @@ export default function DeficiencyMediaScreen() {
     return p !== undefined && p !== null ? String(p) : "SIN_PROYECTO";
   })();
 
+
+
+
   // Resolver nombre/código del alimentador
   useEffect(() => {
     const alimInt = selectedItem?.AlimInterno ?? null;
 
-    console.log("[DefMedia] useEffect FEEDER resolve =>", {
-      alimInt,
-      selectedFeeder,
-      selectedItemAlimEtiqueta: selectedItem?.AlimEtiqueta,
-    });
+
 
     // 1️⃣ selectedFeeder del contexto
     if (selectedFeeder) {
       if (typeof selectedFeeder === "string") {
-        console.log("[DefMedia] feederCode desde selectedFeeder (string):", selectedFeeder);
         setFeederCode(String(selectedFeeder));
         return;
       }
@@ -481,7 +481,6 @@ export default function DeficiencyMediaScreen() {
         null;
 
       if (nameFromSelected) {
-        console.log("[DefMedia] feederCode desde selectedFeeder (obj):", nameFromSelected);
         setFeederCode(String(nameFromSelected));
         return;
       }
@@ -489,7 +488,6 @@ export default function DeficiencyMediaScreen() {
 
     // 2️⃣ etiqueta directa
     if (selectedItem?.AlimEtiqueta) {
-      console.log("[DefMedia] feederCode desde selectedItem.AlimEtiqueta:", selectedItem.AlimEtiqueta);
       setFeederCode(String(selectedItem.AlimEtiqueta));
       return;
     }
@@ -497,10 +495,8 @@ export default function DeficiencyMediaScreen() {
     // 3️⃣ buscar en DB por AlimInterno
     if (alimInt != null) {
       (async () => {
-        console.log("[DefMedia] Buscando feeder por alimInt:", alimInt);
         const found = await findFeederById(alimInt);
 
-        console.log("[DefMedia] resultado findFeederById:", found);
 
         if (found) {
           const alias =
@@ -511,13 +507,9 @@ export default function DeficiencyMediaScreen() {
             found.name ??
             alimInt;
 
-          console.log("[DefMedia] feederCode final desde DB:", alias);
           setFeederCode(String(alias));
         } else {
-          console.log(
-            "[DefMedia] NO se encontró alimentador en DB, se usa solo id:",
-            alimInt
-          );
+
           setFeederCode(String(alimInt));
         }
       })();
@@ -525,7 +517,6 @@ export default function DeficiencyMediaScreen() {
       return;
     }
 
-    console.log("[DefMedia] SIN_ALIM (no se pudo resolver alimentador)");
     setFeederCode("SIN_ALIM");
   }, [selectedFeeder, selectedItem, findFeederById]);
 
@@ -539,15 +530,7 @@ export default function DeficiencyMediaScreen() {
       selectedItem?.SedCodigo ||
       "SIN_SED";
 
-  console.log("[DefMedia] sedCode usado para carpeta:", {
-    selectedSed,
-    selectedItemSed: {
-      SedInterno: selectedItem?.SedInterno,
-      SedCodi: selectedItem?.SedCodi,
-      SedCodigo: selectedItem?.SedCodigo,
-    },
-    sedCode,
-  });
+
 
   // Tipo de elemento
   const tipoElemento =
@@ -580,7 +563,6 @@ export default function DeficiencyMediaScreen() {
     elementCode,
     deficiencyCode,
   ].join("/");
-  console.log("[DefMedia] rutaBase:", rutaBase);
 
   // 📸 Fotos: 6 slots fijos
   const [photos, setPhotos] = useState(Array(6).fill(null));
@@ -660,6 +642,97 @@ export default function DeficiencyMediaScreen() {
   // ================================
   // HELPERS
   // ================================
+
+  // ✅ limpia nombres raros de SAF (evita ":" y cosas que rompen file://)
+  function sanitizeFileName(name) {
+    return String(name || "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
+
+  function getFileExtFromUri(uri, fallbackExt = "jpg") {
+    const name = getFileName(uri) || "";
+    const m = name.match(/\.([a-z0-9]+)$/i);
+    let ext = m ? m[1].toLowerCase() : fallbackExt;
+    if (ext === "jpeg") ext = "jpg";
+    return ext;
+  }
+
+  function simpleHash(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0; // hash int32
+    }
+    return Math.abs(h);
+  }
+
+  // ✅ content:// -> file:// cache (robusto)
+  async function toCacheFileUri(uri, fallbackExt = "jpg") {
+    if (!uri) return null;
+    if (uri.startsWith("file://")) return uri;
+
+    const ext = getFileExtFromUri(uri, fallbackExt);
+    const cacheUri = `${FS.cacheDirectory}SRC_${simpleHash(uri)}.${ext}`;
+
+    try {
+      const info = await FS.getInfoAsync(cacheUri);
+      if (info.exists) return cacheUri;
+
+      // ✅ content:// => lo leemos como base64 con SAF y lo escribimos a cache (file://)
+      const b64 = await readFileAsBase64Generic(uri);
+      await FS.writeAsStringAsync(cacheUri, b64, { encoding: "base64" });
+
+      return cacheUri;
+    } catch (e) {
+      console.log("⚠️ toCacheFileUri() falló:", uri, e);
+      return null;
+    }
+  }
+
+
+
+
+  async function makeThumbUri(uri) {
+    if (!uri) return null;
+
+    try {
+      let sourceUri = uri;
+
+      if (uri.startsWith("content://")) {
+        sourceUri = await toCacheFileUri(uri, "jpg");
+        if (!sourceUri) return null;
+      }
+
+      const thumbUri = `${FS.cacheDirectory}THUMB_${simpleHash(
+        sourceUri + Date.now()
+      )}.jpg`;
+
+      const result = await ImageManipulator.manipulateAsync(
+        sourceUri,
+        [{ resize: { width: 240 } }],
+        {
+          compress: 0.7,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
+
+      await FS.copyAsync({ from: result.uri, to: thumbUri });
+
+      return thumbUri; // 👈 file://
+    } catch (err) {
+      console.log("❌ makeThumbUri ERROR:", err);
+      return null;
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
   function findNextRequiredSlot(startIndex = 0, currentPhotos = photos) {
     for (let i = startIndex; i < REQUIRED_SLOTS.length; i++) {
       const idx = REQUIRED_SLOTS[i];
@@ -676,15 +749,7 @@ export default function DeficiencyMediaScreen() {
   const loadExistingMedia = useCallback(async () => {
     if (!feederCode || feederCode === "SIN_ALIM") return;
 
-    console.log("[DefMedia] 🔄 loadExistingMedia() RUN", {
-      projectCode,
-      feederCode,
-      sedCode,
-      tipoElemento,
-      elementCode,
-      deficiencyCode,
-      t: new Date().toISOString(),
-    });
+
 
     try {
       const rootUri = await getRootUri();
@@ -714,8 +779,7 @@ export default function DeficiencyMediaScreen() {
       const dbPhotoRows = await getArchivosByBasePath(fotosPrefix);
       const dbAudioRows = await getArchivosByBasePath(audiosPrefix);
 
-      console.log("[DefMedia] dbPhotoRows:", dbPhotoRows);
-      console.log("[DefMedia] dbAudioRows:", dbAudioRows);
+
 
       const archCodFromDb =
         dbPhotoRows[0]?.ArchCodTabla ?? dbAudioRows[0]?.ArchCodTabla ?? null;
@@ -759,12 +823,7 @@ export default function DeficiencyMediaScreen() {
             isExisting: true,
           };
 
-          try {
-            const base64 = await readFileAsBase64Generic(uri);
-            thumbSlots[slotNum - 1] = `data:image/jpeg;base64,${base64}`;
-          } catch {
-            thumbSlots[slotNum - 1] = uri;
-          }
+          thumbSlots[slotNum - 1] = await makeThumbUri(uri);
 
           initialPhotoRecs.push({
             ArchInterno: row.ArchInterno,
@@ -804,12 +863,8 @@ export default function DeficiencyMediaScreen() {
         for (let i = 0; i < slots.length; i++) {
           const uri = slots[i];
           if (!uri) continue;
-          try {
-            const base64 = await readFileAsBase64Generic(uri);
-            thumbSlots[i] = `data:image/jpeg;base64,${base64}`;
-          } catch {
-            thumbSlots[i] = uri;
-          }
+          thumbSlots[i] = await makeThumbUri(uri);
+
         }
 
         setPhotos(slots);
@@ -965,18 +1020,11 @@ export default function DeficiencyMediaScreen() {
     if (!capturedPhoto || currentSlotIndex === null) return;
 
     const srcUri = capturedPhoto.uri;
-    let thumbUri = srcUri;
 
-    try {
-      if (srcUri.startsWith("file://")) {
-        const base64 = await FS.readAsStringAsync(srcUri, {
-          encoding: "base64",
-        });
-        thumbUri = `data:image/jpeg;base64,${base64}`;
-      }
-    } catch (err) {
-      console.log("⚠️ Error generando thumbnail:", err);
-    }
+
+
+    let thumbUri = await makeThumbUri(srcUri);
+
 
     setPhotos((prev) => {
       const copy = [...prev];
@@ -1045,10 +1093,7 @@ export default function DeficiencyMediaScreen() {
         console.log("⚠️ Error borrando foto temporal:", err);
       }
     } else {
-      console.log(
-        "[DefMedia] Foto marcada para borrar (DB): ArchInterno=",
-        meta.archInterno
-      );
+
     }
 
     setPhotos((prev) => {
@@ -1107,11 +1152,14 @@ export default function DeficiencyMediaScreen() {
 
   const stopRecording = async () => {
     try {
-      if (!recording) return;
+      if (!recording) return null;
 
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
-      if (!uri) return;
+      if (!uri) {
+        setRecording(null);
+        return null;
+      }
 
       let latitude = null;
       let longitude = null;
@@ -1119,29 +1167,92 @@ export default function DeficiencyMediaScreen() {
         const position = await Location.getCurrentPositionAsync({});
         latitude = position.coords?.latitude ?? null;
         longitude = position.coords?.longitude ?? null;
-      } catch (err) { }
+      } catch { }
 
       const ahora = new Date();
       const timestamp = formatFileTimestampMs();
 
+      const metaObj = {
+        latitude,
+        longitude,
+        archFech: formatDateTimeSQLite(ahora),
+        fileTimestamp: timestamp,
+      };
+
+      // ✅ mantener comportamiento actual (STOP normal agrega a la lista)
       setAudios((prev) => [...prev, uri]);
       setAudioProgress((prev) => [...prev, { position: 0, duration: 1 }]);
-
-      setAudioMeta((prev) => [
-        ...prev,
-        {
-          latitude,
-          longitude,
-          archFech: formatDateTimeSQLite(ahora),
-          fileTimestamp: timestamp,
-        },
-      ]);
+      setAudioMeta((prev) => [...prev, metaObj]);
 
       setRecording(null);
+
+      // ✅ CLAVE: retornar data para que Guardar lo incluya aunque el state aún no refresque
+      return { uri, meta: metaObj };
     } catch (err) {
-      //console.log("Error al detener grabación:", err);
+      setRecording(null);
+      return null;
     }
   };
+
+
+  // ✅ Descarta la grabación actual: detiene y borra el archivo
+  const discardCurrentRecording = async () => {
+    try {
+      if (!recording) return;
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+
+      if (uri) {
+        await safeDeleteUri(uri); // borra file:// (y si algún día fuera content://, también)
+      }
+    } catch (err) {
+      console.log("⚠️ Error descartando grabación:", err);
+    } finally {
+      setRecording(null);
+    }
+  };
+
+  // ✅ Prompt SOLO para cuando presionas GUARDAR
+  const confirmRecordingBeforeSave = async () => {
+    if (!recording) return { proceed: true, finalized: null };
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Grabación en curso",
+        "Hay un audio grabándose. ¿Qué deseas hacer?",
+        [
+          {
+            text: "Cancelar",
+            style: "cancel",
+            onPress: () => resolve({ proceed: false, finalized: null }),
+          },
+          {
+            text: "Descartar",
+            style: "destructive",
+            onPress: async () => {
+              await discardCurrentRecording();
+              resolve({ proceed: true, finalized: null });
+            },
+          },
+          {
+            text: "Finalizar y guardar",
+            onPress: async () => {
+              const finalized = await stopRecording(); // retorna {uri, meta}
+              resolve({ proceed: true, finalized });
+            },
+          },
+        ]
+      );
+    });
+  };
+
+
+
+
+
+
+
 
   // ================================
   // 🔊 REPRODUCCIÓN
@@ -1284,10 +1395,7 @@ export default function DeficiencyMediaScreen() {
         console.log("⚠️ Error al eliminar audio temporal:", err);
       }
     } else {
-      console.log(
-        "[DefMedia] Audio marcado para borrar (DB): ArchInterno=",
-        meta.archInterno
-      );
+
     }
 
     setAudios((prev) => prev.filter((_, i) => i !== index));
@@ -1315,13 +1423,14 @@ export default function DeficiencyMediaScreen() {
     return new Promise((resolve) => {
       Alert.alert(
         "Grabación en curso",
-        "Hay una grabación activa. ¿Deseas detenerla antes de salir?",
+        "Si sales ahora, el audio en curso se descartará.",
         [
-          { text: "No", style: "cancel", onPress: () => resolve(false) },
+          { text: "No salir", style: "cancel", onPress: () => resolve(false) },
           {
-            text: "Sí, detener",
+            text: "Descartar y salir",
+            style: "destructive",
             onPress: async () => {
-              await stopRecording();
+              await discardCurrentRecording(); // ✅ NO agrega a audios
               resolve(true);
             },
           },
@@ -1330,9 +1439,16 @@ export default function DeficiencyMediaScreen() {
     });
   };
 
+
   const handleSave = async () => {
-    const okRec = await confirmStopRecording();
-    if (!okRec) return;
+    const { proceed, finalized } = await confirmRecordingBeforeSave();
+    if (!proceed) return;
+
+    // ✅ IMPORTANTÍSIMO: usamos copias locales para que el audio finalizado
+    // se guarde aunque el state todavía no se haya actualizado
+    const audiosWork = finalized?.uri ? [...audios, finalized.uri] : audios;
+    const audioMetaWork = finalized?.uri ? [...audioMeta, finalized.meta] : audioMeta;
+
 
     const gpsOk = await ensureGpsReady();
     if (!gpsOk) return;
@@ -1354,12 +1470,13 @@ export default function DeficiencyMediaScreen() {
       }
 
       const newAudioItems = [];
-      for (let i = 0; i < audios.length; i++) {
-        const uri = audios[i];
-        const meta = audioMeta[i];
+      for (let i = 0; i < audiosWork.length; i++) {
+        const uri = audiosWork[i];
+        const meta = audioMetaWork[i];
         const isNew = uri && uri.startsWith("file://") && (!meta || !meta.archInterno);
         if (isNew) newAudioItems.push({ index: i, uri, meta: meta || {} });
       }
+
 
       const willWritePhotos = newPhotoItems.length > 0;
       const willWriteAudios = newAudioItems.length > 0;
@@ -1487,10 +1604,11 @@ export default function DeficiencyMediaScreen() {
         const m = photoMeta[i];
         if (m?.archInterno) keptArchInternos.add(m.archInterno);
       }
-      for (let i = 0; i < audioMeta.length; i++) {
-        const m = audioMeta[i];
+      for (let i = 0; i < audioMetaWork.length; i++) {
+        const m = audioMetaWork[i];
         if (m?.archInterno) keptArchInternos.add(m.archInterno);
       }
+
 
       // ==========================
       // 🗑️ BORRADOS (solo carpeta necesaria)
@@ -1502,8 +1620,7 @@ export default function DeficiencyMediaScreen() {
         (r) => !keptArchInternos.has(r.ArchInterno)
       );
 
-      console.log("[DefMedia] Fotos a borrar (DB):", toDeletePhotoRecords);
-      console.log("[DefMedia] Audios a borrar (DB):", toDeleteAudioRecords);
+
 
       // --- Fotos borradas ---
       let borradosFotosUri = null;
@@ -1534,7 +1651,7 @@ export default function DeficiencyMediaScreen() {
             console.log("⚠️ Error moviendo foto a BORRADOS:", rec.ArchNombre, err);
           }
         } else {
-          console.log("[DefMedia] Foto para BORRADOS sin archivo físico:", rec.ArchNombre);
+
         }
 
         await markArchivoAsDeleted(rec.ArchInterno, newRelative);
@@ -1575,7 +1692,6 @@ export default function DeficiencyMediaScreen() {
             console.log("⚠️ Error moviendo audio a BORRADOS:", rec.ArchNombre, err);
           }
         } else {
-          console.log("[DefMedia] Audio para BORRADOS sin archivo físico:", rec.ArchNombre);
         }
 
         await markArchivoAsDeleted(rec.ArchInterno, newRelative);
@@ -1648,12 +1764,11 @@ export default function DeficiencyMediaScreen() {
   const canSave = photos[0] && photos[1] && photos[2] && photos[3];
 
   // Fotos para el visor: usar thumbs (base64) cuando existan
-  const viewerPhotos = photos.map((p, idx) => photoThumbs[idx] || p);
+  const viewerPhotos = photos; // ✅ visor siempre usa la foto real
+
   const nonEmptyPhotos = viewerPhotos.filter((p) => !!p);
-  const selectedViewerUri =
-    photoThumbs[selectedPhotoIndex] ||
-    photos[selectedPhotoIndex] ||
-    null;
+  const selectedViewerUri = photos[selectedPhotoIndex] || null;
+
   const initialIndex =
     selectedViewerUri && nonEmptyPhotos.length > 0
       ? nonEmptyPhotos.findIndex((u) => u === selectedViewerUri)
@@ -1841,11 +1956,16 @@ export default function DeficiencyMediaScreen() {
           <ScrollView horizontal style={styles.carousel}>
             {Array.from({ length: 6 }).map((_, i) => {
               const uri = photos[i];
-              const thumbUri = photoThumbs[i] || uri;
+              const thumbUri = photoThumbs[i];
+
               const meta = photoMeta[i];
 
               return (
-                <View key={i} style={{ marginRight: 10, alignItems: "center" }}>
+                <View
+                  key={`${i}-${thumbUri || "empty"}`}
+                  style={{ marginRight: 10, alignItems: "center" }}
+                >
+
                   <TouchableOpacity
                     onPress={() => handleSlotPress(i)}
                     style={[
@@ -1853,22 +1973,18 @@ export default function DeficiencyMediaScreen() {
                       !thumbUri && styles.photoSlotEmpty,
                     ]}
                   >
+
                     {thumbUri ? (
                       <Image
                         source={{ uri: thumbUri }}
                         style={styles.photo}
                         resizeMode="cover"
-                        onError={(e) =>
-                          console.log(
-                            "❌ Error cargando miniatura",
-                            thumbUri,
-                            e.nativeEvent
-                          )
-                        }
                       />
                     ) : (
                       <Text style={styles.plusText}>+</Text>
                     )}
+
+
                   </TouchableOpacity>
 
                   <Text style={styles.slotLabel}>{SLOT_LABELS[i]}</Text>
@@ -1881,7 +1997,18 @@ export default function DeficiencyMediaScreen() {
                 </View>
               );
             })}
+
+
+
+
+
           </ScrollView>
+
+
+          
+
+
+
         </View>
 
         {/* AUDIOS */}
@@ -1983,14 +2110,10 @@ export default function DeficiencyMediaScreen() {
             <Text style={styles.bottomText}>Cancelar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.saveBtn, !canSave && { backgroundColor: "#aaa" }]}
-            onPress={canSave ? handleSave : () => { }}
-            disabled={!canSave}
-          >
-            <Text style={styles.bottomText}>Guardar</Text>
-          </TouchableOpacity>
+          
         </View>
+
+
       </ScrollView>
     </View>
   );
@@ -2036,9 +2159,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   photo: {
-    width: "100%",
-    height: "100%",
+    width: 100,
+    height: 100,
   },
+
+
+
+
   audioContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -2126,7 +2253,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#eee",
+    renderToHardwareTextureAndroid: true, // 🔥
   },
+
+
+
   photoSlotEmpty: {
     borderWidth: 1,
     borderColor: "#aaa",
