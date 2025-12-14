@@ -1,7 +1,10 @@
 // Inspection.jsx
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { BackHandler } from "react-native";
+
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+
 import {
   Button,
   Dimensions,
@@ -96,6 +99,27 @@ export default function Inspection() {
 
     loadDefs();
   }, [selectedItem]);
+
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        router.replace("/(drawer)/map"); // 👈 vuelve SIEMPRE al mapa
+        return true;
+      };
+
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => {
+        subscription.remove(); // ✅ forma moderna
+      };
+    }, [])
+  );
+
 
   // IDs ya usados (para filtrar ListaDefModal)
   const usedDefIds = items.filter(i => i.type === "def").map(i => i.defId);
