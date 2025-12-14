@@ -2005,7 +2005,7 @@ export default function DeficiencyMediaScreen() {
           </ScrollView>
 
 
-          
+
 
 
 
@@ -2110,7 +2110,13 @@ export default function DeficiencyMediaScreen() {
             <Text style={styles.bottomText}>Cancelar</Text>
           </TouchableOpacity>
 
-          
+          <TouchableOpacity
+            style={[styles.saveBtn, !canSave && { backgroundColor: "#aaa" }]}
+            onPress={canSave ? handleSave : () => { }}
+            disabled={!canSave}
+          >
+            <Text style={styles.bottomText}>Guardar</Text>
+          </TouchableOpacity>
         </View>
 
 
