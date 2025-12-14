@@ -34,6 +34,8 @@ export const createEmptyDeficiency = ({
     DefiInspeccionado: 1,
     EstadoOffLine: 2,
     DefiEstadoCriticidad: dynamicFields.DefiEstadoCriticidad || 0,
+    DefiLatitud: 0,
+    DefiLongitud: 0,
 
     // Usuario / fechas
     DefiUsuarioInic: userId,

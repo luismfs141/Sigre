@@ -112,6 +112,7 @@ export const useDeficiency = () => {
    * 💾 Guarda o actualiza una deficiencia
    */
   const saveDeficiency = async (deficiency) => {
+    console.log(deficiency);
     const dbOk = await checkDatabase();
     if (!dbOk) {
       console.warn("⚠ Base de datos no disponible. No se puede guardar la deficiencia.");

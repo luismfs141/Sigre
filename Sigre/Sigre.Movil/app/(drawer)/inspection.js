@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { BackHandler, Button, Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,6 +9,7 @@ import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
 import ListaDefModal from "../../components/Modal/ListaDefModal";
 
+import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { useTypification } from "../../hooks/useTypification";
 
@@ -17,6 +18,7 @@ export default function Inspection() {
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
+  const { user } = useContext(AuthContext);
 
   const { fetchTypificationsByTypeElement, fetchTypificationsByElement } =
     useTypification();
@@ -230,6 +232,7 @@ export default function Inspection() {
         visible={modalDeficiencyVisible}
         deficiency={currentDeficiency}
         onClose={() => setModalDeficiencyVisible(false)}
+        userId={user.id}
       />
 
       <ListaDefModal

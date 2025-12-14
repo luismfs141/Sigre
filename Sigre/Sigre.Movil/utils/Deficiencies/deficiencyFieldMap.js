@@ -20,6 +20,22 @@ const COMMON_DEFICIENCY_FIELDS = [
     readonly: true
   },
   {
+    key: "DefiLatitud",
+    label: "Latitud",
+    type: "text",
+    required: true,
+    readonly: true,
+    validation: { message: "La longitud es obligatoria" }
+  },
+  {
+    key: "DefiLongitud",
+    label: "Longitud",
+    type: "text",
+    required: true,
+    readonly: true,
+    validation: { message: "La longitud es obligatoria" }
+  },
+  {
     key: "DefiEstadoCriticidad",
     label: "Criticidad",
     type: "text",
@@ -29,7 +45,8 @@ const COMMON_DEFICIENCY_FIELDS = [
       1: "Leve",
       2: "Moderado",
       3: "Grave"
-    }
+    },
+    validation: { message: "Seleccione una criticidad" }
   },
   {
     key: "DefiEstadoSubsanacion",
@@ -41,13 +58,15 @@ const COMMON_DEFICIENCY_FIELDS = [
       0: "Por Subsanar",
       1: "Subsanación Preventiva",
       2: "Subsanación"
-    }
+    },
+    validation: { message: "Seleccione un estado de subsanación" }
   },
   {
     key: "DefiObservacion",
     label: "Observación",
     type: "text",
-    required: true
+    required: true,
+    validation: { message: "La observación es obligatoria" }
   },
   {
     key: "DefiComentario",
@@ -103,14 +122,34 @@ export const DEFICIENCY_FIELD_MAP = {
     label: "VANO - DEF 7006",
     fields: [
       ...COMMON_DEFICIENCY_FIELDS,
-      { key: "DefiDistVertical", label: "Distancia Vertical (m)", type: "number", required: true }
+      {
+        key: "DefiDistVertical",
+        label: "Distancia Vertical (m)",
+        type: "number",
+        required: true,
+        validation: {
+          min: 0.5,
+          max: 10,
+          message: "La distancia vertical debe estar entre 0.5 y 10 metros"
+        }
+      }
     ]
   },
   "7008": {
     label: "VANO - DEF 7008",
     fields: [
       ...COMMON_DEFICIENCY_FIELDS,
-      { key: "DefiDistHorizontal", label: "Distancia Horizontal (m)", type: "number", required: true }
+      {
+        key: "DefiDistHorizontal",
+        label: "Distancia Horizontal (m)",
+        type: "number",
+        required: true,
+        validation: {
+          min: 1,
+          max: 15,
+          message: "La distancia horizontal debe estar entre 1 y 15 metros"
+        }
+      }
     ]
   }
 };
