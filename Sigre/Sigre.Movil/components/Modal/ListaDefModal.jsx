@@ -13,18 +13,19 @@ export default function ListaDefModal({ visible, defs, usedIds, onSelect, onClos
     tableId: d.TableId
   }));
 
-  // ⭐ Filtrar defs ya usadas
+  // Filtrar defs ya usadas
   const available = mappedDefs.filter(d => !usedIds.includes(d.id));
 
-  // Añadir "Sin Deficiencia" como primera opción si no está seleccionada
-  const SIN_DEF_ID = "SIN_DEF";
+  // Añadir "Sin Deficiencia" solo si no está seleccionada
+  const SIN_DEF_ID = 0;
   const hasNoDef = usedIds.includes(SIN_DEF_ID);
 
   const finalList = hasNoDef
-    ? available // no mostrar "Sin Deficiencia" porque ya fue seleccionada
-    : [{ id: SIN_DEF_ID, code: "0", short: "Sin Deficiencia", detail: "" }, ...available];
+    ? available
+    : [{ id: SIN_DEF_ID, code: "0000", short: "Sin Deficiencia", detail: "No se seleccionará ninguna deficiencia" }, ...available];
 
   const handleSelect = def => {
+    console.log("Tipificación seleccionada:", def); // <-- LOG AQUÍ
     if (def.id === SIN_DEF_ID && usedIds.length > 0) {
       Alert.alert(
         "Atención",

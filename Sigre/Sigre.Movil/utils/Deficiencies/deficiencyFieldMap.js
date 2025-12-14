@@ -59,7 +59,7 @@ const COMMON_DEFICIENCY_FIELDS = [
 
 // Mapa de tipificaciones
 export const DEFICIENCY_FIELD_MAP = {
-  "0": {
+  "0000": {
     label: "SIN DEFICIENCIA",
     fields: [
       {
