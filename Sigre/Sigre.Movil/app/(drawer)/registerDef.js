@@ -1,10 +1,9 @@
-import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useFeeder } from "../../hooks/useFeeder";
 
 import { Image } from "react-native";
 
-
+import { BackHandler } from "react-native";
 
 import { useCallback, useContext, useEffect, useState } from "react";
 
@@ -39,7 +38,8 @@ import Slider from "@react-native-community/slider";
 import { Alert } from "react-native";
 
 import { Audio } from "expo-av";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+
 import { useFiles } from "../../hooks/useFiles";
 
 
@@ -571,6 +571,8 @@ export default function DeficiencyMediaScreen() {
 
   // 🎤 Audios
   const [audios, setAudios] = useState([]);
+  const [hasChanges, setHasChanges] = useState(false);
+
   const [audioProgress, setAudioProgress] = useState([]);
   const [audioMeta, setAudioMeta] = useState([]);
 
@@ -958,6 +960,26 @@ export default function DeficiencyMediaScreen() {
     }, [loadExistingMedia])
   );
 
+  useFocusEffect(
+  useCallback(() => {
+    const onBackPress = () => {
+      confirmExit();
+      return true; // ⛔ bloquea back automático
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => {
+      subscription.remove(); // ✅ forma correcta
+    };
+  }, [hasChanges, recording])
+);
+
+
+
 
   // ================================
   // 📸 TOMAR FOTO
@@ -1052,6 +1074,8 @@ export default function DeficiencyMediaScreen() {
 
     setCapturedPhoto(null);
     setIsPreview(false);
+    setHasChanges(true);
+
 
     if (captureMode === "sequence") {
       const nextIndex = findNextRequiredSlot(
@@ -1115,6 +1139,8 @@ export default function DeficiencyMediaScreen() {
     });
 
     setShowModal(false);
+    setHasChanges(true);
+
   };
 
   // ================================
@@ -1183,6 +1209,8 @@ export default function DeficiencyMediaScreen() {
       setAudios((prev) => [...prev, uri]);
       setAudioProgress((prev) => [...prev, { position: 0, duration: 1 }]);
       setAudioMeta((prev) => [...prev, metaObj]);
+      setHasChanges(true);
+
 
       setRecording(null);
 
@@ -1412,32 +1440,61 @@ export default function DeficiencyMediaScreen() {
     } else if (currentAudioIndex !== null && currentAudioIndex > index) {
       setCurrentAudioIndex(currentAudioIndex - 1);
     }
+    setHasChanges(true);
+
   };
 
   // ================================
   // 💾 GUARDAR
   // ================================
-  const confirmStopRecording = async () => {
-    if (!recording) return true;
+  const confirmExit = async () => {
+    // 1️⃣ Sin cambios → salir directo
+    if (!hasChanges) {
+      router.replace("/(drawer)/inspection");
+      return;
+    }
 
-    return new Promise((resolve) => {
-      Alert.alert(
-        "Grabación en curso",
-        "Si sales ahora, el audio en curso se descartará.",
-        [
-          { text: "No salir", style: "cancel", onPress: () => resolve(false) },
-          {
-            text: "Descartar y salir",
-            style: "destructive",
-            onPress: async () => {
-              await discardCurrentRecording(); // ✅ NO agrega a audios
-              resolve(true);
-            },
+    // 2️⃣ Si hay grabación activa
+    if (recording) {
+      const ok = await confirmStopRecording();
+      if (!ok) return;
+    }
+
+    Alert.alert(
+      "Cambios sin guardar",
+      "¿Desea guardar los cambios?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Descartar",
+          style: "destructive",
+          onPress: async () => {
+            if (sound) {
+              try { await sound.stopAsync(); } catch { }
+              try { await sound.unloadAsync(); } catch { }
+            }
+
+            await cleanupNewMedia();
+            await loadExistingMedia();
+            setHasChanges(false);
+
+            router.replace("/(drawer)/inspection");
           },
-        ]
-      );
-    });
+        },
+        {
+          text: "Guardar",
+          onPress: async () => {
+            await handleSave();
+            setHasChanges(false);
+          },
+        },
+      ]
+    );
   };
+
 
 
   const handleSave = async () => {
@@ -2085,28 +2142,9 @@ export default function DeficiencyMediaScreen() {
         <View style={styles.bottomButtons}>
           <TouchableOpacity
             style={styles.cancelBtn}
-            onPress={async () => {
-              const ok = await confirmStopRecording();
-              if (!ok) return;
-              // 🔇 detén reproducción si está sonando
-              if (sound) {
-                try { await sound.stopAsync(); } catch { }
-                try { await sound.unloadAsync(); } catch { }
-                setSound(null);
-                setCurrentAudioIndex(null);
-                setIsPaused(false);
-              }
-
-              await cleanupNewMedia();
-
-              // 🔥 clave: recarga desde disco/DB para “pisar” cualquier estado cacheado
-              await loadExistingMedia();
-
-              router.replace("/(drawer)/inspection");
-
-            }}
-
+            onPress={confirmExit}
           >
+
             <Text style={styles.bottomText}>Cancelar</Text>
           </TouchableOpacity>
 
