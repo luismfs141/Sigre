@@ -66,7 +66,7 @@ export default function Inspection() {
           id: def.TypificationId ?? def.id ?? `DEF_${def.Code}`,
           type: "def",
           defId: def.TypificationId ?? def.id ?? `DEF_${def.Code}`,
-          name: def.Code,
+          name: `${def.Code} → ${def.Component}`,
           data: {
             detail: def.Typification,
             elementId,

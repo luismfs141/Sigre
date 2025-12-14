@@ -5,7 +5,7 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
     const deficiency = await runQuery(
       `SELECT *
        FROM Deficiencias d
-       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno`,
+       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno = ?`,
       [idElement, typeElement, idTypification]
     );
 
