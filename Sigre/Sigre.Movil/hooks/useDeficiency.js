@@ -1,5 +1,5 @@
 import { useDatos } from "../context/DatosContext";
-import { getDeficiencyByTypificationElement, saveOrUpdateDeficiency } from "../database/offlineDB/deficiencies";
+import { deleteDeficiencyById, getDeficiencyByTypificationElement, saveOrUpdateDeficiency } from "../database/offlineDB/deficiencies";
 
 
 import { DEFICIENCY_FIELD_MAP } from "../utils/Deficiencies/deficiencyFieldMap";
@@ -128,10 +128,30 @@ export const useDeficiency = () => {
     }
   };
 
+  /**
+   * 🗑 Elimina una deficiencia si existe en BD
+   */
+  const deleteDeficiency = async (defiInterno) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible. No se puede eliminar.");
+      return false;
+    }
+
+    try {
+      return await deleteDeficiencyById(defiInterno);
+    } catch (error) {
+      console.error("❌ Error eliminando deficiencia:", error);
+      return false;
+    }
+  };
+
+
   return {
     fetchDeficiencyByTypificationElement,
     saveDeficiency,
     createOrGetDeficiency,
-    saveDeficiencyByTypification
+    saveDeficiencyByTypification,
+    deleteDeficiency
   };
 };

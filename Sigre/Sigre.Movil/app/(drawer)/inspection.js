@@ -1,6 +1,15 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
-import { BackHandler, Button, Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  BackHandler,
+  Button,
+  Dimensions,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
@@ -34,9 +43,13 @@ export default function Inspection() {
   const [currentItem, setCurrentItem] = useState(null);
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
 
-  // Estado auxiliar para "Sin Deficiencia"
   const [hasNoDeficiencySelected, setHasNoDeficiencySelected] = useState(false);
 
+  const SIN_DEF_ID = 0;
+
+  /* =======================
+     CARGA INICIAL
+     ======================= */
   useEffect(() => {
     if (!selectedItem) {
       setItems([]);
@@ -45,29 +58,40 @@ export default function Inspection() {
       return;
     }
 
-    const elementId = selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
-    const typeElement = selectedItem.PostInterno ? "POST" : selectedItem.VanoInterno ? "VANO" : "SED";
+    const elementId =
+      selectedItem.PostInterno ??
+      selectedItem.VanoInterno ??
+      selectedItem.SedInterno;
+
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+      ? "VANO"
+      : "SED";
+
     const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
     const tableId = isPost ? 8 : 9;
 
     const loadDefs = async () => {
       try {
         const defsByType = await fetchTypificationsByTypeElement(tableId);
-        const defsByElement = await fetchTypificationsByElement(elementId, typeElement);
+        const defsByElement = await fetchTypificationsByElement(
+          elementId,
+          typeElement
+        );
 
-        // IDs ya usados desde backend
-        const usedFromBackend = defsByElement.map(d => d.TypificationId ?? d.id);
+        const usedFromBackend = defsByElement.map(
+          d => d.TypificationId ?? d.id
+        );
         setUsedTypificationIds(usedFromBackend);
 
-        // Verificar si hay "Sin Deficiencia"
-        const hasNone = defsByElement.some(d => d.Code === "none");
+        const hasNone = usedFromBackend.includes(SIN_DEF_ID);
         setHasNoDeficiencySelected(hasNone);
 
-        // Deficiencias existentes
         const existingDefs = defsByElement.map(def => ({
-          id: def.TypificationId ?? def.id ?? `DEF_${def.Code}`,
+          id: def.TypificationId,
           type: "def",
-          defId: def.TypificationId ?? def.id ?? `DEF_${def.Code}`,
+          defId: def.TypificationId,
           name: `${def.Code} → ${def.Component}`,
           data: {
             detail: def.Typification,
@@ -90,14 +114,12 @@ export default function Inspection() {
 
         setItems([generalItem, ...existingDefs]);
 
-        // Preparar lista de defs para el modal (SIN_DEF se agrega solo en ListaDefModal)
-        const availableForModal = defsByType.map(d => ({
-          ...d,
-          id: d.TypificationId ?? d.id ?? `DEF_${d.Code}`
-        })).filter(d => !usedFromBackend.includes(d.TypificationId ?? d.id));
-
-        setAvailableDefs(availableForModal);
-
+        setAvailableDefs(
+          defsByType.map(d => ({
+            ...d,
+            id: d.TypificationId ?? d.id
+          }))
+        );
       } catch (err) {
         console.error("Error cargando tipificaciones:", err);
       }
@@ -106,34 +128,54 @@ export default function Inspection() {
     loadDefs();
   }, [selectedItem]);
 
+  /* =======================
+     BACK HANDLER
+     ======================= */
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         router.replace("/(drawer)/map");
         return true;
       };
-      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-      return () => subscription.remove();
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+      return () => sub.remove();
     }, [])
   );
 
-  // Agregar nueva deficiencia
+  /* =======================
+     AGREGAR DEFICIENCIA
+     ======================= */
   const addNewDeficiency = def => {
-    const elementId = selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
-    const typeElement = selectedItem.PostInterno ? "POST" : selectedItem.VanoInterno ? "VANO" : "SED";
-    const typificationId = def.TypificationId ?? def.id;
+    const elementId =
+      selectedItem.PostInterno ??
+      selectedItem.VanoInterno ??
+      selectedItem.SedInterno;
 
-    const SIN_DEF_ID = "SIN_DEF";
-    const hasNoDef = usedTypificationIds.includes(SIN_DEF_ID);
-    const hasOtherDefs = usedTypificationIds.filter(id => id !== SIN_DEF_ID).length > 0;
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+      ? "VANO"
+      : "SED";
 
-    if (def.id === SIN_DEF_ID && hasOtherDefs) {
-      alert("No puedes seleccionar 'Sin Deficiencia' mientras existan otras deficiencias.");
+    const typificationId = def.id;
+
+    const hasOtherDefs =
+      usedTypificationIds.filter(id => id !== SIN_DEF_ID).length > 0;
+
+    if (typificationId === SIN_DEF_ID && hasOtherDefs) {
+      alert(
+        "No puedes seleccionar 'Sin Deficiencia' mientras existan otras deficiencias."
+      );
       return;
     }
 
-    if (def.id !== SIN_DEF_ID && hasNoDef) {
-      alert("No puedes añadir más deficiencias mientras 'Sin Deficiencia' esté seleccionada.");
+    if (typificationId !== SIN_DEF_ID && hasNoDeficiencySelected) {
+      alert(
+        "No puedes añadir más deficiencias mientras 'Sin Deficiencia' esté seleccionada."
+      );
       return;
     }
 
@@ -155,28 +197,57 @@ export default function Inspection() {
     };
 
     setItems(prev => [...prev, newDef]);
-    setUsedTypificationIds(prev => [...prev, def.id]);
+    setUsedTypificationIds(prev => [...prev, typificationId]);
 
-    if (def.id === SIN_DEF_ID) setHasNoDeficiencySelected(true);
+    if (typificationId === SIN_DEF_ID) {
+      setHasNoDeficiencySelected(true);
+    }
 
     setNewDefModalVisible(false);
   };
 
-  // Abrir modal de formulario
+  /* =======================
+     ELIMINAR DEFICIENCIA
+     ======================= */
+  const handleDeficiencyDeleted = typificationId => {
+    if (typificationId == null) return;
+
+    setItems(prev =>
+      prev.filter(item => item.defId !== typificationId)
+    );
+
+    setUsedTypificationIds(prev =>
+      prev.filter(id => id !== typificationId)
+    );
+
+    if (typificationId === SIN_DEF_ID) {
+      setHasNoDeficiencySelected(false);
+    }
+
+    setModalDeficiencyVisible(false);
+  };
+
+  /* =======================
+     ABRIR MODAL
+     ======================= */
   const openFormModal = item => {
     setCurrentItem(item);
+
     if (item.type === "general") {
       setModalGeneralVisible(true);
       return;
     }
 
     setCurrentDeficiency({
-      DefiCodigoElemento: item.data.typificationCode,
       ...item.data
     });
+
     setModalDeficiencyVisible(true);
   };
 
+  /* =======================
+     RENDER ITEM
+     ======================= */
   const renderItem = ({ item }) => (
     <View style={[styles.itemCard, { width: screenWidth }]}>
       <View style={styles.itemHeader}>
@@ -187,16 +258,19 @@ export default function Inspection() {
             onPress={() =>
               router.push({
                 pathname: "/(drawer)/registerDef",
-                params: { id: item.id, defCode: item.data.typificationCode }
+                params: {
+                  id: item.id,
+                  defCode: item.data.typificationCode
+                }
               })
             }
           >
-            <FontAwesome5 name="camera" size={32} color="#28a745" />
+            <FontAwesome5 name="camera" size={28} color="#28a745" />
           </TouchableOpacity>
         )}
 
         <TouchableOpacity onPress={() => openFormModal(item)}>
-          <MaterialIcons name="assignment" size={32} color="#007bff" />
+          <MaterialIcons name="assignment" size={28} color="#007bff" />
         </TouchableOpacity>
       </View>
 
@@ -231,8 +305,9 @@ export default function Inspection() {
       <DeficiencyModal
         visible={modalDeficiencyVisible}
         deficiency={currentDeficiency}
-        onClose={() => setModalDeficiencyVisible(false)}
         userId={user.id}
+        onDelete={handleDeficiencyDeleted}
+        onClose={() => setModalDeficiencyVisible(false)}
       />
 
       <ListaDefModal

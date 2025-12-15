@@ -110,3 +110,19 @@ export const saveOrUpdateDeficiency = async (def) => {
     throw error;
   }
 };
+
+export const deleteDeficiencyById = async (defiInterno) => {
+  try {
+    if (!defiInterno) return false;
+
+    await runQuery(
+      `DELETE FROM Deficiencias WHERE DefiInterno = ?`,
+      [defiInterno]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error al eliminar deficiencia:", error);
+    return false;
+  }
+};
