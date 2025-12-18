@@ -10,6 +10,7 @@ const baseURL = 'http://192.168.1.53/SigreHost/api/'; // local Roy
 //const baseURL = 'https://balladlike-priscilla-uncaringly.ngrok-free.dev/SigreHost/api/'; // ngrok acceso
 export const API_URL = baseURL; 
 
+
 export const api = () => {
   return axios.create({
     baseURL,
