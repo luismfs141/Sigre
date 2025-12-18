@@ -57,7 +57,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     valueMap: {
       0: "Por Subsanar",
       1: "Subsanación Preventiva",
-      2: "Subsanación"
+      2: "Subsanación definitiva"
     },
     validation: { message: "Seleccione un estado de subsanación" }
   },

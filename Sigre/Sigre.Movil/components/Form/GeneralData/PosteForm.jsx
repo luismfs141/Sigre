@@ -84,7 +84,8 @@ const PosteForm = forwardRef(({ data }, ref) => {
     PostArmadoMaterial: "Material armado",
     PostRetenidaTipo: "Tipo de retenida",
     PostRetenidaMaterial: "Material de retenida",
-    PostTerceros: "Terceros",
+    //PostTerceros: "Terceros", //Antes TERCEROS
+    PostTerceros: "Cod. poste", 
     PostLatitud: "Latitud",
     PostLongitud: "Longitud",
     PostInterno: "ID interno"
