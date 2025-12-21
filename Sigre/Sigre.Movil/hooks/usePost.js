@@ -33,6 +33,7 @@ export const usePost = () => {
     setLoading(true);
     setError(null);
     try {
+      console.log(post);
       const id = await saveOrUpdatePost(post);
       return id;
     } catch (err) {

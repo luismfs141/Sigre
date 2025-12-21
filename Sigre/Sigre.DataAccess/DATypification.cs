@@ -97,6 +97,7 @@ namespace Sigre.DataAccess
                     Code = cd.CodiCodigo,
                     Typification = ti.TipoDescripcion,
                     TypificationId = ti.TipiInterno,
+                    Deficiency = cd.CodiDeficiencia,
                 };
 
             return query.ToList();

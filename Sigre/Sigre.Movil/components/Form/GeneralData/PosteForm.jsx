@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { usePost } from "../../../hooks/usePost";
 import SelectModal from "../../SelectModal";
 
@@ -28,10 +28,27 @@ const PosteForm = forwardRef(({ data }, ref) => {
   // =========================
   // EXPOSE SAVE
   // =========================
+
   useImperativeHandle(ref, () => ({
     save: async () => {
-      const id = await savePost(form);
-      return { ...form, PostInterno: id };
+      const id = await savePost({
+        ...form,
+        PostTerceros: Number(form.PostTerceros)
+      });
+
+      if (id) {
+        Alert.alert(
+          "Guardado exitoso",
+          "El poste se guardó correctamente."
+        );
+        return { ...form, PostInterno: id };
+      } else {
+        Alert.alert(
+          "Error",
+          "No se pudo guardar el poste."
+        );
+        return null;
+      }
     }
   }));
 
@@ -56,6 +73,12 @@ const PosteForm = forwardRef(({ data }, ref) => {
   // =========================
   // CONFIG
   // =========================
+
+  const tercerosOptions = [
+    { label: "No", value: 0 },
+    { label: "Sí", value: 1 }
+  ];
+
   const lockedFields = [
     "PostInterno",
     "PostLatitud",
@@ -84,8 +107,8 @@ const PosteForm = forwardRef(({ data }, ref) => {
     PostArmadoMaterial: "Material armado",
     PostRetenidaTipo: "Tipo de retenida",
     PostRetenidaMaterial: "Material de retenida",
-    //PostTerceros: "Terceros", //Antes TERCEROS
-    PostTerceros: "Cod. poste", 
+    PostTerceros: "Terceros", //Antes TERCEROS
+    // PostTerceros: "Cod. poste", 
     PostLatitud: "Latitud",
     PostLongitud: "Longitud",
     PostInterno: "ID interno"
@@ -111,6 +134,30 @@ const PosteForm = forwardRef(({ data }, ref) => {
 
   const renderField = (key) => {
     const locked = lockedFields.includes(key);
+    if (key === "PostTerceros") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={
+            tercerosOptions.find(
+              i => String(i.value) === String(form.PostTerceros)
+            )?.label
+          }
+          placeholder="Seleccione opción"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: tercerosOptions,
+              labelKey: "label",
+              valueKey: "value"
+            })
+          }
+        />
+      );
+    }
 
     if (key === "PostMaterial") {
       return (

@@ -92,9 +92,10 @@ export default function Inspection() {
           id: def.TypificationId,
           type: "def",
           defId: def.TypificationId,
-          name: `${def.Code} → ${def.Component}`,
+          name: `${def.Code}→${def.Component}`,
           data: {
             detail: def.Typification,
+            deficiency: def.Deficiency,
             elementId,
             typeElement,
             typificationId: def.TypificationId,
@@ -183,9 +184,10 @@ export default function Inspection() {
       id: typificationId,
       type: "def",
       defId: typificationId,
-      name: `${def.code} → ${def.short}`,
+      name: `${def.code}→${def.short}`,
       data: {
         detail: def.detail ?? "",
+        deficiency: def.deficiency,
         elementId,
         typeElement,
         typificationId,
@@ -275,7 +277,7 @@ export default function Inspection() {
       </View>
 
       {item.type === "def" && (
-        <Text style={{ marginTop: 4 }}>{item.data.detail}</Text>
+        <Text style={{ marginTop: 4 }}>{item.data.deficiency}</Text>
       )}
     </View>
   );

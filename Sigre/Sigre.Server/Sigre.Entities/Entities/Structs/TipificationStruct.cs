@@ -23,6 +23,7 @@ namespace Sigre.Entities.Structs
         public int TableId { get; set; }
         public string Table { get; set; }
         public string Component { get; set; }
+        public string Deficiency { get; set; }
         public string Code { get; set; }
         public string Typification { get; set; }
         [Key]

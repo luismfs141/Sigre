@@ -10,6 +10,7 @@ export default function ListaDefModal({ visible, defs, usedIds, onSelect, onClos
     code: d.Code ?? d.code,
     short: d.Component ?? d.short,
     detail: d.Typification ?? d.detail,
+    deficiency: d.Deficiency,
     tableId: d.TableId
   }));
 
@@ -25,7 +26,6 @@ export default function ListaDefModal({ visible, defs, usedIds, onSelect, onClos
     : [{ id: SIN_DEF_ID, code: "0000", short: "Sin Deficiencia", detail: "No se seleccionará ninguna deficiencia" }, ...available];
 
   const handleSelect = def => {
-    console.log("Tipificación seleccionada:", def); // <-- LOG AQUÍ
     if (def.id === SIN_DEF_ID && usedIds.length > 0) {
       Alert.alert(
         "Atención",
@@ -59,7 +59,7 @@ export default function ListaDefModal({ visible, defs, usedIds, onSelect, onClos
                 <TouchableOpacity key={def.id} onPress={() => handleSelect(def)}>
                   <View style={styles.modalItem}>
                     <Text style={{ fontSize: 16, fontWeight: "bold" }}>
-                      {def.code} → {def.short}
+                      {def.code} → {def.deficiency}
                     </Text>
                     <Text style={{ fontSize: 14, color: "#555", marginTop: 4 }}>
                       {def.detail}
