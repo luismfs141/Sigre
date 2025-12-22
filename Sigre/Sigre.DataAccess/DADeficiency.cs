@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 
 namespace Sigre.DataAccess
@@ -460,5 +461,99 @@ namespace Sigre.DataAccess
                 }
             }
         }
+
+        public int DADEF_SaveFromSync(DeficienciaSyncDto dto)
+        {
+            using var ctx = new SigreContext();
+            using var trx = ctx.Database.BeginTransaction();
+
+            try
+            {
+                int defiServidor;
+
+                // 🔹 INSERT
+                if (dto.EstadoOffLine == 2)
+                {
+                    var defi = new Deficiencia
+                    {
+                        DefiEstado = dto.DefiEstado,
+                        InspInterno = dto.InspInterno,
+                        TablInterno = dto.TablInterno,
+                        DefiCodigoElemento = dto.DefiCodigoElemento,
+                        TipiInterno = dto.TipiInterno,
+
+                        DefiLatitud = dto.DefiLatitud,
+                        DefiLongitud = dto.DefiLongitud,
+
+                        DefiTipoElemento = dto.DefiTipoElemento,
+                        DefiIdElemento = dto.DefiIdElemento,
+
+                        DefiUsuarioInic = dto.DefiUsuarioInic,
+                        DefiUsuarioMod = dto.DefiUsuarioMod,
+
+                        DefiFecRegistro = dto.DefiFecRegistro,
+                        DefiFechaCreacion = DateTime.Now,
+                        DefiActivo = true,
+                        DefiInspeccionado = dto.DefiInspeccionado
+                    };
+
+                    ctx.Deficiencias.Add(defi);
+                    ctx.SaveChanges();
+
+                    defiServidor = defi.DefiInterno;
+                }
+                // 🔹 UPDATE
+                else if (dto.EstadoOffLine == 1 && dto.DefiInterno.HasValue)
+                {
+                    var defi = ctx.Deficiencias
+                        .FirstOrDefault(d => d.DefiInterno == dto.DefiInterno.Value);
+
+                    if (defi == null)
+                        throw new Exception($"Deficiencia {dto.DefiInterno} no existe");
+
+                    defi.DefiEstado = dto.DefiEstado;
+                    defi.DefiObservacion = dto.DefiObservacion;
+                    defi.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
+                    defi.DefiUsuarioMod = dto.DefiUsuarioMod;
+                    defi.DefiFecModificacion = DateTime.Now;
+
+                    ctx.SaveChanges();
+
+                    defiServidor = defi.DefiInterno;
+                }
+                else
+                {
+                    throw new Exception("EstadoOffLine inválido para Deficiencia");
+                }
+
+                // 🔗 SINCRONIZAR ARCHIVOS
+                var daFile = new DAFile();
+
+                foreach (var a in dto.Archivos)
+                {
+                    var archivo = new Archivo
+                    {
+                        ArchInterno = 0, // SIEMPRE 0 desde offline
+                        ArchTipo = a.ArchTipo.ToString(),
+                        ArchNombre = a.ArchNombre,
+                        ArchLatitud = a.ArchLatitud,
+                        ArchLongitud = a.ArchLongitud,
+                        ArchFecha = a.ArchFecha,
+                        ArchActivo = true
+                    };
+                }
+
+                //daFile.DAARCH_SyncByDeficiencia(defiServidor, Archivos);
+
+                trx.Commit();
+                return defiServidor;
+            }
+            catch
+            {
+                trx.Rollback();
+                throw;
+            }
+        }
+
     }
 }

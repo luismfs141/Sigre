@@ -5,6 +5,7 @@ using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;
@@ -111,5 +112,66 @@ namespace Sigre.DataAccess
             else
                 return DAPOST_PinsByFeeders(x_ids);
         }
+
+        public int DAPOST_SaveFromSync(PosteSyncDto dto)
+        {
+            using var ctx = new SigreContext();
+
+            // 🔹 INSERT (creado offline)
+            if (dto.EstadoOffLine == 2)
+            {
+                var nuevo = new Poste
+                {
+                    PostEtiqueta = dto.PostEtiqueta,
+                    PostCodigoNodo = dto.PostCodigoNodo,
+                    PostLatitud = dto.PostLatitud,
+                    PostLongitud = dto.PostLongitud,
+                    AlimInterno = dto.AlimInterno,
+                    PostMaterial = dto.PostMaterial,
+                    PostArmadoTipo = dto.PostArmadoTipo,
+                    PostArmadoMaterial = dto.PostArmadoMaterial,
+                    PostRetenidaTipo = dto.PostRetenidaTipo,
+                    PostRetenidaMaterial = dto.PostRetenidaMaterial,
+                    PostSubestacion = dto.PostSubestacion,
+                    PostTerceros = dto.PostTerceros,
+                    PostInspeccionado = dto.PostInspeccionado,
+                    PostEsBt = dto.PostEsBt,
+                    PostEsMt = dto.PostEsMt
+                };
+
+                ctx.Postes.Add(nuevo);
+                ctx.SaveChanges();
+
+                return nuevo.PostInterno; // ⬅ devolver ID servidor
+            }
+
+            // 🔹 UPDATE
+            if (dto.EstadoOffLine == 1 && dto.PostInterno.HasValue)
+            {
+                var existente = ctx.Postes
+                    .FirstOrDefault(p => p.PostInterno == dto.PostInterno.Value);
+
+                if (existente == null)
+                    throw new Exception($"Poste {dto.PostInterno} no existe");
+
+                existente.PostEtiqueta = dto.PostEtiqueta;
+                existente.PostCodigoNodo = dto.PostCodigoNodo;
+                existente.PostLatitud = dto.PostLatitud;
+                existente.PostLongitud = dto.PostLongitud;
+                existente.PostMaterial = dto.PostMaterial;
+                existente.PostArmadoTipo = dto.PostArmadoTipo;
+                existente.PostArmadoMaterial = dto.PostArmadoMaterial;
+                existente.PostRetenidaTipo = dto.PostRetenidaTipo;
+                existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
+                existente.PostTerceros = dto.PostTerceros;
+                existente.PostInspeccionado = dto.PostInspeccionado;
+
+                ctx.SaveChanges();
+                return existente.PostInterno;
+            }
+
+            throw new Exception("EstadoOffLine no válido");
+        }
+
     }
 }

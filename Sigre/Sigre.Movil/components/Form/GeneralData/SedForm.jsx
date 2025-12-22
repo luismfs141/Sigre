@@ -1,55 +1,144 @@
 // DataGeneral/SedForm.jsx
-import { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSed } from "../../../hooks/useSed";
 
-export default function SedForm({ data, onSave }) {
+const SedForm = forwardRef(({ data }, ref) => {
+  const { saveSed } = useSed();
+
+  // =========================
+  // STATE FORM
+  // =========================
   const [form, setForm] = useState({
-    SedInterno: data.SedInterno ?? "",
-    EstadoOffLine: data.EstadoOffLine ?? "",
-    SedEtiqueta: data.SedEtiqueta ?? "",
-    SedLatitud: data.SedLatitud ?? "",
-    SedLongitud: data.SedLongitud ?? "",
-    SedTipo: data.SedTipo ?? "",
-    AlimInterno: data.AlimInterno ?? "",
-    SedCodigo: data.SedCodigo ?? "",
-    SedSimbolo: data.SedSimbolo ?? "",
-    SedTerceros: data.SedTerceros ?? "",
-    SedMaterial: data.SedMaterial ?? "",
-    SedInspeccionado: data.SedInspeccionado ?? "",
-    SedNumPostes: data.SedNumPostes ?? "",
-    SedArmadoTipo: data.SedArmadoTipo ?? "",
-    SedArmadoMaterial: data.SedArmadoMaterial ?? "",
-    SedRetenidaTipo: data.SedRetenidaTipo ?? "",
-    SedRetenidaMaterial: data.SedRetenidaMaterial ?? "",
-    SedArmadoMaterialNavigationArmmtInterno: data.SedArmadoMaterialNavigationArmmtInterno ?? "",
-    SedArmadoTipoNavigationArmtpInterno: data.SedArmadoTipoNavigationArmtpInterno ?? "",
-    SedMaterialNavigationSedInterno: data.SedMaterialNavigationSedInterno ?? "",
-    SedRetenidaMaterialNavigationRtnmtInterno: data.SedRetenidaMaterialNavigationRtnmtInterno ?? "",
-    SedRetenidaTipoNavigationRtntpInterno: data.SedRetenidaTipoNavigationRtntpInterno ?? ""
+    SedInterno: data?.SedInterno ?? "",
+    EstadoOffLine: data?.EstadoOffLine ?? "",
+    SedCodigo: data?.SedCodigo ?? "",
+    SedEtiqueta: data?.SedEtiqueta ?? "",
+    SedTipo: data?.SedTipo ?? "",
+    SedMaterial: data?.SedMaterial ?? "",
+    SedArmadoTipo: data?.SedArmadoTipo ?? "",
+    SedArmadoMaterial: data?.SedArmadoMaterial ?? "",
+    SedRetenidaTipo: data?.SedRetenidaTipo ?? "",
+    SedRetenidaMaterial: data?.SedRetenidaMaterial ?? "",
+    SedNumPostes: data?.SedNumPostes ?? "",
+    SedTerceros: data?.SedTerceros ?? "",
+    SedLatitud: data?.SedLatitud ?? "",
+    SedLongitud: data?.SedLongitud ?? "",
+    SedInspeccionado: data?.SedInspeccionado ?? ""
   });
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // =========================
+  // EXPOSE SAVE
+  // =========================
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      try {
+        const id = await saveSed(form);
+
+        if (id) {
+          Alert.alert(
+            "Guardado exitoso",
+            "La subestación (SED) se guardó correctamente."
+          );
+
+          return { ...form, SedInterno: id };
+        } else {
+          Alert.alert(
+            "Error",
+            "No se pudo guardar la subestación."
+          );
+          return null;
+        }
+      } catch (error) {
+        Alert.alert(
+          "Error",
+          "Ocurrió un error al guardar la subestación."
+        );
+        return null;
+      }
+    }
+  }));
+
+  // =========================
+  // CONFIG (igual patrón)
+  // =========================
+  const lockedFields = [
+    "SedInterno",
+    "EstadoOffLine",
+    "SedLatitud",
+    "SedLongitud",
+    "SedCodigo"
+  ];
+
+  const orderedFields = [
+    "SedCodigo",
+    "SedEtiqueta",
+    "SedTipo",
+    "SedMaterial",
+    "SedArmadoTipo",
+    "SedArmadoMaterial",
+    "SedRetenidaTipo",
+    "SedRetenidaMaterial",
+    "SedNumPostes",
+    "SedTerceros",
+    "SedLatitud",
+    "SedLongitud",
+    "SedInterno"
+  ];
+
+  const labels = {
+    SedCodigo: "Código SED",
+    SedEtiqueta: "Etiqueta",
+    SedTipo: "Tipo",
+    SedMaterial: "Material",
+    SedArmadoTipo: "Tipo de armado",
+    SedArmadoMaterial: "Material de armado",
+    SedRetenidaTipo: "Tipo de retenida",
+    SedRetenidaMaterial: "Material de retenida",
+    SedNumPostes: "N° de postes",
+    SedTerceros: "Terceros",
+    SedLatitud: "Latitud",
+    SedLongitud: "Longitud",
+    SedInterno: "ID interno"
+  };
+
+  // =========================
+  // RENDER
+  // =========================
   return (
-    <View>
+    <View style={{ padding: 10 }}>
       <Text style={styles.sectionTitle}>Subestación (SED)</Text>
 
-      {Object.keys(form).map((key) => (
-        <View key={key} style={styles.row}>
-          <Text style={styles.label}>{key}</Text>
-          <TextInput
-            style={styles.input}
-            value={form[key] !== null && form[key] !== undefined ? String(form[key]) : ""}
-            onChangeText={(v) => update(key, v)}
-          />
-        </View>
-      ))}
+      {orderedFields.map(key => {
+        const locked = lockedFields.includes(key);
+
+        return (
+          <View key={key} style={styles.row}>
+            <Text style={styles.label}>{labels[key]}</Text>
+            <TextInput
+              style={[styles.input, locked && styles.locked]}
+              editable={!locked}
+              value={form[key] != null ? String(form[key]) : ""}
+              onChangeText={v => update(key, v)}
+            />
+          </View>
+        );
+      })}
     </View>
   );
-}
+});
 
+export default SedForm;
+
+// =========================
 const styles = StyleSheet.create({
-  sectionTitle: { fontWeight: "700", fontSize: 18, marginBottom: 8 },
+  sectionTitle: {
+    fontWeight: "700",
+    fontSize: 18,
+    marginBottom: 8
+  },
   row: { marginBottom: 10 },
   label: { fontWeight: "600" },
   input: {
@@ -59,5 +148,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 4,
     backgroundColor: "#f7f7f7"
+  },
+  locked: {
+    backgroundColor: "#ececec",
+    color: "#777"
   }
 });

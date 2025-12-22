@@ -1,92 +1,9 @@
 import { useDatos } from "../context/DatosContext";
 import { deleteDeficiencyById, getDeficiencyByTypificationElement, saveOrUpdateDeficiency } from "../database/offlineDB/deficiencies";
-
-
-import { DEFICIENCY_FIELD_MAP } from "../utils/Deficiencies/deficiencyFieldMap";
+import { nowPeruISO } from "../utils/dateUtils";
 
 export const useDeficiency = () => {
   const { checkDatabase } = useDatos();
-
-  const normalizeByTypification = (def, typificationId) => {
-    const allowed =
-      DEFICIENCY_FIELD_MAP[typificationId]?.fields.map(f => f.key) ?? [];
-
-    const normalized = { ...def };
-
-    Object.keys(normalized).forEach(key => {
-      if (
-        key.startsWith("Defi") &&
-        !allowed.includes(key) &&
-        ![
-          "DefiInterno",
-          "DefiIdElemento",
-          "DefiTipoElemento",
-          "DefiCodigoElemento",
-          "TipiInterno",
-          "DefiFechaCreacion",
-          "DefiFecRegistro",
-          "DefiEstado",
-          "EstadoOffLine"
-        ].includes(key)
-      ) {
-        normalized[key] = null;
-      }
-    });
-
-    return normalized;
-  };
-
-  const createOrGetDeficiency = async ({
-    element,
-    typification,
-    user
-  }) => {
-    const dbOk = await checkDatabase();
-    if (!dbOk) return null;
-
-    const existing = await getDeficiencyByTypificationElement(
-      element.IdOriginal,
-      element.TipoElemento,
-      typification.TipiInterno
-    );
-
-    if (existing.length > 0) return existing[0];
-
-    const now = new Date().toISOString();
-
-    const newDef = {
-      DefiEstado: "N",
-      TablInterno: 8,
-      TipiInterno: typification.TipiInterno,
-
-      DefiCodigoElemento: element.ElementCode,
-      DefiTipoElemento: element.TipoElemento,
-      DefiIdElemento: element.IdOriginal,
-
-      DefiLatitud: element.Latitude,
-      DefiLongitud: element.Longitude,
-
-      DefiFechaCreacion: now,
-      DefiFecRegistro: now,
-
-      DefiUsuarioInic: user?.usuario,
-      DefiActivo: 1,
-      DefiInspeccionado: 0,
-      EstadoOffLine: 2
-    };
-
-    const defiInterno = await saveOrUpdateDeficiency(newDef);
-
-    return {
-      ...newDef,
-      DefiInterno: defiInterno
-    };
-  };
-
-  const saveDeficiencyByTypification = async (def) => {
-    const normalized = normalizeByTypification(def, def.TipiInterno);
-    return await saveOrUpdateDeficiency(normalized);
-  };
 
   /**
    * Obtiene las deficiencias asociadas a un elemento y tipificación
@@ -108,11 +25,36 @@ export const useDeficiency = () => {
     }
   };
 
+  const normalizeDeficiencyBeforeSave = (deficiency, userId) => {
+    const now = nowPeruISO();
+
+    const isNew =
+      deficiency.DefiInterno === 0 ||
+      deficiency.DefiInterno === null ||
+      deficiency.DefiInterno === undefined;
+
+    return {
+      ...deficiency,
+
+      // 🆕 NUEVA
+      ...(isNew && {
+        DefiEstado: deficiency.DefiEstado || "N",
+        DefiFechaCreacion: now,
+        DefiFecRegistro: now,
+        DefiUsuarioInic: userId
+      }),
+
+      // 🔁 SIEMPRE
+      DefiUsuarioMod: userId,
+      DefiFecModificacion: now
+    };
+  };
+
+
   /**
    * 💾 Guarda o actualiza una deficiencia
    */
-  const saveDeficiency = async (deficiency) => {
-    console.log(deficiency);
+  const saveDeficiency = async (deficiency, userId) => {
     const dbOk = await checkDatabase();
     if (!dbOk) {
       console.warn("⚠ Base de datos no disponible. No se puede guardar la deficiencia.");
@@ -120,8 +62,10 @@ export const useDeficiency = () => {
     }
 
     try {
-      const result = await saveOrUpdateDeficiency(deficiency);
-      return result; // DefiInterno actualizado o insertId
+      const normalized =
+        normalizeDeficiencyBeforeSave(deficiency, userId);
+
+      return await saveOrUpdateDeficiency(normalized);
     } catch (error) {
       console.error("❌ Error al guardar la deficiencia:", error);
       return null;
@@ -150,8 +94,6 @@ export const useDeficiency = () => {
   return {
     fetchDeficiencyByTypificationElement,
     saveDeficiency,
-    createOrGetDeficiency,
-    saveDeficiencyByTypification,
     deleteDeficiency
   };
 };

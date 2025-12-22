@@ -308,6 +308,7 @@ export default function Inspection() {
         visible={modalDeficiencyVisible}
         deficiency={currentDeficiency}
         userId={user.id}
+        selectedItem={selectedItem}
         onDelete={handleDeficiencyDeleted}
         onClose={() => setModalDeficiencyVisible(false)}
       />

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
+using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 using SQLitePCL;
 using System;
@@ -356,5 +357,89 @@ namespace Sigre.DataAccess
                 throw;
             }
         }
+
+        public SyncResult DAFE_SyncAll(SyncPayload payload)
+        {
+            using var ctx = new SigreContext();
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
+            {
+                var mapPostes = new Dictionary<int, int>();
+                var mapVanos = new Dictionary<int, int>();
+                var mapDefis = new Dictionary<int, int>();
+
+                var daPost = new DAPost();
+                var daGap = new DAGap();
+                var daDef = new DADeficiency();
+                var daFile = new DAFile();
+
+                // ==========================
+                // 1️⃣ POSTES
+                // ==========================
+                foreach (var p in payload.Postes)
+                {
+                    int newId = daPost.DAPOST_SaveFromSync(p);
+                    mapPostes[p.EstadoOffLine] = newId;
+                }
+
+                // ==========================
+                // 2️⃣ VANOS
+                // ==========================
+                foreach (var v in payload.Vanos)
+                {
+
+                    int newId = daGap.DAGAP_SaveFromSync(v);
+                    mapVanos[v.EstadoOffLine] = newId;
+                }
+
+                // ==========================
+                // 3️⃣ DEFICIENCIAS
+                // ==========================
+                foreach (var d in payload.Deficiencias)
+                {
+
+                    int newId = daDef.DADEF_SaveFromSync(d);
+                    mapDefis[d.EstadoOffLine] = newId;
+
+                    // ==========================
+                    // 4️⃣ ARCHIVOS
+                    // ==========================
+                    if (d.Archivos?.Any() == true)
+                    {
+                        daFile.DAARCH_SyncByDeficiencia(newId, d.Archivos);
+                    }
+                }
+
+                tx.Commit();
+
+                return new SyncResult
+                {
+                    Postes = mapPostes,
+                    Vanos = mapVanos,
+                    Deficiencias = mapDefis
+                };
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        }
+
+        public class SyncPayload
+        {
+            public List<PosteSyncDto> Postes { get; set; } = new();
+            public List<VanoSyncDto> Vanos { get; set; } = new();
+            public List<DeficienciaSyncDto> Deficiencias { get; set; } = new();
+        }
+
+        public class SyncResult
+        {
+            public Dictionary<int, int> Postes { get; set; }
+            public Dictionary<int, int> Vanos { get; set; }
+            public Dictionary<int, int> Deficiencias { get; set; }
+        }
+
     }
 }
