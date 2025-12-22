@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;
@@ -116,6 +117,82 @@ namespace Sigre.DataAccess
                 return DAGAP_GetPinsBySubestacion(x_ids);
             else
                 return DAGAP_GetPinsByFeeders(x_ids);
+        }
+
+        public int DAGAP_SaveFromSync(VanoSyncDto dto)
+        {
+            using var ctx = new SigreContext();
+
+            // 🔹 INSERT (creado offline)
+            if (dto.EstadoOffLine == 2)
+            {
+                var vano = new Vano
+                {
+                    VanoCodigo = dto.VanoCodigo,
+                    VanoEtiqueta = dto.VanoEtiqueta,
+
+                    VanoLatitudIni = dto.VanoLatitudIni,
+                    VanoLongitudIni = dto.VanoLongitudIni,
+                    VanoLatitudFin = dto.VanoLatitudFin,
+                    VanoLongitudFin = dto.VanoLongitudFin,
+
+                    AlimInterno = dto.AlimInterno,
+
+                    VanoTerceros = dto.VanoTerceros,
+                    VanoMaterial = dto.VanoMaterial,
+
+                    VanoNodoInicial = dto.VanoNodoInicial,
+                    VanoNodoFinal = dto.VanoNodoFinal,
+
+                    VanoInspeccionado = dto.VanoInspeccionado,
+
+                    VanoSubestacion = dto.VanoSubestacion,
+                    VanoEsMt = dto.VanoEsMt,
+                    VanoEsBt = dto.VanoEsBt
+                };
+
+                ctx.Vanos.Add(vano);
+                ctx.SaveChanges();
+
+                return vano.VanoInterno; // 🔁 devolver ID servidor
+            }
+
+            // 🔹 UPDATE
+            if (dto.EstadoOffLine == 1 && dto.VanoInterno.HasValue)
+            {
+                var vano = ctx.Vanos
+                    .FirstOrDefault(v => v.VanoInterno == dto.VanoInterno.Value);
+
+                if (vano == null)
+                    throw new Exception($"Vano {dto.VanoInterno} no existe");
+
+                vano.VanoCodigo = dto.VanoCodigo;
+                vano.VanoEtiqueta = dto.VanoEtiqueta;
+
+                vano.VanoLatitudIni = dto.VanoLatitudIni;
+                vano.VanoLongitudIni = dto.VanoLongitudIni;
+                vano.VanoLatitudFin = dto.VanoLatitudFin;
+                vano.VanoLongitudFin = dto.VanoLongitudFin;
+
+                vano.AlimInterno = dto.AlimInterno;
+
+                vano.VanoTerceros = dto.VanoTerceros;
+                vano.VanoMaterial = dto.VanoMaterial;
+
+                vano.VanoNodoInicial = dto.VanoNodoInicial;
+                vano.VanoNodoFinal = dto.VanoNodoFinal;
+
+                vano.VanoInspeccionado = dto.VanoInspeccionado;
+
+                vano.VanoSubestacion = dto.VanoSubestacion;
+                vano.VanoEsMt = dto.VanoEsMt;
+                vano.VanoEsBt = dto.VanoEsBt;
+
+                ctx.SaveChanges();
+                return vano.VanoInterno;
+            }
+
+            throw new Exception("EstadoOffLine inválido para Vano");
         }
 
     }

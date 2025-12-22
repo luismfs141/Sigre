@@ -1,6 +1,7 @@
 ﻿using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
+using Sigre.Entities.Entities.SyncData;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -88,6 +89,31 @@ namespace Sigre.DataAccess
 
             Archivo archivoTabla = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == 1);
             return archivoTabla;
+        }
+
+        public void DAARCH_SyncByDeficiencia(int defiInternoServidor, List<ArchivoSyncDto> archivosOffline)
+        {
+            using var ctx = new SigreContext();
+
+            foreach (var dto in archivosOffline)
+            {
+                var archivo = new Archivo
+                {
+                    ArchInterno = 0, // 🔒 siempre nuevo
+                    ArchTipo = dto.ArchTipo.ToString(),
+                    ArchTabla = "Deficiencias",
+                    ArchCodTabla = defiInternoServidor,
+                    ArchNombre = dto.ArchNombre,
+                    ArchLatitud = dto.ArchLatitud,
+                    ArchLongitud = dto.ArchLongitud,
+                    ArchFecha = dto.ArchFecha,
+                    ArchActivo = true
+                };
+
+                ctx.Archivos.Add(archivo);
+            }
+
+            ctx.SaveChanges();
         }
     }
 }

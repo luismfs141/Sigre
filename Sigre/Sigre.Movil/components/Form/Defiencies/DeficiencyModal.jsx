@@ -1,3 +1,4 @@
+import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -8,7 +9,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-
 import LocationModal from "../../../components/Modal/LocationModal";
 import { useDeficiency } from "../../../hooks/useDeficiency";
 import { createEmptyDeficiency } from "../../../utils/Deficiencies/deficiencyFactory";
@@ -24,12 +24,15 @@ export default function DeficiencyModal({
   deficiency,
   onClose,
   onDelete, // 👈 callback al padre (Inspection)
-  userId
+  userId,
+  selectedItem,
 }) {
   const [localDef, setLocalDef] = useState(null);
   const [selectConfig, setSelectConfig] = useState(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [activeLocationField, setActiveLocationField] = useState(null);
+  const isEmpty = v =>
+  v === null || v === undefined || v === "";
 
   const {
     fetchDeficiencyByTypificationElement,
@@ -40,6 +43,41 @@ export default function DeficiencyModal({
   // --------------------------------------------------
   // CARGA / INICIALIZACIÓN
   // --------------------------------------------------
+  useEffect(() => {
+    if (!localDef) return;
+
+    const latEmpty = isEmpty(localDef.DefiLatitud);
+    const lngEmpty = isEmpty(localDef.DefiLongitud);
+
+    // 🚫 Si ya existen ambos, no hacer nada
+    if (!latEmpty && !lngEmpty) return;
+
+    (async () => {
+      try {
+        const { status } =
+          await Location.requestForegroundPermissionsAsync();
+
+        if (status !== "granted") return;
+
+        const loc = await Location.getCurrentPositionAsync({});
+
+        setLocalDef(prev => ({
+          ...prev,
+          DefiLatitud: latEmpty
+            ? loc.coords.latitude
+            : prev.DefiLatitud,
+          DefiLongitud: lngEmpty
+            ? loc.coords.longitude
+            : prev.DefiLongitud
+        }));
+      } catch (e) {
+        console.log("Error obteniendo ubicación", e);
+      }
+    })();
+  }, [localDef]);
+
+
+
   useEffect(() => {
     if (!deficiency) return;
 
@@ -68,7 +106,8 @@ export default function DeficiencyModal({
             tableId,
             elementId,
             typeElement,
-            userId
+            userId,
+            selectedItem
           })
         );
       }
@@ -108,7 +147,7 @@ export default function DeficiencyModal({
       return;
     }
 
-    await saveDeficiency(localDef);
+    await saveDeficiency(localDef, userId);
     onClose();
   };
 

@@ -33,12 +33,11 @@ export default function LocationModal({ visible, onClose, onConfirm }) {
               <Text style={styles.coordText}>Longitud: {location.longitude}</Text>
 
               <View style={styles.buttons}>
-                <TouchableOpacity style={styles.btnSave} onPress={() => onConfirm(location)}>
-                  <Text style={styles.btnText}>Confirmar</Text>
-                </TouchableOpacity>
-
                 <TouchableOpacity style={styles.btnDelete} onPress={onClose}>
                   <Text style={styles.btnText}>Cerrar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnSave} onPress={() => onConfirm(location)}>
+                  <Text style={styles.btnText}>Confirmar</Text>
                 </TouchableOpacity>
               </View>
             </>

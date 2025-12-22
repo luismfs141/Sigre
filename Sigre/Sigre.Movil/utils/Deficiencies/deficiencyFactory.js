@@ -9,33 +9,57 @@ export const createEmptyDeficiency = ({
   tableId,
   elementId,
   typeElement,
-  userId
+  userId,
+  selectedItem
 }) => {
   const fieldConfig =
     DEFICIENCY_FIELD_MAP?.[String(typificationCode)]?.fields ?? [];
 
-  // Inicializar campos dinámicos
+  // Inicializar SOLO campos dinámicos (no sistema)
   const dynamicFields = {};
   fieldConfig.forEach(f => {
-    if (f.type === "number") dynamicFields[f.key] = 0;
+    // Excluir campos controlados por el sistema
+    if (
+      [
+        "DefiEstado",
+        "DefiCodigoElemento",
+        "DefiLatitud",
+        "DefiLongitud"
+      ].includes(f.key)
+    ) {
+      return;
+    }
+
+    if (f.type === "number") dynamicFields[f.key] = null;
     else dynamicFields[f.key] = "";
   });
 
   return {
-    DefiInterno: null,
+    // Identificadores
+    DefiInterno: 0,
     TipiInterno: typificationId,
     TablInterno: tableId,
     DefiTipoElemento: typeElement,
     DefiIdElemento: elementId,
 
-    // Estados base
-    DefiEstado: dynamicFields.DefiEstado || "N",
+    // Código del elemento (POST / VANO)
+    DefiCodigoElemento:
+      typeElement === "POST"
+        ? selectedItem?.PostCodigoNodo ?? ""
+        : selectedItem?.VanoCodigo ?? "",
+
+    // Estados base (sistema)
+    DefiEstado: "N",
     DefiActivo: 1,
     DefiInspeccionado: 1,
     EstadoOffLine: 2,
-    DefiEstadoCriticidad: dynamicFields.DefiEstadoCriticidad || 0,
-    DefiLatitud: 0,
-    DefiLongitud: 0,
+
+    // Criticidad por defecto
+    DefiEstadoCriticidad: 0,
+
+    // Ubicación (vacío real → permite autogeneración)
+    DefiLatitud: null,
+    DefiLongitud: null,
 
     // Usuario / fechas
     DefiUsuarioInic: userId,
@@ -47,7 +71,7 @@ export const createEmptyDeficiency = ({
     typificationId,
     typificationCode,
 
-    // Campos dinámicos
+    // Campos dinámicos (usuario)
     ...dynamicFields
   };
 };

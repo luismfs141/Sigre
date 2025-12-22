@@ -117,7 +117,34 @@ export const DEFICIENCY_FIELD_MAP = {
   "6028": { label: "POSTE - DEF 6028", fields: [...COMMON_DEFICIENCY_FIELDS] },
 
   "7002": { label: "VANO - DEF 7002", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "7004": { label: "VANO - DEF 7004", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "7004": {
+    label: "VANO - DEF 7004",
+    fields: [
+      ...COMMON_DEFICIENCY_FIELDS,
+      {
+        key: "DefiDistHorizontal",
+        label: "Distancia Horizontal (m)",
+        type: "number",
+        required: true,
+        validation: {
+          min: 0,
+          max: 1,
+          message: "La distancia horizontal debe ser menor o igual a 1 metro."
+        }
+      },
+      {
+        key: "DefiDistVertical",
+        label: "Distancia Vertical (m)",
+        type: "number",
+        required: true,
+        validation: {
+          min: 1.8,
+          max: 10,
+          message: "La distancia vertical mínima debe ser 1.80 metros"
+        }
+      }
+    ]
+  },
   "7006": {
     label: "VANO - DEF 7006",
     fields: [
@@ -128,9 +155,9 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         validation: {
-          min: 0.5,
-          max: 10,
-          message: "La distancia vertical debe estar entre 0.5 y 10 metros"
+          min: 1.8,
+          max: 20,
+          message: "La distancia vertical mínima es de 1.8 metros."
         }
       }
     ]
@@ -145,9 +172,9 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         validation: {
-          min: 1,
+          min: 7.5,
           max: 15,
-          message: "La distancia horizontal debe estar entre 1 y 15 metros"
+          message: "La distancia horizontal mínima es de 7.5 metros"
         }
       }
     ]
