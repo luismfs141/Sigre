@@ -10,6 +10,9 @@ import { useCallback, useContext, useEffect, useState } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 
+const ENABLE_AUDIO = false;
+
+
 // Opción A (recomendada)
 import * as utm from "utm";
 
@@ -961,22 +964,22 @@ export default function DeficiencyMediaScreen() {
   );
 
   useFocusEffect(
-  useCallback(() => {
-    const onBackPress = () => {
-      confirmExit();
-      return true; // ⛔ bloquea back automático
-    };
+    useCallback(() => {
+      const onBackPress = () => {
+        confirmExit();
+        return true; // ⛔ bloquea back automático
+      };
 
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      onBackPress
-    );
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
 
-    return () => {
-      subscription.remove(); // ✅ forma correcta
-    };
-  }, [hasChanges, recording])
-);
+      return () => {
+        subscription.remove(); // ✅ forma correcta
+      };
+    }, [hasChanges, recording])
+  );
 
 
 
@@ -2060,83 +2063,85 @@ export default function DeficiencyMediaScreen() {
 
 
           </ScrollView>
-
-
-
-
-
-
         </View>
 
+
+        {/* ----------------------------------------------------bloque de audio ----------------------------------------------------- */}
         {/* AUDIOS */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🎤 Audios</Text>
+        {ENABLE_AUDIO && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🎤 Audios</Text>
 
-          {!recording ? (
-            <TouchableOpacity style={styles.buttonGreen} onPress={startRecording}>
-              <Text style={styles.buttonText}>REC</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.buttonRed} onPress={stopRecording}>
-              <Text style={styles.buttonText}>STOP</Text>
-            </TouchableOpacity>
-          )}
-
-          {recording && (
-            <View style={styles.recordingRow}>
-              <View
-                style={[
-                  styles.recDot,
-                  { backgroundColor: blink ? "red" : "transparent" },
-                ]}
-              />
-              <Text style={{ color: "red", fontWeight: "bold" }}>
-                Grabando...
-              </Text>
-            </View>
-          )}
-
-          {audios.map((uri, i) => (
-            <View key={i} style={styles.audioContainer}>
-              <TouchableOpacity
-                onPress={() => playAudio(uri, i)}
-                style={styles.audioPlayButton}
-              >
-                <Text style={{ color: "white" }}>
-                  {currentAudioIndex === i && !isPaused ? "⏸" : "▶️"}
-                </Text>
+            {!recording ? (
+              <TouchableOpacity style={styles.buttonGreen} onPress={startRecording}>
+                <Text style={styles.buttonText}>REC</Text>
               </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.buttonRed} onPress={stopRecording}>
+                <Text style={styles.buttonText}>STOP</Text>
+              </TouchableOpacity>
+            )}
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.audioTitle}>
-                  {getAudioDisplayName(i, uri)}
-                </Text>
-
-                <Text style={styles.audioTime}>
-                  {formatTime(audioProgress[i]?.position)} /{" "}
-                  {formatTime(audioProgress[i]?.duration)}
-                </Text>
-
-                <Slider
-                  style={{ width: "100%" }}
-                  minimumValue={0}
-                  maximumValue={audioProgress[i]?.duration || 1}
-                  value={audioProgress[i]?.position || 0}
-                  onSlidingComplete={(v) => seekAudio(v, i)}
-                  minimumTrackTintColor="#007bff"
-                  maximumTrackTintColor="#ccc"
-                  thumbTintColor="#007bff"
+            {recording && (
+              <View style={styles.recordingRow}>
+                <View
+                  style={[
+                    styles.recDot,
+                    { backgroundColor: blink ? "red" : "transparent" },
+                  ]}
                 />
-              </View>
-
-              <TouchableOpacity onPress={() => deleteAudio(i)}>
-                <Text style={{ color: "red", fontSize: 18, marginLeft: 8 }}>
-                  ✖
+                <Text style={{ color: "red", fontWeight: "bold" }}>
+                  Grabando...
                 </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
+              </View>
+            )}
+
+            {audios.map((uri, i) => (
+              <View key={i} style={styles.audioContainer}>
+                <TouchableOpacity
+                  onPress={() => playAudio(uri, i)}
+                  style={styles.audioPlayButton}
+                >
+                  <Text style={{ color: "white" }}>
+                    {currentAudioIndex === i && !isPaused ? "⏸" : "▶️"}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.audioTitle}>
+                    {getAudioDisplayName(i, uri)}
+                  </Text>
+
+                  <Text style={styles.audioTime}>
+                    {formatTime(audioProgress[i]?.position)} /{" "}
+                    {formatTime(audioProgress[i]?.duration)}
+                  </Text>
+
+                  <Slider
+                    style={{ width: "100%" }}
+                    minimumValue={0}
+                    maximumValue={audioProgress[i]?.duration || 1}
+                    value={audioProgress[i]?.position || 0}
+                    onSlidingComplete={(v) => seekAudio(v, i)}
+                    minimumTrackTintColor="#007bff"
+                    maximumTrackTintColor="#ccc"
+                    thumbTintColor="#007bff"
+                  />
+                </View>
+
+                <TouchableOpacity onPress={() => deleteAudio(i)}>
+                  <Text style={{ color: "red", fontSize: 18, marginLeft: 8 }}>
+                    ✖
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+        )}
+        {/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ bloque de audio ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */}
+
+
 
         {/* BOTONES */}
         <View style={styles.bottomButtons}>

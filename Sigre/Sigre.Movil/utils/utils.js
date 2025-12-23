@@ -1,3 +1,4 @@
+//utils
 import * as MediaLibrary from 'expo-media-library';
 
 // Tabla de iconos según estado

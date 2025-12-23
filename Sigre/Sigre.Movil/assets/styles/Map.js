@@ -12,6 +12,13 @@ const pinStyles = StyleSheet.create({
   // Wrapper (define el bounding box real del marker del icono)
   // Wrapper del icono (tamaño real del icono)
   iconWrapper: {
+    width: 25,
+    height: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  iconWrapperSE: {
     //width: 25,
     //height: 25,
     alignItems: "center",
@@ -19,19 +26,39 @@ const pinStyles = StyleSheet.create({
   },
 
 
+
   // 🟢 Bounding box REAL del icono (Android)
   iconCanvas: {
     width: 32,                 // 👈 prueba subir/bajar
     height: 32,                // 👈 prueba subir/bajar
+    //backgroundColor: "rgba(0,255,0,0.3)", // 🟢 VERDE visible
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+    // 🟢 Bounding box REAL del icono (Android)
+  iconCanvasSE: {
+    //width: 32,                 // 👈 prueba subir/bajar
+    //height: 32,                // 👈 prueba subir/bajar
     backgroundColor: "rgba(0,255,0,0.3)", // 🟢 VERDE visible
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
   },
 
   // ICONO
   pinIcon: {
-    width: 25,
-    height: 25,
+    //width: 25,
+    //height: 25,
+    resizeMode: "contain",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+
+    pinIconSE: {
+    width: 40,
+    height: 40,
     resizeMode: "contain",
     alignItems: "center",
     justifyContent: "flex-start",
@@ -63,7 +90,7 @@ const pinStyles = StyleSheet.create({
   labelCanvas: {
     width: 32,               // 👈 prueba subir/bajar
     height: 40,              // 👈 prueba subir/bajar
-    backgroundColor: "rgba(255,0,0,0.3)", // 🔴 ROJO visible
+    //backgroundColor: "rgba(255,0,0,0.3)", // 🔴 ROJO visible
     alignItems: "center",
     justifyContent: "center",
   },
