@@ -37,6 +37,25 @@ import { useSed } from "../../hooks/useSed.js";
 //const ZOOM_THRESHOLD = 0.007;
 const ZOOM_THRESHOLD = 0.003;
 
+//S.E. independiente
+const ICON_SIZES = {
+  DEFAULT: 22,
+  SED: 100,      // 👈 tamaño mayor para subestación
+};
+
+const getIconSizeByType = (type) => {
+  if (Number(type) === 8) {
+    return ICON_SIZES.SED; // Subestación
+  }
+  return ICON_SIZES.DEFAULT;
+};
+
+const getLabelOffsetByType = (type) => {
+  const size = getIconSizeByType(type);
+  return size / 2 + LABEL_GAP;
+};
+
+
 // 🔧 Ajustes finos (en pixeles)
 const ICON_SIZE = 22;       // debe coincidir con pinStyles.pinIcon (width/height)
 const LABEL_GAP = 2;        // separación entre icono y label
@@ -79,7 +98,7 @@ export const Map = () => {
   const { fetchLocalFeeders } = useFeeder();
   const { fetchAndSelectPost, getPostData } = usePost();
   const { fetchAndSelectSed } = useSed();
-
+ 
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
@@ -351,6 +370,8 @@ export const Map = () => {
         ))}
 
         {memoPins.map((pin, i) => {
+          const iconSize = getIconSizeByType(pin.Type);
+
           const cleanLabel = formatLabel(pin.ElementCode);
           const showLabel = Number(pin.Type) !== 8 && cleanLabel.length > 0;
 
@@ -367,16 +388,23 @@ export const Map = () => {
               <Marker
                 key={`pin-icon-${pin.Id || i}`}
                 coordinate={coordinate}
-                anchor={{ x: 0.5, y: 0.5 }}
+                anchor={{ x: 1.0, y: 1.0 }}
                 tracksViewChanges={true}
                 pointerEvents="none"
               >
                 {/* 🟢 BOUNDING BOX REAL DEL ICONO */}
-                <View style={pinStyles.iconCanvas} collapsable={false}>
-                  <View style={pinStyles.iconWrapper}>
+                <View style={pinStyles.iconCanvasSE} collapsable={false}>
+                  <View style={pinStyles.iconWrapperSE}>
+
                     <Image
                       source={getSourceImageFromType2(pin)}
-                      style={pinStyles.pinIcon}
+                      style={[
+                        pinStyles.pinIconSE,
+                        {
+                          width: 80,
+                          height: 80,
+                        },
+                      ]}
                     />
                   </View>
                 </View>
@@ -406,7 +434,13 @@ export const Map = () => {
 
                     <Image
                       source={getSourceImageFromType2(pin)}
-                      style={pinStyles.pinIcon}
+                      style={[
+                        pinStyles.pinIcon,
+                        {
+                          width: iconSize,
+                          height: iconSize,
+                        },
+                      ]}
                     />
 
                   </View>
@@ -417,17 +451,13 @@ export const Map = () => {
 
               {/* Marker B: LABEL independiente */}
 
-
-
-
-
-
               {showLabel && (
                 <Marker
                   key={`pin-label-${pin.Id || i}`}
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: 0.0 }}
-                  centerOffset={{ x: 0, y: LABEL_OFFSET_Y }}
+                  centerOffset={{ x: 0, y: getLabelOffsetByType(pin.Type) }}
+
                   tracksViewChanges={true}
                   zIndex={999}
 
