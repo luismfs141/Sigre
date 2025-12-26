@@ -129,3 +129,33 @@ export const getVanoByIdLocal = async (vanoInterno) => {
     return null;
   }
 };
+
+// 🔹 Obtener vanos pendientes de sincronización
+export const getVanosPendientes = async () => {
+  const query = `
+    SELECT * FROM Vanos
+    WHERE EstadoOffLine IS NOT NULL
+    ORDER BY VanoInterno
+  `;
+  return await runQuery(query);
+};
+
+// 🔹 Marcar vano como sincronizado
+export const markVanoAsSynced = async (vanoInterno) => {
+  const query = `
+    UPDATE Vanos
+    SET EstadoOffLine = NULL
+    WHERE VanoInterno = ?
+  `;
+  await runQuery(query, [vanoInterno]);
+};
+
+// 🔹 Actualizar ID local por ID servidor (INSERT)
+export const updateVanoIdAfterSync = async (localId, serverId) => {
+  const query = `
+    UPDATE Vanos
+    SET VanoInterno = ?, EstadoOffLine = NULL
+    WHERE VanoInterno = ?
+  `;
+  await runQuery(query, [serverId, localId]);
+};

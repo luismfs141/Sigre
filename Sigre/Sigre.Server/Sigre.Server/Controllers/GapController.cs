@@ -2,12 +2,13 @@
 using Sigre.DataAccess;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 
 namespace Sigre.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class GapController
+    public class GapController : Controller
     {
         [HttpGet("GetByFeeder")]
         public List<Vano> ObtenerGap(int x_feeder_id) {
@@ -27,6 +28,23 @@ namespace Sigre.Server.Controllers
             DAGap dAGap = new DAGap();
 
             return dAGap.DAGAP_GetByListFeeder(feeders);
+        }
+
+        [HttpPost("SyncFromSQLite")]
+        public IActionResult SyncFromSQLite([FromBody] List<VanoSyncDto> vanosOffline)
+        {
+            DAGap dAGap = new DAGap();
+
+            if (vanosOffline == null || vanosOffline.Count == 0)
+                return BadRequest("Lista vacía");
+
+            var result = dAGap.DAVANO_SyncFromSQLite(vanosOffline);
+
+            return Ok(result.Select(r => new
+            {
+                localId = r.localId,
+                serverId = r.serverId
+            }));
         }
     }
 }

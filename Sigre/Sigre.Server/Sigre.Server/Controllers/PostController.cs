@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 
 namespace Sigre.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PostController
+    public class PostController : ControllerBase
     {
         [HttpGet("GetStructByFeeder")]
         public List<ElementStruct> GetStructByFeeder( int x_feeder_id)
@@ -24,5 +25,20 @@ namespace Sigre.Server.Controllers
 
             return dAPost.DAPOST_GetByListFeeder(feeders);
         }
+
+        // 🔁 SINCRONIZACIÓN SQLITE → SQL SERVER
+        [HttpPost("SyncFromSQLite")]
+        public IActionResult SyncFromSQLite([FromBody] List<PosteSyncDto> postesOffline)
+        {
+            DAPost _daPost = new DAPost();
+            var result = _daPost.DAPOST_SyncFromSQLite(postesOffline);
+
+            return Ok(result.Select(r => new
+            {
+                localId = r.localId,
+                serverId = r.serverId
+            }));
+        }
+
     }
 }

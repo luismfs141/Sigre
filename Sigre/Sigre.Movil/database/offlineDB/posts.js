@@ -86,6 +86,51 @@ export const saveOrUpdatePost = async (post) => {
   }
 };
 
+export const getPostesPendientes = async () => {
+  try {
+    const query = `
+      SELECT *
+      FROM Postes
+      WHERE EstadoOffLine IS NOT NULL
+      ORDER BY PostInterno
+    `;
+
+    const rows = await runQuery(query);
+
+    if (!rows || rows.length === 0) {
+      console.log("✅ No hay postes pendientes de sincronización");
+      return [];
+    }
+
+    console.log(`📤 Postes pendientes: ${rows.length}`);
+    return rows;
+
+  } catch (error) {
+    console.error("❌ Error obteniendo postes pendientes:", error);
+    return [];
+  }
+};
+
+// 🔹 Actualizar ID local por ID servidor
+export const updatePostIdAfterSync = async (localId, serverId) => {
+  const query = `
+    UPDATE Postes
+    SET PostInterno = ?, EstadoOffLine = NULL
+    WHERE PostInterno = ?
+  `;
+  await runQuery(query, [serverId, localId]);
+};
+
+// 🔹 Marcar como sincronizado (solo UPDATEs)
+export const markPostAsSynced = async (postInterno) => {
+  const query = `
+    UPDATE Postes
+    SET EstadoOffLine = NULL
+    WHERE PostInterno = ?
+  `;
+  await runQuery(query, [postInterno]);
+};
+
 
 // 🔹 Datos de referencia (material, armado, retenidas)
 export const getPostMaterial = async () => await runQuery("SELECT * FROM PosteMaterials");

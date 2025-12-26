@@ -113,65 +113,76 @@ namespace Sigre.DataAccess
                 return DAPOST_PinsByFeeders(x_ids);
         }
 
-        public int DAPOST_SaveFromSync(PosteSyncDto dto)
+        public List<(int localId, int serverId)> DAPOST_SyncFromSQLite(
+    List<PosteSyncDto> postesOffline)
         {
             using var ctx = new SigreContext();
+            var resultado = new List<(int localId, int serverId)>();
 
-            // 🔹 INSERT (creado offline)
-            if (dto.EstadoOffLine == 2)
+            foreach (var dto in postesOffline)
             {
-                var nuevo = new Poste
+                // 🔹 INSERT (creado offline)
+                if (dto.EstadoOffLine == 2)
                 {
-                    PostEtiqueta = dto.PostEtiqueta,
-                    PostCodigoNodo = dto.PostCodigoNodo,
-                    PostLatitud = dto.PostLatitud,
-                    PostLongitud = dto.PostLongitud,
-                    AlimInterno = dto.AlimInterno,
-                    PostMaterial = dto.PostMaterial,
-                    PostArmadoTipo = dto.PostArmadoTipo,
-                    PostArmadoMaterial = dto.PostArmadoMaterial,
-                    PostRetenidaTipo = dto.PostRetenidaTipo,
-                    PostRetenidaMaterial = dto.PostRetenidaMaterial,
-                    PostSubestacion = dto.PostSubestacion,
-                    PostTerceros = dto.PostTerceros,
-                    PostInspeccionado = dto.PostInspeccionado,
-                    PostEsBt = dto.PostEsBt,
-                    PostEsMt = dto.PostEsMt
-                };
+                    var nuevo = new Poste
+                    {
+                        PostEtiqueta = dto.PostEtiqueta,
+                        PostCodigoNodo = dto.PostCodigoNodo,
+                        PostLatitud = dto.PostLatitud,
+                        PostLongitud = dto.PostLongitud,
+                        AlimInterno = dto.AlimInterno,
+                        PostMaterial = dto.PostMaterial,
+                        PostArmadoTipo = dto.PostArmadoTipo,
+                        PostArmadoMaterial = dto.PostArmadoMaterial,
+                        PostRetenidaTipo = dto.PostRetenidaTipo,
+                        PostRetenidaMaterial = dto.PostRetenidaMaterial,
+                        PostSubestacion = dto.PostSubestacion,
+                        PostTerceros = dto.PostTerceros,
+                        PostInspeccionado = dto.PostInspeccionado,
+                        PostEsBt = dto.PostEsBt,
+                        PostEsMt = dto.PostEsMt
+                    };
 
-                ctx.Postes.Add(nuevo);
-                ctx.SaveChanges();
+                    ctx.Postes.Add(nuevo);
+                    ctx.SaveChanges();
 
-                return nuevo.PostInterno; // ⬅ devolver ID servidor
+                    // localId = PostInterno de SQLite
+                    resultado.Add((dto.PostInterno ?? 0, nuevo.PostInterno));
+                }
+
+                // 🔹 UPDATE (existente)
+                else if ((dto.EstadoOffLine == 1 || dto.EstadoOffLine == 0)
+                         && dto.PostInterno.HasValue)
+                {
+                    var existente = ctx.Postes
+                        .FirstOrDefault(p => p.PostInterno == dto.PostInterno.Value);
+
+                    if (existente == null)
+                        continue;
+
+                    existente.PostEtiqueta = dto.PostEtiqueta;
+                    existente.PostCodigoNodo = dto.PostCodigoNodo;
+                    existente.PostLatitud = dto.PostLatitud;
+                    existente.PostLongitud = dto.PostLongitud;
+                    existente.PostMaterial = dto.PostMaterial;
+                    existente.PostArmadoTipo = dto.PostArmadoTipo;
+                    existente.PostArmadoMaterial = dto.PostArmadoMaterial;
+                    existente.PostRetenidaTipo = dto.PostRetenidaTipo;
+                    existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
+                    existente.PostTerceros = dto.PostTerceros;
+                    existente.PostInspeccionado = dto.PostInspeccionado;
+                    existente.PostEsBt = dto.PostEsBt;
+                    existente.PostEsMt = dto.PostEsMt;
+
+                    ctx.SaveChanges();
+
+                    resultado.Add((existente.PostInterno, existente.PostInterno));
+                }
             }
 
-            // 🔹 UPDATE
-            if (dto.EstadoOffLine == 1 && dto.PostInterno.HasValue)
-            {
-                var existente = ctx.Postes
-                    .FirstOrDefault(p => p.PostInterno == dto.PostInterno.Value);
-
-                if (existente == null)
-                    throw new Exception($"Poste {dto.PostInterno} no existe");
-
-                existente.PostEtiqueta = dto.PostEtiqueta;
-                existente.PostCodigoNodo = dto.PostCodigoNodo;
-                existente.PostLatitud = dto.PostLatitud;
-                existente.PostLongitud = dto.PostLongitud;
-                existente.PostMaterial = dto.PostMaterial;
-                existente.PostArmadoTipo = dto.PostArmadoTipo;
-                existente.PostArmadoMaterial = dto.PostArmadoMaterial;
-                existente.PostRetenidaTipo = dto.PostRetenidaTipo;
-                existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
-                existente.PostTerceros = dto.PostTerceros;
-                existente.PostInspeccionado = dto.PostInspeccionado;
-
-                ctx.SaveChanges();
-                return existente.PostInterno;
-            }
-
-            throw new Exception("EstadoOffLine no válido");
+            return resultado;
         }
+
 
     }
 }
