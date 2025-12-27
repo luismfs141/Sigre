@@ -49,17 +49,25 @@ export const isDatabaseAvailable = async (dbName) => {
   return !!info.exists;
 };
 
+
 export const runQuery = async (sql, params = []) => {
   try {
-    // Asegúrate de abrir base si no hay conexión o si la conexión anterior fue cerrada
     if (!db) {
-      await openDatabase();
-      // 🔹 Espera mínima para que el sistema nativo inicialice la base
-      await new Promise(resolve => setTimeout(resolve, 100));
+      throw new Error("DB no inicializada. Llama openDatabase primero.");
     }
-    return await db.getAllAsync(sql, params);
+
+    const sqlTrim = sql.trim().toUpperCase();
+
+    // 🔍 SELECT
+    if (sqlTrim.startsWith("SELECT")) {
+      return await db.getAllAsync(sql, params);
+    }
+
+    // ✏️ INSERT / UPDATE / DELETE
+    return await db.runAsync(sql, params);
+
   } catch (error) {
-    console.error("Error en runQuery:", error);
+    console.error("❌ Error en runQuery:", error);
     throw error;
   }
 };

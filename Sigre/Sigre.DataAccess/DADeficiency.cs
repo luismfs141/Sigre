@@ -462,98 +462,134 @@ namespace Sigre.DataAccess
             }
         }
 
-        public int DADEF_SaveFromSync(DeficienciaSyncDto dto)
+        public List<(int localId, int serverId)> DADefi_SyncFromSQLite(
+            List<DeficienciaSyncDto> deficienciasOffline)
         {
             using var ctx = new SigreContext();
-            using var trx = ctx.Database.BeginTransaction();
+            var resultado = new List<(int, int)>();
 
-            try
+            foreach (var dto in deficienciasOffline)
             {
-                int defiServidor;
-
-                // 🔹 INSERT
+                // ===============================
+                // 🔹 INSERT (nuevo desde SQLite)
+                // ===============================
                 if (dto.EstadoOffLine == 2)
                 {
-                    var defi = new Deficiencia
+                    var nueva = new Deficiencia
                     {
                         DefiEstado = dto.DefiEstado,
                         InspInterno = dto.InspInterno,
                         TablInterno = dto.TablInterno,
                         DefiCodigoElemento = dto.DefiCodigoElemento,
                         TipiInterno = dto.TipiInterno,
+                        DefiNumSuministro = dto.DefiNumSuministro,
+
+                        DefiFechaDenuncia = dto.DefiFechaDenuncia,
+                        DefiFechaInspeccion = dto.DefiFechaInspeccion,
+                        DefiFechaSubsanacion = dto.DefiFechaSubsanacion,
+
+                        DefiObservacion = dto.DefiObservacion,
+                        DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion,
 
                         DefiLatitud = dto.DefiLatitud,
                         DefiLongitud = dto.DefiLongitud,
 
                         DefiTipoElemento = dto.DefiTipoElemento,
+                        DefiDistHorizontal = dto.DefiDistHorizontal,
+                        DefiDistVertical = dto.DefiDistVertical,
+                        DefiDistTransversal = dto.DefiDistTransversal,
+
                         DefiIdElemento = dto.DefiIdElemento,
+                        DefiFecRegistro = dto.DefiFecRegistro,
+
+                        DefiCodDef = dto.DefiCodDef,
+                        DefiCodRes = dto.DefiCodRes,
+                        DefiCodDen = dto.DefiCodDen,
+
+                        DefiRefer1 = dto.DefiRefer1,
+                        DefiRefer2 = dto.DefiRefer2,
+
+                        DefiCoordX = dto.DefiCoordX,
+                        DefiCoordY = dto.DefiCoordY,
+
+                        DefiCodAmt = dto.DefiCodAmt,
+                        DefiNroOrden = dto.DefiNroOrden,
+
+                        DefiPointX = dto.DefiPointX,
+                        DefiPointY = dto.DefiPointY,
+
+                        DefiUsuCre = dto.DefiUsuCre,
+                        DefiUsuNpc = dto.DefiUsuNpc,
+                        DefiFecModificacion = dto.DefiFecModificacion,
+                        DefiFechaCreacion = dto.DefiFechaCreacion,
+
+                        DefiTipoMaterial = dto.DefiTipoMaterial,
+                        DefiNodoInicial = dto.DefiNodoInicial,
+                        DefiNodoFinal = dto.DefiNodoFinal,
+                        DefiTipoRetenida = dto.DefiTipoRetenida,
+                        DefiRetenidaMaterial = dto.DefiRetenidaMaterial,
+                        DefiTipoArmado = dto.DefiTipoArmado,
+                        DefiArmadoMaterial = dto.DefiArmadoMaterial,
+
+                        DefiNumPostes = dto.DefiNumPostes,
+                        DefiPozoTierra = dto.DefiPozoTierra,
+                        DefiResponsable = dto.DefiResponsable,
+                        DefiComentario = dto.DefiComentario,
+                        DefiPozoTierra2 = dto.DefiPozoTierra2,
 
                         DefiUsuarioInic = dto.DefiUsuarioInic,
                         DefiUsuarioMod = dto.DefiUsuarioMod,
-
-                        DefiFecRegistro = dto.DefiFecRegistro,
-                        DefiFechaCreacion = DateTime.Now,
-                        DefiActivo = true,
-                        DefiInspeccionado = dto.DefiInspeccionado
+                        DefiActivo = dto.DefiActivo,
+                        DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
+                        DefiInspeccionado = dto.DefiInspeccionado,
                     };
 
-                    ctx.Deficiencias.Add(defi);
+                    ctx.Deficiencias.Add(nueva);
                     ctx.SaveChanges();
 
-                    defiServidor = defi.DefiInterno;
+                    resultado.Add((dto.DefiInterno, nueva.DefiInterno));
                 }
                 // 🔹 UPDATE
-                else if (dto.EstadoOffLine == 1 && dto.DefiInterno.HasValue)
+                else if (dto.EstadoOffLine == 1)
                 {
-                    var defi = ctx.Deficiencias
-                        .FirstOrDefault(d => d.DefiInterno == dto.DefiInterno.Value);
+                    var existente = dto.DefiServerId.HasValue
+                        ? ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiServerId)
+                        : ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiInterno);
 
-                    if (defi == null)
-                        throw new Exception($"Deficiencia {dto.DefiInterno} no existe");
+                    if (existente == null) continue;
 
-                    defi.DefiEstado = dto.DefiEstado;
-                    defi.DefiObservacion = dto.DefiObservacion;
-                    defi.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
-                    defi.DefiUsuarioMod = dto.DefiUsuarioMod;
-                    defi.DefiFecModificacion = DateTime.Now;
+                    existente.DefiEstado = dto.DefiEstado;
+                    existente.DefiObservacion = dto.DefiObservacion;
+                    existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
+                    existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
+                    existente.DefiLatitud = dto.DefiLatitud;
+                    existente.DefiLongitud = dto.DefiLongitud;
+                    existente.DefiInspeccionado = dto.DefiInspeccionado;
+                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
+                    existente.DefiFecModificacion = DateTime.Now;
 
                     ctx.SaveChanges();
-
-                    defiServidor = defi.DefiInterno;
+                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
                 }
-                else
+                // 🔹 DELETE LÓGICO
+                else if (dto.EstadoOffLine == 3)
                 {
-                    throw new Exception("EstadoOffLine inválido para Deficiencia");
+                    var existente = dto.DefiServerId.HasValue
+                        ? ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiServerId)
+                        : ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiInterno);
+
+                    if (existente == null) continue;
+
+                    existente.DefiActivo = false;
+                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
+                    existente.DefiFecModificacion = DateTime.Now;
+
+                    ctx.SaveChanges();
+                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
                 }
-
-                // 🔗 SINCRONIZAR ARCHIVOS
-                var daFile = new DAFile();
-
-                foreach (var a in dto.Archivos)
-                {
-                    var archivo = new Archivo
-                    {
-                        ArchInterno = 0, // SIEMPRE 0 desde offline
-                        ArchTipo = a.ArchTipo.ToString(),
-                        ArchNombre = a.ArchNombre,
-                        ArchLatitud = a.ArchLatitud,
-                        ArchLongitud = a.ArchLongitud,
-                        ArchFecha = a.ArchFecha,
-                        ArchActivo = true
-                    };
-                }
-
-                //daFile.DAARCH_SyncByDeficiencia(defiServidor, Archivos);
-
-                trx.Commit();
-                return defiServidor;
             }
-            catch
-            {
-                trx.Rollback();
-                throw;
-            }
+
+            return resultado;
         }
-
     }
 }

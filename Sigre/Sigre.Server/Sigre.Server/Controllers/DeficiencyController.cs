@@ -3,13 +3,14 @@ using Sigre.DataAccess;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 
 namespace Sigre.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class DeficiencyController
+    public class DeficiencyController : Controller
     {
         [Route("save")]
         [HttpPost]
@@ -91,6 +92,25 @@ namespace Sigre.Server.Controllers
                 estado = "Satisfactorio",
                 Mensaje = "Se eliminó correctamente"
             };
+        }
+
+        [HttpPost("SyncFromSQLite")]
+        public IActionResult SyncFromSQLite([FromBody] List<DeficienciaSyncDto> deficienciasOffline)
+        {
+            DADeficiency dADeficiency = new DADeficiency();
+
+            if (deficienciasOffline == null || deficienciasOffline.Count == 0)
+                return Ok(new List<object>());
+
+            var result = dADeficiency.DADefi_SyncFromSQLite(deficienciasOffline);
+
+            var response = result.Select(r => new
+            {
+                localId = r.localId,
+                serverId = r.serverId
+            });
+
+            return Ok(response);
         }
     }
 }

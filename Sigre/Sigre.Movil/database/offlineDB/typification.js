@@ -25,7 +25,7 @@ export const getTypificationByIdElement = async (idElement, typeElement) => {
       `SELECT t.*
        FROM Tipificaciones t
        INNER JOIN Deficiencias d ON t.TypificationId = d.tipiInterno
-       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ?`,
+       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
       [idElement, typeElement]
     );
 

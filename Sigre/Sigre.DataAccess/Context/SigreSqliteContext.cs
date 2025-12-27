@@ -41,8 +41,16 @@ namespace Sigre.DataAccess.Context
             modelBuilder.Entity<PinStruct>().Property(p => p.Id).ValueGeneratedOnAdd();
             modelBuilder.Entity<PinStruct>().Property(p => p.IdOriginal).HasDefaultValue(0);
 
-            modelBuilder.Entity<Deficiencia>().Property<int?>("EstadoOffLine");
+            modelBuilder.Entity<Deficiencia>(entity =>
+            {
+                entity.HasKey(d => d.DefiInterno);          // Clave primaria
+                entity.Property(d => d.DefiInterno)
+                      .ValueGeneratedOnAdd();               // Auto-increment SQLite
+                entity.Property<int?>("EstadoOffLine");     // seguimiento
+                entity.Property<int?>("DefiServerId");      // sync server
+            });
             modelBuilder.Entity<Archivo>().Property<int?>("EstadoOffLine");
+            modelBuilder.Entity<Archivo>().Property<int?>("DefiServerId");
             modelBuilder.Entity<Poste>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Vano>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Sed>().Property<int?>("EstadoOffLine");

@@ -1,11 +1,29 @@
 import { runQuery } from "./db";
 
+export const getDeficiencyByIdLocal = async (defiInterno) => {
+  try {
+    const rows = await runQuery(
+      `SELECT *
+       FROM Deficiencias
+       WHERE DefiInterno = ?
+       LIMIT 1`,
+      [defiInterno]
+    );
+
+    return rows?.[0] ?? null;
+
+  } catch (error) {
+    console.error("❌ Error obteniendo deficiencia por ID local:", error);
+    return null;
+  }
+};
+
 export const getDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
   try {
     const deficiency = await runQuery(
       `SELECT *
        FROM Deficiencias d
-       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno = ?`,
+       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno = ? AND d.DefiActivo = 1`,
       [idElement, typeElement, idTypification]
     );
 
@@ -20,6 +38,99 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
     return [];
   }
 };
+
+// export const saveOrUpdateDeficiency = async (def) => {
+//   try {
+//     const allFields = [
+//       "DefiInterno",
+//       "DefiEstado",
+//       "TablInterno",
+//       "DefiCodigoElemento",
+//       "TipiInterno",
+//       "DefiNumSuministro",
+//       "DefiFechaDenuncia",
+//       "DefiFechaInspeccion",
+//       "DefiObservacion",
+//       "DefiEstadoSubsanacion",
+//       "DefiLatitud",
+//       "DefiLongitud",
+//       "DefiTipoElemento",
+//       "DefiDistHorizontal",
+//       "DefiDistVertical",
+//       "DefiDistTransversal",
+//       "DefiIdElemento",
+//       "DefiFecRegistro",
+//       "DefiCodAmt",
+//       "DefiFecModificacion",
+//       "DefiFechaCreacion",
+//       "DefiPozoTierra",
+//       "DefiResponsable",
+//       "DefiComentario",
+//       "DefiPozoTierra2",
+//       "DefiUsuarioInic",
+//       "DefiUsuarioMod",
+//       "DefiActivo",
+//       "DefiEstadoCriticidad",
+//       "DefiInspeccionado",
+//       "DefiCol1",
+//       "EstadoOffLine"
+//     ];
+
+//     // --------------------------------------------------
+//     // 🔄 UPDATE (si existe DefiInterno)
+//     // --------------------------------------------------
+//     if (def.DefiInterno) {
+//       const updateFields = allFields.filter(f => f !== "DefiInterno");
+
+//       // si viene null → se marca como modificado
+//       const estado = def.EstadoOffLine == null ? 3 : def.EstadoOffLine;
+
+//       const updateQuery = `
+//         UPDATE Deficiencias
+//         SET ${updateFields.map(f => `${f} = ?`).join(", ")}
+//         WHERE DefiInterno = ?
+//       `;
+
+//       const updateValues = [
+//         ...updateFields.map(f =>
+//           f === "EstadoOffLine" ? estado : def[f] ?? null
+//         ),
+//         def.DefiInterno
+//       ];
+
+//       await runQuery(updateQuery, updateValues);
+
+//       return def.DefiInterno;
+//     }
+
+//     // --------------------------------------------------
+//     // ➕ INSERT (nuevo registro)
+//     // EstadoOffLine = 2 (pendiente de sync)
+//     // --------------------------------------------------
+//     const insertFields = allFields.filter(f => f !== "DefiInterno");
+
+//     const insertQuery = `
+//       INSERT INTO Deficiencias (
+//         ${insertFields.join(", ")}
+//       ) VALUES (
+//         ${insertFields.map(() => "?").join(", ")}
+//       )
+//     `;
+
+//     const insertValues = insertFields.map(f =>
+//       f === "EstadoOffLine" ? 2 : def[f] ?? null
+//     );
+
+//     const result = await runQuery(insertQuery, insertValues);
+
+//     // 🔑 CLAVE: SQLite usa lastInsertRowId
+//     return result?.lastInsertRowId ?? null;
+
+//   } catch (error) {
+//     console.error("❌ Error guardando o actualizando deficiencia:", error);
+//     throw error;
+//   }
+// };
 
 export const saveOrUpdateDeficiency = async (def) => {
   try {
@@ -58,12 +169,11 @@ export const saveOrUpdateDeficiency = async (def) => {
       "EstadoOffLine"
     ];
 
-    // ---------------------------------------
-    // 🚀 1. UPDATE si existe DefiInterno
-    // ---------------------------------------
+    // ---------------- UPDATE ----------------
     if (def.DefiInterno) {
       const updateFields = allFields.filter(f => f !== "DefiInterno");
 
+      // 🔴 FIX: UPDATE = 1
       const estado = def.EstadoOffLine == null ? 1 : def.EstadoOffLine;
 
       const updateQuery = `
@@ -73,28 +183,22 @@ export const saveOrUpdateDeficiency = async (def) => {
       `;
 
       const updateValues = [
-        ...updateFields.map(f => def[f] ?? null).slice(0, -1), // todos menos estadoOffLine
-        estado, // valor calculado
+        ...updateFields.map(f =>
+          f === "EstadoOffLine" ? estado : def[f] ?? null
+        ),
         def.DefiInterno
       ];
 
       await runQuery(updateQuery, updateValues);
-
       return def.DefiInterno;
     }
 
-    // ---------------------------------------
-    // 🚀 2. INSERT si NO existe DefiInterno
-    // EstadoOffLine = 2
-    // ---------------------------------------
+    // ---------------- INSERT ----------------
     const insertFields = allFields.filter(f => f !== "DefiInterno");
 
     const insertQuery = `
-      INSERT INTO Deficiencias (
-        ${insertFields.join(", ")}
-      ) VALUES (
-        ${insertFields.map(() => "?").join(", ")}
-      )
+      INSERT INTO Deficiencias (${insertFields.join(", ")})
+      VALUES (${insertFields.map(() => "?").join(", ")})
     `;
 
     const insertValues = insertFields.map(f =>
@@ -103,7 +207,7 @@ export const saveOrUpdateDeficiency = async (def) => {
 
     const result = await runQuery(insertQuery, insertValues);
 
-    return result?.insertId ?? null;
+    return result?.lastInsertRowId ?? null;
 
   } catch (error) {
     console.error("❌ Error guardando o actualizando deficiencia:", error);
@@ -111,18 +215,43 @@ export const saveOrUpdateDeficiency = async (def) => {
   }
 };
 
+
+
+
 export const deleteDeficiencyById = async (defiInterno) => {
-  try {
-    if (!defiInterno) return false;
+  await runQuery(`
+    UPDATE Deficiencias
+    SET DefiActivo = 0,
+        EstadoOffLine = 3
+    WHERE DefiInterno = ?
+  `, [defiInterno]);
 
-    await runQuery(
-      `DELETE FROM Deficiencias WHERE DefiInterno = ?`,
-      [defiInterno]
-    );
+  return true;
+};
 
-    return true;
-  } catch (error) {
-    console.error("❌ Error al eliminar deficiencia:", error);
-    return false;
-  }
+
+export const getDeficienciesPendientes = async () => {
+  return await runQuery(`
+    SELECT *
+    FROM Deficiencias
+    WHERE EstadoOffLine IN (1, 2, 3)
+  `);
+};
+
+export const markDeficiencyAsSynced = async (defiInterno) => {
+  const query = `
+    UPDATE Deficiencias
+    SET EstadoOffLine = NULL
+    WHERE DefiInterno = ?
+  `;
+  await runQuery(query, [defiInterno]);
+};
+
+export const updateDeficiencyIdAfterSync = async (localId, serverId) => {
+  const query = `
+    UPDATE Deficiencias
+    SET DefiServerId = ?, EstadoOffLine = NULL
+    WHERE DefiInterno = ? OR DefiServerId = ?
+  `;
+  await runQuery(query, [serverId, localId, localId]);
 };
