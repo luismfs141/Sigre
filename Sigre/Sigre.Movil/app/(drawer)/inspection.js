@@ -6,17 +6,18 @@ import {
   Dimensions,
   FlatList,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
+
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
+import GeneralDataItem from "../../components/GeneralDataItem";
 import ListaDefModal from "../../components/Modal/ListaDefModal";
+import SelectedTypificationItem from "../../components/SelectedTypificationItem";
+"../../components/GeneralDataItem";
 
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
@@ -28,9 +29,10 @@ export default function Inspection() {
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
   const { user } = useContext(AuthContext);
-
-  const { fetchTypificationsByTypeElement, fetchTypificationsByElement } =
-    useTypification();
+  const {
+  fetchUsedTypificationsByElement,
+  fetchAvailableTypificationsForElement
+} = useTypification();
 
   const [items, setItems] = useState([]);
   const [availableDefs, setAvailableDefs] = useState([]);
@@ -74,21 +76,25 @@ export default function Inspection() {
 
     const loadDefs = async () => {
       try {
-        const defsByType = await fetchTypificationsByTypeElement(tableId);
-        const defsByElement = await fetchTypificationsByElement(
-          elementId,
-          typeElement
+        const usedTypifications =
+          await fetchUsedTypificationsByElement(elementId, typeElement);
+        console.log("✅ usedTypifications:", usedTypifications);
+
+        const availableTypifications =
+          await fetchAvailableTypificationsForElement(
+            tableId,
+            elementId,
+            typeElement
+          );
+
+        const usedIds = usedTypifications.map(
+          t => t.TypificationId ?? t.id
         );
 
-        const usedFromBackend = defsByElement.map(
-          d => d.TypificationId ?? d.id
-        );
-        setUsedTypificationIds(usedFromBackend);
+        setUsedTypificationIds(usedIds);
+        setHasNoDeficiencySelected(usedIds.includes(SIN_DEF_ID));
 
-        const hasNone = usedFromBackend.includes(SIN_DEF_ID);
-        setHasNoDeficiencySelected(hasNone);
-
-        const existingDefs = defsByElement.map(def => ({
+        const existingDefs = usedTypifications.map(def => ({
           id: def.TypificationId,
           type: "def",
           defId: def.TypificationId,
@@ -114,17 +120,17 @@ export default function Inspection() {
         };
 
         setItems([generalItem, ...existingDefs]);
-
         setAvailableDefs(
-          defsByType.map(d => ({
+          availableTypifications.map(d => ({
             ...d,
             id: d.TypificationId ?? d.id
           }))
         );
       } catch (err) {
-        console.error("Error cargando tipificaciones:", err);
+        console.error("❌ Error cargando inspección:", err);
       }
     };
+
 
     loadDefs();
   }, [selectedItem]);
@@ -253,39 +259,52 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
+  const handleLocalDelete = (item) => {
+    setItems(prev =>
+      prev.filter(i => i.defId !== item.defId)
+    );
+
+    setUsedTypificationIds(prev =>
+      prev.filter(id => id !== item.defId)
+    );
+
+    if (item.defId === SIN_DEF_ID) {
+      setHasNoDeficiencySelected(false);
+    }
+  };
+
   /* =======================
      RENDER ITEM
      ======================= */
-  const renderItem = ({ item }) => (
-    <View style={[styles.itemCard, { width: screenWidth }]}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemTitle}>{item.name}</Text>
+    const renderItem = ({ item }) => {
+      // 🔹 DATOS GENERALES (igual que antes)
+      if (item.type === "general") {
+        return (
+          <GeneralDataItem
+            item={selectedItem}
+            onEdit={(it) => openFormModal({ ...item, data: it })}
+          />
+        );
+      }
 
-        {item.type === "def" && (
-          <TouchableOpacity
-            onPress={() => {
-              setSelectedTypification({
-                ...item.data,
-                id: item.id,
-                name: item.name
-              });
-              router.push("/(drawer)/registerDef");
-            }}
-          >
-            <FontAwesome5 name="camera" size={28} color="#28a745" />
-          </TouchableOpacity>
-        )}
+      // 🔹 TIPIFICACIÓN SELECCIONADA (NUEVO COMPONENTE)
+      return (
+        <SelectedTypificationItem
+          item={item}
+          onDelete={handleLocalDelete}
+          onPhotos={(it) => {
+            setSelectedTypification({
+              ...it.data,
+              id: it.id,
+              name: it.name
+            });
+            router.push("/(drawer)/registerDef");
+          }}
+          onDeficiency={openFormModal}
+        />
+      );
+    };
 
-        <TouchableOpacity onPress={() => openFormModal(item)}>
-          <MaterialIcons name="assignment" size={28} color="#007bff" />
-        </TouchableOpacity>
-      </View>
-
-      {item.type === "def" && (
-        <Text style={{ marginTop: 4 }}>{item.data.deficiency}</Text>
-      )}
-    </View>
-  );
 
   return (
     <SafeAreaView style={{ flex: 1, paddingBottom: insets.bottom }}>
