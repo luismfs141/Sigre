@@ -3,7 +3,7 @@ import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "reac
 import { usePost } from "../../../hooks/usePost";
 import SelectModal from "../../SelectModal";
 
-const PosteForm = forwardRef(({ data }, ref) => {
+const PosteForm = forwardRef(({ data, visible }, ref) => {
   const { getArmadoMaterialsPost, getMaterialsPost, getTipoRetenidasPost, getMaterialsRetenidasPost, savePost } = usePost();
 
   // =========================
@@ -37,11 +37,13 @@ const PosteForm = forwardRef(({ data }, ref) => {
       });
 
       if (id) {
+        const updatedForm = { ...form, PostInterno: id };
+        setForm(updatedForm); // 🔹 actualizar el estado del formulario
         Alert.alert(
           "Guardado exitoso",
           "El poste se guardó correctamente."
         );
-        return { ...form, PostInterno: id };
+        return updatedForm;
       } else {
         Alert.alert(
           "Error",
@@ -52,6 +54,7 @@ const PosteForm = forwardRef(({ data }, ref) => {
     }
   }));
 
+
   // =========================
   // DATA
   // =========================
@@ -60,6 +63,25 @@ const PosteForm = forwardRef(({ data }, ref) => {
   const [retenidaTipos, setRetenidaTipos] = useState([]);
   const [retenidaMaterials, setRetenidaMaterials] = useState([]);
   const [selectConfig, setSelectConfig] = useState(null);
+
+  // PosteForm.jsx
+  useEffect(() => {
+    if (!data) return;
+    setForm({
+      PostInterno: data.PostInterno ?? "",
+      EstadoOffLine: data.EstadoOffLine ?? "",
+      PostEtiqueta: data.PostEtiqueta ?? "",
+      PostLatitud: data.PostLatitud ?? "",
+      PostLongitud: data.PostLongitud ?? "",
+      PostCodigoNodo: data.PostCodigoNodo ?? "",
+      PostTerceros: data.PostTerceros ?? "",
+      PostMaterial: data.PostMaterial ?? "",
+      PostRetenidaTipo: data.PostRetenidaTipo ?? "",
+      PostRetenidaMaterial: data.PostRetenidaMaterial ?? "",
+      PostArmadoMaterial: data.PostArmadoMaterial ?? ""
+    });
+  }, [data, visible]);
+
 
   useEffect(() => {
     (async () => {

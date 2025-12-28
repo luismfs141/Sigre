@@ -2,20 +2,29 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { useGap } from "../../../hooks/useGap";
 
-const VanoForm = forwardRef(({ data }, ref) => {
+const VanoForm = forwardRef(({ data, visible }, ref) => {
   const { saveVano, fetchVanoById } = useGap();
   const [form, setForm] = useState({ ...data });
 
-  // 🔹 Cargar datos desde DB si existe
+  // 🔹 Resetea el formulario al abrir el modal o cuando cambian los datos
   useEffect(() => {
     const loadVano = async () => {
+      if (!data) return;
+
       if (data?.VanoInterno) {
         const vanoDB = await fetchVanoById(data.VanoInterno);
-        if (vanoDB) setForm({ ...data, ...vanoDB });
+        if (vanoDB) {
+          setForm({ ...data, ...vanoDB });
+        } else {
+          setForm({ ...data });
+        }
+      } else {
+        setForm({ ...data });
       }
     };
+
     loadVano();
-  }, [data?.VanoInterno]);
+  }, [data, visible]);
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 

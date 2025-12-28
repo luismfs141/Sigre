@@ -1,76 +1,40 @@
-// DataGeneral/SedForm.jsx
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSed } from "../../../hooks/useSed";
 
-const SedForm = forwardRef(({ data }, ref) => {
+const SedForm = forwardRef(({ data, visible }, ref) => {
   const { saveSed } = useSed();
 
-  // =========================
-  // STATE FORM
-  // =========================
-  const [form, setForm] = useState({
-    SedInterno: data?.SedInterno ?? "",
-    EstadoOffLine: data?.EstadoOffLine ?? "",
-    SedCodigo: data?.SedCodigo ?? "",
-    SedEtiqueta: data?.SedEtiqueta ?? "",
-    SedTipo: data?.SedTipo ?? "",
-    SedMaterial: data?.SedMaterial ?? "",
-    SedArmadoTipo: data?.SedArmadoTipo ?? "",
-    SedArmadoMaterial: data?.SedArmadoMaterial ?? "",
-    SedRetenidaTipo: data?.SedRetenidaTipo ?? "",
-    SedRetenidaMaterial: data?.SedRetenidaMaterial ?? "",
-    SedNumPostes: data?.SedNumPostes ?? "",
-    SedTerceros: data?.SedTerceros ?? "",
-    SedLatitud: data?.SedLatitud ?? "",
-    SedLongitud: data?.SedLongitud ?? "",
-    SedInspeccionado: data?.SedInspeccionado ?? ""
-  });
+  const [form, setForm] = useState({ ...data });
+
+  // 🔹 Resetear datos al abrir el modal
+  useEffect(() => {
+    if (!data) return;
+    setForm({ ...data });
+  }, [data, visible]);
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // =========================
-  // EXPOSE SAVE
-  // =========================
   useImperativeHandle(ref, () => ({
     save: async () => {
       try {
         const id = await saveSed(form);
 
         if (id) {
-          Alert.alert(
-            "Guardado exitoso",
-            "La subestación (SED) se guardó correctamente."
-          );
-
+          Alert.alert("Guardado exitoso", "La subestación (SED) se guardó correctamente.");
           return { ...form, SedInterno: id };
         } else {
-          Alert.alert(
-            "Error",
-            "No se pudo guardar la subestación."
-          );
+          Alert.alert("Error", "No se pudo guardar la subestación.");
           return null;
         }
       } catch (error) {
-        Alert.alert(
-          "Error",
-          "Ocurrió un error al guardar la subestación."
-        );
+        Alert.alert("Error", "Ocurrió un error al guardar la subestación.");
         return null;
       }
     }
   }));
 
-  // =========================
-  // CONFIG (igual patrón)
-  // =========================
-  const lockedFields = [
-    "SedInterno",
-    "EstadoOffLine",
-    "SedLatitud",
-    "SedLongitud",
-    "SedCodigo"
-  ];
+  const lockedFields = ["SedInterno", "EstadoOffLine", "SedLatitud", "SedLongitud", "SedCodigo"];
 
   const orderedFields = [
     "SedCodigo",
@@ -104,16 +68,12 @@ const SedForm = forwardRef(({ data }, ref) => {
     SedInterno: "ID interno"
   };
 
-  // =========================
-  // RENDER
-  // =========================
   return (
     <View style={{ padding: 10 }}>
       <Text style={styles.sectionTitle}>Subestación (SED)</Text>
 
       {orderedFields.map(key => {
         const locked = lockedFields.includes(key);
-
         return (
           <View key={key} style={styles.row}>
             <Text style={styles.label}>{labels[key]}</Text>
@@ -132,25 +92,10 @@ const SedForm = forwardRef(({ data }, ref) => {
 
 export default SedForm;
 
-// =========================
 const styles = StyleSheet.create({
-  sectionTitle: {
-    fontWeight: "700",
-    fontSize: 18,
-    marginBottom: 8
-  },
+  sectionTitle: { fontWeight: "700", fontSize: 18, marginBottom: 8 },
   row: { marginBottom: 10 },
   label: { fontWeight: "600" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 8,
-    borderRadius: 6,
-    marginTop: 4,
-    backgroundColor: "#f7f7f7"
-  },
-  locked: {
-    backgroundColor: "#ececec",
-    color: "#777"
-  }
+  input: { borderWidth: 1, borderColor: "#ddd", padding: 8, borderRadius: 6, marginTop: 4, backgroundColor: "#f7f7f7" },
+  locked: { backgroundColor: "#ececec", color: "#777" }
 });

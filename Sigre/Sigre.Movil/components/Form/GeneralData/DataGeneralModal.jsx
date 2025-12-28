@@ -32,20 +32,23 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <ScrollView style={{ flexGrow: 0 }}>
+          {/* HEADER */}
+          <View style={styles.header}>
             <Text style={styles.title}>Datos Generales</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.close}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
-            {isPoste && <PosteForm data={data} ref={formRef} />}
-            {isVano && <VanoForm data={data} ref={formRef} />}
-            {isSed && <SedForm data={data} ref={formRef} />}
+          <ScrollView style={{ flexGrow: 0 }}>
+            {isPoste && <PosteForm data={data} visible={visible} ref={formRef} />}
+            {isVano && <VanoForm data={data} visible={visible} ref={formRef} />}
+            {isSed && <SedForm data={data} visible={visible} ref={formRef} />}
           </ScrollView>
 
+          {/* BOTÓN GUARDAR */}
           <View style={styles.buttons}>
-            <TouchableOpacity style={styles.btnCancel} onPress={onClose}>
-              <Text style={styles.btnText}>Cancelar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+            <TouchableOpacity style={styles.btnSaveCentered} onPress={handleSave}>
               <Text style={styles.btnText}>Guardar</Text>
             </TouchableOpacity>
           </View>
@@ -68,28 +71,24 @@ const styles = StyleSheet.create({
     padding: 12,
     maxHeight: "90%"
   },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 10
-  },
-  buttons: {
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10
+  },
+  title: { fontSize: 20, fontWeight: "700" },
+  close: { fontSize: 22, fontWeight: "700", color: "#555" },
+  buttons: {
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 12
   },
-  btnCancel: {
-    backgroundColor: "#c0392b",
-    padding: 12,
-    borderRadius: 8,
-    width: "48%",
-    alignItems: "center"
-  },
-  btnSave: {
+  btnSaveCentered: {
     backgroundColor: "#27ae60",
     padding: 12,
     borderRadius: 8,
-    width: "48%",
+    width: "60%", // ancho ajustable
     alignItems: "center"
   },
   btnText: {
