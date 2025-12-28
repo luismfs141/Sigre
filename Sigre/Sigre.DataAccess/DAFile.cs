@@ -91,7 +91,7 @@ namespace Sigre.DataAccess
             return archivoTabla;
         }
 
-        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(int defiInternoServidor, List<ArchivoSyncDto> archivosOffline)
+        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
@@ -105,10 +105,12 @@ namespace Sigre.DataAccess
                 {
                     var nuevo = new Archivo
                     {
-                        ArchInterno = 0, // siempre nuevo
+                        ArchInterno = 0, // EF genera
                         ArchTipo = dto.ArchTipo,
                         ArchTabla = dto.ArchTabla ?? "Deficiencias",
-                        ArchCodTabla = defiInternoServidor,
+
+                        // 🔑 RELACIÓN CORRECTA
+                        ArchCodTabla = (int)dto.ArchCodTabla,
 
                         ArchNombre = dto.ArchNombre,
                         ArchLatitud = dto.ArchLatitud,
@@ -119,7 +121,7 @@ namespace Sigre.DataAccess
                         ArchIdElemento = dto.ArchIdElemento,
                         TipiInterno = dto.TipiInterno,
 
-                        ArchActivo = dto.ArchActivo == 1
+                        ArchActivo = dto.ArchActivo == true
                     };
 
                     ctx.Archivos.Add(nuevo);
@@ -127,14 +129,14 @@ namespace Sigre.DataAccess
 
                     resultado.Add((dto.ArchInterno, nuevo.ArchInterno));
                 }
+
                 // ===============================
                 // 🔹 UPDATE
                 // ===============================
                 else if (dto.EstadoOffLine == 1)
                 {
-                    var existente = dto.DefiServerId.HasValue
-                        ? ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.DefiServerId)
-                        : ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.ArchInterno);
+                    var existente = ctx.Archivos
+                        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
 
                     if (existente == null) continue;
 
@@ -146,20 +148,20 @@ namespace Sigre.DataAccess
                     existente.ArchTipoElemento = dto.ArchTipoElemento;
                     existente.ArchIdElemento = dto.ArchIdElemento;
                     existente.TipiInterno = dto.TipiInterno;
-                    existente.ArchActivo = dto.ArchActivo == 1;
+                    existente.ArchActivo = dto.ArchActivo == true;
 
                     ctx.SaveChanges();
 
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
                 }
+
                 // ===============================
                 // 🔹 DELETE LÓGICO
                 // ===============================
                 else if (dto.EstadoOffLine == 3)
                 {
-                    var existente = dto.DefiServerId.HasValue
-                        ? ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.DefiServerId)
-                        : ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.ArchInterno);
+                    var existente = ctx.Archivos
+                        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
 
                     if (existente == null) continue;
 
@@ -172,6 +174,7 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+
 
     }
 }

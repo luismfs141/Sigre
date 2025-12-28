@@ -23,7 +23,7 @@ import { useDatos } from "../../context/DatosContext";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem } = useDatos();
+  const { selectedItem, setSelectedTypification } = useDatos();
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
@@ -240,6 +240,12 @@ export default function Inspection() {
       return;
     }
 
+    setSelectedTypification({
+      ...item.data,
+      id: item.id,
+      name: item.name
+    });
+
     setCurrentDeficiency({
       ...item.data
     });
@@ -257,15 +263,14 @@ export default function Inspection() {
 
         {item.type === "def" && (
           <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: "/(drawer)/registerDef",
-                params: {
-                  id: item.id,
-                  defCode: item.data.typificationCode
-                }
-              })
-            }
+            onPress={() => {
+              setSelectedTypification({
+                ...item.data,
+                id: item.id,
+                name: item.name
+              });
+              router.push("/(drawer)/registerDef");
+            }}
           >
             <FontAwesome5 name="camera" size={28} color="#28a745" />
           </TouchableOpacity>

@@ -268,7 +268,7 @@ export const Map = () => {
 
       if (item.Type === 5) {
         const data = await getPostData(item.IdOriginal);
-        datoElemento = data; // ya es un objeto, no un array
+        datoElemento = data;
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
       } else if (!item.Type && item.VanoCodigo) {

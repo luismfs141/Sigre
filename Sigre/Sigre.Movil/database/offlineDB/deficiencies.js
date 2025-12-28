@@ -215,9 +215,6 @@ export const saveOrUpdateDeficiency = async (def) => {
   }
 };
 
-
-
-
 export const deleteDeficiencyById = async (defiInterno) => {
   await runQuery(`
     UPDATE Deficiencias

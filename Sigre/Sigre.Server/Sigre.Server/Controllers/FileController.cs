@@ -52,16 +52,14 @@ namespace Sigre.Server.Controllers
         }
 
         [HttpPost("SyncFromSQLite")]
-        public IActionResult SyncFromSQLite([FromQuery] int defiInternoServidor, [FromBody] List<ArchivoSyncDto> archivosOffline)
+        public IActionResult SyncFromSQLite([FromBody] List<ArchivoSyncDto> archivosOffline)
         {
-            DAFile daFile = new DAFile();
+            DAFile dAFile = new DAFile();
 
             if (archivosOffline == null || archivosOffline.Count == 0)
                 return Ok(new List<object>());
 
-            var result = daFile.DAARCH_SyncFromSQLite(
-                defiInternoServidor,
-                archivosOffline);
+            var result = dAFile.DAARCH_SyncFromSQLite(archivosOffline);
 
             var response = result.Select(r => new
             {
@@ -71,5 +69,6 @@ namespace Sigre.Server.Controllers
 
             return Ok(response);
         }
+
     }
 }

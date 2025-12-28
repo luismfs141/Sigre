@@ -435,7 +435,7 @@ export default function DeficiencyMediaScreen() {
   const [initialAudioRecords, setInitialAudioRecords] = useState([]); // idem para audios
   const [currentArchCodTabla, setCurrentArchCodTabla] = useState(null);
 
-  const { selectedItem, selectedFeeder, selectedSed, feeders } = useDatos();
+  const { selectedItem, selectedFeeder, selectedSed, feeders, selectedTypification } = useDatos();
 
 
 
@@ -727,16 +727,6 @@ export default function DeficiencyMediaScreen() {
       return null;
     }
   }
-
-
-
-
-
-
-
-
-
-
 
   function findNextRequiredSlot(startIndex = 0, currentPhotos = photos) {
     for (let i = startIndex; i < REQUIRED_SLOTS.length; i++) {
@@ -1597,14 +1587,28 @@ export default function DeficiencyMediaScreen() {
         const relativePath = buildRelativePath("Fotos", fileName);
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
+        const elementId =
+          selectedItem.PostInterno ??
+          selectedItem.VanoInterno ??
+          selectedItem.SedInterno;
+
+        const typeElement = selectedItem.PostInterno
+          ? "POST"
+          : selectedItem.VanoInterno
+          ? "VANO"
+          : "SED";
+
         await saveArchivoLocal({
-          archTipo: slotSuffix,
+          archTipo: 0,
           archTabla: "Deficiencias",
           archCodTabla,
           archNombre: relativePath,
           archLatit: meta.latitude ?? latitude ?? null,
           archLong: meta.longitude ?? longitude ?? null,
           archFech,
+          archTipoElemento:typeElement,
+          archIdElemento: elementId,
+          tipiInterno: selectedTypification.typificationId,
           archActiv: 1,
         });
 
@@ -1641,6 +1645,17 @@ export default function DeficiencyMediaScreen() {
         const relativePath = buildRelativePathWithRoot("SIGRE", "Audios", realFileName);
         const archFech = meta.archFech || formatDateTimeSQLite(new Date());
 
+        const elementId =
+          selectedItem.PostInterno ??
+          selectedItem.VanoInterno ??
+          selectedItem.SedInterno;
+
+        const typeElement = selectedItem.PostInterno
+          ? "POST"
+          : selectedItem.VanoInterno
+          ? "VANO"
+          : "SED";
+
         await saveArchivoLocal({
           archTipo: 0,
           archTabla: "Deficiencias",
@@ -1649,6 +1664,9 @@ export default function DeficiencyMediaScreen() {
           archLatit: meta.latitude ?? latitude ?? null,
           archLong: meta.longitude ?? longitude ?? null,
           archFech,
+          archTipoElemento:typeElement,
+          archIdElemento: elementId,
+          tipiInterno: selectedTypification.typificationId,
           archActiv: 1,
         });
 

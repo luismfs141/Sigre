@@ -1,71 +1,173 @@
-// // hooks/useFiles.js
-// import { useCallback } from "react";
-// import {
-//     getNextArchCodTablaLocal,
-//     insertArchivoLocal,
-// } from "../database/offlineDB/files";
+import { useCallback, useRef } from "react";
+import { api } from "../config";
+import { useDatos } from "../context/DatosContext";
+import { nowPeruISO } from "../utils/dateUtils";
+import { useConnectivity } from "./useConnectivity";
 
-// // Hook para trabajar con archivos (fotos / audios) OFFLINE
-// export function useFiles() {
-//   // Obtener el siguiente código de tabla para Archivos
-//   const getNextArchCodTabla = useCallback(async () => {
-//     return await getNextArchCodTablaLocal();
-//   }, []);
-
-//   // Insertar un registro en Archivos
-//   const saveArchivoLocal = useCallback(async (data) => {
-//     // data = { archTipo, archTabla, archCodTabla, archNombre, archLatit, archLong, archFech, archActiv? }
-//     return await insertArchivoLocal(data);
-//   }, []);
-
-//   return {
-//     getNextArchCodTabla,
-//     saveArchivoLocal,
-//   };
-// }
-
-
-
-// hooks/useFiles.js
-import { useCallback } from "react";
 import {
-    getArchivosByBasePathLocal,
-    getNextArchCodTablaLocal,
-    insertArchivoLocal,
-    markArchivoDeletedLocal,
+  getArchivosByBasePathLocal,
+  getArchivosPendientes,
+  getNextArchCodTablaLocal,
+  insertArchivoLocal,
+  markArchivoAsSynced,
+  markArchivoDeletedLocal,
+  updateArchivoIdAfterSync
 } from "../database/offlineDB/files";
 
-// Hook para trabajar con archivos (fotos / audios) OFFLINE
 export function useFiles() {
-  // Obtener el siguiente código de tabla para Archivos
-  const getNextArchCodTabla = useCallback(async () => {
-    return await getNextArchCodTablaLocal();
-  }, []);
+  const { checkDatabase } = useDatos();
+  const { isOnline } = useConnectivity();
+  const client = api();
 
-  // Insertar un registro en Archivos
-  // data = { archTipo, archTabla, archCodTabla, archNombre, archLatit, archLong, archFech, archActiv? }
+  const syncingRef = useRef(false);
+
+  // ===============================
+  // 🔹 NORMALIZAR ANTES DE GUARDAR
+  // ===============================
+  const normalizeArchivoBeforeSave = useCallback((archivo) => ({
+    archTipo: Number(archivo.archTipo),
+    archTabla: archivo.archTabla ?? "Deficiencias",
+    archCodTabla: Number(archivo.archCodTabla),
+    archNombre: archivo.archNombre,
+    archLatit: archivo.archLatit ?? null,
+    archLong: archivo.archLong ?? null,
+    archFech: archivo.archFech ?? nowPeruISO(),
+    archTipoElemento: archivo.archTipoElemento ?? null,
+    archIdElemento: archivo.archIdElemento ?? null,
+    tipiInterno: archivo.tipiInterno ?? null,
+    archActiv: archivo.archActiv ?? 1
+  }), []);
+
+
+  // ===============================
+  // 🔹 NORMALIZAR PARA SYNC
+  // ===============================
+
+  const normalizeArchivoForSync = (arch) => ({
+    ArchInterno: arch.ArchInterno,
+    ArchServerId: arch.ArchServerId ?? null,
+
+    ArchTabla: arch.ArchTabla ?? "Deficiencias",
+    ArchCodTabla: arch.ArchCodTabla ?? null,
+
+    // 🔴 CLAVE: STRING
+    ArchTipo: String(arch.ArchTipo),
+
+    ArchNombre: arch.ArchNombre,
+
+    ArchLatitud: arch.ArchLatitud ?? null,
+    ArchLongitud: arch.ArchLongitud ?? null,
+
+    // ✔️ DateTime compatible con ASP.NET
+    ArchFecha: arch.ArchFecha
+      ? arch.ArchFecha.replace(" ", "T")
+      : nowPeruISO(),
+
+    ArchTipoElemento: arch.ArchTipoElemento ?? null,
+    ArchIdElemento: arch.ArchIdElemento ?? null,
+    TipiInterno: arch.TipiInterno ?? null,
+
+    // 🔒 Solo informativo (SQLite)
+    DefiServerId: arch.DefiServerId ?? null,
+
+    ArchActivo: Boolean(arch.ArchActivo),
+    EstadoOffLine: Number(arch.EstadoOffLine)
+  });
+
+  // ===============================
+  // 🔄 AUTO SYNC
+  // ===============================
+  const autoSyncArchivo = useCallback(async (archInternoLocal) => {
+    console.log("🔄 [autoSyncArchivo] START →", archInternoLocal);
+
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+
+    try {
+      const online = await isOnline();
+      if (!online) return;
+
+      const pendientes = await getArchivosPendientes();
+
+      const arch = pendientes.find(a =>
+        a.ArchInterno === archInternoLocal &&
+        [1, 2, 3].includes(Number(a.EstadoOffLine))
+      );
+
+      if (!arch) return;
+
+      // 🚫 NO VALIDAR DefiServerId
+      const payload = [normalizeArchivoForSync(arch)];
+
+      console.log("📤 Payload:", payload);
+
+      const response = await client.post(
+        "/File/SyncFromSQLite",
+        payload,
+        { timeout: 15000 }
+      );
+
+      const map = response.data?.[0];
+      if (!map) return;
+
+      if (map.localId !== map.serverId) {
+        await updateArchivoIdAfterSync(map.localId, map.serverId);
+      } else {
+        await markArchivoAsSynced(map.serverId);
+      }
+
+      console.log("✅ Archivo sincronizado");
+
+    } catch (err) {
+      console.error("❌ [autoSyncArchivo]", err?.response?.data || err.message);
+    } finally {
+      syncingRef.current = false;
+      console.log("🔓 [autoSyncArchivo] END");
+    }
+  }, [isOnline, client]);
+
+  // ===============================
+  // 💾 SAVE
+  // ===============================
   const saveArchivoLocal = useCallback(async (data) => {
-    return await insertArchivoLocal(data);
-  }, []);
+    const dbOk = await checkDatabase();
+    if (!dbOk) return null;
 
-  // Leer archivos activos de una ruta base (prefijo de ArchNombre)
-  // basePathPrefix = 'SIGRE/.../DEFxxxx/Fotos/' o 'SIGRE/.../DEFxxxx/Audios/'
-  const getArchivosByBasePath = useCallback(async (basePathPrefix) => {
-    return await getArchivosByBasePathLocal(basePathPrefix);
-  }, []);
+    const normalized = normalizeArchivoBeforeSave(data);
+    console.log("💾 Guardando archivo:", normalized);
 
-  // Marcar un archivo como borrado (ArchActivo = 0, ArchNombre = BORRADOS/...)
+    const localId = await insertArchivoLocal(normalized);
+
+    if (localId) {
+      await autoSyncArchivo(localId);
+    }
+
+    return localId;
+  }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
+
+  // ===============================
+  // 🗑️ DELETE
+  // ===============================
   const markArchivoAsDeleted = useCallback(
     async (archInterno, newRelativePath) => {
-      return await markArchivoDeletedLocal(archInterno, newRelativePath);
+      const dbOk = await checkDatabase();
+      if (!dbOk) return false;
+
+      await markArchivoDeletedLocal(archInterno, newRelativePath);
+      await autoSyncArchivo(archInterno);
+
+      return true;
     },
-    []
+    [checkDatabase, autoSyncArchivo]
   );
 
   return {
-    getNextArchCodTabla,
+    getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
     saveArchivoLocal,
-    getArchivosByBasePath,
-    markArchivoAsDeleted,
+    getArchivosByBasePath: useCallback(
+      (basePathPrefix) => getArchivosByBasePathLocal(basePathPrefix),
+      []
+    ),
+    markArchivoAsDeleted
   };
 }

@@ -92,6 +92,7 @@ export const getNextArchCodTablaLocal = async () => {
  *     6 = Adicional
  *   - Audios: siempre 0
  */
+
 export const insertArchivoLocal = async ({
   archTipo,
   archTabla,
@@ -100,6 +101,10 @@ export const insertArchivoLocal = async ({
   archLatit,
   archLong,
   archFech,
+  archTipoElemento,
+  archIdElemento,
+  tipiInterno,
+
   archActiv = 1,
 }) => {
   try {
@@ -113,24 +118,34 @@ export const insertArchivoLocal = async ({
         ArchLatitud,
         ArchLongitud,
         ArchFecha,
+
+        archTipoElemento,
+        archIdElemento,
+        tipiInterno,
+
         ArchActivo,
         EstadoOffLine
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL);
-    `,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2);
+      `,
       [
-        String(archTipo), // guardamos como TEXT
+        String(archTipo),
         archTabla,
         archCodTabla,
         archNombre,
         archLatit,
         archLong,
         archFech,
+        archTipoElemento,
+        archIdElemento,
+        tipiInterno,
+
         archActiv,
       ]
     );
 
-    return true;
+    const row = await runQuery(`SELECT last_insert_rowid() AS id;`);
+    return row[0].id;
   } catch (error) {
     console.error("❌ Error en insertArchivoLocal:", error);
     throw error;
@@ -202,4 +217,45 @@ export const markArchivoDeletedLocal = async (
     console.error("❌ Error en markArchivoDeletedLocal:", error);
     throw error;
   }
+};
+
+export const getArchivosPendientes = async () => {
+  return await runQuery(`
+    SELECT *
+    FROM Archivos
+    WHERE EstadoOffLine IN (1, 2, 3)
+  `);
+};
+
+export const markArchivoAsSynced = async (archInterno) => {
+  await runQuery(
+    `
+    UPDATE Archivos
+    SET EstadoOffLine = NULL
+    WHERE ArchInterno = ?
+    `,
+    [archInterno]
+  );
+};
+
+export const updateArchivoIdAfterSync = async (localId, serverId) => {
+  await runQuery(
+    `
+    UPDATE Archivos
+    SET DefiServerId = ?, EstadoOffLine = NULL
+    WHERE ArchInterno = ? OR DefiServerId = ?
+    `,
+    [serverId, localId, localId]
+  );
+};
+
+export const markArchivoAsUpdated = async (archInterno) => {
+  await runQuery(
+    `
+    UPDATE Archivos
+    SET EstadoOffLine = 1
+    WHERE ArchInterno = ?
+    `,
+    [archInterno]
+  );
 };
