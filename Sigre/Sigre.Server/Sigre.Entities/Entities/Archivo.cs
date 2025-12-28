@@ -23,5 +23,11 @@ public partial class Archivo
 
     public DateTime? ArchFecha { get; set; }
 
+    public string? ArchTipoElemento { get; set; }
+
+    public int? ArchIdElemento { get; set; }
+
+    public int? TipiInterno { get; set; }
+
     public bool? ArchActivo { get; set; }
 }

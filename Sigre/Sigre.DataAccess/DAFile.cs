@@ -91,29 +91,87 @@ namespace Sigre.DataAccess
             return archivoTabla;
         }
 
-        public void DAARCH_SyncByDeficiencia(int defiInternoServidor, List<ArchivoSyncDto> archivosOffline)
+        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(int defiInternoServidor, List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
+            var resultado = new List<(int, int)>();
 
             foreach (var dto in archivosOffline)
             {
-                var archivo = new Archivo
+                // ===============================
+                // 🔹 INSERT (nuevo desde SQLite)
+                // ===============================
+                if (dto.EstadoOffLine == 2)
                 {
-                    ArchInterno = 0, // 🔒 siempre nuevo
-                    ArchTipo = dto.ArchTipo.ToString(),
-                    ArchTabla = "Deficiencias",
-                    ArchCodTabla = defiInternoServidor,
-                    ArchNombre = dto.ArchNombre,
-                    ArchLatitud = dto.ArchLatitud,
-                    ArchLongitud = dto.ArchLongitud,
-                    ArchFecha = dto.ArchFecha,
-                    ArchActivo = true
-                };
+                    var nuevo = new Archivo
+                    {
+                        ArchInterno = 0, // siempre nuevo
+                        ArchTipo = dto.ArchTipo,
+                        ArchTabla = dto.ArchTabla ?? "Deficiencias",
+                        ArchCodTabla = defiInternoServidor,
 
-                ctx.Archivos.Add(archivo);
+                        ArchNombre = dto.ArchNombre,
+                        ArchLatitud = dto.ArchLatitud,
+                        ArchLongitud = dto.ArchLongitud,
+                        ArchFecha = dto.ArchFecha,
+
+                        ArchTipoElemento = dto.ArchTipoElemento,
+                        ArchIdElemento = dto.ArchIdElemento,
+                        TipiInterno = dto.TipiInterno,
+
+                        ArchActivo = dto.ArchActivo == 1
+                    };
+
+                    ctx.Archivos.Add(nuevo);
+                    ctx.SaveChanges();
+
+                    resultado.Add((dto.ArchInterno, nuevo.ArchInterno));
+                }
+                // ===============================
+                // 🔹 UPDATE
+                // ===============================
+                else if (dto.EstadoOffLine == 1)
+                {
+                    var existente = dto.DefiServerId.HasValue
+                        ? ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.DefiServerId)
+                        : ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.ArchInterno);
+
+                    if (existente == null) continue;
+
+                    existente.ArchTipo = dto.ArchTipo;
+                    existente.ArchNombre = dto.ArchNombre;
+                    existente.ArchLatitud = dto.ArchLatitud;
+                    existente.ArchLongitud = dto.ArchLongitud;
+                    existente.ArchFecha = dto.ArchFecha;
+                    existente.ArchTipoElemento = dto.ArchTipoElemento;
+                    existente.ArchIdElemento = dto.ArchIdElemento;
+                    existente.TipiInterno = dto.TipiInterno;
+                    existente.ArchActivo = dto.ArchActivo == 1;
+
+                    ctx.SaveChanges();
+
+                    resultado.Add((dto.ArchInterno, existente.ArchInterno));
+                }
+                // ===============================
+                // 🔹 DELETE LÓGICO
+                // ===============================
+                else if (dto.EstadoOffLine == 3)
+                {
+                    var existente = dto.DefiServerId.HasValue
+                        ? ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.DefiServerId)
+                        : ctx.Archivos.FirstOrDefault(a => a.ArchInterno == dto.ArchInterno);
+
+                    if (existente == null) continue;
+
+                    existente.ArchActivo = false;
+                    ctx.SaveChanges();
+
+                    resultado.Add((dto.ArchInterno, existente.ArchInterno));
+                }
             }
 
-            ctx.SaveChanges();
+            return resultado;
         }
+
     }
 }

@@ -112,6 +112,7 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.ArchFecha)
                 .HasColumnType("datetime")
                 .HasColumnName("ARCH_Fecha");
+            entity.Property(e => e.ArchIdElemento).HasColumnName("ARCH_IdElemento");
             entity.Property(e => e.ArchLatitud).HasColumnName("ARCH_Latitud");
             entity.Property(e => e.ArchLongitud).HasColumnName("ARCH_Longitud");
             entity.Property(e => e.ArchNombre)
@@ -127,6 +128,11 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .IsFixedLength()
                 .HasColumnName("ARCH_Tipo");
+            entity.Property(e => e.ArchTipoElemento)
+                .HasMaxLength(4)
+                .IsUnicode(false)
+                .HasColumnName("ARCH_TipoElemento");
+            entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
         });
 
         modelBuilder.Entity<ArmadoMaterial>(entity =>

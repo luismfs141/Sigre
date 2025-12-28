@@ -4,13 +4,14 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Sigre.DataAccess;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
+using Sigre.Entities.Entities.SyncData;
 using System.IO;
 
 namespace Sigre.Server.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class FileController
+    public class FileController : Controller
     {
         [Route("UploadFile")]
         [HttpPost]
@@ -48,6 +49,27 @@ namespace Sigre.Server.Controllers
             DAFile dAFile = new DAFile();
 
             return dAFile.DAARCH_GetByFeeder(x_feeder_id);
+        }
+
+        [HttpPost("SyncFromSQLite")]
+        public IActionResult SyncFromSQLite([FromQuery] int defiInternoServidor, [FromBody] List<ArchivoSyncDto> archivosOffline)
+        {
+            DAFile daFile = new DAFile();
+
+            if (archivosOffline == null || archivosOffline.Count == 0)
+                return Ok(new List<object>());
+
+            var result = daFile.DAARCH_SyncFromSQLite(
+                defiInternoServidor,
+                archivosOffline);
+
+            var response = result.Select(r => new
+            {
+                localId = r.localId,
+                serverId = r.serverId
+            });
+
+            return Ok(response);
         }
     }
 }
