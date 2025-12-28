@@ -3,6 +3,7 @@ import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import {
   deleteDeficiencyById,
+  getDeficienciesByElementAndTypi,
   getDeficienciesPendientes,
   getDeficiencyByIdLocal,
   getDeficiencyByTypificationElement,
@@ -197,7 +198,26 @@ export const useDeficiency = () => {
       console.log("❌ Sync masivo deficiencias falló:", err?.response?.data || err.message);
       return { ok: false };
     }
+
   };
+
+const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
+  const dbOk = await checkDatabase();
+  if (!dbOk) return [];
+
+  try {
+    const deficiencias = await getDeficienciesByElementAndTypi(
+      idElement,
+      typeElement,
+      tipiInterno
+    );
+    return deficiencias;
+  } catch (err) {
+    console.error("❌ Error obteniendo deficiencias por tipificación:", err);
+    return [];
+  }
+};
+
 
   return {
     loading,
@@ -206,6 +226,7 @@ export const useDeficiency = () => {
     saveDeficiency,
     deleteDeficiency,
     syncAllDeficiencies,
-    autoSyncDeficiency
+    autoSyncDeficiency,
+    fetchDeficienciesByElementAndTypi
   };
 };

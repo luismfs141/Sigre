@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     marginTop: 4,
-    textAlign: "center" // 🔹 Centrar subtítulo
+    textAlign: "center"
   }
 });

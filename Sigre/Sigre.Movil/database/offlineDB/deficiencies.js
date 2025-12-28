@@ -252,3 +252,27 @@ export const updateDeficiencyIdAfterSync = async (localId, serverId) => {
   `;
   await runQuery(query, [serverId, localId, localId]);
 };
+
+export const getDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
+  try {
+    const deficiencias = await runQuery(
+      `SELECT *
+       FROM Deficiencias
+       WHERE DefiIdElemento = ?
+         AND DefiTipoElemento = ?
+         AND TipiInterno = ?
+         AND DefiActivo = 1`,
+      [idElement, typeElement, tipiInterno]
+    );
+
+    if (!deficiencias || deficiencias.length === 0) {
+      console.warn(`⚠ No se encontraron deficiencias para el elemento ${idElement} y tipiInterno ${tipiInterno}`);
+      return [];
+    }
+
+    return deficiencias;
+  } catch (error) {
+    console.error(`❌ Error al obtener deficiencias:`, error);
+    return [];
+  }
+};

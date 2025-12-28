@@ -5,8 +5,10 @@ import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";
 
 import {
+  deleteFileById,
   getArchivosByBasePathLocal,
   getArchivosPendientes,
+  getFilesByElementAndTypi,
   getNextArchCodTablaLocal,
   insertArchivoLocal,
   markArchivoAsSynced,
@@ -146,7 +148,7 @@ export function useFiles() {
   }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
 
   // ===============================
-  // 🗑️ DELETE
+  // 🗑️ DELETE Y MOD RUTA
   // ===============================
   const markArchivoAsDeleted = useCallback(
     async (archInterno, newRelativePath) => {
@@ -161,6 +163,39 @@ export function useFiles() {
     [checkDatabase, autoSyncArchivo]
   );
 
+  // ===============================
+  // 🗑️ DELETE Y MOD RUTA
+  // ===============================
+  const deletedFile = useCallback(
+    async (archInterno) => {
+      const dbOk = await checkDatabase();
+      if (!dbOk) return false;
+
+      await deleteFileById(archInterno);
+      await autoSyncArchivo(archInterno);
+
+      return true;
+    },
+    [checkDatabase, autoSyncArchivo]
+  );
+
+  // ---------------- Obtener archivos por elemento y tipificación ----------------
+  const fetchFilesByElementAndTypi = useCallback(
+    async (idElement, typeElement, tipiInterno) => {
+      const dbOk = await checkDatabase();
+      if (!dbOk) return [];
+
+      try {
+        const archivos = await getFilesByElementAndTypi(idElement, typeElement, tipiInterno);
+        return archivos;
+      } catch (err) {
+        console.error("❌ Error obteniendo archivos por tipificación:", err);
+        return [];
+      }
+    },
+    [checkDatabase]
+  );
+
   return {
     getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
     saveArchivoLocal,
@@ -168,6 +203,8 @@ export function useFiles() {
       (basePathPrefix) => getArchivosByBasePathLocal(basePathPrefix),
       []
     ),
-    markArchivoAsDeleted
+    markArchivoAsDeleted,
+    fetchFilesByElementAndTypi,
+    deletedFile
   };
 }

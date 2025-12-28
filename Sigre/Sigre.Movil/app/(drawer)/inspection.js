@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
-  BackHandler,
+  Alert, BackHandler,
   Button,
   Dimensions,
   FlatList,
@@ -21,6 +21,8 @@ import SelectedTypificationItem from "../../components/SelectedTypificationItem"
 
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
+import { useDeficiency } from "../../hooks/useDeficiency";
+import { useFiles } from "../../hooks/useFiles";
 import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
@@ -33,6 +35,8 @@ export default function Inspection() {
   fetchUsedTypificationsByElement,
   fetchAvailableTypificationsForElement
 } = useTypification();
+  const { fetchFilesByElementAndTypi, deletedFile } = useFiles();
+  const { fetchDeficienciesByElementAndTypi, deleteDeficiency } = useDeficiency();
 
   const [items, setItems] = useState([]);
   const [availableDefs, setAvailableDefs] = useState([]);
@@ -220,6 +224,8 @@ export default function Inspection() {
   const handleDeficiencyDeleted = typificationId => {
     if (typificationId == null) return;
 
+    console.log(selectedItem);
+
     setItems(prev =>
       prev.filter(item => item.defId !== typificationId)
     );
@@ -259,19 +265,75 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
-  const handleLocalDelete = (item) => {
-    setItems(prev =>
-      prev.filter(i => i.defId !== item.defId)
-    );
+  const handleLocalDelete = async (selectedItem) => {
+    if (!selectedItem) return;
 
-    setUsedTypificationIds(prev =>
-      prev.filter(id => id !== item.defId)
-    );
+    const elementId = selectedItem.data.elementId;
+    const typeElement = selectedItem.data.typeElement;
+    const typificationId = selectedItem.data.typificationId;
 
-    if (item.defId === SIN_DEF_ID) {
-      setHasNoDeficiencySelected(false);
-    }
+    if (!elementId || !typeElement || !typificationId) return;
+
+    // 🔹 Mensaje de advertencia
+    Alert.alert(
+      "Eliminar tipificación",
+      "⚠️ Está a punto de eliminar esta tipificación y todos los archivos asociados. ¿Desea continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // -------------------- Eliminar archivos asociados --------------------
+              const archivos = await fetchFilesByElementAndTypi(elementId, typeElement, typificationId);
+              if (archivos.length) {
+                for (const archivo of archivos) {
+                  await deletedFile(archivo.ArchInterno);
+                  console.log(`🗑 Archivo ${archivo.ArchInterno} eliminado correctamente`);
+                }
+              }
+
+              // -------------------- Obtener y eliminar la deficiencia --------------------
+              const deficiencias = await fetchDeficienciesByElementAndTypi(
+                elementId,
+                typeElement,
+                typificationId
+              );
+
+              if (deficiencias.length) {
+                const def = deficiencias[0]; // asumimos la primera si hay varias
+                const defiInterno = def.DefiInterno;
+
+                const deleted = await deleteDeficiency(defiInterno);
+                if (!deleted) {
+                  console.error(`❌ No se pudo eliminar la deficiencia con DefiInterno ${defiInterno}`);
+                }
+              } else {
+                console.warn(`⚠ No se encontró deficiencia para elementId ${elementId} y typificationId ${typificationId}`);
+              }
+
+              // -------------------- Actualizar estado local --------------------
+              setItems(prev => prev.filter(i => i.defId !== typificationId));
+              setUsedTypificationIds(prev => prev.filter(id => id !== typificationId));
+
+              if (typificationId === SIN_DEF_ID) {
+                setHasNoDeficiencySelected(false);
+              }
+
+              setModalDeficiencyVisible(false);
+
+              console.log(`✅ Tipificación ${typificationId} y archivos asociados eliminados correctamente`);
+            } catch (err) {
+              console.error("❌ Error en handleLocalDelete:", err);
+            }
+          }
+        }
+      ],
+      { cancelable: true }
+    );
   };
+
 
   /* =======================
      RENDER ITEM

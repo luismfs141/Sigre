@@ -202,3 +202,48 @@ export const markArchivoAsUpdated = async (archInterno) => {
     [archInterno]
   );
 };
+
+export const getFilesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
+  try {
+    const archivos = await runQuery(
+      `SELECT *
+       FROM Archivos
+       WHERE ArchIdElemento = ?
+         AND ArchTipoElemento = ?
+         AND TipiInterno = ?
+         AND ArchActivo = 1`,
+      [idElement, typeElement, tipiInterno]
+    );
+
+    if (!archivos || archivos.length === 0) {
+      console.warn(`⚠ No se encontraron archivos para el elemento ${idElement} y tipiInterno ${tipiInterno}`);
+      return [];
+    }
+
+    return archivos;
+  } catch (error) {
+    console.error(`❌ Error al obtener archivos:`, error);
+    return [];
+  }
+};
+
+export const deleteFileById = async (archInterno) => {
+  if (!archInterno) return false;
+
+  try {
+    await runQuery(
+      `
+      UPDATE Archivos
+      SET ArchActivo = 0,
+        EstadoOffLine = 3
+      WHERE ArchInterno = ?;
+      `,
+      [archInterno]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error en markArchivoInactiveLocal:", error);
+    return false;
+  }
+};
