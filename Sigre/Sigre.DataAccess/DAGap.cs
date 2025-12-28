@@ -93,7 +93,7 @@ namespace Sigre.DataAccess
             using (var ctx = new SigreContext())
             {
                 var pinVanos = ctx.Vanos
-                    .Where(v => x_subestaciones.Contains((int)v.VanoSubestacion)) // suponiendo campo SubestacionInterna
+                    .Where(v => x_subestaciones.Contains((int)v.VanoSubestacion ) && v.VanoTerceros == false)
                     .Select(v => new PinStruct()
                     {
                         Id = v.VanoInterno,
@@ -119,8 +119,7 @@ namespace Sigre.DataAccess
                 return DAGAP_GetPinsByFeeders(x_ids);
         }
 
-        public List<(int localId, int serverId)> DAVANO_SyncFromSQLite(
-    List<VanoSyncDto> vanosOffline)
+        public List<(int localId, int serverId)> DAVANO_SyncFromSQLite( List<VanoSyncDto> vanosOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
