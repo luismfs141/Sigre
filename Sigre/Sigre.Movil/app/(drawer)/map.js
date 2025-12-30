@@ -98,7 +98,7 @@ export const Map = () => {
   const { fetchLocalFeeders } = useFeeder();
   const { fetchAndSelectPost, getPostData } = usePost();
   const { fetchAndSelectSed } = useSed();
- 
+
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
@@ -255,6 +255,36 @@ export const Map = () => {
       .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
   }, [pins, shouldShowPins]);
 
+
+
+
+
+
+
+
+
+
+
+
+  const pinsNoSed = useMemo(
+    () => memoPins.filter(p => Number(p.Type) !== 8),
+    [memoPins]
+  );
+
+  const pinsSed = useMemo(
+    () => memoPins.filter(p => Number(p.Type) === 8),
+    [memoPins]
+  );
+
+
+
+
+
+
+
+
+
+
   const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
 
   // ------------------- AUX -------------------
@@ -289,7 +319,7 @@ export const Map = () => {
 
       Alert.alert(
         "Elemento seleccionado",
-        
+
         `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta}`,
         [
           { text: "Cancelar", style: "cancel" },
@@ -376,103 +406,50 @@ export const Map = () => {
           />
         ))}
 
-        {memoPins.map((pin, i) => {
-          const iconSize = getIconSizeByType(pin.Type);
 
+
+        {/* 1) PRIMERO: todos menos SED */}
+        {pinsNoSed.map((pin, i) => {
+          const iconSize = getIconSizeByType(pin.Type);
           const cleanLabel = formatLabel(pin.ElementCode);
-          const showLabel = Number(pin.Type) !== 8 && cleanLabel.length > 0;
+          const showLabel = cleanLabel.length > 0;
 
           const coordinate = {
             latitude: Number(pin.Latitude),
             longitude: Number(pin.Longitude)
           };
 
-
-
-          // Tipo 8: solo icono, sin label, sin interacción
-          if (Number(pin.Type) === 8) {
-            return (
-              <Marker
-                key={`pin-icon-${pin.Id || i}`}
-                coordinate={coordinate}
-                anchor={{ x: 1.0, y: 1.0 }}
-                tracksViewChanges={true}
-                pointerEvents="none"
-              >
-                {/* 🟢 BOUNDING BOX REAL DEL ICONO */}
-                <View style={pinStyles.iconCanvasSE} collapsable={false}>
-                  <View style={pinStyles.iconWrapperSE}>
-
-                    <Image
-                      source={getSourceImageFromType2(pin)}
-                      style={[
-                        pinStyles.pinIconSE,
-                        {
-                          width: 80,
-                          height: 80,
-                        },
-                      ]}
-                    />
-                  </View>
-                </View>
-              </Marker>
-
-            );
-          }
-
-
-
-
           return (
             <React.Fragment key={`pin-frag-${pin.Id || i}`}>
-
-
-              {/* Marker A: ICONO */}
               <Marker
-                key={`pin-icon-${pin.Id || i}`}
                 coordinate={coordinate}
                 anchor={{ x: 0.5, y: 0.5 }}
                 tracksViewChanges={true}
                 onPress={() => onMarkerPress(pin)}
+                zIndex={10} // Android
               >
-                {/* 🟢 BOUNDING BOX REAL DEL ICONO */}
                 <View style={pinStyles.iconCanvas} collapsable={false}>
                   <View style={pinStyles.iconWrapper}>
-
                     <Image
                       source={getSourceImageFromType2(pin)}
-                      style={[
-                        pinStyles.pinIcon,
-                        {
-                          width: iconSize,
-                          height: iconSize,
-                        },
-                      ]}
+                      style={[pinStyles.pinIcon, { width: iconSize, height: iconSize }]}
                     />
-
                   </View>
                 </View>
 
                 <PinCallout pin={pin} />
               </Marker>
 
-              {/* Marker B: LABEL independiente */}
-
               {showLabel && (
                 <Marker
-                  key={`pin-label-${pin.Id || i}`}
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: 0.0 }}
                   centerOffset={{ x: 0, y: getLabelOffsetByType(pin.Type) }}
-
                   tracksViewChanges={true}
-                  zIndex={999}
-
-                  // ✅ CLAVE: si el label se come el toque, que también seleccione
+                  zIndex={999} // Android
                   tappable={true}
                   onPress={() => onMarkerPress(pin)}
                 >
-                  {/* ✅ pointerEvents aquí adentro, no en el Marker */}
                   <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{cleanLabel}</Text>
@@ -480,16 +457,45 @@ export const Map = () => {
                   </View>
                 </Marker>
               )}
-
-
-
-
-
-
-
             </React.Fragment>
           );
         })}
+
+        {/* 2) DESPUÉS: SED (Type 8) para que quede encima */}
+        {pinsSed.map((pin, i) => {
+          const coordinate = {
+            latitude: Number(pin.Latitude),
+            longitude: Number(pin.Longitude)
+          };
+
+          return (
+            <Marker
+              key={`pin-sed-${pin.Id || i}`}
+              coordinate={coordinate}
+              anchor={{ x: 1.0, y: 1.0 }}
+              tracksViewChanges={true}
+              pointerEvents="none"
+              zIndex={2000} // Android (bien alto)
+            >
+              <View style={pinStyles.iconCanvasSE} collapsable={false}>
+                <View style={pinStyles.iconWrapperSE}>
+                  <Image
+                    source={getSourceImageFromType2(pin)}
+                    style={[pinStyles.pinIconSE, { width: 80, height: 80 }]}
+                  />
+                </View>
+              </View>
+            </Marker>
+          );
+        })}
+
+
+
+
+
+
+
+
       </MapView>
 
       <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
