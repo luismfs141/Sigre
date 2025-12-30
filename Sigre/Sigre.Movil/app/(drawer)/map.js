@@ -265,15 +265,21 @@ export const Map = () => {
       let tipoElemento = "";
       let codigoElemento = "";
       let datoElemento = null;
+      let codigoEtiqueta = null;
 
       if (item.Type === 5) {
         const data = await getPostData(item.IdOriginal);
         datoElemento = data;
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
+        codigoEtiqueta = datoElemento.PostEtiqueta
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
+
+        //console.log("⚠️ Error: ", item);
+
         codigoElemento = item.VanoCodigo;
+        codigoEtiqueta = item.VanoEtiqueta;
         datoElemento = item;
       } else {
         tipoElemento = "Desconocido";
@@ -283,7 +289,8 @@ export const Map = () => {
 
       Alert.alert(
         "Elemento seleccionado",
-        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}`,
+        
+        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta}`,
         [
           { text: "Cancelar", style: "cancel" },
           {

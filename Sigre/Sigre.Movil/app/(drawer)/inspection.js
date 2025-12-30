@@ -32,9 +32,9 @@ export default function Inspection() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   const {
-  fetchUsedTypificationsByElement,
-  fetchAvailableTypificationsForElement
-} = useTypification();
+    fetchUsedTypificationsByElement,
+    fetchAvailableTypificationsForElement
+  } = useTypification();
   const { fetchFilesByElementAndTypi, deletedFile } = useFiles();
   const { fetchDeficienciesByElementAndTypi, deleteDeficiency } = useDeficiency();
 
@@ -72,8 +72,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
     const tableId = isPost ? 8 : 9;
@@ -110,11 +110,15 @@ export default function Inspection() {
             typeElement,
             typificationId: def.TypificationId,
             typificationCode: def.Code,
+
+
             tableId
           },
           photos: [],
           audio: null
         }));
+
+
 
         const generalItem = {
           id: "general",
@@ -168,8 +172,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const typificationId = def.id;
 
@@ -338,34 +342,43 @@ export default function Inspection() {
   /* =======================
      RENDER ITEM
      ======================= */
-    const renderItem = ({ item }) => {
-      // 🔹 DATOS GENERALES (igual que antes)
-      if (item.type === "general") {
-        return (
-          <GeneralDataItem
-            item={selectedItem}
-            onEdit={(it) => openFormModal({ ...item, data: it })}
-          />
-        );
-      }
-
-      // 🔹 TIPIFICACIÓN SELECCIONADA (NUEVO COMPONENTE)
+  const renderItem = ({ item }) => {
+    // 🔹 DATOS GENERALES (igual que antes)
+    if (item.type === "general") {
       return (
-        <SelectedTypificationItem
-          item={item}
-          onDelete={handleLocalDelete}
-          onPhotos={(it) => {
-            setSelectedTypification({
-              ...it.data,
-              id: it.id,
-              name: it.name
-            });
-            router.push("/(drawer)/registerDef");
-          }}
-          onDeficiency={openFormModal}
+        <GeneralDataItem
+          item={selectedItem}
+          onEdit={(it) => openFormModal({ ...item, data: it })}
         />
       );
-    };
+    }
+
+    // 🔹 TIPIFICACIÓN SELECCIONADA (NUEVO COMPONENTE)
+    return (
+      <SelectedTypificationItem
+        item={item}
+        onDelete={handleLocalDelete}
+        onPhotos={(it) => {
+
+          
+
+
+          setSelectedTypification({
+            ...it.data,
+            id: it.id,
+            name: it.name
+          });
+          router.push({
+            pathname: "/(drawer)/registerDef",
+            params: {
+              defCode: it.data.typificationCode // ✅ AQUÍ VIAJA EL CÓDIGO
+            }
+          });
+        }}
+        onDeficiency={openFormModal}
+      />
+    );
+  };
 
 
   return (

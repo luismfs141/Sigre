@@ -801,7 +801,10 @@ export default function DeficiencyMediaScreen() {
           if (!Number.isFinite(slotNum) || slotNum < 1 || slotNum > 6) continue;
 
           const fileName = row.ArchNombre.split("/").pop();
-          const uri = photoUris.find((u) => getFileName(u) === fileName);
+          const uri = photoUris.find((u) =>
+            decodeURIComponent(u).endsWith("/" + fileName)
+          );
+
 
           if (!uri) continue;
 
@@ -1595,8 +1598,8 @@ export default function DeficiencyMediaScreen() {
         const typeElement = selectedItem.PostInterno
           ? "POST"
           : selectedItem.VanoInterno
-          ? "VANO"
-          : "SED";
+            ? "VANO"
+            : "SED";
 
         await saveArchivoLocal({
           archTipo: 0,
@@ -1606,7 +1609,7 @@ export default function DeficiencyMediaScreen() {
           archLatit: meta.latitude ?? latitude ?? null,
           archLong: meta.longitude ?? longitude ?? null,
           archFech,
-          archTipoElemento:typeElement,
+          archTipoElemento: typeElement,
           archIdElemento: elementId,
           tipiInterno: selectedTypification.typificationId,
           archActiv: 1,
@@ -1653,8 +1656,8 @@ export default function DeficiencyMediaScreen() {
         const typeElement = selectedItem.PostInterno
           ? "POST"
           : selectedItem.VanoInterno
-          ? "VANO"
-          : "SED";
+            ? "VANO"
+            : "SED";
 
         await saveArchivoLocal({
           archTipo: 0,
@@ -1664,7 +1667,7 @@ export default function DeficiencyMediaScreen() {
           archLatit: meta.latitude ?? latitude ?? null,
           archLong: meta.longitude ?? longitude ?? null,
           archFech,
-          archTipoElemento:typeElement,
+          archTipoElemento: typeElement,
           archIdElemento: elementId,
           tipiInterno: selectedTypification.typificationId,
           archActiv: 1,
