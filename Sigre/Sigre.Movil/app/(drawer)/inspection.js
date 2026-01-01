@@ -10,8 +10,6 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-
-
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
 import GeneralDataItem from "../../components/GeneralDataItem";
@@ -360,7 +358,8 @@ export default function Inspection() {
               id: it.id,
               name: it.name
             });
-            router.push("/(drawer)/registerDef");
+            //router.push("/(drawer)/registerDef");
+            router.push("/(drawer)/multimedia");
           }}
           onDeficiency={openFormModal}
         />
