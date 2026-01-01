@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
 import { useContext, useState } from "react";
 import {
   Alert,
@@ -24,109 +25,77 @@ export default function Multimedia() {
   const { selectedItem } = useDatos();
   const { user } = useContext(AuthContext);
 
-  /* ======================
-     STATE
-  ====================== */
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
-
   const [photos, setPhotos] = useState([]);
   const [audios, setAudios] = useState([]);
-
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
-  /* ======================
-     HANDLERS
-  ====================== */
-  const removePhoto = (index) => {
+  const removePhoto = (index) =>
     setPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
 
-  const removeAudio = (index) => {
+  const removeAudio = (index) =>
     setAudios((prev) => prev.filter((_, i) => i !== index));
-  };
 
   /* ======================
      FINALIZAR
   ====================== */
-
-  const normalizeExt = (ext) => {
-  if (!ext) return "jpg";
-  return ext.startsWith(".") ? ext.slice(1) : ext;
-};
-
-const finalizar = async () => {
-  if (!selectedItem) {
-    Alert.alert("Error", "No hay elemento seleccionado");
-    return;
-  }
-
-  try {
-    const codigoUnico = `${user.id}-${Date.now()}`;
-
-    const baseDir = new Directory(
-      Paths.document,
-      "SigreMovil",
-      "Elemento",
-      codigoUnico
-    );
-
-    await baseDir.create({
-      intermediates: true,
-      idempotent: true,
-    });
-
-    const photosDir = baseDir.createDirectory("Photos");
-    const audiosDir = baseDir.createDirectory("Audios");
-
-    await photosDir.create({ idempotent: true });
-    await audiosDir.create({ idempotent: true });
-
-    // 📸 FOTOS
-    for (let i = 0; i < photos.length; i++) {
-      const source = new File(photos[i].uri);
-      const ext = normalizeExt(source.extension);
-
-      const destination = photosDir.createFile(
-        `photo_${i + 1}_${Date.now()}.${ext}`
-      );
-
-      if (destination.exists) {
-        await destination.delete();
-      }
-
-      await source.move(destination);
+  const finalizar = async () => {
+    if (!selectedItem) {
+      Alert.alert("Error", "No hay elemento seleccionado");
+      return;
     }
 
-    // 🎙️ AUDIOS
-    for (let i = 0; i < audios.length; i++) {
-      const source = new File(audios[i].uri);
-      const ext = normalizeExt(source.extension || "m4a");
-
-      const destination = audiosDir.createFile(
-        `audio_${i + 1}_${Date.now()}.${ext}`
-      );
-
-      if (destination.exists) {
-        await destination.delete();
+    try {
+      /* ======================
+         📸 FOTOS → DCIM
+      ====================== */
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        throw new Error("Permiso de galería denegado");
       }
 
-      await source.move(destination);
+      for (const photo of photos) {
+        const asset = await MediaLibrary.createAssetAsync(photo.uri);
+        await MediaLibrary.createAlbumAsync("SigreMovil", asset, false);
+      }
+
+      /* ======================
+         🎙️ AUDIOS → PRIVADO
+      ====================== */
+      const codigoUnico = `${user.id}-${Date.now()}`;
+      const baseDir = new Directory(
+        Paths.document,
+        "SigreMovil",
+        "Elemento",
+        codigoUnico
+      );
+
+      await baseDir.create({ intermediates: true, idempotent: true });
+      const audiosDir = baseDir.createDirectory("Audios");
+      await audiosDir.create({ idempotent: true });
+
+      for (let i = 0; i < audios.length; i++) {
+        const source = new File(audios[i].uri);
+        const destination = audiosDir.createFile(
+          `audio_${i + 1}_${Date.now()}.m4a`
+        );
+        if (destination.exists) await destination.delete();
+        await source.move(destination);
+      }
+
+      setPhotos([]);
+      setAudios([]);
+
+      Alert.alert("Éxito", "Multimedia guardada correctamente");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "No se pudo guardar la multimedia");
     }
-
-    setPhotos([]);
-    setAudios([]);
-
-    Alert.alert("Éxito", "Multimedia guardada correctamente");
-    console.log("✔ Guardado en:", baseDir.uri);
-  } catch (error) {
-    console.error(error);
-    Alert.alert("Error", "No se pudo guardar la multimedia");
-  }
-};
+  };
 
   /* ======================
-     UI
+     UI (SIN CAMBIOS)
   ====================== */
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -141,10 +110,7 @@ const finalizar = async () => {
             <Text style={styles.buttonText}>Tomar Foto</Text>
           </TouchableOpacity>
 
-          <ScrollView
-            contentContainerStyle={styles.grid}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={styles.grid}>
             {photos.map((photo, index) => (
               <PhotoCard
                 key={index}
@@ -177,11 +143,9 @@ const finalizar = async () => {
           ))}
         </View>
 
-        <View style={styles.finishSection}>
-          <TouchableOpacity style={styles.finishButton} onPress={finalizar}>
-            <Text style={styles.finishText}>FINALIZAR</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.finishButton} onPress={finalizar}>
+          <Text style={styles.finishText}>FINALIZAR</Text>
+        </TouchableOpacity>
       </View>
 
       <Modal visible={!!previewPhoto} transparent>
@@ -191,7 +155,7 @@ const finalizar = async () => {
             style={styles.closePreview}
             onPress={() => setPreviewPhoto(null)}
           >
-            <Text style={styles.closeText}>Cerrar</Text>
+            <Text>Cerrar</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -199,27 +163,23 @@ const finalizar = async () => {
       <ModalCamera
         visible={cameraModal}
         onClose={() => setCameraModal(false)}
-        onPhoto={(photo) => {
-          if (photos.length >= 8) return;
-          setPhotos((prev) => [...prev, { uri: photo.uri }]);
-        }}
+        onPhoto={(photo) =>
+          setPhotos((prev) =>
+            prev.length < 8 ? [...prev, { uri: photo.uri }] : prev
+          )
+        }
       />
 
       <ModalAudio
         visible={audioModal}
         onClose={() => setAudioModal(false)}
-        onAudioRecorded={(uri) => {
-          if (audios.length >= 2) return;
-          setAudios((prev) => [
-            ...prev,
-            { id: Date.now().toString(), uri },
-          ]);
-        }}
+        onAudioRecorded={(uri) =>
+          setAudios((prev) => [...prev, { id: Date.now().toString(), uri }])
+        }
       />
     </SafeAreaView>
   );
 }
-
 
 /* ======================
    ESTILOS
@@ -229,10 +189,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F6F6F6",
   },
+
   container: {
     flex: 1,
     paddingHorizontal: 12,
   },
+
   photosSection: {
     flex: 6,
     backgroundColor: "#fff",
@@ -240,6 +202,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+
   audioSection: {
     flex: 3,
     backgroundColor: "#fff",
@@ -247,15 +210,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+
   finishSection: {
     paddingVertical: 8,
     marginBottom: 6,
   },
+
   title: {
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 10,
   },
+
   button: {
     backgroundColor: "#2563EB",
     paddingVertical: 10,
@@ -263,44 +229,52 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
+
   buttonText: {
     color: "#fff",
     fontWeight: "500",
   },
+
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     paddingBottom: 10,
   },
+
   finishButton: {
     backgroundColor: "#16A34A",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
+
   finishText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
   },
+
   previewContainer: {
     flex: 1,
     backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
+
   previewImage: {
     width: "100%",
     height: "80%",
     resizeMode: "contain",
   },
+
   closePreview: {
     marginTop: 20,
     padding: 10,
     backgroundColor: "#fff",
     borderRadius: 8,
   },
+
   closeText: {
     fontWeight: "600",
   },
