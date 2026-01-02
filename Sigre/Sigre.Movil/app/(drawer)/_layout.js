@@ -87,6 +87,15 @@ export default function DrawerLayout() {
           drawerIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
         }}
       />
+      <Drawer.Screen
+        name="mediaExport"
+        options={{
+          title: "Descarga Multimedia",
+          drawerIcon: ({ color, size }) => (
+            <Ionicons name="wifi" size={size} color={color} />
+          ),
+        }}
+      />
 
       {/* Botón de logout */}
       <Drawer.Screen

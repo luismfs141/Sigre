@@ -1,4 +1,3 @@
-import { Directory, File, Paths } from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import { useContext, useState } from "react";
 import {
@@ -31,72 +30,70 @@ export default function Multimedia() {
   const [audios, setAudios] = useState([]);
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
-  const removePhoto = (index) =>
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  const getElementoInfo = () => {
+    if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
+    if (selectedItem?.VanoInterno) return { tipo: "Vano", codigo: selectedItem.VanoCodigo };
+    throw new Error("Elemento no soportado");
+  };
 
-  const removeAudio = (index) =>
-    setAudios((prev) => prev.filter((_, i) => i !== index));
+  const normalizeExt = (uri) => {
+    const parts = uri.split(".");
+    return parts.length > 1 ? parts[parts.length - 1] : "jpg";
+  };
 
-  /* ======================
-     FINALIZAR
-  ====================== */
-  const finalizar = async () => {
-    if (!selectedItem) {
-      Alert.alert("Error", "No hay elemento seleccionado");
-      return;
-    }
+  const removePhoto = (index) => setPhotos((prev) => prev.filter((_, i) => i !== index));
+  const removeAudio = (index) => setAudios((prev) => prev.filter((_, i) => i !== index));
+
+  const moveToAlbum = async (uri, albumName) => {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== "granted") return Alert.alert("Permiso denegado", "Necesitamos permisos para guardar en la galería");
 
     try {
-      /* ======================
-         📸 FOTOS → DCIM
-      ====================== */
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        throw new Error("Permiso de galería denegado");
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      let album = await MediaLibrary.getAlbumAsync(albumName);
+      if (!album) album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      else await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+    } catch (error) {
+      console.error("Error guardando en galería:", error);
+      Alert.alert("Error", "No se pudo guardar multimedia en la galería");
+    }
+  };
+
+  const finalizar = async () => {
+    if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
+
+    try {
+      const { tipo, codigo } = getElementoInfo();
+      const sessionId = `${user.id}-${Date.now()}`;
+
+      // Guardar fotos
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        if (!photo?.uri) continue;
+        const ext = normalizeExt(photo.uri);
+        const fileName = `${tipo}_${codigo}_${sessionId}_foto_${i + 1}.${ext}`;
+        await moveToAlbum(photo.uri, `SigreMovil/${tipo}`);
       }
 
-      for (const photo of photos) {
-        const asset = await MediaLibrary.createAssetAsync(photo.uri);
-        await MediaLibrary.createAlbumAsync("SigreMovil", asset, false);
-      }
-
-      /* ======================
-         🎙️ AUDIOS → PRIVADO
-      ====================== */
-      const codigoUnico = `${user.id}-${Date.now()}`;
-      const baseDir = new Directory(
-        Paths.document,
-        "SigreMovil",
-        "Elemento",
-        codigoUnico
-      );
-
-      await baseDir.create({ intermediates: true, idempotent: true });
-      const audiosDir = baseDir.createDirectory("Audios");
-      await audiosDir.create({ idempotent: true });
-
+      // Guardar audios
       for (let i = 0; i < audios.length; i++) {
-        const source = new File(audios[i].uri);
-        const destination = audiosDir.createFile(
-          `audio_${i + 1}_${Date.now()}.m4a`
-        );
-        if (destination.exists) await destination.delete();
-        await source.move(destination);
+        const audio = audios[i];
+        if (!audio?.uri) continue;
+        const ext = normalizeExt(audio.uri) || "m4a";
+        const fileName = `${tipo}_${codigo}_${sessionId}_audio_${i + 1}.${ext}`;
+        await moveToAlbum(audio.uri, `SigreMovil/${tipo}`);
       }
 
       setPhotos([]);
       setAudios([]);
 
-      Alert.alert("Éxito", "Multimedia guardada correctamente");
+      Alert.alert("Éxito", "Multimedia guardada correctamente en la galería");
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "No se pudo guardar la multimedia");
     }
   };
 
-  /* ======================
-     UI (SIN CAMBIOS)
-  ====================== */
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -179,6 +176,7 @@ export default function Multimedia() {
       />
     </SafeAreaView>
   );
+
 }
 
 /* ======================
