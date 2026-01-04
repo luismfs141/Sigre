@@ -19,6 +19,8 @@ export const userStyles = StyleSheet.create({
   btnFeeder: { backgroundColor: "#FF9800", padding: 6, borderRadius: 6 },
   btnText: { color: "#fff", fontSize: 12 },
   input: {
+    backgroundColor: "#fff",
+    color: "#000",
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 6,

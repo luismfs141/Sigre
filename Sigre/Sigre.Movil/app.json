@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.luisfoco141.SigreMovil",
+      "softwareKeyboardLayoutMode": "resize", //--------------- nuevo
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",

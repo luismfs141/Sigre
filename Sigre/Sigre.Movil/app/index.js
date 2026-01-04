@@ -5,8 +5,13 @@ import { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Button,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View
 } from "react-native";
 import { AuthContext } from "../context/AuthContext";
@@ -63,50 +68,129 @@ export default function Index() {
   }
 
   // 🟢 SI NO HAY USUARIO → MOSTRAR LOGIN AQUÍ MISMO
+  // if (!user) {
+  //   return (
+  //     <View style={LoginStyles.container}>
+  //       <Text style={LoginStyles.title}>Iniciar Sesión</Text>
+
+  //       <TextInput
+  //         placeholder="Usuario"
+  //         value={username}
+  //         onChangeText={setUsername}
+  //         style={LoginStyles.input}
+  //         color="#000"
+  //         placeholderTextColor="#666"
+  //       />
+
+  //       <TextInput
+  //         placeholder="Contraseña"
+  //         secureTextEntry
+  //         value={password}
+  //         onChangeText={setPassword}
+  //         style={LoginStyles.input}
+  //         color="#000"
+  //         placeholderTextColor="#666"
+  //       />
+
+  //       <Text style={LoginStyles.label}>Selecciona un proyecto:</Text>
+
+  //       <View style={LoginStyles.picker}>
+  //         <Picker
+  //           selectedValue={selectedProject}
+  //           onValueChange={(v) => setSelectedProject(v)}
+  //           style={{ color: "#000" }}       
+  //           dropdownIconColor="#000"
+
+  //         >
+  //           <Picker.Item label="Baja Tensión" value={0} />
+  //           <Picker.Item label="Media Tensión" value={1} />
+  //         </Picker>
+  //       </View>
+
+  //       <View style={LoginStyles.button}>
+  //         <Button title="Iniciar sesión" onPress={handleLogin} />
+  //       </View>
+
+  //       <View style={{ marginTop: 20 }}>
+  //         <Text style={{ fontSize: 12, color: "gray", textAlign: "center" }}>
+  //           ID dispositivo: {deviceId}
+  //         </Text>
+  //       </View>
+  //     </View>
+  //   );
+  // }
+
   if (!user) {
     return (
-      <View style={LoginStyles.container}>
-        <Text style={LoginStyles.title}>Iniciar Sesión</Text>
-
-        <TextInput
-          placeholder="Usuario"
-          value={username}
-          onChangeText={setUsername}
-          style={LoginStyles.input}
-        />
-
-        <TextInput
-          placeholder="Contraseña"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          style={LoginStyles.input}
-        />
-
-        <Text style={LoginStyles.label}>Selecciona un proyecto:</Text>
-
-        <View style={LoginStyles.picker}>
-          <Picker
-            selectedValue={selectedProject}
-            onValueChange={(v) => setSelectedProject(v)}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <Picker.Item label="Baja Tensión" value={0} />
-            <Picker.Item label="Media Tensión" value={1} />
-          </Picker>
-        </View>
+            <View style={LoginStyles.container}>
+              <Text style={LoginStyles.title}>Iniciar Sesión</Text>
 
-        <View style={LoginStyles.button}>
-          <Button title="Iniciar sesión" onPress={handleLogin} />
-        </View>
+              <TextInput
+                placeholder="Usuario"
+                value={username}
+                onChangeText={setUsername}
+                style={LoginStyles.input}
+                placeholderTextColor="#666"
+                color="#000"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
 
-        <View style={{ marginTop: 20 }}>
-          <Text style={{ fontSize: 12, color: "gray", textAlign: "center" }}>
-            ID dispositivo: {deviceId}
-          </Text>
-        </View>
-      </View>
+              <TextInput
+                placeholder="Contraseña"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                style={LoginStyles.input}
+                placeholderTextColor="#666"
+                color="#000"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text style={LoginStyles.label}>Selecciona un proyecto:</Text>
+
+              <View style={LoginStyles.picker}>
+                <Picker
+                  selectedValue={selectedProject}
+                  onValueChange={(v) => setSelectedProject(v)}
+                  style={{ color: "#000" }}
+                  dropdownIconColor="#000"
+                >
+                  <Picker.Item label="Baja Tensión" value={0} color="#000" />
+                  <Picker.Item label="Media Tensión" value={1} color="#000" />
+                </Picker>
+              </View>
+
+              <View style={LoginStyles.button}>
+                <Button title="INICIAR SESIÓN" onPress={handleLogin} />
+              </View>
+
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ fontSize: 12, color: "gray", textAlign: "center" }}>
+                  ID dispositivo: {deviceId}
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     );
   }
+
 
   return null;
 }
