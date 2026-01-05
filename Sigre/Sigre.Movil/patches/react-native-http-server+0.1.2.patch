@@ -1,10 +1,9 @@
 diff --git a/node_modules/react-native-http-server/android/build.gradle b/node_modules/react-native-http-server/android/build.gradle
-index 090642a..1e74a34 100644
+index 090642a..3d6cdc5 100644
 --- a/node_modules/react-native-http-server/android/build.gradle
 +++ b/node_modules/react-native-http-server/android/build.gradle
 @@ -1,12 +1,10 @@
--apply plugin: 'com.android.library'
-+﻿apply plugin: 'com.android.library'
+ apply plugin: 'com.android.library'
  
  android {
 -    compileSdkVersion 23
@@ -19,7 +18,7 @@ index 090642a..1e74a34 100644
          versionCode 2
          versionName "1.1"
          ndk {
-@@ -19,7 +17,10 @@ android {
+@@ -19,7 +17,12 @@ android {
  }
  
  dependencies {
@@ -28,8 +27,50 @@ index 090642a..1e74a34 100644
 -    compile 'org.nanohttpd:nanohttpd:2.2.0'
 +    implementation 'com.facebook.react:react-android:+'
 +    implementation 'org.nanohttpd:nanohttpd:2.2.0'
++	implementation 'androidx.annotation:annotation:1.8.2'
++
  }
 +
 +
 +
 +
+diff --git a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
+index f1a4b8b..57369c3 100644
+--- a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
++++ b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
+@@ -18,7 +18,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
+ import java.util.Map;
+ import java.util.HashMap;
+ 
+-import android.support.annotation.Nullable;
++import androidx.annotation.Nullable;
++
+ import android.util.Log;
+ 
+ public class RNHttpServerModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
+@@ -124,8 +125,9 @@ public class RNHttpServerModule extends ReactContextBaseJavaModule implements Li
+     }
+   }
+ 
+-  @ReactMethod
+-  public String getHostName() {
++  @ReactMethod(isBlockingSynchronousMethod = true)
++public String getHostName() {
++
+     if(_server != null) {
+       Log.d(TAG, _server.getHostname());
+       return _server.getHostname();
+diff --git a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
+index 9d7eb47..859441b 100644
+--- a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
++++ b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
+@@ -12,7 +12,8 @@ import java.util.Set;
+ import java.util.Iterator;
+ import java.util.HashMap;
+ 
+-import android.support.annotation.Nullable;
++import androidx.annotation.Nullable;
++
+ import android.util.Log;
+ 
+ import java.io.IOException;
