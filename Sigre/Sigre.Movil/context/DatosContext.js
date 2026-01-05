@@ -130,6 +130,7 @@ export const DatosProvider = ({ children }) => {
   const [selectedItem, setSelectedItem] = useState([]);
   const [selectedProject, setSelectedProject] = useState(0);
   const [selectedTypification, setSelectedTypification] = useState(null);
+  const [selectedDeficiency, setSelectedDeficiency] = useState(null);
 
   const [region, setRegion] = useState({
     latitude: -12.0464,
@@ -225,6 +226,9 @@ export const DatosProvider = ({ children }) => {
         
         setSelectedTypification,
         selectedTypification,
+
+        setSelectedDeficiency,
+        selectedDeficiency,
 
         // Datos
         //////////////////////////////////// alimentador

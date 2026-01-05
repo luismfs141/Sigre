@@ -3,6 +3,8 @@ import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import {
   deleteDeficiencyById,
+  fetchDeficienciesForFlatList,
+  getDeficienciesByElement,
   getDeficienciesByElementAndTypi,
   getDeficienciesPendientes,
   getDeficiencyByIdLocal,
@@ -23,6 +25,23 @@ export const useDeficiency = () => {
   const [error, setError] = useState(null);
 
   let syncing = false; // evita auto-sync simultáneo
+
+  // ------------------- GET BY ID LOCAL -------------------
+  const fetchDeficiencyByIdLocal = async (defiInterno) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return null;
+
+    try {
+      const def = await getDeficiencyByIdLocal(defiInterno);
+      return def ?? null;
+    } catch (err) {
+      console.error(
+        "❌ Error obteniendo deficiencia por ID local:",
+        err
+      );
+      return null;
+    }
+  };
 
   // ------------------- FETCH -------------------
   const fetchDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
@@ -201,22 +220,71 @@ export const useDeficiency = () => {
 
   };
 
-const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
-  const dbOk = await checkDatabase();
-  if (!dbOk) return [];
+  const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
 
-  try {
-    const deficiencias = await getDeficienciesByElementAndTypi(
-      idElement,
-      typeElement,
-      tipiInterno
-    );
-    return deficiencias;
-  } catch (err) {
-    console.error("❌ Error obteniendo deficiencias por tipificación:", err);
-    return [];
-  }
-};
+    try {
+      const deficiencias = await getDeficienciesByElementAndTypi(
+        idElement,
+        typeElement,
+        tipiInterno
+      );
+      return deficiencias;
+    } catch (err) {
+      console.error("❌ Error obteniendo deficiencias por tipificación:", err);
+      return [];
+    }
+  };
+
+  const fetchDeficienciesByElement = async (idElement, typeElement) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
+
+    try {
+      const deficiencias = await getDeficienciesByElement(
+        idElement,
+        typeElement
+      );
+      return deficiencias;
+    } catch (err) {
+      console.error("❌ Error obteniendo deficiencias:", err);
+      return [];
+    }
+  };
+
+  const deficienciesForFlatList = async (elementId, typeElement) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
+
+    try {
+      // Obtener deficiencias desde la base de datos usando el hook
+      const rawDefs = await fetchDeficienciesForFlatList(elementId, typeElement);
+      // Normalizar datos para FlatList
+      const flatListData = rawDefs.map(def => ({
+        id: def.DefiInterno, // asegurarse que siempre haya id
+        type: "def",
+        defId: def.DefiInterno, // id de la deficiencia
+        name: `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? ` Suministro: ${def.DefiNumSuministro}` : ""}`,
+        data: {
+          detail: def.Deficiency ?? "",
+          elementId: def.DefiIdElemento,
+          typeElement: def.DefiTipoElemento,
+          typificationId: def.TipiInterno,
+          typificationCode: def.Code,
+          tableId: def.TablInterno,
+          numSuministro: def.DefiNumSuministro
+        },
+        photos: [],
+        audio: null
+      }));
+
+      return flatListData;
+    } catch (error) {
+      console.error("❌ Error fetching deficiencies for FlatList:", error);
+      return [];
+    }
+  };
 
 
   return {
@@ -227,6 +295,9 @@ const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInt
     deleteDeficiency,
     syncAllDeficiencies,
     autoSyncDeficiency,
-    fetchDeficienciesByElementAndTypi
+    fetchDeficienciesByElementAndTypi,
+    fetchDeficienciesByElement,
+    deficienciesForFlatList,
+    fetchDeficiencyByIdLocal
   };
 };

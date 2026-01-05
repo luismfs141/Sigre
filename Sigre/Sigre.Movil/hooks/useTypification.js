@@ -4,21 +4,6 @@
 // export const useTypification = () => {
 //   const { checkDatabase } = useDatos();
 
-//   const fetchTypificationsByTypeElement = async (tableId) => {
-//     const dbOk = await checkDatabase();
-//     if (!dbOk) {
-//       console.warn("⚠ Base de datos no disponible. No se pueden cargar las tipificaciones.");
-//       return [];
-//     }
-
-//     try {
-//       return await getTypificationByTypeElement(tableId);
-//     } catch (error) {
-//       console.error("❌ Error al obtener tipificaciones por tipo de elemento:", error);
-//       return [];
-//     }
-//   };
-
 //   const fetchTypificationsByElement = async (idElement, typeElement) => {
 //     const dbOk = await checkDatabase();
 //     if (!dbOk) {
@@ -63,6 +48,21 @@ export const useTypification = () => {
       return false;
     }
     return true;
+  };
+
+  const fetchTypificationsByTypeElement = async (tableId) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible. No se pueden cargar las tipificaciones.");
+      return [];
+    }
+
+    try {
+      return await getTypificationByTypeElement(tableId);
+    } catch (error) {
+      console.error("❌ Error al obtener tipificaciones por tipo de elemento:", error);
+      return [];
+    }
   };
 
   /* ===============================
@@ -129,6 +129,7 @@ export const useTypification = () => {
 
   return {
     fetchUsedTypificationsByElement,
-    fetchAvailableTypificationsForElement
+    fetchAvailableTypificationsForElement,
+    fetchTypificationsByTypeElement
   };
 };

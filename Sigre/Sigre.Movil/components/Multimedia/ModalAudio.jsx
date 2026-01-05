@@ -1,88 +1,134 @@
 import { Audio } from "expo-av";
-import { useEffect, useState } from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
   const [recording, setRecording] = useState(null);
 
-  useEffect(() => {
-    return () => {
-      recording?.stopAndUnloadAsync();
-    };
-  }, [recording]);
-
   const startRecording = async () => {
-    await Audio.requestPermissionsAsync();
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) return;
 
-    const { recording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY
-    );
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
 
-    setRecording(recording);
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+    } catch (err) {
+      console.error("Error iniciando grabación", err);
+    }
   };
 
   const stopRecording = async () => {
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
+    try {
+      if (!recording) return;
 
-    onAudioRecorded(uri);
-    setRecording(null);
-    onClose();
+      const rec = recording;
+      setRecording(null);
+
+      await rec.stopAndUnloadAsync();
+      const uri = rec.getURI();
+
+      onAudioRecorded(uri);
+      onClose();
+    } catch (err) {
+      console.warn("Grabación ya detenida");
+    }
   };
 
   return (
-    <Modal visible={visible} animationType="slide">
-      <View style={styles.container}>
-        <Text style={styles.title}>🎙️ Grabación de Audio</Text>
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
+          <Text style={styles.title}>🎙️ Grabar audio</Text>
 
-        {!recording ? (
-          <TouchableOpacity style={styles.button} onPress={startRecording}>
-            <Text style={styles.text}>Iniciar Grabación</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.buttonStop} onPress={stopRecording}>
-            <Text style={styles.text}>Detener Grabación</Text>
-          </TouchableOpacity>
-        )}
+          {!recording ? (
+            <TouchableOpacity
+              style={styles.recordButton}
+              onPress={startRecording}
+            >
+              <Text style={styles.buttonText}>Iniciar</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.stopButton}
+              onPress={stopRecording}
+            >
+              <Text style={styles.buttonText}>Detener</Text>
+            </TouchableOpacity>
+          )}
 
-        <TouchableOpacity onPress={onClose}>
-          <Text>Cerrar</Text>
-        </TouchableOpacity>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.cancel}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
-    padding: 20,
+    alignItems: "center",
   },
+
+  modal: {
+    width: "80%",
+    maxWidth: 320,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    elevation: 5,
+  },
+
   title: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "600",
-    marginBottom: 30,
+    marginBottom: 16,
   },
-  button: {
+
+  recordButton: {
     backgroundColor: "#2563EB",
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 10,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  buttonStop: {
+
+  stopButton: {
     backgroundColor: "#DC2626",
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 10,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  text: {
+
+  buttonText: {
     color: "#fff",
-    fontWeight: "500",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
+  cancel: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#555",
   },
 });

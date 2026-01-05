@@ -1,33 +1,73 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import {
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { fromLatLon } from "utm";
+import { nowPeruISO } from "../../utils/dateUtils";
 
 export default function ModalCamera({
   visible,
   onClose,
-  onPhoto = () => {}, // 🛡️ evita crash si no se pasa
+  onPhoto = () => {},
 }) {
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isReady, setIsReady] = useState(false);
 
-  // 🔁 Reset al abrir
+  /* ======================
+     ZOOM (BOTONES)
+  ====================== */
+  const [zoom, setZoom] = useState(0); // 0 → 1
+
   useEffect(() => {
     if (visible) {
       setIsReady(false);
+      setZoom(0);
     }
   }, [visible]);
 
-  // ⛔ Sin permisos aún
+  const zoomIn = () =>
+    setZoom((z) => Math.min(z + 0.1, 1));
+
+  const zoomOut = () =>
+    setZoom((z) => Math.max(z - 0.1, 0));
+
+  /* ======================
+     UBICACIÓN
+  ====================== */
+  const getCurrentLocation = async () => {
+    const { status } =
+      await Location.requestForegroundPermissionsAsync();
+
+    if (status !== "granted") return null;
+
+    const loc = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+
+    return {
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+    };
+  };
+
+  const convertToUTM = (lat, lon) => {
+    const utm = fromLatLon(lat, lon);
+    return {
+      utmX: utm.easting,
+      utmY: utm.northing,
+      zone: utm.zoneNum,
+    };
+  };
+
   if (!permission) return null;
 
-  // 🔐 Solicitud de permisos
   if (!permission.granted) {
     return (
       <Modal visible={visible} animationType="slide">
@@ -48,7 +88,9 @@ export default function ModalCamera({
     );
   }
 
-  // 📸 Captura SEGURA
+  /* ======================
+     📸 FOTO
+  ====================== */
   const takePhoto = async () => {
     if (!cameraRef.current) return;
 
@@ -58,12 +100,26 @@ export default function ModalCamera({
         skipProcessing: false,
       });
 
-      if (photo?.uri) {
-        onPhoto(photo);
-        onClose();
+      if (!photo?.uri) return;
+
+      const coords = await getCurrentLocation();
+      let utm = null;
+
+      if (coords) {
+        utm = convertToUTM(coords.latitude, coords.longitude);
       }
-    } catch (error) {
-      console.error("❌ Error cámara:", error);
+
+      onPhoto({
+        uri: photo.uri,
+        latUtm: utm?.utmY ?? null,
+        lonUtm: utm?.utmX ?? null,
+        utmZone: utm?.zone ?? null,
+        fechaISO: nowPeruISO(),
+      });
+
+      onClose();
+    } catch (e) {
+      console.error("❌ Error cámara:", e);
     }
   };
 
@@ -74,11 +130,27 @@ export default function ModalCamera({
           ref={cameraRef}
           style={{ flex: 1 }}
           facing="back"
-          onMountError={(e) =>
-            console.error("❌ Error al montar cámara", e)
-          }
+          zoom={zoom}
           onCameraReady={() => setIsReady(true)}
+          onMountError={(e) =>
+            console.error("❌ Error cámara", e)
+          }
         />
+
+        {/* 🔍 ZOOM CONTROLS */}
+        <View style={styles.zoomControls}>
+          <Pressable style={styles.zoomBtn} onPress={zoomOut}>
+            <Text style={styles.zoomBtnText}>−</Text>
+          </Pressable>
+
+          <Text style={styles.zoomBtnValue}>
+            {Math.round(zoom * 100)}%
+          </Text>
+
+          <Pressable style={styles.zoomBtn} onPress={zoomIn}>
+            <Text style={styles.zoomBtnText}>+</Text>
+          </Pressable>
+        </View>
 
         {/* 🎛️ CONTROLES */}
         <View style={styles.controls}>
@@ -116,6 +188,29 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     backgroundColor: "#fff",
     marginBottom: 14,
+  },
+  zoomControls: {
+    position: "absolute",
+    right: 20,
+    top: 80,
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  zoomBtn: {
+    padding: 6,
+  },
+  zoomBtnText: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  zoomBtnValue: {
+    color: "#fff",
+    fontSize: 12,
+    marginVertical: 4,
   },
   center: {
     flex: 1,
