@@ -1,9 +1,11 @@
 import { useFocusEffect } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
-import { useContext, useState } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useContext, useState } from "react";
 import {
   Alert,
+  BackHandler,
   Image,
   Modal,
   ScrollView,
@@ -48,114 +50,130 @@ export default function Multimedia() {
   const [audioModal, setAudioModal] = useState(false);
 
   const [photos, setPhotos] = useState(Array(6).fill(null));
-  const [audios, setAudios] = useState([]); // 🎧 lista dinámica
+  const [audios, setAudios] = useState([]);
 
   const [photoIndex, setPhotoIndex] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
+  const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
-  // useEffect(() => {
-  //   loadMedios();
-  // }, [selectedDeficiency?.id]);
+  const router = useRouter();
 
-  useFocusEffect(
-    useCallback(() => {
-      loadMedios();
-
-      return () => {
-        // opcional: cleanup
-      };
-    }, [selectedDeficiency?.id])
-  );
-
-
-  const loadMedios = async () => {
-    // 🧹 LIMPIAR SIEMPRE ANTES DE CARGAR
+  /* ======================
+     CLEANUP
+  ====================== */
+  const limpiarMultimedia = () => {
     setPhotos(Array(6).fill(null));
     setAudios([]);
+    setPreviewPhoto(null);
+    setPhotoIndex(null);
+    setCameraModal(false);
+    setAudioModal(false);
+  };
+
+  /* ======================
+     LOAD MEDIOS (FIXED)
+  ====================== */
+  const loadMedios = async () => {
+    // ⛔ VALIDAR ANTES DE PRENDER LOADING
+    if (!selectedDeficiency?.id) {
+      limpiarMultimedia();
+      return;
+    }
+
+    setLoading(true);
+    setLoadingMessage("Cargando multimedia...");
 
     try {
-      if (!selectedDeficiency?.id) return;
-
+      setLoadingMessage("Obteniendo deficiencia...");
       const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
 
       const deficienciaId =
         deficiencia.DefiServerId ?? deficiencia.DefiInterno;
 
+      setLoadingMessage("Buscando archivos guardados...");
       const medios = await fetchMediosByDeficienciaId(deficienciaId);
 
-      const activos = medios.filter(
-        m => Number(m.ArchActivo) === 1
-      );
+      const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
       const photosTmp = Array(6).fill(null);
       const audiosTmp = [];
 
-      for (const m of activos) {
-        const filename = m.ArchNombre.split("/").pop();
+      if (activos.length > 0) {
+        setLoadingMessage("Procesando fotos y audios...");
 
-        // 🎙️ AUDIO → MUSIC
-        if (Number(m.ArchTipo) === 0) {
-          const uri = await getAssetUriByFilename(
-            filename,
-            MediaLibrary.MediaType.audio
-          );
+        for (const m of activos) {
+          const filename = m.ArchNombre.split("/").pop();
 
-          if (uri) {
-            audiosTmp.push({
-              uri,
-              title: "Audio",
-            });
+          if (Number(m.ArchTipo) === 0) {
+            const uri = await getAssetUriByFilename(
+              filename,
+              MediaLibrary.MediaType.audio
+            );
+            if (uri) audiosTmp.push({ uri, title: "Audio" });
           }
-        }
 
-        // 📸 FOTO → PICTURES
-        if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-          const uri = await getAssetUriByFilename(
-            filename,
-            MediaLibrary.MediaType.photo
-          );
-
-          if (uri) {
-            photosTmp[Number(m.ArchTipo) - 1] = {
-              uri,
-              latUtm: m.ArchLatitud,
-              lonUtm: m.ArchLongitud,
-              fechaISO: m.ArchFecha,
-            };
+          if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
+            const uri = await getAssetUriByFilename(
+              filename,
+              MediaLibrary.MediaType.photo
+            );
+            if (uri) {
+              photosTmp[Number(m.ArchTipo) - 1] = {
+                uri,
+                latUtm: m.ArchLatitud,
+                lonUtm: m.ArchLongitud,
+                fechaISO: m.ArchFecha,
+              };
+            }
           }
         }
       }
 
       setPhotos(photosTmp);
       setAudios(audiosTmp);
-
     } catch (err) {
       console.error("❌ Error cargando medios:", err);
+    } finally {
+      setLoading(false);
+      setLoadingMessage("");
     }
   };
 
+  /* ======================
+     FOCUS EFFECT
+  ====================== */
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
 
-  const getAssetUriByFilename = async (filename, mediaType) => {
-    let after = null;
+      const cargar = async () => {
+        if (activo) await loadMedios();
+      };
 
-    do {
-      const page = await MediaLibrary.getAssetsAsync({
-        mediaType,
-        first: 100,
-        after,
-        sortBy: MediaLibrary.SortBy.creationTime,
-      });
+      cargar();
 
-      const asset = page.assets.find(a => a.filename === filename);
-      if (asset) return asset.uri;
+      return () => {
+        activo = false;
+        limpiarMultimedia();
+      };
+    }, [selectedDeficiency?.id])
+  );
 
-      after = page.endCursor;
-    } while (after);
-
-    return null;
-  };
-
+  /* ======================
+     BACK HANDLER
+  ====================== */
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        router.replace("/(drawer)/inspection");
+        return true;
+      };
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => sub.remove();
+    }, [])
+  );
 
   /* ======================
      HELPERS
@@ -168,9 +186,21 @@ export default function Multimedia() {
     throw new Error("Elemento no soportado");
   };
 
-  const getFilenameFromUri = (uri) => {
-    if (!uri) return null;
-    return uri.split("/").pop();
+  const getFilenameFromUri = (uri) => uri?.split("/").pop() ?? null;
+
+  const getAssetUriByFilename = async (filename, mediaType) => {
+    let after = null;
+    do {
+      const page = await MediaLibrary.getAssetsAsync({
+        mediaType,
+        first: 100,
+        after,
+      });
+      const asset = page.assets.find(a => a.filename === filename);
+      if (asset) return asset.uri;
+      after = page.endCursor;
+    } while (after);
+    return null;
   };
 
   const moveToAlbum = async (uri, albumName, filename) => {
@@ -241,93 +271,120 @@ export default function Multimedia() {
   };
 
   /* ======================
-     FINALIZAR
+     FINALIZAR (FIXED)
   ====================== */
   const finalizar = async () => {
-
-    let feeder = await findFeederById(selectedSed.AlimInterno);
     if (!selectedItem)
       return Alert.alert("Error", "No hay elemento seleccionado");
 
     try {
+      setLoading(true);
+      setLoadingMessage("Preparando guardado...");
+
+      const feeder = await findFeederById(selectedSed.AlimInterno);
       const { tipo, codigo } = getElementoInfo();
 
       const folderBase = `SigreMovil/${feeder.alimEtiqueta}/${selectedSed.SedCodigo}/${tipo}/${codigo}/${selectedDeficiency.typificationCode}`;
-      const folderFinal = selectedDeficiency.numSuministro ? `${folderBase}/${selectedDeficiency.numSuministro}` : folderBase;
+
+      const folderFinal = selectedDeficiency.numSuministro
+        ? `${folderBase}/${selectedDeficiency.numSuministro}`
+        : folderBase;
 
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         if (photo?.uri) {
-          const filename = `${i + 1}.jpg`; // índice
+          setLoadingMessage(`Guardando foto ${i + 1}...`);
+          const filename = `${i + 1}.jpg`;
           await moveToAlbum(photo.uri, folderFinal, filename);
-
           await saveFileRecord({
             filename,
             relativePath: folderFinal,
             slot: i + 1,
             isAudio: false,
-            photoData: photo 
+            photoData: photo,
           });
         }
       }
 
-      for (const audio of audios) {
+      for (let i = 0; i < audios.length; i++) {
+        const audio = audios[i];
         if (audio?.uri) {
-          const filename = getFilenameFromUri(audio.uri); 
-
+          setLoadingMessage(`Guardando audio ${i + 1}...`);
+          const filename = getFilenameFromUri(audio.uri);
           await moveAudio(audio.uri, folderFinal);
-
           await saveFileRecord({
-            filename, 
+            filename,
             relativePath: folderFinal,
             slot: 0,
-            isAudio: true
+            isAudio: true,
           });
         }
       }
 
-      setPhotos(Array(6).fill(null));
-      setAudios([]);
+      limpiarMultimedia();
+      setLoading(false);
 
-      Alert.alert("Éxito", "Multimedia guardada correctamente");
+      Alert.alert("Éxito", "Multimedia guardada correctamente", [
+        { text: "OK", onPress: () => router.replace("/inspection") },
+      ]);
     } catch (err) {
+      setLoading(false);
       console.error(err);
       Alert.alert("Error", "No se pudo guardar la multimedia");
     }
   };
 
-  const saveFileRecord = async ({
-    filename,
-    relativePath,
-    slot,
-    isAudio = false,
-    photoData = null
-  }) => {
-    const { tipo } = getElementoInfo();
-    const deficiency = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+const saveFileRecord = async ({
+  filename,
+  relativePath,
+  slot,
+  isAudio = false,
+  photoData = null,
+}) => {
+  const { tipo } = getElementoInfo();
 
-    return await saveArchivoLocal({
-      ArchInterno: null,
+  const deficiency = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
 
-      archTipo: isAudio ? 0 : slot,
-      archTabla: "Deficiencias",
-      archCodTabla: deficiency.DefiServerId??selectedDeficiency.id,
+  // 🔒 GARANTÍA ABSOLUTA
+  let archTipoFinal;
 
-      archNombre: `${relativePath}/${filename}`,
+  if (isAudio) {
+    archTipoFinal = 0;
+  } else {
+    archTipoFinal = Number.isInteger(slot) && slot > 0 ? slot : 1;
+  }
 
-      // 📍 UTM DESDE LA FOTO
-      archLatit: photoData?.latUtm ?? 0,
-      archLong: photoData?.lonUtm ?? 0,
+  console.log(archTipoFinal);
 
-      // 📅 FECHA REAL DE CAPTURA
-      archFech: photoData?.fechaISO ?? null,
 
-      archTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
-      archIdElemento: selectedDeficiency.elementId,
-      tipiInterno: selectedDeficiency?.typificationId ?? null,
-      archActiv: 1
-    });
-  };
+  return await saveArchivoLocal({
+    ArchInterno: null,
+
+    // ⚠️ JAMÁS NULL
+    ArchTipo: archTipoFinal,
+
+    ArchTabla: "Deficiencias",
+
+    ArchCodTabla:
+      deficiency?.DefiServerId ?? selectedDeficiency.id,
+
+    ArchNombre: `${relativePath}/${filename}`,
+
+    ArchLatitud: photoData?.latUtm ?? null,
+    ArchLongitud: photoData?.lonUtm ?? null,
+    ArchFecha: photoData?.fechaISO ?? null,
+
+    ArchTipoElemento:
+      tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
+
+    ArchIdElemento: selectedDeficiency.elementId,
+
+    TipiInterno: selectedDeficiency?.typificationId ?? null,
+
+    ArchActivo: 1,
+  });
+};
+
 
   /* ======================
      UI
@@ -461,6 +518,15 @@ export default function Multimedia() {
           ])
         }
       />
+
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <Text style={styles.loadingText}>{loadingMessage}</Text>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -564,5 +630,24 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: "#fff",
     borderRadius: 8,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loadingBox: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 12,
+    minWidth: 220,
+  },
+
+  loadingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

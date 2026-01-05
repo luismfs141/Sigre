@@ -80,8 +80,8 @@ export default function Inspection() {
 
 
   /* =======================
-     BACK HANDLER
-     ======================= */
+      BACK HANDLER
+    ======================= */
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {

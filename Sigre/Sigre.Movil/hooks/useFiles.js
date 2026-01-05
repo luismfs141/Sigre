@@ -27,18 +27,21 @@ export function useFiles() {
   // ===============================
   // 🔹 NORMALIZAR ANTES DE GUARDAR
   // ===============================
-  const normalizeArchivoBeforeSave = useCallback((archivo) => ({
-    archTipo: Number(archivo.archTipo),
-    archTabla: archivo.archTabla ?? "Deficiencias",
-    archCodTabla: Number(archivo.archCodTabla),
-    archNombre: archivo.archNombre,
-    archLatit: archivo.archLatit ?? null,
-    archLong: archivo.archLong ?? null,
-    archFech: archivo.archFech ?? nowPeruISO(),
-    archTipoElemento: archivo.archTipoElemento ?? null,
-    archIdElemento: archivo.archIdElemento ?? null,
-    tipiInterno: archivo.tipiInterno ?? null,
-    archActiv: archivo.archActiv ?? 1
+  const normalizeArchivoBeforeSave = useCallback((archivo) => (
+     console.log("🧪 archivo:", archivo),
+    {
+  
+    archTipo: Number(archivo.ArchTipo),
+    archTabla: archivo.ArchTabla ?? "Deficiencias",
+    archCodTabla: Number(archivo.ArchCodTabla),
+    archNombre: archivo.ArchNombre,
+    archLatit: archivo.ArchLatit ?? null,
+    archLong: archivo.ArchLong ?? null,
+    archFech: archivo.ArchFech ?? nowPeruISO(),
+    archTipoElemento: archivo.ArchTipoElemento ?? null,
+    archIdElemento: archivo.ArchIdElemento ?? null,
+    tipiInterno: archivo.TipiInterno ?? null,
+    archActiv: archivo.ArchActiv ?? 1
   }), []);
 
 
@@ -149,6 +152,7 @@ export function useFiles() {
   // }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
 
   const saveArchivoLocal = useCallback(async (data) => {
+
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 

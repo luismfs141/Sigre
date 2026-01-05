@@ -51,6 +51,20 @@ export const insertArchivoLocal = async ({
   archActiv = 1,
 }) => {
   try {
+        // 🔎 LOG COMPLETO
+    console.log("🧪 insertArchivoLocal → payload:", {
+      archTipo,
+      archTabla,
+      archCodTabla,
+      archNombre,
+      archLatit,
+      archLong,
+      archFech,
+      archTipoElemento,
+      archIdElemento,
+      tipiInterno,
+      archActiv,
+    });
     await runQuery(
       `
       INSERT INTO Archivos (
