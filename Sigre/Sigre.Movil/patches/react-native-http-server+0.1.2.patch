@@ -1,0 +1,129 @@
+diff --git a/node_modules/react-native-http-server/android/build.gradle b/node_modules/react-native-http-server/android/build.gradle
+index 090642a..3d6cdc5 100644
+--- a/node_modules/react-native-http-server/android/build.gradle
++++ b/node_modules/react-native-http-server/android/build.gradle
+@@ -1,12 +1,10 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
+-    compileSdkVersion 23
+-    buildToolsVersion "23.0.1"
+-
++    compileSdkVersion rootProject.ext.compileSdkVersion
+     defaultConfig {
+-        minSdkVersion 16
+-        targetSdkVersion 22
++        minSdkVersion rootProject.ext.minSdkVersion
++        targetSdkVersion rootProject.ext.targetSdkVersion
+         versionCode 2
+         versionName "1.1"
+         ndk {
+@@ -19,7 +17,12 @@ android {
+ }
+ 
+ dependencies {
+-    compile 'com.facebook.react:react-native:+'
+-    compile 'com.google.android.gms:play-services-gcm:+'
+-    compile 'org.nanohttpd:nanohttpd:2.2.0'
++    implementation 'com.facebook.react:react-android:+'
++    implementation 'org.nanohttpd:nanohttpd:2.2.0'
++	implementation 'androidx.annotation:annotation:1.8.2'
++
+ }
++
++
++
++
+diff --git a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
+index f1a4b8b..57369c3 100644
+--- a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
++++ b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerModule.java
+@@ -18,7 +18,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
+ import java.util.Map;
+ import java.util.HashMap;
+ 
+-import android.support.annotation.Nullable;
++import androidx.annotation.Nullable;
++
+ import android.util.Log;
+ 
+ public class RNHttpServerModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
+@@ -124,8 +125,9 @@ public class RNHttpServerModule extends ReactContextBaseJavaModule implements Li
+     }
+   }
+ 
+-  @ReactMethod
+-  public String getHostName() {
++  @ReactMethod(isBlockingSynchronousMethod = true)
++public String getHostName() {
++
+     if(_server != null) {
+       Log.d(TAG, _server.getHostname());
+       return _server.getHostname();
+diff --git a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerReactPackage.java b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerReactPackage.java
+index 5258d37..ce6aeab 100644
+--- a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerReactPackage.java
++++ b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/RNHttpServerReactPackage.java
+@@ -1,38 +1,29 @@
+ package com.strainy.RNHttpServer;
+ 
+-import java.util.Arrays;
+-import java.util.ArrayList;
+-import java.util.Collections;
+-import java.util.List;
++import androidx.annotation.NonNull;
+ 
+ import com.facebook.react.ReactPackage;
+-import com.strainy.RNHttpServer.RNHttpServerModule;
+ import com.facebook.react.bridge.NativeModule;
+ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.uimanager.ViewManager;
+-import com.facebook.react.bridge.JavaScriptModule;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
+ 
+ public class RNHttpServerReactPackage implements ReactPackage {
+ 
+   @Override
+-  public List<NativeModule> createNativeModules(
+-                              ReactApplicationContext reactContext) {
++  @NonNull
++  public List<NativeModule> createNativeModules(@NonNull ReactApplicationContext reactContext) {
+     List<NativeModule> modules = new ArrayList<>();
+-
+     modules.add(new RNHttpServerModule(reactContext));
+-
+     return modules;
+   }
+ 
+   @Override
+-  public List<Class<? extends JavaScriptModule>> createJSModules() {
+-  	return Collections.emptyList();
+-  }
+-
+-  @Override
+-  public List<ViewManager> createViewManagers(
+-                            ReactApplicationContext reactContext) {
+-  	return Collections.emptyList();
++  @NonNull
++  public List<ViewManager> createViewManagers(@NonNull ReactApplicationContext reactContext) {
++    return Collections.emptyList();
+   }
+-
+ }
+diff --git a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
+index 9d7eb47..859441b 100644
+--- a/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
++++ b/node_modules/react-native-http-server/android/src/main/java/com/strainy/RNHttpServer/Server.java
+@@ -12,7 +12,8 @@ import java.util.Set;
+ import java.util.Iterator;
+ import java.util.HashMap;
+ 
+-import android.support.annotation.Nullable;
++import androidx.annotation.Nullable;
++
+ import android.util.Log;
+ 
+ import java.io.IOException;

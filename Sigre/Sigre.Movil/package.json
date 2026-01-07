@@ -6,6 +6,7 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
+    "postinstall": "patch-package",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
@@ -87,6 +88,7 @@
     "babel-loader": "^8.4.1",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "patch-package": "^8.0.1",
     "react-native-svg": "15.12.1",
     "storybook": "^10.0.5",
     "typescript": "~5.9.2"

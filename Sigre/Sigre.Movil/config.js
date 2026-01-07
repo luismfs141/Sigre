@@ -4,11 +4,12 @@ import axios from 'axios';
 //const baseURL = 'https://localhost:44325/api/'; // desar con SSL
 //const baseURL = 'http://localhost:56870/api/'; // desa sin SSL
 //const baseURL = 'https://localhost:7280/api/'; //
-const baseURL = 'http://192.168.0.208/SigreHost/api/'; // local Luis
+//const baseURL = 'http://192.168.0.208/SigreHost/api/'; // local Luis
 //const baseURL = 'http://192.168.1.12/SigreHost/api/'; // local Roy
 //const baseURL = 'http://192.168.1.41/SigreHost/api/'; // OFICINA SIGRE
-//const baseURL = 'https://sigre-api-a6bbh4drgpgjeshw.canadacentral-01.azurewebsites.net/api/';
+const baseURL = 'https://sigre-api-a6bbh4drgpgjeshw.canadacentral-01.azurewebsites.net/api/';
 export const API_URL = baseURL; 
+
 
 
 export const api = () => {

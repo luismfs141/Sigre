@@ -568,11 +568,22 @@ export default function Sync() {
               data={user?.proyecto === 0 ? selectedSubstations : selectedFeeders}
               keyExtractor={(i) => i.id.toString()}
               contentContainerStyle={{ paddingBottom: 20 }}
-              ListEmptyComponent={
-                <Text style={{ color: "#777" }}>
-                  {user?.proyecto === 0 ? "No hay SED seleccionados" : "No hay alimentadores seleccionados"}
-                </Text>
-              }
+              // ListEmptyComponent={
+              //   <Text style={{ color: "#777" }}>
+              //     {user?.proyecto === 0 ? "No hay SED seleccionados" : "No hay alimentadores seleccionados"}
+              //   </Text>
+              // }
+
+              ListEmptyComponent={() => (
+                <View style={{ paddingVertical: 12 }}>
+                  <Text style={{ color: "#777" }}>
+                    {user?.proyecto === 0
+                      ? "No hay SED seleccionados"
+                      : "No hay alimentadores seleccionados"}
+                  </Text>
+                </View>
+              )}
+
               renderItem={({ item }) => (
                 <View style={styles.feederRow}>
                   <Text style={styles.feederText}>{item.name}</Text>
