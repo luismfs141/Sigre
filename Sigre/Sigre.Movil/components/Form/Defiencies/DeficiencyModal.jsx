@@ -1,4 +1,6 @@
 import * as Location from "expo-location";
+import { KeyboardAvoidingView, Platform } from "react-native";
+
 import { useEffect, useState } from "react";
 import {
   Modal,
@@ -31,7 +33,7 @@ export default function DeficiencyModal({
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [activeLocationField, setActiveLocationField] = useState(null);
   const isEmpty = v =>
-  v === null || v === undefined || v === "";
+    v === null || v === undefined || v === "";
 
   const {
     fetchDeficiencyByTypificationElement,
@@ -155,147 +157,160 @@ export default function DeficiencyModal({
   // --------------------------------------------------
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* HEADER */}
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.close}>✕</Text>
-            </TouchableOpacity>
-          </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.container}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
 
-          {/* FORM */}
-          <ScrollView>
-            {fields.map(field => {
-              const value = localDef[field.key];
+              {/* HEADER */}
+              <View style={styles.header}>
+                <Text style={styles.title}>{title}</Text>
+                <TouchableOpacity onPress={onClose}>
+                  <Text style={styles.close}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
-              // 📍 LAT / LNG
-              if (
-                field.key === "DefiLatitud" ||
-                field.key === "DefiLongitud"
-              ) {
-                return (
-                  <View key={field.key} style={{ marginBottom: 15 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setActiveLocationField(field.key);
-                        setShowLocationModal(true);
-                      }}
-                      style={styles.locationLabel}
-                    >
-                      <Text style={{ fontWeight: "700" }}>
-                        {field.label}
-                      </Text>
-                    </TouchableOpacity>
+              {/* FORM */}
+              <ScrollView>
+                {fields.map(field => {
+                  const value = localDef[field.key];
 
+                  // 📍 LAT / LNG
+                  if (
+                    field.key === "DefiLatitud" ||
+                    field.key === "DefiLongitud"
+                  ) {
+                    return (
+                      <View key={field.key} style={{ marginBottom: 15 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setActiveLocationField(field.key);
+                            setShowLocationModal(true);
+                          }}
+                          style={styles.locationLabel}
+                        >
+                          <Text style={{ fontWeight: "700" }}>
+                            {field.label}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <DeficiencyField
+                          field={field}
+                          value={value}
+                          editable={false}
+                        />
+                      </View>
+                    );
+                  }
+
+                  // 🔽 SELECT
+                  if (field.valueMap) {
+                    const items = Object.entries(field.valueMap).map(
+                      ([val, label]) => ({ value: val, label })
+                    );
+
+                    return (
+                      <DeficiencyField
+                        key={field.key}
+                        field={field}
+                        value={
+                          items.find(
+                            i => String(i.value) === String(value)
+                          )?.label ?? ""
+                        }
+                        onPress={
+                          field.selectable
+                            ? () =>
+                              setSelectConfig({
+                                field: field.key,
+                                title: field.label,
+                                items,
+                                labelKey: "label",
+                                valueKey: "value"
+                              })
+                            : null
+                        }
+                      />
+                    );
+                  }
+
+                  // ✏️ INPUT
+                  return (
                     <DeficiencyField
+                      key={field.key}
                       field={field}
                       value={value}
-                      editable={false}
+                      onChange={val =>
+                        setLocalDef(prev => ({
+                          ...prev,
+                          [field.key]: val
+                        }))
+                      }
                     />
-                  </View>
-                );
-              }
+                  );
+                })}
+              </ScrollView>
 
-              // 🔽 SELECT
-              if (field.valueMap) {
-                const items = Object.entries(field.valueMap).map(
-                  ([val, label]) => ({ value: val, label })
-                );
+              {/* BOTONES */}
+              <View style={styles.buttons}>
+                <TouchableOpacity
+                  style={styles.btnSave}
+                  onPress={handleSave}
+                >
+                  <Text style={styles.btnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
 
-                return (
-                  <DeficiencyField
-                    key={field.key}
-                    field={field}
-                    value={
-                      items.find(
-                        i => String(i.value) === String(value)
-                      )?.label ?? ""
-                    }
-                    onPress={
-                      field.selectable
-                        ? () =>
-                            setSelectConfig({
-                              field: field.key,
-                              title: field.label,
-                              items,
-                              labelKey: "label",
-                              valueKey: "value"
-                            })
-                        : null
-                    }
-                  />
-                );
-              }
+              {/* SELECT MODAL */}
+              <SelectModal
+                visible={!!selectConfig}
+                title={selectConfig?.title}
+                items={selectConfig?.items ?? []}
+                labelKey={selectConfig?.labelKey}
+                valueKey={selectConfig?.valueKey}
+                selectedValue={
+                  selectConfig ? localDef?.[selectConfig.field] : null
+                }
+                onSelect={val =>
+                  setLocalDef(prev => ({
+                    ...prev,
+                    [selectConfig.field]: val
+                  }))
+                }
+                onClose={() => setSelectConfig(null)}
+              />
 
-              // ✏️ INPUT
-              return (
-                <DeficiencyField
-                  key={field.key}
-                  field={field}
-                  value={value}
-                  onChange={val =>
+              {/* LOCATION MODAL */}
+              <LocationModal
+                visible={showLocationModal}
+                onClose={() => setShowLocationModal(false)}
+                onConfirm={coords => {
+                  if (activeLocationField) {
                     setLocalDef(prev => ({
                       ...prev,
-                      [field.key]: val
-                    }))
+                      [activeLocationField]:
+                        coords[
+                        activeLocationField === "DefiLatitud"
+                          ? "latitude"
+                          : "longitude"
+                        ]
+                    }));
                   }
-                />
-              );
-            })}
-          </ScrollView>
-
-          {/* BOTONES */}
-          <View style={styles.buttons}>
-            <TouchableOpacity
-              style={styles.btnSave}
-              onPress={handleSave}
-            >
-              <Text style={styles.btnText}>Guardar</Text>
-            </TouchableOpacity>
+                  setShowLocationModal(false);
+                }}
+              />
+            </ScrollView>
           </View>
-
-          {/* SELECT MODAL */}
-          <SelectModal
-            visible={!!selectConfig}
-            title={selectConfig?.title}
-            items={selectConfig?.items ?? []}
-            labelKey={selectConfig?.labelKey}
-            valueKey={selectConfig?.valueKey}
-            selectedValue={
-              selectConfig ? localDef?.[selectConfig.field] : null
-            }
-            onSelect={val =>
-              setLocalDef(prev => ({
-                ...prev,
-                [selectConfig.field]: val
-              }))
-            }
-            onClose={() => setSelectConfig(null)}
-          />
-
-          {/* LOCATION MODAL */}
-          <LocationModal
-            visible={showLocationModal}
-            onClose={() => setShowLocationModal(false)}
-            onConfirm={coords => {
-              if (activeLocationField) {
-                setLocalDef(prev => ({
-                  ...prev,
-                  [activeLocationField]:
-                    coords[
-                      activeLocationField === "DefiLatitud"
-                        ? "latitude"
-                        : "longitude"
-                    ]
-                }));
-              }
-              setShowLocationModal(false);
-            }}
-          />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
