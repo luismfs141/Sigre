@@ -72,74 +72,215 @@ export default function Multimedia() {
     setAudioModal(false);
   };
 
+const getAssetUriByRealPath = async (relativePath, filename, mediaType) => {
+  let after = null;
+
+  do {
+    const page = await MediaLibrary.getAssetsAsync({
+      mediaType,
+      first: 100,
+      after,
+      sortBy: MediaLibrary.SortBy.creationTime,
+    });
+
+    // Buscar por NOMBRE + RUTA en el URI real
+    const asset = page.assets.find(a =>
+      a.filename === filename &&
+      a.uri.includes(relativePath)
+    );
+
+    if (asset) return asset.uri;
+
+    after = page.endCursor;
+  } while (after);
+
+  console.warn("❌ Archivo no encontrado:", relativePath, filename);
+  return null;
+};
+
+
+  const getAssetUriByPath = async (relativePath, filename, mediaType) => {
+    // 1️⃣ Obtener el álbum por nombre (ruta)
+    const album = await MediaLibrary.getAlbumAsync(relativePath);
+    if (!album) {
+      console.warn("❌ Álbum no encontrado:", relativePath);
+      return null;
+    }
+
+    let after = null;
+
+    // 2️⃣ Buscar solo dentro del álbum
+    do {
+      const page = await MediaLibrary.getAssetsAsync({
+        album,
+        mediaType,
+        first: 100,
+        after,
+      });
+
+      const asset = page.assets.find(a => a.filename === filename);
+      if (asset) return asset.uri;
+
+      after = page.endCursor;
+    } while (after);
+
+    console.warn("❌ Archivo no encontrado en álbum:", relativePath, filename);
+    return null;
+  };
+
+
   /* ======================
      LOAD MEDIOS (FIXED)
   ====================== */
-  const loadMedios = async () => {
-    // ⛔ VALIDAR ANTES DE PRENDER LOADING
-    if (!selectedDeficiency?.id) {
-      limpiarMultimedia();
-      return;
-    }
+  // const loadMedios = async () => {
+  //   // ⛔ VALIDAR ANTES DE PRENDER LOADING
+  //   if (!selectedDeficiency?.id) {
+  //     limpiarMultimedia();
+  //     return;
+  //   }
 
-    setLoading(true);
-    setLoadingMessage("Cargando multimedia...");
+  //   setLoading(true);
+  //   setLoadingMessage("Cargando multimedia...");
 
-    try {
-      setLoadingMessage("Obteniendo deficiencia...");
-      const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+  //   try {
+  //     setLoadingMessage("Obteniendo deficiencia...");
+  //     const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
 
-      const deficienciaId =
-        deficiencia.DefiServerId ?? deficiencia.DefiInterno;
+  //     const deficienciaId =
+  //       deficiencia.DefiServerId ?? deficiencia.DefiInterno;
 
-      setLoadingMessage("Buscando archivos guardados...");
-      const medios = await fetchMediosByDeficienciaId(deficienciaId);
+  //     setLoadingMessage("Buscando archivos guardados...");
+  //     const medios = await fetchMediosByDeficienciaId(deficienciaId);
 
-      const activos = medios.filter(m => Number(m.ArchActivo) === 1);
+  //     const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
-      const photosTmp = Array(6).fill(null);
-      const audiosTmp = [];
+  //     const photosTmp = Array(6).fill(null);
+  //     const audiosTmp = [];
 
-      if (activos.length > 0) {
-        setLoadingMessage("Procesando fotos y audios...");
+  //     if (activos.length > 0) {
+  //       setLoadingMessage("Procesando fotos y audios...");
 
-        for (const m of activos) {
-          const filename = m.ArchNombre.split("/").pop();
+  //       for (const m of activos) {
+  //         const filename = m.ArchNombre.split("/").pop();
 
-          if (Number(m.ArchTipo) === 0) {
-            const uri = await getAssetUriByFilename(
-              filename,
-              MediaLibrary.MediaType.audio
-            );
-            if (uri) audiosTmp.push({ uri, title: "Audio" });
+  //         if (Number(m.ArchTipo) === 0) {
+  //           const uri = await getAssetUriByFilename(
+  //             filename,
+  //             MediaLibrary.MediaType.audio
+  //           );
+  //           if (uri) audiosTmp.push({ uri, title: "Audio" });
+  //         }
+
+  //         if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
+  //           const uri = await getAssetUriByFilename(
+  //             filename,
+  //             MediaLibrary.MediaType.photo
+  //           );
+  //           if (uri) {
+  //             photosTmp[Number(m.ArchTipo) - 1] = {
+  //               uri,
+  //               latUtm: m.ArchLatitud,
+  //               lonUtm: m.ArchLongitud,
+  //               fechaISO: m.ArchFecha,
+  //             };
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     setPhotos(photosTmp);
+  //     setAudios(audiosTmp);
+  //   } catch (err) {
+  //     console.error("❌ Error cargando medios:", err);
+  //   } finally {
+  //     setLoading(false);
+  //     setLoadingMessage("");
+  //   }
+  // };
+
+const loadMedios = async () => {
+  if (!selectedDeficiency?.id) {
+    limpiarMultimedia();
+    return;
+  }
+
+  setLoading(true);
+  setLoadingMessage("Cargando multimedia...");
+
+  try {
+    setLoadingMessage("Obteniendo deficiencia...");
+    const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+
+    const deficienciaId =
+      deficiencia.DefiServerId ?? deficiencia.DefiInterno;
+
+    setLoadingMessage("Buscando archivos guardados...");
+    const medios = await fetchMediosByDeficienciaId(deficienciaId);
+
+    const activos = medios.filter(m => Number(m.ArchActivo) === 1);
+
+    const photosTmp = Array(6).fill(null);
+    const audiosTmp = [];
+
+    if (activos.length > 0) {
+      setLoadingMessage("Procesando fotos y audios...");
+
+      for (const m of activos) {
+        const fullPath = m.ArchNombre; 
+        // SigreMovil/AMAUTA/1465/Vano/VBT000192983/7004/1.jpg
+
+        const filename = fullPath.split("/").pop();
+        const relativePath = fullPath.substring(
+          0,
+          fullPath.lastIndexOf("/")
+        );
+
+        // 🎵 AUDIO → Music
+        if (Number(m.ArchTipo) === 0) {
+          const uri = await getAssetUriByRealPath(
+            relativePath,
+            filename,
+            MediaLibrary.MediaType.audio
+          );
+
+          if (uri) {
+            audiosTmp.push({
+              uri,
+              title: "Audio",
+            });
           }
+        }
 
-          if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-            const uri = await getAssetUriByFilename(
-              filename,
-              MediaLibrary.MediaType.photo
-            );
-            if (uri) {
-              photosTmp[Number(m.ArchTipo) - 1] = {
-                uri,
-                latUtm: m.ArchLatitud,
-                lonUtm: m.ArchLongitud,
-                fechaISO: m.ArchFecha,
-              };
-            }
+        // 📸 FOTO → Pictures
+        if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
+          const uri = await getAssetUriByRealPath(
+            relativePath,
+            filename,
+            MediaLibrary.MediaType.photo
+          );
+
+          if (uri) {
+            photosTmp[Number(m.ArchTipo) - 1] = {
+              uri,
+              latUtm: m.ArchLatitud,
+              lonUtm: m.ArchLongitud,
+              fechaISO: m.ArchFecha,
+            };
           }
         }
       }
-
-      setPhotos(photosTmp);
-      setAudios(audiosTmp);
-    } catch (err) {
-      console.error("❌ Error cargando medios:", err);
-    } finally {
-      setLoading(false);
-      setLoadingMessage("");
     }
-  };
+
+    setPhotos(photosTmp);
+    setAudios(audiosTmp);
+  } catch (err) {
+    console.error("❌ Error cargando medios:", err);
+  } finally {
+    setLoading(false);
+    setLoadingMessage("");
+  }
+};
+
 
   /* ======================
      FOCUS EFFECT
@@ -204,31 +345,22 @@ export default function Multimedia() {
   };
 
   const moveToAlbum = async (uri, albumName, filename) => {
-    // 1️⃣ Pedir permisos
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permiso denegado", "Se requiere acceso a la galería");
-      return;
-    }
+    // 🚫 YA NO pedir permiso aquí
 
-    // 2️⃣ Carpeta temporal
     const tempDir = FileSystem.cacheDirectory + "SigreMovil/";
     const folderInfo = await FileSystem.getInfoAsync(tempDir);
     if (!folderInfo.exists) {
       await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
     }
 
-    // 3️⃣ Copiar archivo con nombre deseado
     const localUri = `${tempDir}${filename}`;
     await FileSystem.copyAsync({
       from: uri,
       to: localUri,
     });
 
-    // 4️⃣ Crear asset en la galería
     const asset = await MediaLibrary.createAssetAsync(localUri);
 
-    // 5️⃣ Crear o agregar álbum
     let album = await MediaLibrary.getAlbumAsync(albumName);
     if (!album) {
       await MediaLibrary.createAlbumAsync(albumName, asset, false);
@@ -239,36 +371,23 @@ export default function Multimedia() {
     console.log("Foto guardada en álbum:", filename);
   };
 
+
   const moveAudio = async (uri, albumName) => {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permiso denegado", "Se requiere acceso a la galería");
-      return;
-    }
+
+    const asset = await MediaLibrary.createAssetAsync(uri);
 
     try {
-      // ✔ SIEMPRE se guarda el audio
-      const asset = await MediaLibrary.createAssetAsync(uri);
-
-      try {
-        const album = await MediaLibrary.getAlbumAsync(albumName);
-
-        if (!album) {
-          await MediaLibrary.createAlbumAsync(albumName, asset, false);
-        } else {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-        }
-      } catch (albumError) {
-        // ⚠️ ERROR ESPERADO EN ANDROID (NO ROMPE FLUJO)
-        console.warn(
-          "⚠️ No se pudo crear álbum para audio, continuando...",
-          albumError?.message
-        );
+      const album = await MediaLibrary.getAlbumAsync(albumName);
+      if (!album) {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
       }
-    } catch (err) {
-      console.error("❌ Error guardando audio:", err);
+    } catch (albumError) {
+      console.warn("⚠️ No se pudo crear álbum para audio, continuando...");
     }
   };
+
 
   /* ======================
      FINALIZAR (FIXED)
@@ -276,6 +395,9 @@ export default function Multimedia() {
   const finalizar = async () => {
     if (!selectedItem)
       return Alert.alert("Error", "No hay elemento seleccionado");
+
+    const hasPermission = await ensureMediaPermission();
+    if (!hasPermission) return;
 
     try {
       setLoading(true);
@@ -385,6 +507,25 @@ const saveFileRecord = async ({
   });
 };
 
+const ensureMediaPermission = async () => {
+  const { status, canAskAgain } = await MediaLibrary.getPermissionsAsync();
+
+  if (status === "granted") return true;
+
+  if (canAskAgain) {
+    const result = await MediaLibrary.requestPermissionsAsync({
+      accessPrivileges: "all",   // 👈 CLAVE
+    });
+
+    return result.status === "granted";
+  }
+
+  Alert.alert(
+    "Permiso bloqueado",
+    "Debes habilitar el acceso a la galería en Configuración > Aplicaciones > Permisos."
+  );
+  return false;
+};
 
   /* ======================
      UI
