@@ -51,6 +51,20 @@ export const insertArchivoLocal = async ({
   archActiv = 1,
 }) => {
   try {
+        // 🔎 LOG COMPLETO
+    console.log("🧪 insertArchivoLocal → payload:", {
+      archTipo,
+      archTabla,
+      archCodTabla,
+      archNombre,
+      archLatit,
+      archLong,
+      archFech,
+      archTipoElemento,
+      archIdElemento,
+      tipiInterno,
+      archActiv,
+    });
     await runQuery(
       `
       INSERT INTO Archivos (
@@ -245,5 +259,96 @@ export const deleteFileById = async (archInterno) => {
   } catch (error) {
     console.error("❌ Error en markArchivoInactiveLocal:", error);
     return false;
+  }
+};
+
+export const saveOrUpdateArchivoLocal = async (arch) => {
+  try {
+    const allFields = [
+      "ArchInterno",
+      "ArchTipo",
+      "ArchTabla",
+      "ArchCodTabla",
+      "ArchNombre",
+      "ArchLatitud",
+      "ArchLongitud",
+      "ArchFecha",
+      "ArchTipoElemento",
+      "ArchIdElemento",
+      "TipiInterno",
+      "ArchActivo",
+      "EstadoOffLine",
+      "DefiServerId"
+    ];
+
+    // ---------------- UPDATE ----------------
+    if (arch.ArchInterno) {
+      const updateFields = allFields.filter(f => f !== "ArchInterno");
+
+      // 🔴 MISMA LÓGICA QUE DEFICIENCIAS
+      const estado =
+        arch.EstadoOffLine == null ? 1 : arch.EstadoOffLine;
+
+      const updateQuery = `
+        UPDATE Archivos
+        SET ${updateFields.map(f => `${f} = ?`).join(", ")}
+        WHERE ArchInterno = ?
+      `;
+
+      const updateValues = [
+        ...updateFields.map(f =>
+          f === "EstadoOffLine" ? estado : arch[f] ?? null
+        ),
+        arch.ArchInterno
+      ];
+
+      await runQuery(updateQuery, updateValues);
+      return arch.ArchInterno;
+    }
+
+    // ---------------- INSERT ----------------
+    const insertFields = allFields.filter(f => f !== "ArchInterno");
+
+    const insertQuery = `
+      INSERT INTO Archivos (${insertFields.join(", ")})
+      VALUES (${insertFields.map(() => "?").join(", ")})
+    `;
+
+    const insertValues = insertFields.map(f =>
+      f === "EstadoOffLine" ? 2 : arch[f] ?? null
+    );
+
+    const result = await runQuery(insertQuery, insertValues);
+
+    return result?.lastInsertRowId ?? null;
+
+  } catch (error) {
+    console.error("❌ Error guardando o actualizando archivo:", error);
+    throw error;
+  }
+};
+
+
+export const getMediosByDeficienciaIdLocal = async (deficienciaId) => {
+  try {
+    const rows = await runQuery(
+      `
+      SELECT *
+      FROM Archivos
+      WHERE ArchTabla = 'Deficiencias'
+        AND ArchCodTabla = ?
+        AND ArchActivo = 1
+      ORDER BY ArchInterno ASC;
+      `,
+      [deficienciaId]
+    );
+
+    return rows || [];
+  } catch (error) {
+    console.error(
+      "❌ Error en getMediosByDeficienciaIdLocal:",
+      error
+    );
+    return [];
   }
 };

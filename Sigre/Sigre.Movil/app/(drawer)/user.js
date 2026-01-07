@@ -77,21 +77,21 @@ export default function User() {
     }
   };
 
-    /** 🔹 Abrir modal de alimentadores */
-const openFeedersModal = async (user) => {
-  setSelectedUser(user);
+  /** 🔹 Abrir modal de alimentadores */
+  const openFeedersModal = async (user) => {
+    setSelectedUser(user);
 
-  // 🧹 Limpiar selección anterior
-  setSelectedFeeders([]);
+    // 🧹 Limpiar selección anterior
+    setSelectedFeeders([]);
 
-  // 🔹 Obtener lista del backend
-  const lista = await getFeedersByUser(user.usuaInterno);
+    // 🔹 Obtener lista del backend
+    const lista = await getFeedersByUser(user.usuaInterno);
 
-  // 📝 Usar directamente lo que retorna la función
-  setSelectedFeeders(lista.map(f => f.alimInterno));
+    // 📝 Usar directamente lo que retorna la función
+    setSelectedFeeders(lista.map(f => f.alimInterno));
 
-  setModalFeeders(true);
-};
+    setModalFeeders(true);
+  };
 
 
 
@@ -165,25 +165,34 @@ const openFeedersModal = async (user) => {
               <TextInput
                 style={userStyles.input}
                 placeholder="Nombres"
+                placeholderTextColor="#888"
                 value={form.usuaNombres}
                 onChangeText={(text) => setForm({ ...form, usuaNombres: text })}
               />
               <TextInput
                 style={userStyles.input}
                 placeholder="Apellidos"
+                placeholderTextColor="#888"
                 value={form.usuaApellidos}
                 onChangeText={(text) => setForm({ ...form, usuaApellidos: text })}
               />
               <TextInput
                 style={userStyles.input}
                 placeholder="Correo"
+                placeholderTextColor="#888"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
                 value={form.usuaCorreo}
                 onChangeText={(text) => setForm({ ...form, usuaCorreo: text })}
               />
               <TextInput
                 style={userStyles.input}
                 placeholder="Contraseña"
+                placeholderTextColor="#888"
                 secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
                 value={form.usuaPassword}
                 onChangeText={(text) => setForm({ ...form, usuaPassword: text })}
               />
@@ -193,6 +202,8 @@ const openFeedersModal = async (user) => {
                 <Picker
                   selectedValue={form.perfilId}
                   onValueChange={(value) => setForm({ ...form, perfilId: value })}
+                  style={{ color: "#000" }}
+                  dropdownIconColor="#000"
                 >
                   <Picker.Item label="Seleccione un perfil" value="" />
                   {perfiles.map((perfil) => (
@@ -200,6 +211,7 @@ const openFeedersModal = async (user) => {
                       key={perfil.perfInterno}
                       label={perfil.perfNombre}
                       value={perfil.perfInterno}
+                      color="#000"
                     />
                   ))}
                 </Picker>
@@ -220,89 +232,89 @@ const openFeedersModal = async (user) => {
       </Modal>
 
       {/* 🔹 Modal de Alimentadores */}
-    <Modal visible={modalFeeders} animationType="slide" transparent>
-    <View style={modalStyles.modalOverlay}>
-        <View style={modalStyles.modalContainer}>
-        <Text style={modalStyles.modalTitle}>
-            Alimentadores de {selectedUser?.usuaNombres}
-        </Text>
-
-        {/* 🔹 Contenido con scroll */}
-        <ScrollView
-            style={{ flex: 1 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-        >
-        {/* 🔹 Sección Asignados */}
-        <Text style={userStyles.sectionTitle}>Asignados</Text>
-        {selectedFeeders.length > 0 ? (
-            <FlatList
-            data={feeders.filter(f => selectedFeeders.includes(f.alimInterno))}
-            keyExtractor={(f) => f.alimInterno.toString()}
-            renderItem={({ item }) => (
-                <View style={userStyles.assignedItem}>
-                <Text style={userStyles.feederText}>{item.alimEtiqueta}</Text>
-                <TouchableOpacity onPress={() => handleRemoveFeeder(item.alimInterno)}>
-                    <Text style={userStyles.removeText}>❌</Text>
-                </TouchableOpacity>
-                </View>
-            )}
-            scrollEnabled={false}
-            />
-        ) : (
-            <Text style={userStyles.noItemsText}>No hay alimentadores asignados</Text>
-        )}
-
-        {/* 🔹 Sección Disponibles */}
-        <Text style={userStyles.sectionTitle}>Disponibles</Text>
-        <TextInput
-            style={userStyles.searchInput}
-            placeholder="Buscar alimentador..."
-            value={searchFeeder}
-            onChangeText={setSearchFeeder}
-        />
-
-        {feeders
-            .filter(
-            (f) =>
-                !selectedFeeders.includes(f.alimInterno) &&
-                (f.alimEtiqueta.toLowerCase().includes(searchFeeder.toLowerCase()) ||
-                f.alimInterno.toString().includes(searchFeeder))
-            )
-            .map((item) => (
-            <TouchableOpacity
-                key={item.alimInterno}
-                style={userStyles.availableItem}
-                onPress={() => handleAddFeeder(item.alimInterno)}
-            >
-                <Text style={userStyles.feederText}>{item.alimEtiqueta}</Text>
-                <Text style={userStyles.addText}>＋</Text>
-            </TouchableOpacity>
-            ))}
-        </ScrollView>
-
-        {/* 🔹 Botones fijos abajo */}
-        <View style={modalStyles.footerButtons}>
-            <TouchableOpacity
-            style={[userStyles.saveButton, saving && { opacity: 0.6 }]}
-            onPress={handleSaveFeeders}
-            disabled={saving}
-            >
-            <Text style={userStyles.saveButtonText}>
-                {saving ? "Guardando..." : "Guardar Cambios"}
+      <Modal visible={modalFeeders} animationType="slide" transparent>
+        <View style={modalStyles.modalOverlay}>
+          <View style={modalStyles.modalContainer}>
+            <Text style={modalStyles.modalTitle}>
+              Alimentadores de {selectedUser?.usuaNombres}
             </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-            style={userStyles.cancelButton}
-            onPress={() => setModalFeeders(false)}
+            {/* 🔹 Contenido con scroll */}
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
-            <Text style={userStyles.cancelButtonText}>Cerrar</Text>
-            </TouchableOpacity>
+              {/* 🔹 Sección Asignados */}
+              <Text style={userStyles.sectionTitle}>Asignados</Text>
+              {selectedFeeders.length > 0 ? (
+                <FlatList
+                  data={feeders.filter(f => selectedFeeders.includes(f.alimInterno))}
+                  keyExtractor={(f) => f.alimInterno.toString()}
+                  renderItem={({ item }) => (
+                    <View style={userStyles.assignedItem}>
+                      <Text style={userStyles.feederText}>{item.alimEtiqueta}</Text>
+                      <TouchableOpacity onPress={() => handleRemoveFeeder(item.alimInterno)}>
+                        <Text style={userStyles.removeText}>❌</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <Text style={userStyles.noItemsText}>No hay alimentadores asignados</Text>
+              )}
+
+              {/* 🔹 Sección Disponibles */}
+              <Text style={userStyles.sectionTitle}>Disponibles</Text>
+              <TextInput
+                style={userStyles.searchInput}
+                placeholder="Buscar alimentador..."
+                value={searchFeeder}
+                onChangeText={setSearchFeeder}
+              />
+
+              {feeders
+                .filter(
+                  (f) =>
+                    !selectedFeeders.includes(f.alimInterno) &&
+                    (f.alimEtiqueta.toLowerCase().includes(searchFeeder.toLowerCase()) ||
+                      f.alimInterno.toString().includes(searchFeeder))
+                )
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item.alimInterno}
+                    style={userStyles.availableItem}
+                    onPress={() => handleAddFeeder(item.alimInterno)}
+                  >
+                    <Text style={userStyles.feederText}>{item.alimEtiqueta}</Text>
+                    <Text style={userStyles.addText}>＋</Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            {/* 🔹 Botones fijos abajo */}
+            <View style={modalStyles.footerButtons}>
+              <TouchableOpacity
+                style={[userStyles.saveButton, saving && { opacity: 0.6 }]}
+                onPress={handleSaveFeeders}
+                disabled={saving}
+              >
+                <Text style={userStyles.saveButtonText}>
+                  {saving ? "Guardando..." : "Guardar Cambios"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={userStyles.cancelButton}
+                onPress={() => setModalFeeders(false)}
+              >
+                <Text style={userStyles.cancelButtonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-        </View>
-    </View>
-    </Modal>
+      </Modal>
     </View>
   );
 }

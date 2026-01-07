@@ -39,6 +39,27 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
   }
 };
 
+export const getDeficienciesByElement = async (idElement, typeElement) => {
+  try {
+    const deficiency = await runQuery(
+      `SELECT *
+       FROM Deficiencias d
+       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
+      [idElement, typeElement]
+    );
+
+    if (!deficiency || deficiency.length === 0) {
+      console.warn(`⚠ No se encontró deficiencia para el elemento ${idElement}`);
+      return [];
+    }
+
+    return deficiency;
+  } catch (error) {
+    console.error(`❌ Error al obtener la deficiencia:`, error);
+    return [];
+  }
+};
+
 // export const saveOrUpdateDeficiency = async (def) => {
 //   try {
 //     const allFields = [
@@ -273,6 +294,36 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
     return deficiencias;
   } catch (error) {
     console.error(`❌ Error al obtener deficiencias:`, error);
+    return [];
+  }
+};
+
+
+export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
+  try {
+    const query = `
+      SELECT 
+        d.DefiInterno,
+        d.TablInterno,
+        d.DefiIdElemento,
+        d.DefiTipoElemento,
+        d.DefiNumSuministro,
+        t.TypificationId AS TipiInterno,
+        t.Code,
+        t.Component,
+        t.Deficiency
+      FROM Deficiencias d
+      LEFT JOIN Tipificaciones t
+        ON d.TipiInterno = t.TypificationId
+      WHERE d.DefiIdElemento = ?
+        AND d.DefiTipoElemento = ?
+        AND DefiActivo = 1
+      ORDER BY d.DefiInterno ASC;
+    `;
+    const results = await runQuery(query, [elementId, typeElement]);
+    return results;
+  } catch (error) {
+    console.error("Error fetching deficiencies for FlatList:", error);
     return [];
   }
 };

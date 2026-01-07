@@ -79,7 +79,12 @@ public partial class SigreContext : DbContext
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
 
     => optionsBuilder.UseSqlServer("Server=localhost;Database=Sigre;User Id=sa;Password=1342;TrustServerCertificate=True;");
-    //=> optionsBuilder.UseSqlServer("Server=tcp:serversigre.database.windows.net,1433;Database = Sigre;Authentication=Active Directory Managed Identity;Encrypt=True;");
+    //=> optionsBuilder.UseSqlServer(
+    //      "Server=tcp:serversigre.database.windows.net,1433;" +
+    //      "Database=Sigre;" +
+    //      "Authentication=Active Directory Managed Identity;" +
+    //      "Encrypt=True;");
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

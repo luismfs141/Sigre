@@ -1,222 +1,122 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
-  Alert, BackHandler,
+  Alert,
+  BackHandler,
   Button,
-  Dimensions,
   FlatList,
   StyleSheet,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-
-
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
 import GeneralDataItem from "../../components/GeneralDataItem";
-import ListaDefModal from "../../components/Modal/ListaDefModal";
-import SelectedTypificationItem from "../../components/SelectedTypificationItem";
-"../../components/GeneralDataItem";
+import ListaTipificaciones from "../../components/Modal/ListaTipificaciones";
+import SelectedDeficiencyItem from "../../components/SelectedDeficiencyItem";
 
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { useDeficiency } from "../../hooks/useDeficiency";
 import { useFiles } from "../../hooks/useFiles";
-import { useTypification } from "../../hooks/useTypification";
 
 export default function Inspection() {
-  const { selectedItem, setSelectedTypification } = useDatos();
+  const { selectedItem, setSelectedTypification, selectedDeficiency, setSelectedDeficiency } = useDatos();
   const insets = useSafeAreaInsets();
-  const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
   const { user } = useContext(AuthContext);
-  const {
-  fetchUsedTypificationsByElement,
-  fetchAvailableTypificationsForElement
-} = useTypification();
+
   const { fetchFilesByElementAndTypi, deletedFile } = useFiles();
-  const { fetchDeficienciesByElementAndTypi, deleteDeficiency } = useDeficiency();
+  const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
 
   const [items, setItems] = useState([]);
-  const [availableDefs, setAvailableDefs] = useState([]);
-  const [usedTypificationIds, setUsedTypificationIds] = useState([]);
-
   const [modalGeneralVisible, setModalGeneralVisible] = useState(false);
   const [modalDeficiencyVisible, setModalDeficiencyVisible] = useState(false);
   const [newDefModalVisible, setNewDefModalVisible] = useState(false);
-
   const [currentItem, setCurrentItem] = useState(null);
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
-
-  const [hasNoDeficiencySelected, setHasNoDeficiencySelected] = useState(false);
-
-  const SIN_DEF_ID = 0;
 
   /* =======================
      CARGA INICIAL
      ======================= */
-  useEffect(() => {
-    if (!selectedItem) {
-      setItems([]);
-      setUsedTypificationIds([]);
-      setHasNoDeficiencySelected(false);
-      return;
-    }
+    useEffect(() => {
+      if (!selectedItem) {
+        setItems([]);
+        return;
+      }
 
-    const elementId =
-      selectedItem.PostInterno ??
-      selectedItem.VanoInterno ??
-      selectedItem.SedInterno;
+      const elementId =
+        selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
 
-    const typeElement = selectedItem.PostInterno
-      ? "POST"
-      : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+      const typeElement = selectedItem.PostInterno
+        ? "POST"
+        : selectedItem.VanoInterno
+          ? "VANO"
+          : "SED";
 
-    const isPost = selectedItem.PostCodigoNodo?.startsWith?.("PTO");
-    const tableId = isPost ? 8 : 9;
-
-    const loadDefs = async () => {
-      try {
-        const usedTypifications =
-          await fetchUsedTypificationsByElement(elementId, typeElement);
-        console.log("✅ usedTypifications:", usedTypifications);
-
-        const availableTypifications =
-          await fetchAvailableTypificationsForElement(
-            tableId,
+      const loadDefs = async () => {
+        try {
+          const existingDefs = await deficienciesForFlatList(
             elementId,
             typeElement
           );
 
-        const usedIds = usedTypifications.map(
-          t => t.TypificationId ?? t.id
-        );
+          const generalItem = {
+            id: "general",
+            type: "general",
+            name: "Datos Generales",
+            data: selectedItem
+          };
 
-        setUsedTypificationIds(usedIds);
-        setHasNoDeficiencySelected(usedIds.includes(SIN_DEF_ID));
+          setItems([generalItem, ...existingDefs]);
+        } catch (err) {
+          console.error("❌ Error cargando inspección:", err);
+        }
+      };
 
-        const existingDefs = usedTypifications.map(def => ({
-          id: def.TypificationId,
-          type: "def",
-          defId: def.TypificationId,
-          name: `${def.Code}→${def.Component}`,
-          data: {
-            detail: def.Typification,
-            deficiency: def.Deficiency,
-            elementId,
-            typeElement,
-            typificationId: def.TypificationId,
-            typificationCode: def.Code,
-            tableId
-          },
-          photos: [],
-          audio: null
-        }));
+      loadDefs();
+    }, [selectedItem]);
 
-        const generalItem = {
-          id: "general",
-          type: "general",
-          name: "Datos Generales",
-          data: selectedItem
-        };
-
-        setItems([generalItem, ...existingDefs]);
-        setAvailableDefs(
-          availableTypifications.map(d => ({
-            ...d,
-            id: d.TypificationId ?? d.id
-          }))
-        );
-      } catch (err) {
-        console.error("❌ Error cargando inspección:", err);
-      }
-    };
-
-
-    loadDefs();
-  }, [selectedItem]);
 
   /* =======================
-     BACK HANDLER
-     ======================= */
+      BACK HANDLER
+    ======================= */
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         router.replace("/(drawer)/map");
         return true;
       };
-      const sub = BackHandler.addEventListener(
-        "hardwareBackPress",
-        onBackPress
-      );
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => sub.remove();
     }, [])
   );
 
-  /* =======================
-     AGREGAR DEFICIENCIA
-     ======================= */
-  const addNewDeficiency = def => {
+  const refreshList = async () => {
+    if (!selectedItem) return;
+
     const elementId =
-      selectedItem.PostInterno ??
-      selectedItem.VanoInterno ??
-      selectedItem.SedInterno;
+      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
 
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
-    const typificationId = def.id;
+    const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
-    const hasOtherDefs =
-      usedTypificationIds.filter(id => id !== SIN_DEF_ID).length > 0;
-
-    if (typificationId === SIN_DEF_ID && hasOtherDefs) {
-      alert(
-        "No puedes seleccionar 'Sin Deficiencia' mientras existan otras deficiencias."
-      );
-      return;
-    }
-
-    if (typificationId !== SIN_DEF_ID && hasNoDeficiencySelected) {
-      alert(
-        "No puedes añadir más deficiencias mientras 'Sin Deficiencia' esté seleccionada."
-      );
-      return;
-    }
-
-    const newDef = {
-      id: typificationId,
-      type: "def",
-      defId: typificationId,
-      name: `${def.code}→${def.short}`,
-      data: {
-        detail: def.detail ?? "",
-        deficiency: def.deficiency,
-        elementId,
-        typeElement,
-        typificationId,
-        typificationCode: def.code,
-        tableId: def.tableId
-      },
-      photos: [],
-      audio: null
+    const generalItem = {
+      id: "general",
+      type: "general",
+      name: "Datos Generales",
+      data: selectedItem
     };
 
-    setItems(prev => [...prev, newDef]);
-    setUsedTypificationIds(prev => [...prev, typificationId]);
-
-    if (typificationId === SIN_DEF_ID) {
-      setHasNoDeficiencySelected(true);
-    }
-
-    setNewDefModalVisible(false);
+    setItems([generalItem, ...existingDefs]);
   };
+
 
   /* =======================
      ELIMINAR DEFICIENCIA
@@ -224,20 +124,7 @@ export default function Inspection() {
   const handleDeficiencyDeleted = typificationId => {
     if (typificationId == null) return;
 
-    console.log(selectedItem);
-
-    setItems(prev =>
-      prev.filter(item => item.defId !== typificationId)
-    );
-
-    setUsedTypificationIds(prev =>
-      prev.filter(id => id !== typificationId)
-    );
-
-    if (typificationId === SIN_DEF_ID) {
-      setHasNoDeficiencySelected(false);
-    }
-
+    setItems(prev => prev.filter(item => item.defId !== typificationId));
     setModalDeficiencyVisible(false);
   };
 
@@ -252,29 +139,15 @@ export default function Inspection() {
       return;
     }
 
-    setSelectedTypification({
-      ...item.data,
-      id: item.id,
-      name: item.name
-    });
+    setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
 
-    setCurrentDeficiency({
-      ...item.data
-    });
-
+    setCurrentDeficiency({ ...item.data });
     setModalDeficiencyVisible(true);
   };
 
   const handleLocalDelete = async (selectedItem) => {
     if (!selectedItem) return;
 
-    const elementId = selectedItem.data.elementId;
-    const typeElement = selectedItem.data.typeElement;
-    const typificationId = selectedItem.data.typificationId;
-
-    if (!elementId || !typeElement || !typificationId) return;
-
-    // 🔹 Mensaje de advertencia
     Alert.alert(
       "Eliminar tipificación",
       "⚠️ Está a punto de eliminar esta tipificación y todos los archivos asociados. ¿Desea continuar?",
@@ -285,45 +158,9 @@ export default function Inspection() {
           style: "destructive",
           onPress: async () => {
             try {
-              // -------------------- Eliminar archivos asociados --------------------
-              const archivos = await fetchFilesByElementAndTypi(elementId, typeElement, typificationId);
-              if (archivos.length) {
-                for (const archivo of archivos) {
-                  await deletedFile(archivo.ArchInterno);
-                  console.log(`🗑 Archivo ${archivo.ArchInterno} eliminado correctamente`);
-                }
-              }
-
-              // -------------------- Obtener y eliminar la deficiencia --------------------
-              const deficiencias = await fetchDeficienciesByElementAndTypi(
-                elementId,
-                typeElement,
-                typificationId
-              );
-
-              if (deficiencias.length) {
-                const def = deficiencias[0]; // asumimos la primera si hay varias
-                const defiInterno = def.DefiInterno;
-
-                const deleted = await deleteDeficiency(defiInterno);
-                if (!deleted) {
-                  console.error(`❌ No se pudo eliminar la deficiencia con DefiInterno ${defiInterno}`);
-                }
-              } else {
-                console.warn(`⚠ No se encontró deficiencia para elementId ${elementId} y typificationId ${typificationId}`);
-              }
-
-              // -------------------- Actualizar estado local --------------------
-              setItems(prev => prev.filter(i => i.defId !== typificationId));
-              setUsedTypificationIds(prev => prev.filter(id => id !== typificationId));
-
-              if (typificationId === SIN_DEF_ID) {
-                setHasNoDeficiencySelected(false);
-              }
-
+              await deleteDeficiency(selectedItem.defId);
               setModalDeficiencyVisible(false);
-
-              console.log(`✅ Tipificación ${typificationId} y archivos asociados eliminados correctamente`);
+              refreshList();
             } catch (err) {
               console.error("❌ Error en handleLocalDelete:", err);
             }
@@ -334,45 +171,66 @@ export default function Inspection() {
     );
   };
 
+  const handleSelectTypification = (def) => {
+    if (!selectedItem) return;
+
+    const elementId =
+      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+        ? "VANO"
+        : "SED";
+
+    const currentDef = {
+      detail: def.detail ?? "",
+      deficiency: def.deficiency,
+      elementId,
+      typeElement,
+      typificationId: def.id,
+      typificationCode: def.code,
+      tableId: def.tableId
+    };
+
+    setCurrentDeficiency(currentDef);
+    setModalDeficiencyVisible(true);
+    setNewDefModalVisible(false);
+  };
 
   /* =======================
      RENDER ITEM
      ======================= */
-    const renderItem = ({ item }) => {
-      // 🔹 DATOS GENERALES (igual que antes)
-      if (item.type === "general") {
-        return (
-          <GeneralDataItem
-            item={selectedItem}
-            onEdit={(it) => openFormModal({ ...item, data: it })}
-          />
-        );
-      }
-
-      // 🔹 TIPIFICACIÓN SELECCIONADA (NUEVO COMPONENTE)
+  const renderItem = ({ item }) => {
+    if (item.type === "general") {
       return (
-        <SelectedTypificationItem
-          item={item}
-          onDelete={handleLocalDelete}
-          onPhotos={(it) => {
-            setSelectedTypification({
-              ...it.data,
-              id: it.id,
-              name: it.name
-            });
-            router.push("/(drawer)/registerDef");
-          }}
-          onDeficiency={openFormModal}
+        <GeneralDataItem
+          item={selectedItem}
+          onEdit={(it) => openFormModal({ ...item, data: it })}
         />
       );
-    };
+    }
 
+    return (
+      <SelectedDeficiencyItem
+        item={item}
+        onDelete={handleLocalDelete}
+        onPhotos={(it) => {
+          setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
+          router.push("/(drawer)/multimedia");
+        }}
+        onDeficiency={openFormModal}
+      />
+    );
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, paddingBottom: insets.bottom }}>
       <FlatList
         data={items}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={item => 
+          item.type === "def" ? item.defId.toString() : item.id.toString()
+        }
         renderItem={renderItem}
       />
 
@@ -380,7 +238,6 @@ export default function Inspection() {
         <Button
           title="Nueva Deficiencia"
           onPress={() => setNewDefModalVisible(true)}
-          disabled={hasNoDeficiencySelected}
         />
       </View>
 
@@ -396,14 +253,15 @@ export default function Inspection() {
         userId={user.id}
         selectedItem={selectedItem}
         onDelete={handleDeficiencyDeleted}
-        onClose={() => setModalDeficiencyVisible(false)}
+        onClose={() => {
+          setModalDeficiencyVisible(false);
+          refreshList();
+        }}
       />
-
-      <ListaDefModal
+      <ListaTipificaciones
         visible={newDefModalVisible}
-        defs={availableDefs}
-        usedIds={usedTypificationIds}
-        onSelect={addNewDeficiency}
+        selectedItem={selectedItem}
+        onSelect={handleSelectTypification}
         onClose={() => setNewDefModalVisible(false)}
       />
     </SafeAreaView>

@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Servicios
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(); //Comentar para Server Online
 
 // 🔑 Configuración de JWT
 var key = Encoding.UTF8.GetBytes("esta_es_una_clave_super_segura_123456!");
@@ -57,8 +57,8 @@ var app = builder.Build();
 // Pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger(); //Comentar para Server Online
+    app.UseSwaggerUI(); //Comentar para Server Online
 }
 
 app.UseHttpsRedirection();

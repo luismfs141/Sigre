@@ -1,20 +1,19 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-export default function SelectedTypificationItem({
+export default function SelectedDeficiencyItem({
   item,
   onDelete,
   onPhotos,
   onDeficiency
 }) {
-
   return (
     <View style={styles.card}>
       {/* 🔹 Título */}
       <Text style={styles.title}>{item.name}</Text>
 
       {item.data && (
-        <Text style={styles.subtitle}>{item.data.deficiency}</Text>
+        <Text style={styles.subtitle}>{item.data.detail}</Text>
       )}
 
       {/* 🔹 BOTONES */}

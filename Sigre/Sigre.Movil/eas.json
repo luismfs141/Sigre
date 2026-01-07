@@ -33,6 +33,14 @@
       "env": {
         "ENVIRONMENT": "production"
       }
+    },
+
+   
+
+    "production-apk": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "ENVIRONMENT": "production" }
     }
   }
 }

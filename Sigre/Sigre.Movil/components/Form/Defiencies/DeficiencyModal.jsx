@@ -1,7 +1,6 @@
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -152,35 +151,6 @@ export default function DeficiencyModal({
   };
 
   // --------------------------------------------------
-  // 🗑 ELIMINAR (CLAVE DEL REFRESH)
-  // --------------------------------------------------
-  const handleDelete = () => {
-    Alert.alert(
-      "Confirmar eliminación",
-      "¿Desea eliminar esta deficiencia?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: async () => {
-            // Si existe en BD → borrar
-            if (localDef?.DefiInterno) {
-              await deleteDeficiency(localDef.DefiInterno);
-            }
-
-            // 🔔 Avisar al padre (Inspection)
-            onDelete?.(localDef.typificationId);
-
-            // 🔒 Cerrar modal
-            onClose();
-          }
-        }
-      ]
-    );
-  };
-
-  // --------------------------------------------------
   // RENDER
   // --------------------------------------------------
   return (
@@ -279,13 +249,6 @@ export default function DeficiencyModal({
           {/* BOTONES */}
           <View style={styles.buttons}>
             <TouchableOpacity
-              style={styles.btnDelete}
-              onPress={handleDelete}
-            >
-              <Text style={styles.btnText}>Eliminar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={styles.btnSave}
               onPress={handleSave}
             >
@@ -363,18 +326,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 12
   },
-  btnDelete: {
-    backgroundColor: "#e74c3c",
-    padding: 12,
-    borderRadius: 8,
-    width: "48%",
-    alignItems: "center"
+  buttons: {
+    flexDirection: "row",
+    justifyContent: "center", // <-- centra horizontalmente
+    marginTop: 12
   },
   btnSave: {
     backgroundColor: "#27ae60",
     padding: 12,
     borderRadius: 8,
-    width: "48%",
+    width: "60%", // opcional, se puede ajustar según se vea mejor
     alignItems: "center"
   },
   btnText: { color: "#fff", fontWeight: "600" },

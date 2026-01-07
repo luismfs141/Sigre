@@ -9,10 +9,11 @@ import {
   getArchivosByBasePathLocal,
   getArchivosPendientes,
   getFilesByElementAndTypi,
+  getMediosByDeficienciaIdLocal,
   getNextArchCodTablaLocal,
-  insertArchivoLocal,
   markArchivoAsSynced,
   markArchivoDeletedLocal,
+  saveOrUpdateArchivoLocal,
   updateArchivoIdAfterSync
 } from "../database/offlineDB/files";
 
@@ -26,18 +27,21 @@ export function useFiles() {
   // ===============================
   // 🔹 NORMALIZAR ANTES DE GUARDAR
   // ===============================
-  const normalizeArchivoBeforeSave = useCallback((archivo) => ({
-    archTipo: Number(archivo.archTipo),
-    archTabla: archivo.archTabla ?? "Deficiencias",
-    archCodTabla: Number(archivo.archCodTabla),
-    archNombre: archivo.archNombre,
-    archLatit: archivo.archLatit ?? null,
-    archLong: archivo.archLong ?? null,
-    archFech: archivo.archFech ?? nowPeruISO(),
-    archTipoElemento: archivo.archTipoElemento ?? null,
-    archIdElemento: archivo.archIdElemento ?? null,
-    tipiInterno: archivo.tipiInterno ?? null,
-    archActiv: archivo.archActiv ?? 1
+  const normalizeArchivoBeforeSave = useCallback((archivo) => (
+     console.log("🧪 archivo:", archivo),
+    {
+  
+    archTipo: Number(archivo.ArchTipo),
+    archTabla: archivo.ArchTabla ?? "Deficiencias",
+    archCodTabla: Number(archivo.ArchCodTabla),
+    archNombre: archivo.ArchNombre,
+    archLatit: archivo.ArchLatit ?? null,
+    archLong: archivo.ArchLong ?? null,
+    archFech: archivo.ArchFech ?? nowPeruISO(),
+    archTipoElemento: archivo.ArchTipoElemento ?? null,
+    archIdElemento: archivo.ArchIdElemento ?? null,
+    tipiInterno: archivo.TipiInterno ?? null,
+    archActiv: archivo.ArchActiv ?? 1
   }), []);
 
 
@@ -131,21 +135,64 @@ export function useFiles() {
   // ===============================
   // 💾 SAVE
   // ===============================
+  // const saveArchivoLocal = useCallback(async (data) => {
+  //   const dbOk = await checkDatabase();
+  //   if (!dbOk) return null;
+
+  //   const normalized = normalizeArchivoBeforeSave(data);
+  //   console.log("💾 Guardando archivo:", normalized);
+
+  //   const localId = await insertArchivoLocal(normalized);
+
+  //   if (localId) {
+  //     await autoSyncArchivo(localId);
+  //   }
+
+  //   return localId;
+  // }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
+
   const saveArchivoLocal = useCallback(async (data) => {
+
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
+    // 🔹 Normalización EXISTENTE (NO SE TOCA)
     const normalized = normalizeArchivoBeforeSave(data);
-    console.log("💾 Guardando archivo:", normalized);
 
-    const localId = await insertArchivoLocal(normalized);
+    // 🔹 Adaptación a estructura SQLite (saveOrUpdate)
+    const archivoForDB = {
+      ArchInterno: data.ArchInterno ?? null,   // 👈 clave para UPDATE
+      ArchTipo: normalized.archTipo,
+      ArchTabla: normalized.archTabla,
+      ArchCodTabla: normalized.archCodTabla,
+      ArchNombre: normalized.archNombre,
+      ArchLatitud: normalized.archLatit,
+      ArchLongitud: normalized.archLong,
+      ArchFecha: normalized.archFech,
+      ArchTipoElemento: normalized.archTipoElemento,
+      ArchIdElemento: normalized.archIdElemento,
+      TipiInterno: normalized.tipiInterno,
+      ArchActivo: normalized.archActiv,
+      EstadoOffLine: data.EstadoOffLine ?? null,
+      DefiServerId: data.DefiServerId ?? null
+    };
 
+    console.log("💾 saveOrUpdateArchivoLocal:", archivoForDB);
+
+    const localId = await saveOrUpdateArchivoLocal(archivoForDB);
+
+    // 🔄 Mantener sincronización automática
     if (localId) {
       await autoSyncArchivo(localId);
     }
 
     return localId;
-  }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
+  }, [
+    checkDatabase,
+    autoSyncArchivo,
+    normalizeArchivoBeforeSave
+  ]);
+
 
   // ===============================
   // 🗑️ DELETE Y MOD RUTA
@@ -196,6 +243,27 @@ export function useFiles() {
     [checkDatabase]
   );
 
+  // ---------------- Obtener TODOS los medios por Deficiencia ----------------
+  const fetchMediosByDeficienciaId = useCallback(
+    async (deficienciaId) => {
+      const dbOk = await checkDatabase();
+      if (!dbOk) return [];
+
+      try {
+        const medios = await getMediosByDeficienciaIdLocal(deficienciaId);
+        return medios;
+      } catch (err) {
+        console.error(
+          "❌ Error obteniendo medios por deficiencia:",
+          err
+        );
+        return [];
+      }
+    },
+    [checkDatabase]
+  );
+
+
   return {
     getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
     saveArchivoLocal,
@@ -205,6 +273,7 @@ export function useFiles() {
     ),
     markArchivoAsDeleted,
     fetchFilesByElementAndTypi,
+    fetchMediosByDeficienciaId,
     deletedFile
   };
 }
