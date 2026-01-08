@@ -292,39 +292,6 @@ const loadLocalSeds = async () => {
   //───────────────────────────────────────────────
   // SINCRONIZAR (SINCRONIZA BASE)
   //───────────────────────────────────────────────
-
-  // const handleSync = async () => {
-  //   try {
-  //     const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
-
-  //     // 1️⃣ Cerrar base
-  //     await closeDatabase();
-
-  //     // 2️⃣ Eliminar archivo
-  //     await FileSystem.deleteAsync(dbPath, { idempotent: true });
-
-  //     // 3️⃣ Limpiar storage
-  //     await AsyncStorage.removeItem("selectedFeeders");
-  //     await AsyncStorage.removeItem("offline_db_name");
-  //     await AsyncStorage.removeItem("db_name");   // 👈 IMPORTANTE
-
-  //     // 4️⃣ Limpiar estados
-  //     setSelectedFeeders([]);
-  //     setSelectedFeeder(null);
-  //     setSelectedSubstations([]);
-  //     setSubstationsByFeeder([]);
-
-  //     setDbName(null);     // 👈 hace que checkDatabase falle
-  //     setDbExists(false);  // 👈 REACTIVA BOTONES
-  //     setIsSynced(true);
-
-  //     Alert.alert("Listo", "Base eliminada.");
-  //   } catch (e) {
-  //     console.log("❌ Error en sincronización:", e);
-  //     Alert.alert("Error", "No se pudo sincronizar.");
-  //   }
-  // };
-
   const handleSyncPress = () => {
     Alert.alert(
       "Sincronización",
