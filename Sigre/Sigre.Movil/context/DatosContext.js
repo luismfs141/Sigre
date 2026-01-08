@@ -70,16 +70,44 @@ export const DatosProvider = ({ children }) => {
   // -------------------------------------------------------
   // Comprobar base antes de cada pantalla
   // -------------------------------------------------------
-  const checkDatabase = async () => {
-    if (!dbName) return false;
+  // const checkDatabase = async () => {
+  //   if (!dbName) return false;
+  //   const exists = await isDatabaseAvailable(dbName);
+  //   if (!exists) {
+  //     console.warn("❌ checkDatabase -> La base NO existe:", dbName);
+  //     setDbReady(false);
+  //     return false;
+  //   }
+  //   return true;
+  // };
+
+const checkDatabase = async () => {
+  try {
+    if (!dbName) {
+      console.warn("⚠ checkDatabase -> No hay dbName");
+      return false;
+    }
+
     const exists = await isDatabaseAvailable(dbName);
     if (!exists) {
       console.warn("❌ checkDatabase -> La base NO existe:", dbName);
       setDbReady(false);
       return false;
     }
+
+    // 🔴 CLAVE: si la DB no está lista, ábrela y espera
+    if (!dbReady) {
+      console.log("📂 checkDatabase -> Abriendo base...");
+      await openLocalDB();   // 👈 ESPERA a que termine
+    }
+
     return true;
-  };
+  } catch (error) {
+    console.error("❌ Error en checkDatabase:", error);
+    return false;
+  }
+};
+
 
   // -------------------------------------------------------
   // Cerrar BD actual
