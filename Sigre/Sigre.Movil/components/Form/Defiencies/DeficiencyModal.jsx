@@ -41,6 +41,23 @@ export default function DeficiencyModal({
     deleteDeficiency
   } = useDeficiency();
 
+
+
+  // --------------------------------------------------
+  // LIMPIAR CAMPOS
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!visible) {
+      setLocalDef(null);
+      setSelectConfig(null);
+      setShowLocationModal(false);
+      setActiveLocationField(null);
+    }
+  }, [visible]);
+
+
+
   // --------------------------------------------------
   // CARGA / INICIALIZACIÓN
   // --------------------------------------------------
@@ -122,6 +139,8 @@ export default function DeficiencyModal({
   const code = String(localDef.typificationCode);
   const fields = getDeficiencyFields(code);
   const title = getDeficiencyLabel(code);
+  const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${localDef.DefiInterno ?? 0}`;
+
 
   // --------------------------------------------------
   // 💾 GUARDAR
@@ -153,25 +172,25 @@ export default function DeficiencyModal({
   // };
 
   const isEmptyValue = (field, value) => {
-  if (value === null || value === undefined) return true;
+    if (value === null || value === undefined) return true;
 
-  const s = String(value).trim();
-  if (s === "") return true;
+    const s = String(value).trim();
+    if (s === "") return true;
 
-  // ✅ Si es select y el valor es "0":
-  // solo considerarlo "vacío" si "0" NO existe en su valueMap
-  if (field.selectable || field.valueMap) {
-    if (s === "0") {
-      const hasZeroOption =
-        field.valueMap && Object.prototype.hasOwnProperty.call(field.valueMap, "0");
+    // ✅ Si es select y el valor es "0":
+    // solo considerarlo "vacío" si "0" NO existe en su valueMap
+    if (field.selectable || field.valueMap) {
+      if (s === "0") {
+        const hasZeroOption =
+          field.valueMap && Object.prototype.hasOwnProperty.call(field.valueMap, "0");
 
-      // Si NO hay opción 0 => entonces sí es "no seleccionado"
-      if (!hasZeroOption) return true;
+        // Si NO hay opción 0 => entonces sí es "no seleccionado"
+        if (!hasZeroOption) return true;
+      }
     }
-  }
 
-  return false;
-};
+    return false;
+  };
 
 
   const toNumber = (v) => {
@@ -266,83 +285,87 @@ export default function DeficiencyModal({
 
               {/* FORM */}
               <ScrollView>
-                {fields.map(field => {
-                  const value = localDef[field.key];
+                <View key={formKey}>
+                  {fields.map(field => {
+                    const value = localDef[field.key];
 
-                  // 📍 LAT / LNG
-                  if (
-                    field.key === "DefiLatitud" ||
-                    field.key === "DefiLongitud"
-                  ) {
-                    return (
-                      <View key={field.key} style={{ marginBottom: 15 }}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setActiveLocationField(field.key);
-                            setShowLocationModal(true);
-                          }}
-                          style={styles.locationLabel}
-                        >
-                          <Text style={{ fontWeight: "700" }}>
-                            {field.label}
-                          </Text>
-                        </TouchableOpacity>
+                    // 📍 LAT / LNG
+                    if (
+                      field.key === "DefiLatitud" ||
+                      field.key === "DefiLongitud"
+                    ) {
+                      return (
+                        <View key={field.key} style={{ marginBottom: 15 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setActiveLocationField(field.key);
+                              setShowLocationModal(true);
+                            }}
+                            style={styles.locationLabel}
+                          >
+                            <Text style={{ fontWeight: "700" }}>
+                              {field.label}
+                            </Text>
+                          </TouchableOpacity>
 
+                          <DeficiencyField
+                            field={field}
+                            value={value}
+                            editable={false}
+                          />
+                        </View>
+                      );
+                    }
+
+                    // 🔽 SELECT
+                    if (field.valueMap) {
+                      const items = Object.entries(field.valueMap).map(
+                        ([val, label]) => ({ value: val, label })
+                      );
+
+                      return (
                         <DeficiencyField
+                          // key={field.key}
+                          key={`${formKey}-${field.key}`}
                           field={field}
-                          value={value}
-                          editable={false}
+                          value={
+                            items.find(
+                              i => String(i.value) === String(value)
+                            )?.label ?? ""
+                          }
+                          onPress={
+                            field.selectable
+                              ? () =>
+                                setSelectConfig({
+                                  field: field.key,
+                                  title: field.label,
+                                  items,
+                                  labelKey: "label",
+                                  valueKey: "value"
+                                })
+                              : null
+                          }
                         />
-                      </View>
-                    );
-                  }
+                      );
+                    }
 
-                  // 🔽 SELECT
-                  if (field.valueMap) {
-                    const items = Object.entries(field.valueMap).map(
-                      ([val, label]) => ({ value: val, label })
-                    );
-
+                    // ✏️ INPUT
                     return (
                       <DeficiencyField
-                        key={field.key}
+                      // key={field.key}
+                        key={`${formKey}-${field.key}`}
                         field={field}
-                        value={
-                          items.find(
-                            i => String(i.value) === String(value)
-                          )?.label ?? ""
-                        }
-                        onPress={
-                          field.selectable
-                            ? () =>
-                              setSelectConfig({
-                                field: field.key,
-                                title: field.label,
-                                items,
-                                labelKey: "label",
-                                valueKey: "value"
-                              })
-                            : null
+                        value={value}
+                        onChange={val =>
+                          setLocalDef(prev => ({
+                            ...prev,
+                            [field.key]: val
+                          }))
                         }
                       />
                     );
-                  }
-
-                  // ✏️ INPUT
-                  return (
-                    <DeficiencyField
-                      key={field.key}
-                      field={field}
-                      value={value}
-                      onChange={val =>
-                        setLocalDef(prev => ({
-                          ...prev,
-                          [field.key]: val
-                        }))
-                      }
-                    />
-                  );
-                })}
+                  })}
+                </View>
               </ScrollView>
 
               {/* BOTONES */}
