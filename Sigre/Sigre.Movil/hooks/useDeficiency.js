@@ -114,9 +114,10 @@ export const useDeficiency = () => {
     const dbOk = await checkDatabase();
     if (!dbOk) return false;
 
-    try {
-      const def = await getDeficiencyByIdLocal(defiInterno);
-      if (!def) return false;
+  try {
+    const def = await getDeficiencyByIdLocal(defiInterno);
+    console.log(def);
+    if (!def) return false;
 
       // 🔴 BORRADO LÓGICO SIEMPRE
       await deleteDeficiencyById(defiInterno);

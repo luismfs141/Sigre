@@ -5,20 +5,52 @@ import { styles } from "./modalStyles";
 
 export default function ListaTipificaciones({ visible, selectedItem, onSelect, onClose }) {
   const screenHeight = Dimensions.get("window").height;
-  const { fetchTypificationsByTypeElement } = useTypification();
+  const { fetchTypificationsByTypeElement, fetchUsedTypificationsByElement } = useTypification();
   const [typifications, setTypifications] = useState([]);
 
+  const CODES_NO_RETIRAR = ["7004"];
+
   useEffect(() => {
-    if (!selectedItem) return;
+    if (!selectedItem || !visible) return;
 
     const tableId = selectedItem.PostInterno ? 8 : 9;
+    const typeElement = selectedItem.PostInterno ? "POST" : "VANO";
 
     const loadTypifications = async () => {
       try {
-        // Trae todas las tipificaciones de la base según tableId
+        // 1. Todas las tipificaciones
         const allTypifications = await fetchTypificationsByTypeElement(tableId);
 
-        // Siempre añadimos "Sin Deficiencia" al inicio
+        // 2. Tipificaciones ya usadas por el elemento
+        const used = await fetchUsedTypificationsByElement(
+          selectedItem.PostInterno,
+          typeElement
+        );
+
+        // 3. Obtener IDs usados (normalizados)
+        const usedIds = used.map(u =>
+          String(u.TypificationId ?? u.IdTypification ?? u.id)
+        );
+
+        // 4. Filtrar aplicando la lista manual
+        const available = allTypifications.filter(t => {
+          const id = String(t.TypificationId ?? t.IdTypification ?? t.id);
+          const code = String(t.Code ?? t.code);
+
+          const estaUsada = usedIds.includes(id);
+          const noDebeRetirarse = CODES_NO_RETIRAR.includes(code);
+
+          // Regla:
+          // - Si está usada → se quita
+          // - EXCEPTO si su código está en CODES_NO_RETIRAR
+          if (estaUsada && !noDebeRetirarse) {
+            return false;
+          }
+
+          return true;
+        });
+
+        // 5. Armar lista final
         const finalList = [
           {
             id: 0,
@@ -27,8 +59,8 @@ export default function ListaTipificaciones({ visible, selectedItem, onSelect, o
             detail: "No se seleccionará ninguna deficiencia",
             deficiency: "Sin Deficiencia"
           },
-          ...allTypifications.map(t => ({
-            id: t.TypificationId ?? t.id,
+          ...available.map(t => ({
+            id: t.TypificationId ?? t.IdTypification ?? t.id,
             code: t.Code ?? t.code,
             short: t.Component ?? t.short,
             detail: t.Typification ?? t.detail,
@@ -44,7 +76,7 @@ export default function ListaTipificaciones({ visible, selectedItem, onSelect, o
     };
 
     loadTypifications();
-  }, [selectedItem]);
+  }, [selectedItem, visible]); // 🔥 CLAVE: ahora se recarga cada vez que se abre el modal
 
   const handleSelect = def => {
     onSelect(def);

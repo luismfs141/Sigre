@@ -33,7 +33,6 @@
 
 import { useDatos } from "../context/DatosContext";
 import {
-  getTypificationByFiles,
   getTypificationByIdElement,
   getTypificationByTypeElement
 } from "../database/offlineDB/typification";
@@ -68,36 +67,20 @@ export const useTypification = () => {
   /* ===============================
      🔹 USADAS (Deficiencias + Archivos)
      =============================== */
+
   const fetchUsedTypificationsByElement = async (idElement, typeElement) => {
     if (!(await ensureDb())) return [];
-
     if (!idElement || !typeElement) return [];
 
     try {
-      const [fromDefs, fromFiles] = await Promise.all([
-        getTypificationByIdElement(idElement, typeElement),
-        getTypificationByFiles(idElement, typeElement)
-      ]);
-
-      // Unificar sin duplicados
-      const map = new Map();
-
-      [...fromDefs, ...fromFiles].forEach(t => {
-        const id = t.TypificationId ?? t.id;
-        if (!map.has(id)) {
-          map.set(id, {
-            ...t,
-            TypificationId: id
-          });
-        }
-      });
-
-      return Array.from(map.values());
+      const used = await getTypificationByIdElement(idElement, typeElement);
+      return used ?? [];
     } catch (error) {
       console.error("❌ Error obteniendo tipificaciones usadas:", error);
       return [];
     }
   };
+
 
   /* ===============================
      🔹 DISPONIBLES (por tipo elemento)
