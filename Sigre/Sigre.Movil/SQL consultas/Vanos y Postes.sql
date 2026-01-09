@@ -1,7 +1,7 @@
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR ETIQUETA DE ELEMENTO -------------------
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(20) = '011959';
+DECLARE @etiqueta varchar(20) = '%27516%';
 ;WITH Q AS
 (
     SELECT  ElementoEtiqueta =
@@ -22,20 +22,24 @@ DECLARE @etiqueta varchar(20) = '011959';
 SELECT  DEFI_IdElemento,
         ElementoEtiqueta,
         DEFI_FechaCreacion,
+        DEFI_TipoElemento,
         DEFI_Interno,
         DEFI_Observacion,
         DEFI_Comentario,
         DEFI_Activo,
+        DEFI_DistHorizontal,
+        DEFI_DistVertical,
         Q.*
 FROM Q
 WHERE ElementoEtiqueta LIKE @etiqueta
 ORDER BY Q.DEFI_FechaCreacion DESC;
 GO
 
+
 ------------------------------------------------------------------
 -- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(20) = '%011959%';
+DECLARE @etiqueta varchar(20) = '00556';
 
 ;WITH Q AS
 (
@@ -63,7 +67,7 @@ GO
 
 
 
-
+select * from Deficiencias order by DEFI_FechaCreacion desc
 
 
 
@@ -74,7 +78,7 @@ order by 1 desc
 
 
 
-
+select * from Archivos order by ARCH_Fecha desc
 
 
 
