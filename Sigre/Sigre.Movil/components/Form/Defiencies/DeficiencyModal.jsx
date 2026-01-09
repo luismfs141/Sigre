@@ -126,31 +126,117 @@ export default function DeficiencyModal({
   // --------------------------------------------------
   // 💾 GUARDAR
   // --------------------------------------------------
+  // const handleSave = async () => {
+  //   const missing = fields.filter(f => f.required && !localDef[f.key]);
+  //   if (missing.length) {
+  //     alert(
+  //       `Campos obligatorios: ${missing.map(f => f.label).join(", ")}`
+  //     );
+  //     return;
+  //   }
+
+  //   const invalid = fields
+  //     .filter(f => f.validation && localDef[f.key] != null)
+  //     .filter(
+  //       f =>
+  //         localDef[f.key] < f.validation.min ||
+  //         localDef[f.key] > f.validation.max
+  //     );
+
+  //   if (invalid.length) {
+  //     alert(invalid.map(f => f.validation.message).join("\n"));
+  //     return;
+  //   }
+
+  //   await saveDeficiency(localDef, userId);
+  //   onClose();
+  // };
+
+  const isEmptyValue = (field, value) => {
+  if (value === null || value === undefined) return true;
+
+  const s = String(value).trim();
+  if (s === "") return true;
+
+  // ✅ Si es select y el valor es "0":
+  // solo considerarlo "vacío" si "0" NO existe en su valueMap
+  if (field.selectable || field.valueMap) {
+    if (s === "0") {
+      const hasZeroOption =
+        field.valueMap && Object.prototype.hasOwnProperty.call(field.valueMap, "0");
+
+      // Si NO hay opción 0 => entonces sí es "no seleccionado"
+      if (!hasZeroOption) return true;
+    }
+  }
+
+  return false;
+};
+
+
+  const toNumber = (v) => {
+    if (v === null || v === undefined) return NaN;
+    const s = String(v).trim().replace(",", "."); // por si escriben 5,5
+    return s === "" ? NaN : parseFloat(s);
+  };
+
   const handleSave = async () => {
-    const missing = fields.filter(f => f.required && !localDef[f.key]);
+    // ✅ 1) REQUERIDOS (mejorado)
+    const missing = fields.filter(f => f.required && isEmptyValue(f, localDef[f.key]));
     if (missing.length) {
-      alert(
-        `Campos obligatorios: ${missing.map(f => f.label).join(", ")}`
-      );
+      alert(`Campos obligatorios: ${missing.map(f => f.label).join(", ")}`);
       return;
     }
 
-    const invalid = fields
-      .filter(f => f.validation && localDef[f.key] != null)
-      .filter(
-        f =>
-          localDef[f.key] < f.validation.min ||
-          localDef[f.key] > f.validation.max
-      );
+    // ✅ 2) VALIDACIONES (min/max + custom)
+    const errors = [];
 
-    if (invalid.length) {
-      alert(invalid.map(f => f.validation.message).join("\n"));
+    for (const f of fields) {
+      const raw = localDef[f.key];
+
+      // si está vacío, no validar rangos (required ya filtró arriba)
+      if (isEmptyValue(f, raw)) continue;
+
+      // ✅ 2A) custom (AQUÍ se ejecuta tu lógica condicional y verás el console.log)
+      if (f.validation?.custom) {
+        const msg = f.validation.custom(raw, localDef);
+        if (msg) errors.push(msg);
+        continue; // si quieres que custom sea la autoridad, no seguir con min/max
+      }
+
+      // ✅ 2B) min/max (solo si existen)
+      const hasMin = f.validation?.min !== undefined;
+      const hasMax = f.validation?.max !== undefined;
+
+      if ((hasMin || hasMax) && f.type === "number") {
+        const n = toNumber(raw);
+
+        if (!Number.isFinite(n)) {
+          errors.push(`${f.label}: Ingrese un número válido.`);
+          continue;
+        }
+
+        if (hasMin && n < f.validation.min) {
+          errors.push(f.validation.message || `${f.label}: mínimo ${f.validation.min}`);
+          continue;
+        }
+
+        if (hasMax && n > f.validation.max) {
+          errors.push(f.validation.message || `${f.label}: máximo ${f.validation.max}`);
+          continue;
+        }
+      }
+    }
+
+    if (errors.length) {
+      alert(errors.join("\n"));
       return;
     }
 
     await saveDeficiency(localDef, userId);
     onClose();
   };
+
 
   // --------------------------------------------------
   // RENDER

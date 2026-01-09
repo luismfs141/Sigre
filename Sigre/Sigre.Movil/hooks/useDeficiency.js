@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import {
@@ -85,6 +86,11 @@ export const useDeficiency = () => {
 
     try {
       const normalized = normalizeDeficiencyBeforeSave(deficiency, userId);
+
+
+
+
+
       const localId = await saveOrUpdateDeficiency(normalized);
 
       console.log("✅ Deficiencia guardada con ID local:", localId);
@@ -105,32 +111,31 @@ export const useDeficiency = () => {
   // ------------------- DELETE -------------------
 
   const deleteDeficiency = async (defiInterno) => {
-  const dbOk = await checkDatabase();
-  if (!dbOk) return false;
+    const dbOk = await checkDatabase();
+    if (!dbOk) return false;
 
-  try {
-    const def = await getDeficiencyByIdLocal(defiInterno);
-    console.log(def);
-    if (!def) return false;
+    try {
+      const def = await getDeficiencyByIdLocal(defiInterno);
+      if (!def) return false;
 
-    // 🔴 BORRADO LÓGICO SIEMPRE
-    await deleteDeficiencyById(defiInterno);
+      // 🔴 BORRADO LÓGICO SIEMPRE
+      await deleteDeficiencyById(defiInterno);
 
-    // 🔴 SOLO SI EXISTE EN SERVIDOR → SYNC
-    if (def.DefiServerId) {
-      console.log("🌐 Deficiencia existe en servidor, sincronizando eliminación...");
-      await autoSyncDeficiency(defiInterno);
-    } else {
-      console.log("📱 Deficiencia solo local, no se sincroniza");
+      // 🔴 SOLO SI EXISTE EN SERVIDOR → SYNC
+      if (def.DefiServerId) {
+        console.log("🌐 Deficiencia existe en servidor, sincronizando eliminación...");
+        await autoSyncDeficiency(defiInterno);
+      } else {
+        console.log("📱 Deficiencia solo local, no se sincroniza");
+      }
+
+      return true;
+
+    } catch (err) {
+      console.error("❌ Error eliminando deficiencia:", err);
+      return false;
     }
-
-    return true;
-
-  } catch (err) {
-    console.error("❌ Error eliminando deficiencia:", err);
-    return false;
-  }
-};
+  };
 
 
   // ------------------- NORMALIZE PARA SYNC -------------------
@@ -198,8 +203,8 @@ export const useDeficiency = () => {
       if (!pendientes.length) return { ok: true, synced: 0 };
 
       const payload = pendientes
-      .filter(d => [1, 2, 3].includes(Number(d.EstadoOffLine)))
-      .map(normalizeDeficiencyForSync);
+        .filter(d => [1, 2, 3].includes(Number(d.EstadoOffLine)))
+        .map(normalizeDeficiencyForSync);
       if (!payload.length) return { ok: true, synced: 0 };
 
       const response = await client.post("/Deficiency/SyncFromSQLite", payload, { timeout: 15000 });
