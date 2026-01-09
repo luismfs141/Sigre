@@ -104,6 +104,32 @@ export default function DrawerLayout() {
           },
         }}
       />
+      {/*Expo Router es automático. Como tienes los archivos inspection.js, multimedia.js y registerDef.js dentro de la carpeta (drawer), Expo asume automáticamente que quieres mostrarlos en el menú, 1. Ocultar Inspection */}
+      <Drawer.Screen
+        name="inspection"  // Nombre exacto del archivo sin .js
+        options={{
+          drawerItemStyle: { display: 'none' }, // Esto lo oculta del menú
+          headerTitle: "Inspección" // Título si navegas a él
+        }}
+      />
+
+      {/* 2. Ocultar Multimedia */}
+      <Drawer.Screen
+        name="multimedia"
+        options={{
+          drawerItemStyle: { display: 'none' }
+        }}
+      />
+
+      {/* 3. Ocultar RegisterDef */}
+      <Drawer.Screen
+        name="registerDef"
+        options={{
+          drawerItemStyle: { display: 'none' }
+        }}
+      />
     </Drawer>
+
+    
   );
 }
