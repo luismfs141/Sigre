@@ -110,6 +110,7 @@ export const useDeficiency = () => {
 
   try {
     const def = await getDeficiencyByIdLocal(defiInterno);
+    console.log(def);
     if (!def) return false;
 
     // 🔴 BORRADO LÓGICO SIEMPRE

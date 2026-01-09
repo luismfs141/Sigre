@@ -327,7 +327,7 @@ export const Map = () => {
             text: "Inspeccionar",
             onPress: () => {
               setSelectedItem(datoElemento);
-              router.push("/(drawer)/inspection");
+              router.push("inspection");
             }
           }
         ]
