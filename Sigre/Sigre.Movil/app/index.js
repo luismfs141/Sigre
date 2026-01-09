@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Picker } from "@react-native-picker/picker";
 import * as Application from "expo-application";
 import { useRouter } from "expo-router";
@@ -11,8 +12,9 @@ import {
   ScrollView,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
-  View
+  View,
 } from "react-native";
 import { AuthContext } from "../context/AuthContext";
 import LoginStyles from "../styles/LoginStyles";
@@ -26,6 +28,8 @@ export default function Index() {
   const [password, setPassword] = useState("");
   const [selectedProject, setSelectedProject] = useState(0);
   const [deviceId, setDeviceId] = useState("");
+  // false al inicio para que la contraseña esté oculta por defecto
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   // Obtener ID del dispositivo
   useEffect(() => {
@@ -149,17 +153,35 @@ export default function Index() {
                 keyboardType="email-address"
               />
 
-              <TextInput
-                placeholder="Contraseña"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                style={LoginStyles.input}
-                placeholderTextColor="#666"
-                color="#000"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              {/* Password:Contenedor que envuelve el input y el icono */}
+              <View style={[LoginStyles.inputContainer, { color: "#000" }]}>
+                <TextInput
+                  placeholder="Contraseña"
+                  // Si isPasswordVisible es true, secureTextEntry es false (se ve el texto)
+                  secureTextEntry={!isPasswordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                  // Usamos un estilo modificado para el input interno
+                  style={LoginStyles.inputInside}
+                  placeholderTextColor="#666"
+                  // color="#000" // Movemos el color al estilo o al padre si es necesario
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                {/* Botón del ojito */}
+                <TouchableOpacity
+                  onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  style={LoginStyles.iconButton}
+                >
+                  <Ionicons
+                    // Cambia el nombre del icono según el estado
+                    name={isPasswordVisible ? "eye-off" : "eye"}
+                    size={24}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
 
               <Text style={LoginStyles.label}>Selecciona un proyecto:</Text>
 

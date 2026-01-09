@@ -41,6 +41,35 @@ const LoginStyles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
+  // --- NUEVO: CONTENEDOR INPUT CON ICONO (Para contraseña) ---
+  inputContainer: {
+    flexDirection: 'row',     // Fila para poner texto + icono
+    alignItems: 'center',     // Centrado vertical
+    height: 50,               // Misma altura que el input normal
+    width: '100%',
+    backgroundColor: '#fff',  // Fondo blanco igual que el input normal
+    borderRadius: 8,          // Radio 8 (Uniforme)
+    borderWidth: 1,           // Borde 1
+    borderColor: '#bdc3c7',   // Mismo color de borde que input normal
+    paddingHorizontal: 12,    // Mismo padding
+    marginBottom: 15,
+  },
+  
+  // El TextInput DENTRO del contenedor de contraseña
+  inputInside: {
+    flex: 1,                  // Ocupa todo el espacio menos el icono
+    height: '100%',
+    fontSize: 16,             // Mismo tamaño de letra
+    color: '#000',
+    // Sin bordes aquí, porque ya los tiene el contenedor padre
+  },
+  
+  // Estilo para el botón del ojo
+  iconButton: {
+    padding: 4,               // Espacio para facilitar el toque
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default LoginStyles;
