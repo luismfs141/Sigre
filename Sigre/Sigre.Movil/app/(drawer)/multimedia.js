@@ -1,11 +1,11 @@
 import { useFocusEffect } from "@react-navigation/native";
-// ✅ Importación 'legacy' para Expo FileSystem
+// ✅ Importación para FileSystem (ajustado a tu versión legacy)
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing"; 
 import { useRouter } from "expo-router";
 import { useCallback, useState, useEffect } from "react";
-import JSZip from "jszip"; // 📦 LIBRERÍA ZIP
+import JSZip from "jszip"; // 📦 LIBRERÍA PARA ZIP
 
 import {
   Alert,
@@ -21,12 +21,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Contextos y Hooks (Ajusta las rutas según tu proyecto)
+// --- TUS CONTEXTOS Y HOOKS ---
 import { useDatos } from "../../context/DatosContext";
 import { useFeeder } from "../../hooks/useFeeder";
 import { useFiles } from "../../hooks/useFiles";
 import { useDeficiency } from "../../hooks/useDeficiency";
 
+// --- TUS COMPONENTES ---
 import AudioCard from "../../components/Multimedia/AudioCard";
 import ModalAudio from "../../components/Multimedia/ModalAudio";
 import ModalCamera from "../../components/Multimedia/ModalCamera";
@@ -36,7 +37,9 @@ const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Def1", "
 const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Multimedia() {
-  // --- HOOKS ---
+  // ==============================================================================
+  // 1. HOOKS E INICIALIZACIÓN
+  // ==============================================================================
   const router = useRouter();
   const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
   const { findFeederById } = useFeeder();
@@ -44,29 +47,19 @@ export default function Multimedia() {
   const { fetchDeficiencyByIdLocal } = useDeficiency();
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
 
-  // --- ESTADO ---
+  // Estados de Interfaz
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
   const [loading, setLoading] = useState({ active: false, msg: "" });
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [photoIndex, setPhotoIndex] = useState(null);
 
+  // Estados de Datos
   const [photos, setPhotos] = useState(Array(6).fill(null));
   const [audios, setAudios] = useState([]);
   const [deletedIds, setDeletedIds] = useState([]); 
 
-  const [photoIndex, setPhotoIndex] = useState(null);
-  const [previewPhoto, setPreviewPhoto] = useState(null);
-
-  // --- HELPER: Obtener Tipo y Código del Elemento ---
-  const getElementoInfo = () => {
-    if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
-    // Verificamos varias propiedades por si acaso
-    const vanoCode = selectedItem?.Vano_Codigo || selectedItem?.VanoCodigo;
-    if (vanoCode) return { tipo: "Vano", codigo: vanoCode };
-    
-    return { tipo: "Elemento", codigo: "UNK" };
-  };
-
-  // --- INICIALIZACIÓN ---
+  // Crear directorio inicial
   useEffect(() => {
     async function init() {
       const dirInfo = await FileSystem.getInfoAsync(APP_MEDIA_DIR);
@@ -77,15 +70,18 @@ export default function Multimedia() {
     init();
   }, []);
 
-  // --- CARGA DE MEDIOS ---
+  // ==============================================================================
+  // 2. CARGA DE DATOS (READ)
+  // ==============================================================================
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;
     setLoading({ active: true, msg: "Cargando..." });
-    setDeletedIds([]);
+    setDeletedIds([]); // Reiniciar cola de borrado
 
     try {
       const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
       const deficienciaId = deficiencia.DefiServerId ?? deficiencia.DefiInterno;
+
       const medios = await fetchMediosByDeficienciaId(deficienciaId);
       const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
@@ -99,8 +95,10 @@ export default function Multimedia() {
 
         if (fileInfo.exists) {
           if (Number(m.ArchTipo) === 0) {
+            // Audio
             audiosTmp.push({ uri: localUri, title: "Audio", id: m.ArchInterno, type: 0 });
           } else if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
+            // Foto
             photosTmp[Number(m.ArchTipo) - 1] = {
               uri: localUri, latUtm: m.ArchLatitud, lonUtm: m.ArchLongitud, 
               fechaISO: m.ArchFecha, id: m.ArchInterno, originalPath: localUri, type: Number(m.ArchTipo)
@@ -111,7 +109,7 @@ export default function Multimedia() {
       setPhotos(photosTmp);
       setAudios(audiosTmp);
     } catch (err) {
-      console.error("Error cargando:", err);
+      console.error("Error cargando medios:", err);
     } finally {
       setLoading({ active: false, msg: "" });
     }
@@ -124,6 +122,9 @@ export default function Multimedia() {
     }, [selectedDeficiency?.id])
   );
 
+  // ==============================================================================
+  // 3. GESTIÓN DE ESTADO (DELETE TEMPORAL)
+  // ==============================================================================
   const limpiarMultimedia = () => {
     setPhotos(Array(6).fill(null));
     setAudios([]);
@@ -135,7 +136,6 @@ export default function Multimedia() {
     setLoading({ active: false, msg: "" });
   };
 
-  // --- BORRAR ---
   const handleDeletePhoto = (index) => {
     const photo = photos[index];
     if (photo?.id) {
@@ -152,43 +152,41 @@ export default function Multimedia() {
     setAudios(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ==========================================================
-  // 📦 GENERACIÓN DE ZIP CON CARPETEO INTELIGENTE
-  // ==========================================================
+  // Helper para saber qué elemento es (Poste o Vano)
+  const getElementoInfo = () => {
+    if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
+    const vanoCode = selectedItem?.Vano_Codigo || selectedItem?.VanoCodigo;
+    if (vanoCode) return { tipo: "Vano", codigo: vanoCode };
+    return { tipo: "Elemento", codigo: "UNK" };
+  };
+
+  // ==============================================================================
+  // 4. EXPORTAR ZIP CON ESTRUCTURA (REQUERIMIENTO 2 Y 3)
+  // ==============================================================================
   const exportarFotosZip = async () => {
     const fotosValidas = photos.filter(p => p !== null);
     if (fotosValidas.length === 0) return Alert.alert("Sin fotos", "No hay fotos para exportar.");
 
     try {
-      setLoading({ active: true, msg: "Creando estructura de carpetas..." });
+      setLoading({ active: true, msg: "Estructurando carpetas..." });
 
-      // 1. Obtener Datos para la Ruta
-      // a) Alimentador
+      // A) Obtener Datos Jerárquicos
       let nombreAlimentador = "SIN_ALIM";
       if (selectedSed?.AlimInterno) {
         const feederObj = await findFeederById(selectedSed.AlimInterno);
         nombreAlimentador = feederObj?.ALIM_Etiqueta || feederObj?.alimEtiqueta || "ALIM_UNK";
       }
-
-      // b) SED
       const codigoSed = selectedSed?.SedCodigo || "SIN_SED";
-
-      // c) Elemento (Poste/Vano y Código)
       const { tipo, codigo } = getElementoInfo();
-      const tipoCarpeta = tipo === "Vano" ? "Vano" : "Poste"; // Aseguramos nombre limpio
-
-      // d) Deficiencia (TIPI_INTERNO o DefiInterno)
-      // Usamos DefiInterno para que la carpeta sea única por reporte, o TIPI si prefieres agrupar por tipo.
-      // Aquí uso DefiInterno como identificador del reporte actual.
+      const tipoCarpeta = tipo === "Vano" ? "Vano" : "Poste";
       const codigoDeficiencia = selectedDeficiency?.DefiInterno || selectedDeficiency?.id || "DEF_UNK";
 
-      // 2. Construir la Ruta Jerárquica
-      // Pictures / Alimentador / SED / TipoElemento / CodigoElemento / CodigoDeficiencia
+      // B) Crear ruta: Pictures / Alim / Sed / Tipo / Elemento / Deficiencia
       const carpetaRuta = `Pictures/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}`;
 
-      // 3. Crear ZIP y Poblar
+      // C) Generar ZIP
       const zip = new JSZip();
-      const folder = zip.folder(carpetaRuta); // Crea toda la ruta interna
+      const folder = zip.folder(carpetaRuta);
 
       setLoading({ active: true, msg: "Comprimiendo imágenes..." });
 
@@ -196,16 +194,14 @@ export default function Multimedia() {
         const photo = photos[i];
         if (photo?.uri) {
           const base64 = await FileSystem.readAsStringAsync(photo.uri, { encoding: FileSystem.EncodingType.Base64 });
-          // Nombre del archivo: TIPO_CODIGO_SLOT.jpg
           const nombreArchivo = `${tipo}_${codigo}_${PHOTO_SLOTS[i].replace(/\s/g, "")}.jpg`;
-          
           folder.file(nombreArchivo, base64, { base64: true });
         }
       }
 
-      // 4. Generar y Compartir
+      // D) Guardar y Compartir
       const zipBase64 = await zip.generateAsync({ type: "base64" });
-      const fileName = `Inspeccion_${codigo}_${codigoDeficiencia}.zip`;
+      const fileName = `Evidencia_${codigo}_${codigoDeficiencia}.zip`;
       const zipUri = FileSystem.cacheDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(zipUri, zipBase64, { encoding: FileSystem.EncodingType.Base64 });
@@ -213,7 +209,7 @@ export default function Multimedia() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(zipUri);
       } else {
-        Alert.alert("Error", "No se puede compartir en este dispositivo");
+        Alert.alert("Error", "Compartir no disponible");
       }
 
     } catch (error) {
@@ -224,59 +220,79 @@ export default function Multimedia() {
     }
   };
 
-  // --- FINALIZAR (Solo Guardado Local) ---
+  // ==============================================================================
+  // 5. GUARDAR DATOS (FINALIZAR + REQUERIMIENTO 4 SOFT DELETE)
+  // ==============================================================================
   const finalizar = async () => {
     if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
 
     try {
       setLoading({ active: true, msg: "Guardando..." });
 
-      // Datos base
+      // Contexto base
       const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
       const codTabla = deficiencyData?.DefiServerId ?? selectedDeficiency.id;
       const defiInterno = selectedDeficiency.DefiInterno || deficiencyData?.DefiInterno || 'NEW';
       const { tipo, codigo } = getElementoInfo();
       const filePrefix = `${tipo.charAt(0)}_${codigo}_DEF_${defiInterno}`;
 
-      // Eliminar borrados
+      // --- [SOFT DELETE] ---
+      // Marcamos como inactivo en BD y ponemos nombre DELETED
       for (const item of deletedIds) {
         await saveArchivoLocal({
-          ArchInterno: item.id, ArchActivo: 0, ArchTipo: item.type, ArchCodTabla: codTabla, 
-          ArchNombre: "DELETED", ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
+          ArchInterno: item.id,
+          ArchActivo: 0,             // <--- Desactivar
+          ArchNombre: "DELETED",     // <--- Renombrar
+          
+          // Datos obligatorios para integridad
+          ArchTipo: item.type,
+          ArchCodTabla: codTabla,
+          ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
           ArchTabla: "Deficiencias"
         });
+
+        // Borrado físico local (opcional, para liberar espacio)
         try { await FileSystem.deleteAsync(item.path, { idempotent: true }); } catch (e) {}
       }
 
-      // Guardar Fotos (Solo App Privada)
+      // --- [GUARDAR FOTOS] (Privado) ---
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
-        if (photo?.uri && !photo.id) {
+        if (photo?.uri && !photo.id) { // Solo nuevas
           const fname = `${filePrefix}_IMG_${Date.now()}_${i}.jpg`;
           const destUri = APP_MEDIA_DIR + fname;
+          
           await FileSystem.copyAsync({ from: photo.uri, to: destUri });
-          await saveFileRecord({ filename: fname, slot: i + 1, isAudio: false, photoData: photo, codTablaOverride: codTabla });
+          
+          await saveFileRecord({ 
+            filename: fname, slot: i + 1, isAudio: false, photoData: photo, codTablaOverride: codTabla 
+          });
         }
       }
 
-      // Guardar Audios (Solo App Privada)
+      // --- [GUARDAR AUDIOS] (Privado - Req 1) ---
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
-        if (audio?.uri && !audio.id) {
+        if (audio?.uri && !audio.id) { // Solo nuevos
           const fname = `${filePrefix}_AUDIO_${Date.now()}_${i}.m4a`;
           const destUri = APP_MEDIA_DIR + fname;
+          
           await FileSystem.copyAsync({ from: audio.uri, to: destUri });
-          await saveFileRecord({ filename: fname, slot: 0, isAudio: true, codTablaOverride: codTabla });
+          
+          await saveFileRecord({ 
+            filename: fname, slot: 0, isAudio: true, codTablaOverride: codTabla 
+          });
         }
       }
 
       limpiarMultimedia();
       setLoading({ active: false, msg: "" });
-      Alert.alert("Guardado", "Datos guardados localmente.", [{ text: "OK", onPress: () => router.replace("/inspection") }]);
+      Alert.alert("Guardado", "Datos guardados correctamente.", [{ text: "OK", onPress: () => router.replace("/inspection") }]);
 
     } catch (err) {
       setLoading({ active: false, msg: "" });
       Alert.alert("Error", err.message);
+      console.error(err);
     }
   };
 
@@ -291,6 +307,9 @@ export default function Multimedia() {
     });
   };
 
+  // ==============================================================================
+  // 6. RENDERIZADO (UI)
+  // ==============================================================================
   const handleCancelar = () => {
     Alert.alert("Cancelar", "¿Salir sin guardar?", [
       { text: "No", style: "cancel" },
@@ -307,13 +326,14 @@ export default function Multimedia() {
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* SECCION FOTOS + ZIP */}
+        {/* FOTOS + BOTÓN ZIP */}
         <View style={styles.section}>
           <View style={styles.headerRow}>
              <Text style={styles.title}>📸 Registro de Fotos</Text>
+             {/* El botón solo aparece si hay fotos */}
              {photos.some(p => p !== null) && (
                 <TouchableOpacity style={styles.zipButton} onPress={exportarFotosZip}>
-                  <Text style={styles.zipText}>📦 Crear ZIP Estructurado</Text>
+                  <Text style={styles.zipText}>📦 Exportar ZIP</Text>
                 </TouchableOpacity>
              )}
           </View>
@@ -328,7 +348,7 @@ export default function Multimedia() {
           </View>
         </View>
 
-        {/* SECCION AUDIOS (PRIVADOS) */}
+        {/* AUDIOS (SOLO PRIVADO, SIN EXPORTAR) */}
         <View style={styles.section}>
           <View style={styles.audioHeader}>
             <Text style={styles.title}>🎙️ Registro de Audio</Text>
@@ -357,6 +377,7 @@ export default function Multimedia() {
         </View>
       </View>
 
+      {/* MODALES */}
       <ModalCamera visible={cameraModal} onClose={() => setCameraModal(false)}
         onPhoto={(p) => setPhotos(prev => { const c = [...prev]; c[photoIndex] = p; return c; })}
       />
@@ -385,28 +406,38 @@ export default function Multimedia() {
   );
 }
 
+// ==============================================================================
+// 7. ESTILOS
+// ==============================================================================
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F6F6F6" },
   scrollContent: { paddingHorizontal: 12, paddingBottom: 100 },
   section: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   title: { fontSize: 18, fontWeight: "600" },
+  
+  // Botón ZIP
   zipButton: { backgroundColor: '#2563EB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   zipText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
+
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  
   audioHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   recButton: { backgroundColor: "#DC2626", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   recText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   emptyText: { color: "#999", fontStyle: "italic", textAlign: "center", marginTop: 5 },
+  
   footer: { height: 90, paddingHorizontal: 12, justifyContent: "center", backgroundColor: "#F6F6F6", borderTopWidth: 1, borderTopColor: "#e5e5e5" },
   footerRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
   cancelButton: { flex: 1, backgroundColor: "#EF4444", paddingVertical: 14, borderRadius: 10, alignItems: "center" },
   cancelButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   finishButton: { flex: 1, backgroundColor: "#16A34A", paddingVertical: 14, borderRadius: 10, alignItems: "center" },
   finishText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  
   previewContainer: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
   previewImage: { width: "100%", height: "80%", resizeMode: "contain" },
   closePreview: { marginTop: 20, padding: 10, backgroundColor: "#fff", borderRadius: 8 },
+  
   loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
   loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: 'center' },
   loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
