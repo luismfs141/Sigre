@@ -112,12 +112,6 @@ export const useDeficiency = () => {
     const def = await getDeficiencyByIdLocal(defiInterno);
     console.log(def);
     if (!def) return false;
-    if (!def) return false;
-=========
-    try {
-      const def = await getDeficiencyByIdLocal(defiInterno);
-      if (!def) return false;
->>>>>>>>> Temporary merge branch 2
 
     // 🔴 BORRADO LÓGICO SIEMPRE
     await deleteDeficiencyById(defiInterno);
