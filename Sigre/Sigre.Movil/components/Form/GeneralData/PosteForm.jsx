@@ -113,13 +113,13 @@ const PosteForm = forwardRef(({ data, visible }, ref) => {
     "PostCodigoNodo",
     "PostEtiqueta",
     "PostMaterial",
-    "PostArmadoMaterial",
+    //"PostArmadoMaterial",
     "PostRetenidaTipo",
-    "PostRetenidaMaterial",
+    //"PostRetenidaMaterial",
     "PostTerceros",
-    "PostLatitud",
-    "PostLongitud",
-    "PostInterno"
+    //"PostLatitud",
+    //"PostLongitud",
+    //"PostInterno"
   ];
 
   const labels = {

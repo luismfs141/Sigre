@@ -17,7 +17,8 @@ const COMMON_DEFICIENCY_FIELDS = [
     label: "Código",
     type: "text",
     required: false,
-    readonly: true
+    readonly: true,
+    hidden: true //Campo ocultp
   },
   {
     key: "DefiLatitud",
@@ -25,6 +26,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     type: "text",
     required: true,
     readonly: true,
+    hidden: true,//Campo ocultp
     validation: { message: "La longitud es obligatoria" }
   },
   {
@@ -33,6 +35,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     type: "text",
     required: true,
     readonly: true,
+    hidden: true,//Campo ocultp
     validation: { message: "La longitud es obligatoria" }
   },
   {
@@ -62,6 +65,20 @@ const COMMON_DEFICIENCY_FIELDS = [
     validation: { message: "Seleccione un estado de subsanación" }
   },
   {
+    key: "DefiNumSuministro",
+    label: "Número de suministro",
+    type: "text",
+    required: true,
+    validation: {
+      custom: (value) => {
+        const s = String(value ?? "").trim();
+        if (!s) return "El número de suministro es obligatorio.";
+        if (!/^\d+$/.test(s)) return "El número de suministro debe contener solo dígitos.";
+        return null;
+      }
+    }
+  },
+  {
     key: "DefiObservacion",
     label: "Observación",
     type: "text",
@@ -85,14 +102,16 @@ const COMMON_BEFORE_OBSERVACION =
 const COMMON_FROM_OBSERVACION =
   idxObs >= 0 ? COMMON_DEFICIENCY_FIELDS.slice(idxObs) : [];
 
-// Orden de campos en 7006: insertar después de Estado Subsanación
-const idxSub = COMMON_BEFORE_OBSERVACION.findIndex(f => f.key === "DefiEstadoSubsanacion");
+// ✅ Orden de campos en 7006: insertar después de NumSuministro (para que quede pegado a Subsanación)
+const idxSum = COMMON_BEFORE_OBSERVACION.findIndex(f => f.key === "DefiNumSuministro");
 
-const COMMON_BEFOREOBS_UNTIL_SUBSANACION =
-  idxSub >= 0 ? COMMON_BEFORE_OBSERVACION.slice(0, idxSub + 1) : [...COMMON_BEFORE_OBSERVACION];
+const COMMON_BEFOREOBS_UNTIL_SUMINISTRO =
+  idxSum >= 0 ? COMMON_BEFORE_OBSERVACION.slice(0, idxSum + 1) : [...COMMON_BEFORE_OBSERVACION];
 
-const COMMON_BEFOREOBS_AFTER_SUBSANACION =
-  idxSub >= 0 ? COMMON_BEFORE_OBSERVACION.slice(idxSub + 1) : [];
+const COMMON_BEFOREOBS_AFTER_SUMINISTRO =
+  idxSum >= 0 ? COMMON_BEFORE_OBSERVACION.slice(idxSum + 1) : [];
+
+
 
 
 
@@ -120,7 +139,8 @@ export const DEFICIENCY_FIELD_MAP = {
         label: "Código",
         type: "text",
         required: false,
-        readonly: true
+        readonly: true,
+        
       },
       {
         key: "DefiComentario",
@@ -185,13 +205,13 @@ export const DEFICIENCY_FIELD_MAP = {
 
             if (acc === 1) {
               // Accesible: v >= 3
-              if (v < 3) return "Si es Accesible, la distancia vertical debe ser mayor o igual a 3.00 m.";
+              if (v > 3) return "Si es Accesible, la distancia vertical debe ser menor a 3.00 m.";
               return null;
             }
 
             // No accesible: 1.80 <= v < 3.00
-            if (v < 1.8 || v >= 3) {
-              return "Si es No accesible, la distancia vertical debe estar entre 1.80 m y menor a 3.00 m.";
+            if (v > 1.8) {
+              return "Si es No accesible, la distancia vertical debe ser menor a 1.80 m.";
             }
             return null;
           }
@@ -204,73 +224,61 @@ export const DEFICIENCY_FIELD_MAP = {
 
 
   "7006": {
-    label: "VANO - DEF 7006",
-    fields: [
-      ...COMMON_BEFOREOBS_UNTIL_SUBSANACION, // ✅ hasta Estado Subsanación (incluido)
+  label: "VANO - DEF 7006",
+  fields: [
+    // ✅ hasta NumSuministro (incluye Subsanación + NumSuministro inmediatamente después)
+    ...COMMON_BEFOREOBS_UNTIL_SUMINISTRO,
 
-      // ✅ Tipo de cruce (va después de Estado Subsanación)
-      {
-        key: "DefiCol1",
-        label: "Tipo de cruce*",
-        type: "text",
-        selectable: true,
-        required: true,
-        valueMap: {
-          1: "Calle",
-          2: "Avenida",
-          3: "Cruce de trenes"
-        },
-        validation: { message: "Seleccione el tipo de cruce" }
+    // ✅ Tipo de cruce (va después de NumSuministro)
+    {
+      key: "DefiCol1",
+      label: "Tipo de cruce*",
+      type: "text",
+      selectable: true,
+      required: true,
+      valueMap: {
+        1: "Calle",
+        2: "Avenida",
+        3: "Cruce de trenes"
       },
+      validation: { message: "Seleccione el tipo de cruce" }
+    },
 
-      // lo que venga después de subsanación (si algún día agregas otro campo antes de Observación)
-      ...COMMON_BEFOREOBS_AFTER_SUBSANACION,
+    // ✅ lo que quedaba antes de Observación (si algún día agregas algo más)
+    ...COMMON_BEFOREOBS_AFTER_SUMINISTRO,
 
-      // ✅ Distancia vertical (depende del tipo de cruce)
-      // {
-      //   key: "DefiDistVertical",
-      //   label: "Distancia Vertical (m)",
-      //   type: "number",
-      //   required: true,
-      //   validation: {
-      //     min: 5.5,   // base (luego lo sobreescribimos dinámicamente)
-      //     max: 20,
-      //     message: "Revise el tipo de cruce para el mínimo requerido."
-      //   }
-      // },
+    // ✅ Distancia vertical depende de tipo de cruce
+    {
+      key: "DefiDistVertical",
+      label: "Distancia Vertical (m)",
+      type: "number",
+      required: true,
+      validation: {
+        custom: (value, values) => {
+          const v = Number(value);
+          const tipo = Number(values?.DefiCol1);
 
-      // ✅ Distancia vertical (depende del tipo de cruce)
-      {
-        key: "DefiDistVertical",
-        label: "Distancia Vertical (m)",
-        type: "number",
-        required: true,
-        validation: {
-          custom: (value, values) => {
-            console.log("🧪 custom DistVertical ejecutado", { value, tipo: values?.DefiCol1 });
-            const v = Number(value);
-            const tipo = Number(values?.DefiCol1); // 1=Calle, 2=Avenida, 3=Cruce de trenes
+          if (!Number.isFinite(v)) return "Ingrese un número válido en distancia vertical.";
+          if (![1, 2, 3].includes(tipo)) return "Seleccione primero el tipo de cruce.";
 
-            if (!Number.isFinite(v)) return "Ingrese un número válido en distancia vertical.";
-            if (![1, 2, 3].includes(tipo)) return "Seleccione primero el tipo de cruce.";
+          const maxByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
+          const max = maxByTipo[tipo];
 
-            const minByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
-            const min = minByTipo[tipo];
-
-            if (v < min) {
-              const tipoTxt = tipo === 1 ? "Calle" : tipo === 2 ? "Avenida" : "Cruce de trenes";
-              return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${min.toFixed(2)} m.`;
-            }
-
-            if (v > 20) return "La distancia vertical no debe exceder 20.00 m.";
-            return null;
+          if (v > max) {
+            const tipoTxt = tipo === 1 ? "Calle" : tipo === 2 ? "Avenida" : "Cruce de trenes";
+            return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${max.toFixed(2)} m.`;
           }
-        }
-      },
 
-      ...COMMON_FROM_OBSERVACION // ✅ Observación y Comentario al final
-    ]
-  },
+          return null;
+        }
+      }
+    },
+
+    // ✅ Observación y Comentario al final
+    ...COMMON_FROM_OBSERVACION
+  ]
+},
+
 
 
 
@@ -292,7 +300,7 @@ export const DEFICIENCY_FIELD_MAP = {
         required: true,
         validation: {
           min: 7.5,
-        
+
           message: "La distancia horizontal mínima es de 7.5 metros"
         }
       },

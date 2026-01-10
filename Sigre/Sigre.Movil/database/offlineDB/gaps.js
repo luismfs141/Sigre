@@ -159,3 +159,4 @@ export const updateVanoIdAfterSync = async (localId, serverId) => {
   `;
   await runQuery(query, [serverId, localId]);
 };
+
