@@ -201,13 +201,13 @@ export const DEFICIENCY_FIELD_MAP = {
 
             if (acc === 1) {
               // Accesible: v >= 3
-              if (v < 3) return "Si es Accesible, la distancia vertical debe ser mayor o igual a 3.00 m.";
+              if (v > 3) return "Si es Accesible, la distancia vertical debe ser menor a 3.00 m.";
               return null;
             }
 
             // No accesible: 1.80 <= v < 3.00
-            if (v < 1.8 || v >= 3) {
-              return "Si es No accesible, la distancia vertical debe estar entre 1.80 m y menor a 3.00 m.";
+            if (v > 1.8) {
+              return "Si es No accesible, la distancia vertical debe ser menor a 1.80 m.";
             }
             return null;
           }
@@ -258,11 +258,11 @@ export const DEFICIENCY_FIELD_MAP = {
           if (![1, 2, 3].includes(tipo)) return "Seleccione primero el tipo de cruce.";
 
           const minByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
-          const min = minByTipo[tipo];
+          const max = maxByTipo[tipo];
 
-          if (v < min) {
+          if (v > max) {
             const tipoTxt = tipo === 1 ? "Calle" : tipo === 2 ? "Avenida" : "Cruce de trenes";
-            return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${min.toFixed(2)} m.`;
+            return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${max.toFixed(2)} m.`;
           }
 
           if (v > 20) return "La distancia vertical no debe exceder 20.00 m.";
