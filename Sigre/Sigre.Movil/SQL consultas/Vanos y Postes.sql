@@ -28,7 +28,7 @@ GO
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR ETIQUETA DE ELEMENTO + CODI_Codigo
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(50) = '00132';
+DECLARE @etiqueta varchar(50) = '%00132%';
 
 ;WITH Q AS
 (
@@ -86,6 +86,70 @@ WHERE Q.ElementoEtiqueta LIKE @etiqueta
 ORDER BY Q.DEFI_FechaCreacion DESC;
 GO
 
+
+
+------------------------------------------------------------------
+-- BUSCA DEFICIENCIAS POR CODIGO DE ELEMENTO + CODI_Codigo
+------------------------------------------------------------------
+DECLARE @codigo varchar(50) = '%35899%';
+
+;WITH Q AS
+(
+    SELECT
+        ElementoEtiqueta =
+            CASE d.DEFI_TipoElemento
+                WHEN 'POST' THEN p.POST_Etiqueta
+                WHEN 'VANO' THEN v.VANO_Codigo
+                ELSE NULL
+            END,
+        CODI_Codigo = c.CODI_Codigo,
+        p.POST_EsBT,
+        d.*
+    FROM dbo.Deficiencias d
+    LEFT JOIN dbo.Postes p
+        ON d.DEFI_TipoElemento = 'POST'
+       AND d.DEFI_IdElemento   = p.POST_Interno
+    LEFT JOIN dbo.Vanos v
+        ON d.DEFI_TipoElemento = 'VANO'
+       AND d.DEFI_IdElemento   = v.VANO_Interno
+    LEFT JOIN dbo.Tipificaciones t
+        ON d.TIPI_Interno = t.TIPI_Interno
+    LEFT JOIN dbo.Codigos c
+        ON t.CODI_Interno = c.CODI_Interno
+)
+SELECT
+    Q.DEFI_IdElemento,
+    Q.ElementoEtiqueta,
+    Q.DEFI_FechaCreacion,
+    Q.DEFI_FecModificacion,
+    Q.DEFI_TipoElemento,
+    Q.CODI_Codigo,
+    Q.DEFI_Interno,
+    case q.DEFI_EstadoCriticidad 
+        when '1' then 'Leve'
+        when '2' then 'Moderado'
+        when '3' then 'Grave'
+    end as Criticidad,
+    case Q.DEFI_EstadoSubsanacion
+        when '0' then 'Por subsanar'
+        when '1' then 'Subsanación Preventiva'
+        when '2' then 'Subsanación Definitiva'
+    end as [Estado subsanación],
+    Q.DEFI_Observacion,
+    Q.DEFI_Comentario,
+    Q.DEFI_Activo,
+    Q.DEFI_NumSuministro,
+    Q.DEFI_DistHorizontal,
+    Q.DEFI_DistVertical,
+    [******] = '',
+    q.*
+FROM Q
+WHERE Q.ElementoEtiqueta LIKE @codigo
+ORDER BY Q.DEFI_FechaCreacion DESC;
+GO
+
+
+
 --------------------------------
 -- VANOS -----------------------
 --------------------------------
@@ -111,7 +175,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 ------------------------------------------------------------------
 -- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(20) = '035899';
+DECLARE @etiqueta varchar(20) = '%35899%';
 
 ;WITH Q AS
 (

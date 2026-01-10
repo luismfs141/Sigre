@@ -40,43 +40,43 @@ export default function Inspection() {
   /* =======================
      CARGA INICIAL
      ======================= */
-    useEffect(() => {
-      if (!selectedItem) {
-        setItems([]);
-        return;
+  useEffect(() => {
+    if (!selectedItem) {
+      setItems([]);
+      return;
+    }
+
+    const elementId =
+      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+        ? "VANO"
+        : "SED";
+
+    const loadDefs = async () => {
+      try {
+        const existingDefs = await deficienciesForFlatList(
+          elementId,
+          typeElement
+        );
+
+        const generalItem = {
+          id: "general",
+          type: "general",
+          name: "Datos Generales",
+          data: selectedItem
+        };
+
+        setItems([generalItem, ...existingDefs]);
+      } catch (err) {
+        console.error("❌ Error cargando inspección:", err);
       }
+    };
 
-      const elementId =
-        selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
-
-      const typeElement = selectedItem.PostInterno
-        ? "POST"
-        : selectedItem.VanoInterno
-          ? "VANO"
-          : "SED";
-
-      const loadDefs = async () => {
-        try {
-          const existingDefs = await deficienciesForFlatList(
-            elementId,
-            typeElement
-          );
-
-          const generalItem = {
-            id: "general",
-            type: "general",
-            name: "Datos Generales",
-            data: selectedItem
-          };
-
-          setItems([generalItem, ...existingDefs]);
-        } catch (err) {
-          console.error("❌ Error cargando inspección:", err);
-        }
-      };
-
-      loadDefs();
-    }, [selectedItem]);
+    loadDefs();
+  }, [selectedItem]);
 
 
   /* =======================
@@ -171,6 +171,32 @@ export default function Inspection() {
     );
   };
 
+  // const handleSelectTypification = (def) => {
+  //   if (!selectedItem) return;
+
+  //   const elementId =
+  //     selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+
+  //   const typeElement = selectedItem.PostInterno
+  //     ? "POST"
+  //     : selectedItem.VanoInterno
+  //       ? "VANO"
+  //       : "SED";
+
+  //   const currentDef = {
+  //     detail: def.detail ?? "",
+  //     deficiency: def.deficiency,
+  //     elementId,
+  //     typeElement,
+  //     typificationId: def.id,
+  //     typificationCode: def.code,
+  //     tableId: def.tableId
+  //   };
+
+  //   setCurrentDeficiency(currentDef);
+  //   setModalDeficiencyVisible(true);
+  //   setNewDefModalVisible(false);
+  // };
   const handleSelectTypification = (def) => {
     if (!selectedItem) return;
 
@@ -190,13 +216,20 @@ export default function Inspection() {
       typeElement,
       typificationId: def.id,
       typificationCode: def.code,
-      tableId: def.tableId
+      tableId: def.tableId,
+
+      // ✅ 7004 puede repetirse: crear SIEMPRE nuevo cuando se elige desde lista
+      forceNew: String(def.code) === "7004",
+
+      // ✅ clave única para que no “recicle” estado visual
+      nonce: Date.now()
     };
 
     setCurrentDeficiency(currentDef);
     setModalDeficiencyVisible(true);
     setNewDefModalVisible(false);
   };
+
 
   /* =======================
      RENDER ITEM
@@ -228,7 +261,7 @@ export default function Inspection() {
     <SafeAreaView style={{ flex: 1, paddingBottom: insets.bottom }}>
       <FlatList
         data={items}
-        keyExtractor={item => 
+        keyExtractor={item =>
           item.type === "def" ? item.defId.toString() : item.id.toString()
         }
         renderItem={renderItem}
@@ -246,6 +279,7 @@ export default function Inspection() {
         item={currentItem}
         onClose={() => setModalGeneralVisible(false)}
       />
+
 
       <DeficiencyModal
         visible={modalDeficiencyVisible}

@@ -69,11 +69,19 @@ const VanoForm = forwardRef(({ data, visible }, ref) => {
 
   const orderedFields = [
     "VanoCodigo",
-    "VanoEtiqueta",
+    //"VanoEtiqueta",
     "VanoNodoInicial",
     "VanoNodoFinal",
-    "VanoInterno"
+    //"VanoInterno"
   ];
+
+  const LABELS = {
+    VanoCodigo: "Código",
+    VanoEtiqueta: "Etiqueta",
+    VanoNodoInicial: "Nodo Inicial",
+    VanoNodoFinal: "Nodo Final",
+    VanoInterno: "Interno"
+  };
 
   return (
     <View>
@@ -84,7 +92,7 @@ const VanoForm = forwardRef(({ data, visible }, ref) => {
 
         return (
           <View key={key} style={styles.row}>
-            <Text style={styles.label}>{key}</Text>
+            <Text style={styles.label}>{LABELS[key] ?? key}</Text>
             <TextInput
               style={[styles.input, isLocked && styles.lockedInput]}
               value={form[key] != null ? String(form[key]) : ""}
@@ -107,3 +115,4 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: "#ddd", padding: 8, borderRadius: 6, marginTop: 4, backgroundColor: "#f7f7f7" },
   lockedInput: { backgroundColor: "#ececec", color: "#777" },
 });
+

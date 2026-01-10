@@ -99,15 +99,64 @@ export default function DeficiencyModal({
   useEffect(() => {
     if (!deficiency) return;
 
+    // const load = async () => {
+    //   const {
+    //     elementId,
+    //     typeElement,
+    //     typificationId,
+    //     typificationCode,
+    //     tableId
+    //   } = deficiency;
+
+    //   const result = await fetchDeficiencyByTypificationElement(
+    //     elementId,
+    //     typeElement,
+    //     typificationId
+    //   );
+
+    //   if (result && result.length > 0) {
+    //     setLocalDef({ ...result[0], typificationId, typificationCode });
+    //   } else {
+    //     setLocalDef(
+    //       createEmptyDeficiency({
+    //         typificationId,
+    //         typificationCode,
+    //         tableId,
+    //         elementId,
+    //         typeElement,
+    //         userId,
+    //         selectedItem
+    //       })
+    //     );
+    //   }
+    // };
     const load = async () => {
       const {
         elementId,
         typeElement,
         typificationId,
         typificationCode,
-        tableId
+        tableId,
+        forceNew
       } = deficiency;
 
+      // ✅ SI VIENE forceNew => SIEMPRE nuevo registro (NO cargar el existente)
+      if (forceNew) {
+        setLocalDef(
+          createEmptyDeficiency({
+            typificationId,
+            typificationCode,
+            tableId,
+            elementId,
+            typeElement,
+            userId,
+            selectedItem
+          })
+        );
+        return;
+      }
+
+      // 🟢 Caso normal (únicas): cargar si existe, sino crear
       const result = await fetchDeficiencyByTypificationElement(
         elementId,
         typeElement,
@@ -131,6 +180,7 @@ export default function DeficiencyModal({
       }
     };
 
+
     load();
   }, [deficiency]);
 
@@ -139,7 +189,8 @@ export default function DeficiencyModal({
   const code = String(localDef.typificationCode);
   const fields = getDeficiencyFields(code);
   const title = getDeficiencyLabel(code);
-  const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${localDef.DefiInterno ?? 0}`;
+  //const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${localDef.DefiInterno ?? 0}`;
+  const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${deficiency?.nonce ?? 0}-${localDef.DefiInterno ?? 0}`;
 
 
   // --------------------------------------------------
@@ -287,6 +338,8 @@ export default function DeficiencyModal({
               <ScrollView>
                 <View key={formKey}>
                   {fields.map(field => {
+                    if (field.hidden) return null;//--- para que respete el Hidden de deficiencyFieldMap
+
                     const value = localDef[field.key];
 
                     // 📍 LAT / LNG
@@ -352,7 +405,7 @@ export default function DeficiencyModal({
                     // ✏️ INPUT
                     return (
                       <DeficiencyField
-                      // key={field.key}
+                        // key={field.key}
                         key={`${formKey}-${field.key}`}
                         field={field}
                         value={value}
