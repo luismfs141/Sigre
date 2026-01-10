@@ -1,9 +1,12 @@
 import { useFocusEffect } from "@react-navigation/native";
-// ✅ Importación 'legacy'
+// ✅ Importación 'legacy' para Expo FileSystem
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing"; 
 import { useRouter } from "expo-router";
-import { useCallback, useContext, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
+import JSZip from "jszip"; // 📦 LIBRERÍA ZIP
+
 import {
   Alert,
   BackHandler,
@@ -13,10 +16,12 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// Contextos y Hooks (Ajusta las rutas según tu proyecto)
 import { useDatos } from "../../context/DatosContext";
 import { useFeeder } from "../../hooks/useFeeder";
 import { useFiles } from "../../hooks/useFiles";
@@ -27,73 +32,60 @@ import ModalAudio from "../../components/Multimedia/ModalAudio";
 import ModalCamera from "../../components/Multimedia/ModalCamera";
 import PhotoCard from "../../components/Multimedia/PhotoCard";
 
-const PHOTO_SLOTS = [
-  "Panorámica",
-  "Frontal",
-  "Izquierda",
-  "Derecha",
-  "Def1",
-  "Def2",
-];
-
+const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Def1", "Def2"];
 const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Multimedia() {
+  // --- HOOKS ---
+  const router = useRouter();
   const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
-  // ✅ Usaremos esto para buscar el nombre real "SELVA ALEGRE"
-  const { findFeederById } = useFeeder(); 
+  const { findFeederById } = useFeeder();
   const { saveArchivoLocal, fetchMediosByDeficienciaId } = useFiles();
   const { fetchDeficiencyByIdLocal } = useDeficiency();
-  const router = useRouter();
-
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
 
+  // --- ESTADO ---
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("");
+  const [loading, setLoading] = useState({ active: false, msg: "" });
 
   const [photos, setPhotos] = useState(Array(6).fill(null));
   const [audios, setAudios] = useState([]);
-  const [deletedIds, setDeletedIds] = useState([]);
+  const [deletedIds, setDeletedIds] = useState([]); 
 
   const [photoIndex, setPhotoIndex] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
+  // --- HELPER: Obtener Tipo y Código del Elemento ---
+  const getElementoInfo = () => {
+    if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
+    // Verificamos varias propiedades por si acaso
+    const vanoCode = selectedItem?.Vano_Codigo || selectedItem?.VanoCodigo;
+    if (vanoCode) return { tipo: "Vano", codigo: vanoCode };
+    
+    return { tipo: "Elemento", codigo: "UNK" };
+  };
+
+  // --- INICIALIZACIÓN ---
   useEffect(() => {
     async function init() {
       const dirInfo = await FileSystem.getInfoAsync(APP_MEDIA_DIR);
       if (!dirInfo.exists) {
         await FileSystem.makeDirectoryAsync(APP_MEDIA_DIR, { intermediates: true });
       }
-      if (!permissionResponse || permissionResponse.status !== 'granted') {
-        await requestPermission();
-      }
     }
     init();
   }, []);
 
-  const limpiarMultimedia = () => {
-    setPhotos(Array(6).fill(null));
-    setAudios([]);
-    setPreviewPhoto(null);
-    setPhotoIndex(null);
-    setCameraModal(false);
-    setAudioModal(false);
-    setDeletedIds([]);
-  };
-
+  // --- CARGA DE MEDIOS ---
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;
-
-    setLoading(true);
-    setLoadingMessage("Cargando...");
+    setLoading({ active: true, msg: "Cargando..." });
     setDeletedIds([]);
 
     try {
       const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
       const deficienciaId = deficiencia.DefiServerId ?? deficiencia.DefiInterno;
-
       const medios = await fetchMediosByDeficienciaId(deficienciaId);
       const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
@@ -110,8 +102,8 @@ export default function Multimedia() {
             audiosTmp.push({ uri: localUri, title: "Audio", id: m.ArchInterno, type: 0 });
           } else if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
             photosTmp[Number(m.ArchTipo) - 1] = {
-              uri: localUri, latUtm: m.ArchLatitud, lonUtm: m.ArchLongitud, fechaISO: m.ArchFecha,
-              id: m.ArchInterno, originalPath: localUri, type: Number(m.ArchTipo)
+              uri: localUri, latUtm: m.ArchLatitud, lonUtm: m.ArchLongitud, 
+              fechaISO: m.ArchFecha, id: m.ArchInterno, originalPath: localUri, type: Number(m.ArchTipo)
             };
           }
         }
@@ -121,18 +113,29 @@ export default function Multimedia() {
     } catch (err) {
       console.error("Error cargando:", err);
     } finally {
-      setLoading(false);
+      setLoading({ active: false, msg: "" });
     }
   };
 
   useFocusEffect(
     useCallback(() => {
-      let activo = true;
-      if (activo) loadMedios();
-      return () => { activo = false; limpiarMultimedia(); };
+      loadMedios();
+      return () => limpiarMultimedia();
     }, [selectedDeficiency?.id])
   );
 
+  const limpiarMultimedia = () => {
+    setPhotos(Array(6).fill(null));
+    setAudios([]);
+    setPreviewPhoto(null);
+    setPhotoIndex(null);
+    setCameraModal(false);
+    setAudioModal(false);
+    setDeletedIds([]);
+    setLoading({ active: false, msg: "" });
+  };
+
+  // --- BORRAR ---
   const handleDeletePhoto = (index) => {
     const photo = photos[index];
     if (photo?.id) {
@@ -149,180 +152,143 @@ export default function Multimedia() {
     setAudios(prev => prev.filter((_, i) => i !== index));
   };
 
-  const guardarEnAlbum = async (uriLocal, albumName) => {
+  // ==========================================================
+  // 📦 GENERACIÓN DE ZIP CON CARPETEO INTELIGENTE
+  // ==========================================================
+  const exportarFotosZip = async () => {
+    const fotosValidas = photos.filter(p => p !== null);
+    if (fotosValidas.length === 0) return Alert.alert("Sin fotos", "No hay fotos para exportar.");
+
     try {
-      if (permissionResponse?.status !== 'granted') return;
-      const asset = await MediaLibrary.createAssetAsync(uriLocal);
-      const album = await MediaLibrary.getAlbumAsync(albumName);
-      if (album == null) {
-        await MediaLibrary.createAlbumAsync(albumName, asset, false);
-      } else {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      setLoading({ active: true, msg: "Creando estructura de carpetas..." });
+
+      // 1. Obtener Datos para la Ruta
+      // a) Alimentador
+      let nombreAlimentador = "SIN_ALIM";
+      if (selectedSed?.AlimInterno) {
+        const feederObj = await findFeederById(selectedSed.AlimInterno);
+        nombreAlimentador = feederObj?.ALIM_Etiqueta || feederObj?.alimEtiqueta || "ALIM_UNK";
       }
-    } catch (e) {
-      console.log(`Error guardando en ${albumName}:`, e);
-    }
-  };
 
-  // ✅ PAPELERA OK: Usa copy=true para crear copia real antes de borrar
-  const moverAPapeleraYBorrar = async (filename, sourceAlbumName) => {
-    try {
-      if (permissionResponse?.status !== 'granted') return;
+      // b) SED
+      const codigoSed = selectedSed?.SedCodigo || "SIN_SED";
 
-      const sourceAlbum = await MediaLibrary.getAlbumAsync(sourceAlbumName);
-      if (!sourceAlbum) return;
+      // c) Elemento (Poste/Vano y Código)
+      const { tipo, codigo } = getElementoInfo();
+      const tipoCarpeta = tipo === "Vano" ? "Vano" : "Poste"; // Aseguramos nombre limpio
 
-      const assets = await MediaLibrary.getAssetsAsync({ album: sourceAlbum.id, first: 500 });
-      const assetToDelete = assets.assets.find(a => a.filename === filename || filename.includes(a.filename));
+      // d) Deficiencia (TIPI_INTERNO o DefiInterno)
+      // Usamos DefiInterno para que la carpeta sea única por reporte, o TIPI si prefieres agrupar por tipo.
+      // Aquí uso DefiInterno como identificador del reporte actual.
+      const codigoDeficiencia = selectedDeficiency?.DefiInterno || selectedDeficiency?.id || "DEF_UNK";
 
-      if (assetToDelete) {
-        const trashAlbumName = "SigreMovil/Papelera";
-        let trashAlbum = await MediaLibrary.getAlbumAsync(trashAlbumName);
-        
-        // Copia física
-        if (!trashAlbum) {
-           await MediaLibrary.createAlbumAsync(trashAlbumName, assetToDelete, true);
-        } else {
-           await MediaLibrary.addAssetsToAlbumAsync([assetToDelete], trashAlbum, true);
+      // 2. Construir la Ruta Jerárquica
+      // Pictures / Alimentador / SED / TipoElemento / CodigoElemento / CodigoDeficiencia
+      const carpetaRuta = `Pictures/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}`;
+
+      // 3. Crear ZIP y Poblar
+      const zip = new JSZip();
+      const folder = zip.folder(carpetaRuta); // Crea toda la ruta interna
+
+      setLoading({ active: true, msg: "Comprimiendo imágenes..." });
+
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        if (photo?.uri) {
+          const base64 = await FileSystem.readAsStringAsync(photo.uri, { encoding: FileSystem.EncodingType.Base64 });
+          // Nombre del archivo: TIPO_CODIGO_SLOT.jpg
+          const nombreArchivo = `${tipo}_${codigo}_${PHOTO_SLOTS[i].replace(/\s/g, "")}.jpg`;
+          
+          folder.file(nombreArchivo, base64, { base64: true });
         }
-
-        // Borrar original
-        await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
-        console.log(`Movido a Papelera y borrado de origen.`);
       }
-    } catch (e) {
-      console.log("Error en gestión de papelera:", e);
+
+      // 4. Generar y Compartir
+      const zipBase64 = await zip.generateAsync({ type: "base64" });
+      const fileName = `Inspeccion_${codigo}_${codigoDeficiencia}.zip`;
+      const zipUri = FileSystem.cacheDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(zipUri, zipBase64, { encoding: FileSystem.EncodingType.Base64 });
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(zipUri);
+      } else {
+        Alert.alert("Error", "No se puede compartir en este dispositivo");
+      }
+
+    } catch (error) {
+      console.error("ZIP Error:", error);
+      Alert.alert("Error", "Fallo al crear ZIP: " + error.message);
+    } finally {
+      setLoading({ active: false, msg: "" });
     }
   };
 
-  /* ======================
-     FINALIZAR (CORREGIDO)
-  ====================== */
+  // --- FINALIZAR (Solo Guardado Local) ---
   const finalizar = async () => {
     if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
 
     try {
-      setLoading(true);
-      setLoadingMessage("Iniciando guardado...");
+      setLoading({ active: true, msg: "Guardando..." });
 
-      // 1️⃣ DATOS BASE
+      // Datos base
       const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
       const codTabla = deficiencyData?.DefiServerId ?? selectedDeficiency.id;
       const defiInterno = selectedDeficiency.DefiInterno || deficiencyData?.DefiInterno || 'NEW';
-      const { tipo, codigo } = getElementoInfo(); 
-
-      // 2️⃣ OBTENER ALIM_ETIQUETA CORRECTAMENTE
-      // Buscamos el objeto Alimentador completo usando el ID que tiene la SED
-      let alimEtiqueta = "ALIM_UNK";
-      try {
-        if (selectedSed?.AlimInterno) {
-            const feederObj = await findFeederById(selectedSed.AlimInterno);
-            // Probamos ambas mayúsculas/minúsculas según tu DB y Logs
-            alimEtiqueta = feederObj?.ALIM_Etiqueta || feederObj?.alimEtiqueta || "ALIM_UNK";
-        }
-      } catch (e) {
-        console.log("Error buscando alimentador:", e);
-      }
-
-      const sedCodigo = selectedSed?.SedCodigo || selectedSed?.codigo || "0000";
-
-      // 📂 RUTA FINAL: SigreMovil / SELVA ALEGRE / 1577 / ...
-      const albumName = `SigreMovil/${alimEtiqueta}/${sedCodigo}/${tipo}/${codigo}/${defiInterno}`;
+      const { tipo, codigo } = getElementoInfo();
       const filePrefix = `${tipo.charAt(0)}_${codigo}_DEF_${defiInterno}`;
 
-      // 3️⃣ PROCESAR ELIMINADOS
-      setLoadingMessage("Gestionando eliminados...");
+      // Eliminar borrados
       for (const item of deletedIds) {
-        // a) BD
         await saveArchivoLocal({
           ArchInterno: item.id, ArchActivo: 0, ArchTipo: item.type, ArchCodTabla: codTabla, 
           ArchNombre: "DELETED", ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
-          ArchIdElemento: selectedDeficiency.elementId ?? 0, ArchTabla: "Deficiencias"
+          ArchTabla: "Deficiencias"
         });
-
-        // b) App Física
         try { await FileSystem.deleteAsync(item.path, { idempotent: true }); } catch (e) {}
-
-        // c) Galería (Papelera + Borrar de Carpeta Correcta)
-        if (item.type !== 0) {
-           const filename = item.path.split('/').pop();
-           // Ahora sí buscamos en la carpeta correcta (SELVA ALEGRE/...)
-           await moverAPapeleraYBorrar(filename, albumName);
-        }
       }
 
-      // 4️⃣ GUARDAR NUEVAS
-      setLoadingMessage("Guardando fotos...");
+      // Guardar Fotos (Solo App Privada)
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         if (photo?.uri && !photo.id) {
-          const timestamp = Date.now();
-          const filename = `${filePrefix}_IMG_${timestamp}_${i}.jpg`;
-          const destUri = APP_MEDIA_DIR + filename;
-
+          const fname = `${filePrefix}_IMG_${Date.now()}_${i}.jpg`;
+          const destUri = APP_MEDIA_DIR + fname;
           await FileSystem.copyAsync({ from: photo.uri, to: destUri });
-          await guardarEnAlbum(destUri, albumName);
-
-          await saveFileRecord({
-            filename, relativePath: "SigreMedios", slot: i + 1, isAudio: false, 
-            photoData: photo, codTablaOverride: codTabla
-          });
+          await saveFileRecord({ filename: fname, slot: i + 1, isAudio: false, photoData: photo, codTablaOverride: codTabla });
         }
       }
 
-      // 5️⃣ AUDIOS
+      // Guardar Audios (Solo App Privada)
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
         if (audio?.uri && !audio.id) {
-          const timestamp = Date.now();
-          const filename = `${filePrefix}_AUDIO_${timestamp}_${i}.m4a`;
-          const destUri = APP_MEDIA_DIR + filename;
-
+          const fname = `${filePrefix}_AUDIO_${Date.now()}_${i}.m4a`;
+          const destUri = APP_MEDIA_DIR + fname;
           await FileSystem.copyAsync({ from: audio.uri, to: destUri });
-          await saveFileRecord({
-            filename, relativePath: "SigreMedios", slot: 0, isAudio: true, codTablaOverride: codTabla
-          });
+          await saveFileRecord({ filename: fname, slot: 0, isAudio: true, codTablaOverride: codTabla });
         }
       }
 
       limpiarMultimedia();
-      setLoading(false);
-      
-      Alert.alert(
-        "Guardado Exitoso", 
-        `Fotos guardadas en:\n.../${alimEtiqueta}/${sedCodigo}/${tipo}/${codigo}...`, 
-        [{ text: "OK", onPress: () => router.replace("/inspection") }]
-      );
+      setLoading({ active: false, msg: "" });
+      Alert.alert("Guardado", "Datos guardados localmente.", [{ text: "OK", onPress: () => router.replace("/inspection") }]);
 
     } catch (err) {
-      setLoading(false);
-      Alert.alert("Error", "Ocurrió un error: " + err.message);
-      console.error(err);
+      setLoading({ active: false, msg: "" });
+      Alert.alert("Error", err.message);
     }
   };
 
-  /* ======================
-     HELPERS
-  ====================== */
-  const saveFileRecord = async ({ filename, relativePath, slot, isAudio, photoData, codTablaOverride }) => {
+  const saveFileRecord = async ({ filename, slot, isAudio, photoData, codTablaOverride }) => {
     const { tipo } = getElementoInfo();
     let finalCodTabla = codTablaOverride ?? (await fetchDeficiencyByIdLocal(selectedDeficiency.id))?.DefiServerId ?? selectedDeficiency.id;
-    const archTipoFinal = isAudio ? 0 : (slot > 0 ? slot : 1);
-
     return await saveArchivoLocal({
-      ArchInterno: null, ArchTipo: archTipoFinal, ArchTabla: "Deficiencias", ArchCodTabla: finalCodTabla,
-      ArchNombre: `${relativePath}/${filename}`, ArchLatitud: photoData?.latUtm ?? null, 
-      ArchLongitud: photoData?.lonUtm ?? null, ArchFecha: photoData?.fechaISO ?? null,
-      ArchTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
-      ArchIdElemento: selectedDeficiency.elementId, TipiInterno: selectedDeficiency?.typificationId ?? null,
-      ArchActivo: 1,
+      ArchInterno: null, ArchTipo: isAudio ? 0 : (slot > 0 ? slot : 1), ArchTabla: "Deficiencias", ArchCodTabla: finalCodTabla,
+      ArchNombre: `SigreMedios/${filename}`, ArchLatitud: photoData?.latUtm ?? null, ArchLongitud: photoData?.lonUtm ?? null, 
+      ArchFecha: photoData?.fechaISO ?? null, ArchTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
+      ArchIdElemento: selectedDeficiency.elementId, ArchActivo: 1,
     });
-  };
-
-  const getElementoInfo = () => {
-    if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
-    if (selectedItem?.Vano_Codigo || selectedItem?.VanoCodigo) return { tipo: "Vano", codigo: selectedItem.Vano_Codigo || selectedItem.VanoCodigo };
-    return { tipo: "Elemento", codigo: "000" };
   };
 
   const handleCancelar = () => {
@@ -333,31 +299,36 @@ export default function Multimedia() {
   };
 
   useFocusEffect(useCallback(() => {
-      const onBack = () => { handleCancelar(); return true; };
-      const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
-      return () => sub.remove();
-    }, [])
-  );
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => { handleCancelar(); return true; });
+    return () => sub.remove();
+  }, []));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* SECCION FOTOS + ZIP */}
         <View style={styles.section}>
-          <Text style={styles.title}>📸 Registro de Fotos</Text>
+          <View style={styles.headerRow}>
+             <Text style={styles.title}>📸 Registro de Fotos</Text>
+             {photos.some(p => p !== null) && (
+                <TouchableOpacity style={styles.zipButton} onPress={exportarFotosZip}>
+                  <Text style={styles.zipText}>📦 Crear ZIP Estructurado</Text>
+                </TouchableOpacity>
+             )}
+          </View>
           <View style={styles.grid}>
             {PHOTO_SLOTS.map((title, index) => (
               <PhotoCard
                 key={index} title={title} uri={photos[index]?.uri}
-                onPress={() => {
-                  if (photos[index]?.uri) setPreviewPhoto(photos[index].uri);
-                  else { setPhotoIndex(index); setCameraModal(true); }
-                }}
+                onPress={() => photos[index]?.uri ? setPreviewPhoto(photos[index].uri) : (setPhotoIndex(index), setCameraModal(true))}
                 onDelete={() => handleDeletePhoto(index)}
               />
             ))}
           </View>
         </View>
 
+        {/* SECCION AUDIOS (PRIVADOS) */}
         <View style={styles.section}>
           <View style={styles.audioHeader}>
             <Text style={styles.title}>🎙️ Registro de Audio</Text>
@@ -366,12 +337,15 @@ export default function Multimedia() {
             </TouchableOpacity>
           </View>
           {audios.map((audio, index) => (
-            <AudioCard key={index} title={audio.title} uri={audio.uri} onDelete={() => handleDeleteAudio(index)} />
+            <View key={index} style={{ marginBottom: 8 }}>
+              <AudioCard title={audio.title} uri={audio.uri} onDelete={() => handleDeleteAudio(index)} />
+            </View>
           ))}
           {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
         </View>
       </ScrollView>
 
+      {/* FOOTER */}
       <View style={styles.footer}>
         <View style={styles.footerRow}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancelar}>
@@ -383,25 +357,27 @@ export default function Multimedia() {
         </View>
       </View>
 
+      <ModalCamera visible={cameraModal} onClose={() => setCameraModal(false)}
+        onPhoto={(p) => setPhotos(prev => { const c = [...prev]; c[photoIndex] = p; return c; })}
+      />
+      <ModalAudio visible={audioModal} onClose={() => setAudioModal(false)}
+        onAudioRecorded={(u) => setAudios(prev => [...prev, { uri: u, title: `Nota ${prev.length + 1}` }])}
+      />
+      
       <Modal visible={!!previewPhoto} transparent>
          <View style={styles.previewContainer}>
             <Image source={{ uri: previewPhoto }} style={styles.previewImage} />
             <TouchableOpacity style={styles.closePreview} onPress={() => setPreviewPhoto(null)}>
-               <Text>Cerrar</Text>
+               <Text style={{fontWeight: 'bold'}}>Cerrar</Text>
             </TouchableOpacity>
          </View>
       </Modal>
 
-      <ModalCamera visible={cameraModal} onClose={() => setCameraModal(false)}
-        onPhoto={(photo) => setPhotos(prev => { const copy = [...prev]; copy[photoIndex] = photo; return copy; })}
-      />
-      <ModalAudio visible={audioModal} onClose={() => setAudioModal(false)}
-        onAudioRecorded={(uri) => setAudios(prev => [...prev, { uri, title: `Audio ${prev.length + 1}` }])}
-      />
-      <Modal visible={loading} transparent animationType="fade">
+      <Modal visible={loading.active} transparent animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingBox}>
-            <Text style={styles.loadingText}>{loadingMessage}</Text>
+            <ActivityIndicator size="large" color="#16A34A" />
+            <Text style={styles.loadingText}>{loading.msg}</Text>
           </View>
         </View>
       </Modal>
@@ -413,7 +389,10 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F6F6F6" },
   scrollContent: { paddingHorizontal: 12, paddingBottom: 100 },
   section: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   title: { fontSize: 18, fontWeight: "600" },
+  zipButton: { backgroundColor: '#2563EB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  zipText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   audioHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   recButton: { backgroundColor: "#DC2626", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
@@ -429,6 +408,6 @@ const styles = StyleSheet.create({
   previewImage: { width: "100%", height: "80%", resizeMode: "contain" },
   closePreview: { marginTop: 20, padding: 10, backgroundColor: "#fff", borderRadius: 8 },
   loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220 },
-  loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center" },
+  loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: 'center' },
+  loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
 });
