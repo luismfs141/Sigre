@@ -1,8 +1,10 @@
 import { useFocusEffect } from "@react-navigation/native";
+// ✅ CORRECCIÓN EXPO SDK 52+: Usamos 'legacy'
 import * as FileSystem from "expo-file-system/legacy";
+// ✅ NUEVO: Para guardar en Galería Pública (Reportes)
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
-import { useCallback, useContext, useState } from "react";
+import { useCallback, useContext, useState, useEffect } from "react";
 import {
   Alert,
   BackHandler,
@@ -16,11 +18,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
-import { useDeficiency } from "../../hooks/useDeficiency";
 import { useFeeder } from "../../hooks/useFeeder";
 import { useFiles } from "../../hooks/useFiles";
+import { useDeficiency } from "../../hooks/useDeficiency";
 
 import AudioCard from "../../components/Multimedia/AudioCard";
 import ModalAudio from "../../components/Multimedia/ModalAudio";
@@ -39,30 +40,55 @@ const PHOTO_SLOTS = [
   "Def2",
 ];
 
+// 📁 CARPETA BASE (Privada y Offline de la App)
+const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
+
 export default function Multimedia() {
   const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
-  const { user } = useContext(AuthContext);
   const { findFeederById } = useFeeder();
-  const { saveArchivoLocal, fetchMediosByDeficienciaId } = useFiles();
+  const { saveArchivoLocal, fetchMediosByDeficienciaId, updateArchivoState } = useFiles();
   const { fetchDeficiencyByIdLocal } = useDeficiency();
+  const router = useRouter();
 
+  // Permisos de Galería
+  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
+
+  // Estados UI
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
-
-  const [photos, setPhotos] = useState(Array(6).fill(null));
-  const [audios, setAudios] = useState([]);
-
-  const [photoIndex, setPhotoIndex] = useState(null);
-  const [previewPhoto, setPreviewPhoto] = useState(null);
-
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  const router = useRouter();
+  // Datos
+  const [photos, setPhotos] = useState(Array(6).fill(null));
+  const [audios, setAudios] = useState([]);
+  
+  // 🗑️ LISTA DE ELIMINADOS
+  const [deletedIds, setDeletedIds] = useState([]);
+
+  // Preview / Indices
+  const [photoIndex, setPhotoIndex] = useState(null);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   /* ======================
-     CLEANUP
+     INIT / PERMISOS
   ====================== */
+  useEffect(() => {
+    async function init() {
+      // 1. Crear carpeta interna si no existe
+      const dirInfo = await FileSystem.getInfoAsync(APP_MEDIA_DIR);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(APP_MEDIA_DIR, { intermediates: true });
+      }
+      
+      // 2. Pedir permiso para guardar en Galería (Reportes)
+      if (!permissionResponse || permissionResponse.status !== 'granted') {
+        await requestPermission();
+      }
+    }
+    init();
+  }, []);
+
   const limpiarMultimedia = () => {
     setPhotos(Array(6).fill(null));
     setAudios([]);
@@ -70,476 +96,305 @@ export default function Multimedia() {
     setPhotoIndex(null);
     setCameraModal(false);
     setAudioModal(false);
+    setDeletedIds([]);
   };
-
-const getAssetUriByRealPath = async (relativePath, filename, mediaType) => {
-  let after = null;
-
-  do {
-    const page = await MediaLibrary.getAssetsAsync({
-      mediaType,
-      first: 100,
-      after,
-      sortBy: MediaLibrary.SortBy.creationTime,
-    });
-
-    // Buscar por NOMBRE + RUTA en el URI real
-    const asset = page.assets.find(a =>
-      a.filename === filename &&
-      a.uri.includes(relativePath)
-    );
-
-    if (asset) return asset.uri;
-
-    after = page.endCursor;
-  } while (after);
-
-  console.warn("❌ Archivo no encontrado:", relativePath, filename);
-  return null;
-};
-
-
-  const getAssetUriByPath = async (relativePath, filename, mediaType) => {
-    // 1️⃣ Obtener el álbum por nombre (ruta)
-    const album = await MediaLibrary.getAlbumAsync(relativePath);
-    if (!album) {
-      console.warn("❌ Álbum no encontrado:", relativePath);
-      return null;
-    }
-
-    let after = null;
-
-    // 2️⃣ Buscar solo dentro del álbum
-    do {
-      const page = await MediaLibrary.getAssetsAsync({
-        album,
-        mediaType,
-        first: 100,
-        after,
-      });
-
-      const asset = page.assets.find(a => a.filename === filename);
-      if (asset) return asset.uri;
-
-      after = page.endCursor;
-    } while (after);
-
-    console.warn("❌ Archivo no encontrado en álbum:", relativePath, filename);
-    return null;
-  };
-
 
   /* ======================
-     LOAD MEDIOS (FIXED)
+     LOAD MEDIOS
   ====================== */
-  // const loadMedios = async () => {
-  //   // ⛔ VALIDAR ANTES DE PRENDER LOADING
-  //   if (!selectedDeficiency?.id) {
-  //     limpiarMultimedia();
-  //     return;
-  //   }
+  const loadMedios = async () => {
+    if (!selectedDeficiency?.id) return;
 
-  //   setLoading(true);
-  //   setLoadingMessage("Cargando multimedia...");
+    setLoading(true);
+    setLoadingMessage("Cargando...");
+    setDeletedIds([]);
 
-  //   try {
-  //     setLoadingMessage("Obteniendo deficiencia...");
-  //     const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+    try {
+      const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+      const deficienciaId = deficiencia.DefiServerId ?? deficiencia.DefiInterno;
 
-  //     const deficienciaId =
-  //       deficiencia.DefiServerId ?? deficiencia.DefiInterno;
+      // 1. Consultamos BD Local
+      const medios = await fetchMediosByDeficienciaId(deficienciaId);
+      const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
-  //     setLoadingMessage("Buscando archivos guardados...");
-  //     const medios = await fetchMediosByDeficienciaId(deficienciaId);
+      const photosTmp = Array(6).fill(null);
+      const audiosTmp = [];
 
-  //     const activos = medios.filter(m => Number(m.ArchActivo) === 1);
-
-  //     const photosTmp = Array(6).fill(null);
-  //     const audiosTmp = [];
-
-  //     if (activos.length > 0) {
-  //       setLoadingMessage("Procesando fotos y audios...");
-
-  //       for (const m of activos) {
-  //         const filename = m.ArchNombre.split("/").pop();
-
-  //         if (Number(m.ArchTipo) === 0) {
-  //           const uri = await getAssetUriByFilename(
-  //             filename,
-  //             MediaLibrary.MediaType.audio
-  //           );
-  //           if (uri) audiosTmp.push({ uri, title: "Audio" });
-  //         }
-
-  //         if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-  //           const uri = await getAssetUriByFilename(
-  //             filename,
-  //             MediaLibrary.MediaType.photo
-  //           );
-  //           if (uri) {
-  //             photosTmp[Number(m.ArchTipo) - 1] = {
-  //               uri,
-  //               latUtm: m.ArchLatitud,
-  //               lonUtm: m.ArchLongitud,
-  //               fechaISO: m.ArchFecha,
-  //             };
-  //           }
-  //         }
-  //       }
-  //     }
-
-  //     setPhotos(photosTmp);
-  //     setAudios(audiosTmp);
-  //   } catch (err) {
-  //     console.error("❌ Error cargando medios:", err);
-  //   } finally {
-  //     setLoading(false);
-  //     setLoadingMessage("");
-  //   }
-  // };
-
-const loadMedios = async () => {
-  if (!selectedDeficiency?.id) {
-    limpiarMultimedia();
-    return;
-  }
-
-  setLoading(true);
-  setLoadingMessage("Cargando multimedia...");
-
-  try {
-    setLoadingMessage("Obteniendo deficiencia...");
-    const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
-
-    const deficienciaId =
-      deficiencia.DefiServerId ?? deficiencia.DefiInterno;
-
-    setLoadingMessage("Buscando archivos guardados...");
-    const medios = await fetchMediosByDeficienciaId(deficienciaId);
-
-    const activos = medios.filter(m => Number(m.ArchActivo) === 1);
-
-    const photosTmp = Array(6).fill(null);
-    const audiosTmp = [];
-
-    if (activos.length > 0) {
-      setLoadingMessage("Procesando fotos y audios...");
-
+      // 2. Mapeamos según ArchTipo
       for (const m of activos) {
-        const fullPath = m.ArchNombre; 
-        // SigreMovil/AMAUTA/1465/Vano/VBT000192983/7004/1.jpg
+        const filename = m.ArchNombre.split("/").pop();
+        const localUri = APP_MEDIA_DIR + filename;
+        const fileInfo = await FileSystem.getInfoAsync(localUri);
 
-        const filename = fullPath.split("/").pop();
-        const relativePath = fullPath.substring(
-          0,
-          fullPath.lastIndexOf("/")
-        );
-
-        // 🎵 AUDIO → Music
-        if (Number(m.ArchTipo) === 0) {
-          const uri = await getAssetUriByRealPath(
-            relativePath,
-            filename,
-            MediaLibrary.MediaType.audio
-          );
-
-          if (uri) {
+        if (fileInfo.exists) {
+          if (Number(m.ArchTipo) === 0) { // Audio
             audiosTmp.push({
-              uri,
+              uri: localUri,
               title: "Audio",
+              id: m.ArchInterno,
+              type: 0 
             });
-          }
-        }
-
-        // 📸 FOTO → Pictures
-        if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-          const uri = await getAssetUriByRealPath(
-            relativePath,
-            filename,
-            MediaLibrary.MediaType.photo
-          );
-
-          if (uri) {
+          } else if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) { // Foto
             photosTmp[Number(m.ArchTipo) - 1] = {
-              uri,
+              uri: localUri,
               latUtm: m.ArchLatitud,
               lonUtm: m.ArchLongitud,
               fechaISO: m.ArchFecha,
+              id: m.ArchInterno,
+              originalPath: localUri,
+              type: Number(m.ArchTipo) 
             };
           }
         }
       }
+
+      setPhotos(photosTmp);
+      setAudios(audiosTmp);
+
+    } catch (err) {
+      console.error("Error cargando:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setPhotos(photosTmp);
-    setAudios(audiosTmp);
-  } catch (err) {
-    console.error("❌ Error cargando medios:", err);
-  } finally {
-    setLoading(false);
-    setLoadingMessage("");
-  }
-};
-
-
-  /* ======================
-     FOCUS EFFECT
-  ====================== */
   useFocusEffect(
     useCallback(() => {
       let activo = true;
-
-      const cargar = async () => {
-        if (activo) await loadMedios();
-      };
-
-      cargar();
-
-      return () => {
-        activo = false;
-        limpiarMultimedia();
-      };
+      if (activo) loadMedios();
+      return () => { activo = false; limpiarMultimedia(); };
     }, [selectedDeficiency?.id])
   );
 
   /* ======================
-     BACK HANDLER
+     ACCIONES DE ELIMINACIÓN
   ====================== */
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        router.replace("/(drawer)/inspection");
-        return true;
-      };
-      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-      return () => sub.remove();
-    }, [])
-  );
+  const handleDeletePhoto = (index) => {
+    const photo = photos[index];
+    if (photo?.id) {
+      setDeletedIds(prev => [...prev, { 
+        id: photo.id, 
+        path: photo.originalPath, 
+        type: photo.type 
+      }]);
+    }
+    setPhotos(prev => {
+      const copy = [...prev];
+      copy[index] = null;
+      return copy;
+    });
+  };
+
+  const handleDeleteAudio = (index) => {
+    const audio = audios[index];
+    if (audio?.id) {
+      setDeletedIds(prev => [...prev, { 
+        id: audio.id, 
+        path: audio.uri, 
+        type: audio.type 
+      }]);
+    }
+    setAudios(prev => prev.filter((_, i) => i !== index));
+  };
 
   /* ======================
-     HELPERS
+     HELPER: GUARDAR EN GALERÍA
   ====================== */
-  const getElementoInfo = () => {
-    if (selectedItem?.PostInterno)
-      return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
-    if (selectedItem?.VanoInterno)
-      return { tipo: "Vano", codigo: selectedItem.VanoCodigo };
-    throw new Error("Elemento no soportado");
-  };
-
-  const getFilenameFromUri = (uri) => uri?.split("/").pop() ?? null;
-
-  const getAssetUriByFilename = async (filename, mediaType) => {
-    let after = null;
-    do {
-      const page = await MediaLibrary.getAssetsAsync({
-        mediaType,
-        first: 100,
-        after,
-      });
-      const asset = page.assets.find(a => a.filename === filename);
-      if (asset) return asset.uri;
-      after = page.endCursor;
-    } while (after);
-    return null;
-  };
-
-  const moveToAlbum = async (uri, albumName, filename) => {
-    // 🚫 YA NO pedir permiso aquí
-
-    const tempDir = FileSystem.cacheDirectory + "SigreMovil/";
-    const folderInfo = await FileSystem.getInfoAsync(tempDir);
-    if (!folderInfo.exists) {
-      await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
-    }
-
-    const localUri = `${tempDir}${filename}`;
-    await FileSystem.copyAsync({
-      from: uri,
-      to: localUri,
-    });
-
-    const asset = await MediaLibrary.createAssetAsync(localUri);
-
-    let album = await MediaLibrary.getAlbumAsync(albumName);
-    if (!album) {
-      await MediaLibrary.createAlbumAsync(albumName, asset, false);
-    } else {
-      await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-    }
-
-    console.log("Foto guardada en álbum:", filename);
-  };
-
-
-  const moveAudio = async (uri, albumName) => {
-
-    const asset = await MediaLibrary.createAssetAsync(uri);
-
+  const guardarCopiaEnGaleria = async (uriLocal) => {
     try {
-      const album = await MediaLibrary.getAlbumAsync(albumName);
-      if (!album) {
-        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      if (permissionResponse?.status !== 'granted') return;
+
+      const asset = await MediaLibrary.createAssetAsync(uriLocal);
+      const album = await MediaLibrary.getAlbumAsync("SigreMovil");
+      
+      if (album == null) {
+        await MediaLibrary.createAlbumAsync("SigreMovil", asset, false);
       } else {
         await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
       }
-    } catch (albumError) {
-      console.warn("⚠️ No se pudo crear álbum para audio, continuando...");
+    } catch (e) {
+      console.log("Error guardando en galería pública:", e);
     }
   };
 
-
   /* ======================
-     FINALIZAR (FIXED)
+     FINALIZAR (CON EXPORTACIÓN A GALERÍA)
   ====================== */
   const finalizar = async () => {
-    if (!selectedItem)
-      return Alert.alert("Error", "No hay elemento seleccionado");
-
-    const hasPermission = await ensureMediaPermission();
-    if (!hasPermission) return;
+    if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
 
     try {
       setLoading(true);
-      setLoadingMessage("Preparando guardado...");
+      setLoadingMessage("Guardando y Exportando...");
 
-      const feeder = await findFeederById(selectedSed.AlimInterno);
-      const { tipo, codigo } = getElementoInfo();
+      // 1️⃣ DATOS PADRE (Para SQL Constraints)
+      const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+      const codTabla = deficiencyData?.DefiServerId ?? selectedDeficiency.id;
+      const { tipo, codigo } = getElementoInfo(); 
 
-      const folderBase = `SigreMovil/${feeder.alimEtiqueta}/${selectedSed.SedCodigo}/${tipo}/${codigo}/${selectedDeficiency.typificationCode}`;
+      // 2️⃣ PROCESAR ELIMINADOS EN BD (Soft Delete)
+      for (const item of deletedIds) {
+        // Marcamos como inactivo en BD, enviando todos los campos para evitar NOT NULL
+        await saveArchivoLocal({
+          ArchInterno: item.id,
+          ArchActivo: 0,        
+          ArchTipo: item.type,   
+          ArchCodTabla: codTabla, 
+          
+          ArchNombre: "DELETED", 
+          ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
+          ArchIdElemento: selectedDeficiency.elementId ?? 0,
+          ArchTabla: "Deficiencias"
+        });
+        // Nota: No borramos físico, para evitar conflictos y mantener backup
+      }
 
-      const folderFinal = selectedDeficiency.numSuministro
-        ? `${folderBase}/${selectedDeficiency.numSuministro}`
-        : folderBase;
+      // Prefijo base
+      const filePrefix = `${tipo.charAt(0)}_${codigo}`;
 
+      // 3️⃣ GUARDAR FOTOS NUEVAS
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
-        if (photo?.uri) {
-          setLoadingMessage(`Guardando foto ${i + 1}...`);
-          const filename = `${i + 1}.jpg`;
-          await moveToAlbum(photo.uri, folderFinal, filename);
+        
+        if (photo?.uri && !photo.id) {
+          // Generamos nombre único con Timestamp
+          const timestamp = Date.now();
+          const filename = `${filePrefix}_IMG_${timestamp}_${i}.jpg`;
+          const destUri = APP_MEDIA_DIR + filename;
+
+          // A) Copiar a carpeta privada (Offline App)
+          await FileSystem.copyAsync({ from: photo.uri, to: destUri });
+
+          // B) ✅ EXPORTAR A GALERÍA PÚBLICA (Para USB/Reportes)
+          await guardarCopiaEnGaleria(destUri);
+
+          // C) Guardar en BD
           await saveFileRecord({
             filename,
-            relativePath: folderFinal,
+            relativePath: "SigreMedios",
             slot: i + 1,
             isAudio: false,
             photoData: photo,
+            codTablaOverride: codTabla
           });
         }
       }
 
+      // 4️⃣ GUARDAR AUDIOS NUEVOS
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
-        if (audio?.uri) {
-          setLoadingMessage(`Guardando audio ${i + 1}...`);
-          const filename = getFilenameFromUri(audio.uri);
-          await moveAudio(audio.uri, folderFinal);
+        if (audio?.uri && !audio.id) {
+          const timestamp = Date.now();
+          const filename = `${filePrefix}_AUDIO_${timestamp}_${i}.m4a`;
+          const destUri = APP_MEDIA_DIR + filename;
+
+          await FileSystem.copyAsync({ from: audio.uri, to: destUri });
+
           await saveFileRecord({
             filename,
-            relativePath: folderFinal,
+            relativePath: "SigreMedios",
             slot: 0,
             isAudio: true,
+            codTablaOverride: codTabla
           });
         }
       }
 
       limpiarMultimedia();
       setLoading(false);
+      Alert.alert(
+        "Éxito", 
+        "Datos guardados. Las fotos se han exportado al álbum 'SigreMovil'.", 
+        [{ text: "OK", onPress: () => router.replace("/inspection") }]
+      );
 
-      Alert.alert("Éxito", "Multimedia guardada correctamente", [
-        { text: "OK", onPress: () => router.replace("/inspection") },
-      ]);
     } catch (err) {
       setLoading(false);
+      Alert.alert("Error", "Error guardando: " + err.message);
       console.error(err);
-      Alert.alert("Error", "No se pudo guardar la multimedia");
     }
   };
 
-const saveFileRecord = async ({
-  filename,
-  relativePath,
-  slot,
-  isAudio = false,
-  photoData = null,
-}) => {
-  const { tipo } = getElementoInfo();
+  /* ======================
+     HELPERS
+  ====================== */
+  const saveFileRecord = async ({ filename, relativePath, slot, isAudio, photoData, codTablaOverride }) => {
+    const { tipo } = getElementoInfo();
+    
+    let finalCodTabla = codTablaOverride;
+    if (!finalCodTabla) {
+        const deficiency = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+        finalCodTabla = deficiency?.DefiServerId ?? selectedDeficiency.id;
+    }
 
-  const deficiency = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+    const archTipoFinal = isAudio ? 0 : (slot > 0 ? slot : 1);
 
-  // 🔒 GARANTÍA ABSOLUTA
-  let archTipoFinal;
-
-  if (isAudio) {
-    archTipoFinal = 0;
-  } else {
-    archTipoFinal = Number.isInteger(slot) && slot > 0 ? slot : 1;
-  }
-
-  console.log(archTipoFinal);
-
-
-  return await saveArchivoLocal({
-    ArchInterno: null,
-
-    // ⚠️ JAMÁS NULL
-    ArchTipo: archTipoFinal,
-
-    ArchTabla: "Deficiencias",
-
-    ArchCodTabla:
-      deficiency?.DefiServerId ?? selectedDeficiency.id,
-
-    ArchNombre: `${relativePath}/${filename}`,
-
-    ArchLatitud: photoData?.latUtm ?? null,
-    ArchLongitud: photoData?.lonUtm ?? null,
-    ArchFecha: photoData?.fechaISO ?? null,
-
-    ArchTipoElemento:
-      tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
-
-    ArchIdElemento: selectedDeficiency.elementId,
-
-    TipiInterno: selectedDeficiency?.typificationId ?? null,
-
-    ArchActivo: 1,
-  });
-};
-
-const ensureMediaPermission = async () => {
-  const { status, canAskAgain } = await MediaLibrary.getPermissionsAsync();
-
-  if (status === "granted") return true;
-
-  if (canAskAgain) {
-    const result = await MediaLibrary.requestPermissionsAsync({
-      accessPrivileges: "all",   // 👈 CLAVE
+    return await saveArchivoLocal({
+      ArchInterno: null,
+      ArchTipo: archTipoFinal,
+      ArchTabla: "Deficiencias",
+      ArchCodTabla: finalCodTabla,
+      ArchNombre: `${relativePath}/${filename}`,
+      ArchLatitud: photoData?.latUtm ?? null,
+      ArchLongitud: photoData?.lonUtm ?? null,
+      ArchFecha: photoData?.fechaISO ?? null,
+      ArchTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
+      ArchIdElemento: selectedDeficiency.elementId,
+      TipiInterno: selectedDeficiency?.typificationId ?? null,
+      ArchActivo: 1,
     });
+  };
 
-    return result.status === "granted";
-  }
+  const getElementoInfo = () => {
+    if (selectedItem?.PostInterno) {
+        return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
+    }
+    // Lógica Vano corregida
+    if (selectedItem?.Vano_Codigo || selectedItem?.VanoCodigo) {
+        return { 
+            tipo: "Vano", 
+            codigo: selectedItem.Vano_Codigo || selectedItem.VanoCodigo 
+        };
+    }
+    return { tipo: "Elemento", codigo: "000" };
+  };
 
-  Alert.alert(
-    "Permiso bloqueado",
-    "Debes habilitar el acceso a la galería en Configuración > Aplicaciones > Permisos."
+  const handleCancelar = () => {
+    Alert.alert(
+      "Cancelar inspección",
+      "¿Estás seguro de salir? Se perderán los cambios no guardados.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, salir",
+          style: "destructive",
+          onPress: () => {
+            limpiarMultimedia();
+            router.replace("/inspection");
+          }
+        }
+      ]
+    );
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => { handleCancelar(); return true; };
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => sub.remove();
+    }, [])
   );
-  return false;
-};
 
   /* ======================
-     UI
+     RENDER UI
   ====================== */
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ===== FOTOS ===== */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* FOTOS */}
         <View style={styles.section}>
           <Text style={styles.title}>📸 Registro de Fotos</Text>
-
           <View style={styles.grid}>
             {PHOTO_SLOTS.map((title, index) => (
               <PhotoCard
@@ -547,117 +402,76 @@ const ensureMediaPermission = async () => {
                 title={title}
                 uri={photos[index]?.uri}
                 onPress={() => {
-                  if (photos[index]?.uri) {
-                    setPreviewPhoto(photos[index].uri);
-                  } else {
-                    setPhotoIndex(index);
-                    setCameraModal(true);
-                  }
+                  if (photos[index]?.uri) setPreviewPhoto(photos[index].uri);
+                  else { setPhotoIndex(index); setCameraModal(true); }
                 }}
-                onDelete={() =>
-                  setPhotos((prev) => {
-                    const copy = [...prev];
-                    copy[index] = null;
-                    return copy;
-                  })
-                }
-                onPreview={() => setPreviewPhoto(photos[index]?.uri)}
+                onDelete={() => handleDeletePhoto(index)}
               />
             ))}
           </View>
         </View>
 
-        {/* ===== AUDIO ===== */}
+        {/* AUDIOS */}
         <View style={styles.section}>
           <View style={styles.audioHeader}>
             <Text style={styles.title}>🎙️ Registro de Audio</Text>
-
-            <TouchableOpacity
-              style={styles.recButton}
-              onPress={() => setAudioModal(true)}
-            >
-              <Text style={styles.recText}>● REC</Text>
+            <TouchableOpacity style={styles.recButton} onPress={() => setAudioModal(true)}>
+               <Text style={styles.recText}>● REC</Text>
             </TouchableOpacity>
           </View>
-
-          {audios.length === 0 && (
-            <Text style={styles.emptyAudio}>
-              No hay audios grabados
-            </Text>
-          )}
-
           {audios.map((audio, index) => (
             <AudioCard
               key={index}
               title={audio.title}
               uri={audio.uri}
-              onDelete={() =>
-                Alert.alert(
-                  "Eliminar audio",
-                  `¿Desea eliminar ${audio.title}?`,
-                  [
-                    { text: "Cancelar", style: "cancel" },
-                    {
-                      text: "Eliminar",
-                      style: "destructive",
-                      onPress: () =>
-                        setAudios((prev) =>
-                          prev.filter((_, i) => i !== index)
-                        ),
-                    },
-                  ]
-                )
-              }
+              onDelete={() => handleDeleteAudio(index)}
             />
           ))}
+          {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
         </View>
+
       </ScrollView>
 
-      {/* ===== FOOTER ===== */}
+      {/* FOOTER */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.finishButton} onPress={finalizar}>
-          <Text style={styles.finishText}>FINALIZAR</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ===== PREVIEW FOTO ===== */}
-      <Modal visible={!!previewPhoto} transparent>
-        <View style={styles.previewContainer}>
-          <Image source={{ uri: previewPhoto }} style={styles.previewImage} />
-          <TouchableOpacity
-            style={styles.closePreview}
-            onPress={() => setPreviewPhoto(null)}
-          >
-            <Text>Cerrar</Text>
+        <View style={styles.footerRow}>
+          <TouchableOpacity style={styles.cancelButton} onPress={handleCancelar}>
+            <Text style={styles.cancelButtonText}>CANCELAR</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.finishButton} onPress={finalizar}>
+            <Text style={styles.finishText}>FINALIZAR</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* MODALES */}
+      <Modal visible={!!previewPhoto} transparent>
+         <View style={styles.previewContainer}>
+            <Image source={{ uri: previewPhoto }} style={styles.previewImage} />
+            <TouchableOpacity style={styles.closePreview} onPress={() => setPreviewPhoto(null)}>
+               <Text>Cerrar</Text>
+            </TouchableOpacity>
+         </View>
       </Modal>
 
-      {/* ===== MODALES ===== */}
       <ModalCamera
         visible={cameraModal}
         onClose={() => setCameraModal(false)}
-        onPhoto={(photo) =>
-          setPhotos((prev) => {
-            const copy = [...prev];
-            copy[photoIndex] = photo;
-            return copy;
-          })
-        }
+        onPhoto={(photo) => {
+           setPhotos(prev => {
+              const copy = [...prev];
+              copy[photoIndex] = photo;
+              return copy;
+           });
+        }}
       />
 
       <ModalAudio
         visible={audioModal}
         onClose={() => setAudioModal(false)}
-        onAudioRecorded={(uri) =>
-          setAudios((prev) => [
-            ...prev,
-            {
-              uri,
-              title: `Audio ${prev.length + 1}`,
-            },
-          ])
-        }
+        onAudioRecorded={(uri) => {
+           setAudios(prev => [...prev, { uri, title: `Audio ${prev.length + 1}` }]);
+        }}
       />
 
       <Modal visible={loading} transparent animationType="fade">
@@ -672,123 +486,53 @@ const ensureMediaPermission = async () => {
   );
 }
 
-/* ======================
-   ESTILOS
-====================== */
-const FOOTER_HEIGHT = 80;
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F6F6F6",
-  },
-
-  scrollContent: {
-    paddingHorizontal: 12,
-    paddingBottom: FOOTER_HEIGHT + 10,
-  },
-
-  section: {
-    backgroundColor: "#fff",
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-
-  audioHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-
-  recButton: {
-    backgroundColor: "#DC2626",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-
-  recText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
-  emptyAudio: {
-    color: "#6B7280",
-    fontStyle: "italic",
-    marginTop: 4,
-  },
-
+  safeArea: { flex: 1, backgroundColor: "#F6F6F6" },
+  scrollContent: { paddingHorizontal: 12, paddingBottom: 100 },
+  section: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
+  title: { fontSize: 18, fontWeight: "600" },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  audioHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  recButton: { backgroundColor: "#DC2626", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  recText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  emptyText: { color: "#999", fontStyle: "italic", textAlign: "center", marginTop: 5 },
   footer: {
-    height: FOOTER_HEIGHT,
+    height: 90,
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 16,
+    justifyContent: "center",
     backgroundColor: "#F6F6F6",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e5e5"
   },
-
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: "#EF4444",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
   finishButton: {
+    flex: 1,
     backgroundColor: "#16A34A",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
-
-  finishText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  previewContainer: {
-    flex: 1,
-    backgroundColor: "#000",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  previewImage: {
-    width: "100%",
-    height: "80%",
-    resizeMode: "contain",
-  },
-
-  closePreview: {
-    marginTop: 20,
-    padding: 10,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-  },
-  loadingOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  loadingBox: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    minWidth: 220,
-  },
-
-  loadingText: {
-    fontSize: 15,
-    fontWeight: "600",
-    textAlign: "center",
-  },
+  finishText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  previewContainer: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
+  previewImage: { width: "100%", height: "80%", resizeMode: "contain" },
+  closePreview: { marginTop: 20, padding: 10, backgroundColor: "#fff", borderRadius: 8 },
+  loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220 },
+  loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center" },
 });

@@ -9,7 +9,6 @@ const baseURL = 'http://192.168.1.28/SigreHost/api/'; // local Roy
 export const API_URL = baseURL; 
 
 
-
 export const api = () => {
   return axios.create({
     baseURL,
