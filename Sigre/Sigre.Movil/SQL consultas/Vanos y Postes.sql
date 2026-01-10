@@ -1,3 +1,30 @@
+--------------------------------
+-- POSTES ----------------------
+--------------------------------
+DECLARE @etiqueta varchar(50) = '00132';
+DECLARE @alimentador varchar(50) = 'MARIANO MELGAR';
+
+SELECT
+    a.ALIM_Etiqueta,
+    P.POST_Etiqueta,
+    pm.POSMT_Nombre,
+    rt.RTNTP_Nombre,
+    POST_Terceros,
+    [***] = '',
+    p.*
+FROM dbo.Postes p
+LEFT JOIN dbo.Alimentadores as a
+    ON a.ALIM_Interno = p.ALIM_Interno
+LEFT JOIN dbo.PosteMaterial as pm
+    on p.POST_Material = pm.POSMT_Interno
+LEFT JOIN dbo.RetenidaTipo as rt
+    on p.POST_RetenidaTipo = rt.RTNTP_Interno
+WHERE p.POST_Etiqueta = @etiqueta
+    AND a.ALIM_Etiqueta = @alimentador
+    AND p.POST_EsBT = 1;
+GO
+
+
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR ETIQUETA DE ELEMENTO + CODI_Codigo
 ------------------------------------------------------------------
@@ -59,39 +86,32 @@ WHERE Q.ElementoEtiqueta LIKE @etiqueta
 ORDER BY Q.DEFI_FechaCreacion DESC;
 GO
 
-
 --------------------------------
--- POSTES ----------------------
+-- VANOS -----------------------
 --------------------------------
-DECLARE @etiqueta varchar(50) = '00132';
+DECLARE @VanoCodigo varchar(50) = '%35899%';
 DECLARE @alimentador varchar(50) = 'MARIANO MELGAR';
-
 SELECT
-    a.ALIM_Etiqueta,
-    P.POST_Etiqueta,
-    pm.POSMT_Nombre,
-    rt.RTNTP_Nombre,
-    POST_Terceros,
+    v.VANO_Codigo,
+    v.VANO_NodoInicial,
+    v.VANO_NodoFinal,
     [***] = '',
-    p.*
-FROM dbo.Postes p
-LEFT JOIN dbo.Alimentadores as a
-    ON a.ALIM_Interno = p.ALIM_Interno
-LEFT JOIN dbo.PosteMaterial as pm
-    on p.POST_Material = pm.POSMT_Interno
-LEFT JOIN dbo.RetenidaTipo as rt
-    on p.POST_RetenidaTipo = rt.RTNTP_Interno
-WHERE p.POST_Etiqueta = @etiqueta
-    AND a.ALIM_Etiqueta = @alimentador
-    AND p.POST_EsBT = 1;
-GO
+    v.*
+FROM dbo.Vanos v
+LEFT JOIN DBO.Alimentadores AS A
+    ON A.ALIM_Interno = V.ALIM_Interno
+WHERE v.VANO_Codigo like @VanoCodigo
+    AND V.VANO_EsBT = 1
+    AND A.ALIM_Etiqueta = @alimentador
 
 
-SELECT DEFI_Latitud,* FROM Deficiencias
+
+
+
 ------------------------------------------------------------------
 -- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(20) = '00556';
+DECLARE @etiqueta varchar(20) = '035899';
 
 ;WITH Q AS
 (

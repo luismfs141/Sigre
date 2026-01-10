@@ -257,7 +257,7 @@ export const DEFICIENCY_FIELD_MAP = {
           if (!Number.isFinite(v)) return "Ingrese un número válido en distancia vertical.";
           if (![1, 2, 3].includes(tipo)) return "Seleccione primero el tipo de cruce.";
 
-          const minByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
+          const maxByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
           const max = maxByTipo[tipo];
 
           if (v > max) {
@@ -265,7 +265,6 @@ export const DEFICIENCY_FIELD_MAP = {
             return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${max.toFixed(2)} m.`;
           }
 
-          if (v > 20) return "La distancia vertical no debe exceder 20.00 m.";
           return null;
         }
       }
