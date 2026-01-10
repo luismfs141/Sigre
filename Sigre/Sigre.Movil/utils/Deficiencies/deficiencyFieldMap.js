@@ -17,7 +17,8 @@ const COMMON_DEFICIENCY_FIELDS = [
     label: "Código",
     type: "text",
     required: false,
-    readonly: true
+    readonly: true,
+    hidden: true //Campo ocultp
   },
   {
     key: "DefiLatitud",
@@ -25,6 +26,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     type: "text",
     required: true,
     readonly: true,
+    hidden: true,//Campo ocultp
     validation: { message: "La longitud es obligatoria" }
   },
   {
@@ -33,6 +35,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     type: "text",
     required: true,
     readonly: true,
+    hidden: true,//Campo ocultp
     validation: { message: "La longitud es obligatoria" }
   },
   {
@@ -136,7 +139,8 @@ export const DEFICIENCY_FIELD_MAP = {
         label: "Código",
         type: "text",
         required: false,
-        readonly: true
+        readonly: true,
+        
       },
       {
         key: "DefiComentario",
