@@ -1,10 +1,7 @@
-//maps app
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-
-
-
+// maps app
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,52 +13,40 @@ import {
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
-
-
-
-import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
-
+import { mapStyles, pinStyles } from "../../assets/styles/Map.js";
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
-import { PinCallout } from "../../components/PinCallout";
-
-import { mapStyles, pinStyles } from "../../assets/styles/Map.js";
-
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useFeeder } from "../../hooks/useFeeder.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
+import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
-//const ZOOM_THRESHOLD = 0.007;
+// ---------------- CONFIG ----------------
 const ZOOM_THRESHOLD = 0.003;
 
-//S.E. independiente
+// Tamaños
 const ICON_SIZES = {
   DEFAULT: 22,
-  SED: 100,      // 👈 tamaño mayor para subestación
+  SED: 35,
 };
 
-const getIconSizeByType = (type) => {
-  if (Number(type) === 8) {
-    return ICON_SIZES.SED; // Subestación
-  }
-  return ICON_SIZES.DEFAULT;
-};
+const LABEL_GAP = 2;
+
+const isSedType = (type) => Number(type) === 1 || Number(type) === 2;
+const isPostType = (type) => Number(type) === 5;
+
+const getIconSizeByType = (type) =>
+  isSedType(type) ? ICON_SIZES.SED : ICON_SIZES.DEFAULT;
 
 const getLabelOffsetByType = (type) => {
   const size = getIconSizeByType(type);
   return size / 2 + LABEL_GAP;
 };
 
-
-// 🔧 Ajustes finos (en pixeles)
-const ICON_SIZE = 22;       // debe coincidir con pinStyles.pinIcon (width/height)
-const LABEL_GAP = 2;        // separación entre icono y label
-const LABEL_OFFSET_Y = ICON_SIZE / 2 + LABEL_GAP; // baja el label desde la coordenada
-
-export const Map = () => {
+const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
 
@@ -78,10 +63,6 @@ export const Map = () => {
     region,
     setRegion,
     setSelectedItem,
-    setSelectedPin,
-    setSelectedGap,
-    feeders,
-    setFeeders
   } = useDatos();
 
   const {
@@ -96,7 +77,7 @@ export const Map = () => {
   } = useMap();
 
   const { fetchLocalFeeders } = useFeeder();
-  const { fetchAndSelectPost, getPostData } = usePost();
+  const { getPostData } = usePost();
   const { fetchAndSelectSed } = useSed();
 
   const [loadingPins, setLoadingPins] = useState(false);
@@ -132,14 +113,12 @@ export const Map = () => {
 
         if (user?.proyecto === 1) {
           const feederId = selectedFeeder.AlimInterno;
-
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsByFeeder(feederId),
             getGapsByFeeder(feederId)
           ]);
         } else {
           const sedId = selectedSed.SedInterno;
-
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsBySed(sedId),
             getGapsBySed(sedId)
@@ -167,7 +146,7 @@ export const Map = () => {
     loadData();
   }, [selectedFeeder, selectedSed, user?.proyecto]);
 
-  // ------------------- GPS EN TIEMPO REAL -------------------
+  // ------------------- GPS -------------------
   useEffect(() => {
     let subscription;
     const initLocation = async () => {
@@ -198,12 +177,14 @@ export const Map = () => {
     return () => subscription && subscription.remove();
   }, []);
 
-  // ------------------- ORIENTACIÓN DEL CELULAR -------------------
+  // ------------------- ORIENTACIÓN -------------------
   useEffect(() => {
     let headingSub;
     const initHeading = async () => {
       try {
-        headingSub = await Location.watchHeadingAsync((e) => setHeading(e.trueHeading || 0));
+        headingSub = await Location.watchHeadingAsync((e) =>
+          setHeading(e.trueHeading || 0)
+        );
       } catch (err) {
         console.warn("Error heading:", err);
       }
@@ -213,7 +194,7 @@ export const Map = () => {
     return () => headingSub && headingSub.remove();
   }, []);
 
-  // ------------------- IR A UBICACIÓN DEL USUARIO -------------------
+  // ------------------- IR A UBICACIÓN -------------------
   const goToUserLocation = async () => {
     try {
       setLoadingLocation(true);
@@ -242,9 +223,9 @@ export const Map = () => {
     }
   };
 
-  // ------------------- MEMOIZACIÓN DE PINS Y GAPS -------------------
+  // ------------------- MEMO PINS -------------------
   const memoPins = useMemo(() => {
-    if (!shouldShowPins || !Array.isArray(pins)) return [];
+    if (!Array.isArray(pins)) return [];
     return pins
       .filter((p) => p.Type !== 0 && p.Latitude != null && p.Longitude != null)
       .map((p) => ({
@@ -253,42 +234,23 @@ export const Map = () => {
         Longitude: Number(p.Longitude)
       }))
       .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
-  }, [pins, shouldShowPins]);
-
-
-
-
-
-
-
-
-
-
-
-
-  const pinsNoSed = useMemo(
-    () => memoPins.filter(p => Number(p.Type) !== 8),
-    [memoPins]
-  );
+  }, [pins]);
 
   const pinsSed = useMemo(
-    () => memoPins.filter(p => Number(p.Type) === 8),
+    () => memoPins.filter((p) => isSedType(p.Type)),
     [memoPins]
   );
 
-
-
-
-
-
-
-
-
+  const pinsPost = useMemo(() => {
+    if (!shouldShowPins) return [];
+    return memoPins.filter((p) => isPostType(p.Type));
+  }, [memoPins, shouldShowPins]);
 
   const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
 
   // ------------------- AUX -------------------
-  const formatLabel = (label) => label?.replace(/\r?\n|\r/g, " - ").trim() || "";
+  const formatLabel = (label) =>
+    label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
     try {
@@ -337,8 +299,16 @@ export const Map = () => {
     }
   };
 
+  const getCleanLabel = (pin) => {
+    const raw = pin.Label || pin.ElementCode || "";
 
-  // ------------------- RENDER -------------------
+    if (!raw) return "";
+
+    // Corta en el primer salto de línea y elimina espacios
+    return String(raw).split("\n")[0].trim();
+  };
+
+  // ------------------- PLACEHOLDER -------------------
   if ((user?.proyecto === 1 && !selectedFeeder) || (user?.proyecto === 0 && !selectedSed)) {
     return (
       <View style={styles.placeholderContainer}>
@@ -362,6 +332,7 @@ export const Map = () => {
     );
   }
 
+  // ------------------- RENDER -------------------
   return (
     <View style={{ flex: 1 }}>
       {user?.proyecto === 0 ? (
@@ -392,6 +363,7 @@ export const Map = () => {
           getPinsByRegion(reg);
         }}
       >
+        {/* GAPS */}
         {memoGaps.map((gap, i) => (
           <Polyline
             key={`gap-${i}`}
@@ -406,27 +378,26 @@ export const Map = () => {
           />
         ))}
 
-
-
-        {/* 1) PRIMERO: todos menos SED */}
-        {pinsNoSed.map((pin, i) => {
+        {/* POSTES: ICONO + LABEL */}
+        {pinsPost.map((pin, i) => {
           const iconSize = getIconSizeByType(pin.Type);
-          const cleanLabel = formatLabel(pin.ElementCode);
+          const cleanLabel = formatLabel(pin.ElementCode || pin.Label);
           const showLabel = cleanLabel.length > 0;
 
           const coordinate = {
-            latitude: Number(pin.Latitude),
-            longitude: Number(pin.Longitude)
+            latitude: pin.Latitude,
+            longitude: pin.Longitude
           };
 
           return (
-            <React.Fragment key={`pin-frag-${pin.Id || i}`}>
+            <Fragment key={`pin-post-${pin.Id || i}`}>
+              {/* ICONO */}
               <Marker
                 coordinate={coordinate}
                 anchor={{ x: 0.5, y: 0.5 }}
                 tracksViewChanges={true}
                 onPress={() => onMarkerPress(pin)}
-                zIndex={10} // Android
+                zIndex={10}
               >
                 <View style={pinStyles.iconCanvas} collapsable={false}>
                   <View style={pinStyles.iconWrapper}>
@@ -436,18 +407,17 @@ export const Map = () => {
                     />
                   </View>
                 </View>
-
-                <PinCallout pin={pin} />
               </Marker>
 
+              {/* LABEL */}
               {showLabel && (
                 <Marker
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: 0.0 }}
                   centerOffset={{ x: 0, y: getLabelOffsetByType(pin.Type) }}
                   tracksViewChanges={true}
-                  zIndex={999} // Android
-                  tappable={true}
+                  zIndex={999}
+                  tappable
                   onPress={() => onMarkerPress(pin)}
                 >
                   <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
@@ -457,44 +427,57 @@ export const Map = () => {
                   </View>
                 </Marker>
               )}
-            </React.Fragment>
+            </Fragment>
           );
         })}
 
-        {/* 2) DESPUÉS: SED (Type 8) para que quede encima */}
+        {/* SED: SIEMPRE VISIBLE - SOLO ICONO + LABEL */}
         {pinsSed.map((pin, i) => {
           const coordinate = {
-            latitude: Number(pin.Latitude),
-            longitude: Number(pin.Longitude)
+            latitude: pin.Latitude,
+            longitude: pin.Longitude
           };
+          const label = getCleanLabel(pin);
 
           return (
-            <Marker
-              key={`pin-sed-${pin.Id || i}`}
-              coordinate={coordinate}
-              anchor={{ x: 1.0, y: 1.0 }}
-              tracksViewChanges={true}
-              pointerEvents="none"
-              zIndex={2000} // Android (bien alto)
-            >
-              <View style={pinStyles.iconCanvasSE} collapsable={false}>
-                <View style={pinStyles.iconWrapperSE}>
+            <Fragment key={`pin-sed-${pin.Id || i}`}>
+              
+              {/* ICONO */}
+              <Marker
+                coordinate={coordinate}
+                anchor={{ x: 0.5, y: 1.5 }}
+                tracksViewChanges={true}
+                zIndex={2000}
+                onPress={() => onMarkerPress(pin)}
+              >
+                <View collapsable={false}>
                   <Image
                     source={getSourceImageFromType2(pin)}
-                    style={[pinStyles.pinIconSE, { width: 80, height: 80 }]}
+                    style={{ width: 35, height: 35, resizeMode: "contain" }}
                   />
                 </View>
-              </View>
-            </Marker>
+              </Marker>
+
+              {/* LABEL */}
+              {label !== "" && (
+                <Marker
+                  coordinate={coordinate}
+                  anchor={{ x: 0.5, y: 1.9 }}
+                  centerOffset={{ x: 0, y: 30 }}   // mueve el texto debajo del icono
+                  tracksViewChanges={true}
+                  zIndex={2001}
+                  tappable={false}
+                >
+                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                    <View style={pinStyles.labelBox}>
+                      <Text style={pinStyles.labelText}>{label}</Text>
+                    </View>
+                  </View>
+                </Marker>
+              )}
+            </Fragment>
           );
         })}
-
-
-
-
-
-
-
 
       </MapView>
 
@@ -521,7 +504,7 @@ const styles = StyleSheet.create({
   placeholderContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   placeholderText: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
   loadingOverlay: { position: "absolute", top: "50%", left: "50%", zIndex: 100 },
-  map: { width: "100%", height: "100%" }
+  map: { width: "100%", height: "100%" },
 });
 
 export default Map;

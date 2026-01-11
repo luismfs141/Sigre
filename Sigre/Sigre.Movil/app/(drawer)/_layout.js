@@ -2,8 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
-import ListBox from "../../components/ui/ListBox";
 import { AuthContext } from "../../context/AuthContext";
 
 export default function DrawerLayout() {
@@ -51,16 +49,6 @@ export default function DrawerLayout() {
         options={{
           title: 'Mapa',
           drawerIcon: ({ color, size }) => <Ionicons name="map" size={size} color={color} />,
-          headerRight: () => (
-            <View style={{ marginRight: 10, width: 180 }}>
-              <ListBox
-                items={items}
-                value={selected}
-                onChange={setSelected}
-                placeholder="Seleccione base..."
-              />
-            </View>
-          ),
         }}
       />
 
