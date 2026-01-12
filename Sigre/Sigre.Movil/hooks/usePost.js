@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../config";
+import { useDatos } from "../context/DatosContext";
 import {
   getPostArmadoMaterial,
   getPostByIdLocal,
@@ -16,14 +17,28 @@ export const usePost = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const { isOnline } = useConnectivity();
+  const { checkDatabase } = useDatos(); // ✅ Validación de DB
   const client = api();
 
   // ------------------- OBTENER POSTE -------------------
   const getPostData = async (postInterno) => {
     setLoading(true);
     setError(null);
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se puede obtener el poste");
+      setLoading(false);
+      return null;
+    }
+
     try {
+      if (!postInterno) return null;
       const data = await getPostByIdLocal(postInterno);
+      if (!data) {
+        console.warn("⚠ No se encontró el poste con ID:", postInterno);
+        return null;
+      }
       return data;
     } catch (err) {
       console.error("❌ Error obteniendo poste:", err);
@@ -39,6 +54,13 @@ export const usePost = () => {
     setLoading(true);
     setError(null);
 
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se puede guardar el poste");
+      setLoading(false);
+      return null;
+    }
+
     try {
       const localId = await saveOrUpdatePost(post);
 
@@ -46,12 +68,10 @@ export const usePost = () => {
       if (localId) autoSyncPost(localId);
 
       return localId;
-
     } catch (err) {
       console.error("❌ Error guardando poste:", err);
       setError(err);
       return null;
-
     } finally {
       setLoading(false);
     }
@@ -61,9 +81,17 @@ export const usePost = () => {
   const getMaterialsPost = async () => {
     setLoading(true);
     setError(null);
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se pueden obtener materiales");
+      setLoading(false);
+      return [];
+    }
+
     try {
       const data = await getPostMaterial();
-      return data;
+      return data || [];
     } catch (err) {
       console.error("❌ Error obteniendo materiales de poste:", err);
       setError(err);
@@ -76,9 +104,17 @@ export const usePost = () => {
   const getArmadoMaterialsPost = async () => {
     setLoading(true);
     setError(null);
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se pueden obtener materiales de armado");
+      setLoading(false);
+      return [];
+    }
+
     try {
       const data = await getPostArmadoMaterial();
-      return data;
+      return data || [];
     } catch (err) {
       console.error("❌ Error obteniendo materiales de armado:", err);
       setError(err);
@@ -91,9 +127,17 @@ export const usePost = () => {
   const getTipoRetenidasPost = async () => {
     setLoading(true);
     setError(null);
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se pueden obtener tipos de retenidas");
+      setLoading(false);
+      return [];
+    }
+
     try {
       const data = await getPostRetenidaTipo();
-      return data;
+      return data || [];
     } catch (err) {
       console.error("❌ Error obteniendo tipos de retenidas:", err);
       setError(err);
@@ -106,9 +150,17 @@ export const usePost = () => {
   const getMaterialsRetenidasPost = async () => {
     setLoading(true);
     setError(null);
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, no se pueden obtener materiales de retenidas");
+      setLoading(false);
+      return [];
+    }
+
     try {
       const data = await getPostRetenidaMaterial();
-      return data;
+      return data || [];
     } catch (err) {
       console.error("❌ Error obteniendo materiales de retenidas:", err);
       setError(err);
@@ -120,36 +172,35 @@ export const usePost = () => {
 
   // 🔁 Auto-sync de UN poste (automático)
   const autoSyncPost = async (postInternoLocal) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) {
+      console.warn("⚠ Base de datos no disponible, auto-sync cancelado");
+      return;
+    }
+
     try {
-      // 1️⃣ Verificar internet
       const online = await isOnline();
       if (!online) {
         console.log("ℹ️ Auto-sync no realizada, queda offline");
         return;
       }
 
-      // 2️⃣ Obtener poste local
       const post = await getPostByIdLocal(postInternoLocal);
       if (!post || post.EstadoOffLine == null) return;
 
-      // 3️⃣ Normalizar
       const postToSync = normalizePostForSync(post);
-
       console.log("📤 Payload sync:", JSON.stringify([postToSync], null, 2));
 
-      // 4️⃣ Enviar DIRECTAMENTE el array
       const response = await client.post(
         "/Post/SyncFromSQLite",
-        [postToSync], // ✅ ESTO ES LO QUE EL BACKEND ESPERA
+        [postToSync],
         { timeout: 6000 }
       );
 
       const result = response.data;
       if (!Array.isArray(result) || result.length === 0) return;
 
-      // 5️⃣ Aplicar resultado
       const map = result[0];
-
       if (map.localId !== map.serverId) {
         await updatePostIdAfterSync(map.localId, map.serverId);
       } else {
@@ -157,7 +208,6 @@ export const usePost = () => {
       }
 
       console.log("✅ Poste sincronizado correctamente");
-
     } catch (err) {
       if (err.response) {
         console.log("❌ Sync error:", err.response.status, err.response.data);
@@ -169,26 +219,19 @@ export const usePost = () => {
     }
   };
 
-
   const normalizePostForSync = (post) => ({
     ...post,
-    // INT
     EstadoOffLine: Number(post.EstadoOffLine ?? 1),
     AlimInterno: Number(post.AlimInterno),
-
-    // BOOL (CRÍTICO)
     PostTerceros: Boolean(post.PostTerceros),
     PostInspeccionado: Boolean(post.PostInspeccionado),
     PostEsMt: Boolean(post.PostEsMt),
     PostEsBt: Boolean(post.PostEsBt),
-
-    // Limpieza opcional
     PostMaterial: post.PostMaterial ? Number(post.PostMaterial) : null,
     PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
     PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
     PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
   });
-
 
   return {
     loading,

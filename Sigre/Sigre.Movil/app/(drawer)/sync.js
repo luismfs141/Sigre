@@ -21,6 +21,7 @@ import { useDatos } from "../../context/DatosContext";
 import { closeDatabase } from '../../database/offlineDB/db';
 import { useFeeder } from "../../hooks/useFeeder";
 import { useOffline } from "../../hooks/useOffline";
+import { useSed } from "../../hooks/useSed";
 
 export default function Sync() {
 
@@ -29,6 +30,7 @@ export default function Sync() {
   const { dbName, setDbName, selectedFeeder, setSelectedFeeder } = useDatos();
   const dispatch = useDispatch();
   const isAppLoading = useSelector((state) => state.app.isLoading);
+  const { fetchAllSedsLocal } = useSed();
 
   const {
     feedersByUser,
@@ -38,34 +40,63 @@ export default function Sync() {
     seds
   } = useFeeder(user?.id);
 
-  // Estados originales
+  // Estados
   const [selectedFeeders, setSelectedFeeders] = useState([]);
   const [dbExists, setDbExists] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalSubVisible, setModalSubVisible] = useState(false);
 
   // Proyecto 0
-  //const [selectedFeeder, setSelectedFeeder] = useState(null);
   const [substationsByFeeder, setSubstationsByFeeder] = useState([]);
   const [selectedSubstations, setSelectedSubstations] = useState([]);
+  const [localSeds, setLocalSeds] = useState([]);
   const [searchSed, setSearchSed] = useState("");
 
-  // 🔹 Cargar alimentadores al iniciar
+  //───────────────────────────────────────────────
+  // CARGAR SEDS LOCALES CUANDO EXISTE BASE
+  //───────────────────────────────────────────────
   useEffect(() => {
-    if (user?.id) getFeedersByUser(user.id);
+    const loadLocalSeds = async () => {
+      if (!dbName) return;
+
+      try {
+        console.log("📦 Base local detectada:", dbName);
+        const data = await fetchAllSedsLocal();
+        console.log("✅ SEDs locales recibidas:", data);
+        setLocalSeds(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.log("❌ Error cargando SEDs locales:", e);
+        setLocalSeds([]);
+      }
+    };
+
+    loadLocalSeds();
+  }, [dbName]);
+
+  //───────────────────────────────────────────────
+  // CARGAR ALIMENTADORES
+  //───────────────────────────────────────────────
+  useEffect(() => {
+    if (user?.id) {
+      console.log("👤 Cargando alimentadores del usuario:", user.id);
+      getFeedersByUser(user.id);
+    }
   }, [user?.id]);
 
-  // 🔹 Revisar la base local cuando cambia dbName
+  //───────────────────────────────────────────────
+  // REVISAR BASE CUANDO CAMBIA NOMBRE
+  //───────────────────────────────────────────────
   useEffect(() => {
     if (!dbName) return;
+    console.log("🗂 Revisando existencia de BD:", dbName);
     checkDatabase();
   }, [dbName]);
 
-  // 🔹 Función que revisa si la base existe
   const checkDatabase = async () => {
     try {
       const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
       const fileInfo = await FileSystem.getInfoAsync(dbPath);
+      console.log("📁 DB existe?:", fileInfo.exists, "→", dbPath);
       setDbExists(fileInfo.exists);
     } catch (e) {
       console.log("❌ Error revisando BD", e);
@@ -75,10 +106,9 @@ export default function Sync() {
   //───────────────────────────────────────────────
   // DESCARGAR BASE
   //───────────────────────────────────────────────
-
   const handleDownload = async () => {
     if (isAppLoading) return;
-    // ✅ VALIDACIONES ANTES de prender el loading (para no dejarlo “pegado”)
+
     if (user?.proyecto === 0) {
       if (!selectedFeeder) return Alert.alert("Selecciona un alimentador");
       if (selectedSubstations.length === 0)
@@ -88,7 +118,6 @@ export default function Sync() {
         return Alert.alert("Selecciona al menos un alimentador");
     }
 
-    // ✅ PRENDER LOADING (tu modal global)
     dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Descargando base de datos..." });
     dispatch({ type: "APP/SET_LOADING", payload: true });
 
@@ -96,46 +125,32 @@ export default function Sync() {
 
     try {
       let nombreBase = `sigre_offline_${Date.now()}.db`;
+      console.log("⬇️ Descargando base:", nombreBase);
 
-      //──────────────────────
-      // PROYECTO 0 — BAJA TENSIÓN
-      //──────────────────────
       if (user?.proyecto === 0) {
         const sedsIds = selectedSubstations.map((s) => parseInt(s.id, 10));
+        console.log("📥 SEDs a descargar:", sedsIds);
 
         const fileUri = await downloadDatabase(user.id, sedsIds, 0, nombreBase);
         if (!fileUri) throw new Error("Descarga fallida");
 
-        dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Cerrando base anterior..." });
         await closeDatabase();
         await new Promise((r) => setTimeout(r, 150));
-
-        dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Guardando base local..." });
         await setDbName(nombreBase);
 
         setSelectedFeeders([]);
         setSelectedSubstations([]);
-
         setDbExists(true);
         ok = true;
-      }
-
-      //──────────────────────
-      // PROYECTO 1 — MEDIA TENSIÓN
-      //──────────────────────
-      else {
+      } else {
         const feederIds = selectedFeeders.map((f) => parseInt(f.id, 10));
+        console.log("📥 Alimentadores a descargar:", feederIds);
 
         const fileUri = await downloadDatabase(user.id, feederIds, 1, nombreBase);
         if (!fileUri) throw new Error("Descarga fallida");
 
-        dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Cerrando base anterior..." });
         await closeDatabase();
         await new Promise((r) => setTimeout(r, 150));
-
-        dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Guardando base local..." });
-
-        // ✅ OJO: tu código tenía `${nombreBase}.db` → eso quedaba ".db.db"
         await setDbName(nombreBase);
 
         setSelectedFeeders([]);
@@ -143,19 +158,15 @@ export default function Sync() {
         ok = true;
       }
     } catch (e) {
-      console.log(e);
+      console.log("❌ Error en descarga:", e);
     } finally {
-      // ✅ APAGAR LOADING SIEMPRE
       dispatch({ type: "APP/SET_LOADING", payload: false });
       dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
     }
 
-    // ✅ ALERT DESPUÉS de apagar el loading (tal como pediste)
     if (ok) Alert.alert("Éxito", "Base descargada correctamente.");
     else Alert.alert("Error", "No se pudo descargar la base.");
   };
-
-
 
   //───────────────────────────────────────────────
   // EXPORTAR BASE
@@ -176,22 +187,7 @@ export default function Sync() {
   };
 
   //───────────────────────────────────────────────
-  // SINCRONIZAR (ELIMINAR BASE)
-  //───────────────────────────────────────────────
-  const handleSync = async () => {
-    try {
-      Alert.alert(
-        "Sincronización",
-        "La sincronización se realizó correctamente."
-      );
-    } catch (e) {
-      console.log("❌ Error en sincronización:", e);
-      Alert.alert("Error", "No se pudo sincronizar.");
-    }
-  };
-
-  //───────────────────────────────────────────────
-  // ELIMINAR BASE (CON CONFIRMACIÓN)
+  // ELIMINAR BASE
   //───────────────────────────────────────────────
   const handleDelete = async () => {
     if (!dbName) {
@@ -209,6 +205,7 @@ export default function Sync() {
           onPress: async () => {
             try {
               const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+              console.log("🗑 Eliminando DB:", dbPath);
 
               await closeDatabase();
               await FileSystem.deleteAsync(dbPath, { idempotent: true });
@@ -238,40 +235,32 @@ export default function Sync() {
   //───────────────────────────────────────────────
   // ALIMENTADORES
   //───────────────────────────────────────────────
-
   const addFeeder = async (feeder) => {
     const obj = {
       id: feeder.alimInterno ?? feeder.id,
       name: feeder.alimEtiqueta ?? feeder.name,
     };
 
-    // Proyecto 0 = uno solo
     if (user?.proyecto === 0) {
+      console.log("➕ Alimentador seleccionado:", obj);
       setSelectedFeeder(obj);
-
-      console.log("✅ Alimentador seleccionado (global):", obj);
-
-
       setSelectedFeeders([obj]);
-
       await AsyncStorage.setItem("selectedFeeders", JSON.stringify([obj]));
 
       const sedsList = await fetchSedsByFeeder(obj.id);
       setSubstationsByFeeder(Array.isArray(sedsList) ? sedsList : []);
-
       setModalVisible(false);
       return;
     }
 
-    // Proyecto 1 = múltiples
     const newList = [...selectedFeeders, obj];
     setSelectedFeeders(newList);
     await AsyncStorage.setItem("selectedFeeders", JSON.stringify(newList));
-
     setModalVisible(false);
   };
 
   const removeFeeder = async (feeder) => {
+    console.log("➖ Quitando alimentador:", feeder);
     const filtered = selectedFeeders.filter(f => f.id !== feeder.id);
     setSelectedFeeders(filtered);
     await AsyncStorage.setItem("selectedFeeders", JSON.stringify(filtered));
@@ -283,27 +272,12 @@ export default function Sync() {
     }
   };
 
-  // cargar alimentador guardado en storage
-  const loadSelectedFeeders = async () => {
-    const saved = await AsyncStorage.getItem("selectedFeeders");
-    if (!saved) return;
-
-    const parsed = JSON.parse(saved);
-    setSelectedFeeders(parsed);
-
-    if (user?.proyecto === 0 && parsed.length > 0) {
-      setSelectedFeeder(parsed[0]);
-      const data = await fetchSedsByFeeder(parsed[0].id);
-      setSubstationsByFeeder(Array.isArray(data) ? data : []);
-    }
-  };
-
   //───────────────────────────────────────────────
   // SUBESTACIONES (SED)
   //───────────────────────────────────────────────
-
   const toggleSubstation = (item) => {
     const exists = selectedSubstations.some(s => s.id === item.sedInterno);
+    console.log("🔁 Toggle SED:", item.sedInterno, "exists:", exists);
 
     if (exists) {
       setSelectedSubstations(prev => prev.filter(s => s.id !== item.sedInterno));
@@ -319,20 +293,18 @@ export default function Sync() {
     if (!selectedFeeder)
       return Alert.alert("Selecciona un alimentador");
 
+    console.log("🏢 Abriendo modal SED del feeder:", selectedFeeder.id);
     const data = await fetchSedsByFeeder(selectedFeeder.id);
     setSubstationsByFeeder(Array.isArray(data) ? data : []);
     setSearchSed("");
     setModalSubVisible(true);
   };
 
-  //const isLoading = offlineLoading || loadingFeeders;
-  const isLoading = loadingFeeders; // ✅ solo para carga de alimentadores
-
+  const isLoading = loadingFeeders;
 
   //───────────────────────────────────────────────
   // UI
   //───────────────────────────────────────────────
-
   return (
     <SafeAreaView style={styles.container}>
       {isLoading ? (
@@ -356,9 +328,8 @@ export default function Sync() {
             </View>
           </View>
 
-          {/* CONTENIDO PRINCIPAL (ESTO ES LO QUE SCROLLEA) */}
+          {/* CONTENIDO */}
           <View style={{ flex: 1 }}>
-            {/* Si quieres mostrar el alimentador seleccionado (proyecto 0) */}
             {user?.proyecto === 0 && selectedFeeder && (
               <View style={{ marginBottom: 10 }}>
                 <Text style={{ fontWeight: "bold" }}>Alimentador:</Text>
@@ -367,86 +338,88 @@ export default function Sync() {
             )}
 
             <Text style={{ fontWeight: "bold", fontSize: 16, marginBottom: 8 }}>
-              {user?.proyecto === 0 ? "SED seleccionados:" : "Alimentadores seleccionados:"}
+              {user?.proyecto === 0 ? "SED:" : "Alimentadores seleccionados:"}
             </Text>
 
-            <FlatList
-              style={{ flex: 1 }}
-              data={user?.proyecto === 0 ? selectedSubstations : selectedFeeders}
-              keyExtractor={(i) => i.id.toString()}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              // ListEmptyComponent={
-              //   <Text style={{ color: "#777" }}>
-              //     {user?.proyecto === 0 ? "No hay SED seleccionados" : "No hay alimentadores seleccionados"}
-              //   </Text>
-              // }
+            {/* 🔴 AQUÍ ESTÁ LA CORRECCIÓN: MOSTRAR SOLO SEDS LOCALES CUANDO EXISTE BASE */}
+<FlatList
+  style={{ flex: 1 }}
+  data={
+    user?.proyecto === 0
+      ? dbExists
+        ? localSeds            // 👉 SED desde SQLite
+        : selectedSubstations // 👉 SED seleccionados antes
+      : selectedFeeders
+  }
+  keyExtractor={(item, index) =>
+    item.SedInterno
+      ? item.SedInterno.toString()
+      : item.sedInterno
+      ? item.sedInterno.toString()
+      : index.toString()
+  }
+  contentContainerStyle={{ paddingBottom: 20 }}
 
-              ListEmptyComponent={() => (
-                <View style={{ paddingVertical: 12 }}>
-                  <Text style={{ color: "#777" }}>
-                    {user?.proyecto === 0
-                      ? "No hay SED seleccionados"
-                      : "No hay alimentadores seleccionados"}
-                  </Text>
-                </View>
-              )}
+  ListEmptyComponent={() => (
+    <View style={{ paddingVertical: 12 }}>
+      <Text style={{ color: "#777" }}>
+        {user?.proyecto === 0
+          ? dbExists
+            ? "No hay SED en la base local"
+            : "No hay SED seleccionados"
+          : "No hay alimentadores seleccionados"}
+      </Text>
+    </View>
+  )}
 
-              renderItem={({ item }) => (
-                <View style={styles.feederRow}>
-                  <Text style={styles.feederText}>{item.name}</Text>
+  renderItem={({ item }) => (
+    <View style={styles.feederRow}>
+      <Text style={styles.feederText}>
+        {user?.proyecto === 0
+          ? dbExists
+            ? item.SedCodigo    // ✅ CAMPO REAL
+            : item.name
+          : item.name}
+      </Text>
 
-                  <Button
-                    title="❌"
-                    onPress={() => {
-                      if (user?.proyecto === 0) {
-                        // item.id aquí es el id que guardas en selectedSubstations
-                        toggleSubstation({ sedInterno: item.id });
-                      } else {
-                        removeFeeder(item);
-                      }
-                    }}
-                  />
-                </View>
-              )}
-            />
+      {/* ❌ Solo permitir borrar cuando NO es base local */}
+      {!dbExists && (
+        <Button
+          title="❌"
+          onPress={() => {
+            if (user?.proyecto === 0) {
+              toggleSubstation({ sedInterno: item.id });
+            } else {
+              removeFeeder(item);
+            }
+          }}
+        />
+      )}
+    </View>
+  )}
+/>
+
           </View>
 
-          {/* FOOTER FIJO (2 FILAS / 2 COLUMNAS) */}
+          {/* FOOTER */}
           <View style={styles.footer}>
-            {/* FILA 1 */}
             <View style={styles.footerRow}>
               <View style={styles.footerCol}>
-                <Button
-                  title="📥 Descargar Base"
-                  onPress={handleDownload}
-                />
+                <Button title="📥 Descargar Base" onPress={handleDownload} />
               </View>
-
               <View style={styles.footerCol}>
-                <Button
-                  title="💾 Exportar Base"
-                  onPress={handleExport}
-                />
+                <Button title="💾 Exportar Base" onPress={handleExport} />
               </View>
             </View>
 
-            {/* ESPACIO ENTRE FILAS */}
             <View style={{ height: 10 }} />
 
-            {/* FILA 2 */}
             <View style={styles.footerRow}>
               <View style={styles.footerCol}>
-                <Button
-                  title="🗑️ Eliminar Base"
-                  onPress={handleDelete}
-                />
+                <Button title="🗑️ Eliminar Base" onPress={handleDelete} />
               </View>
-
               <View style={styles.footerCol}>
-                <Button
-                  title="🔄 Sincronizar"
-                  onPress={handleSync}
-                />
+                <Button title="🔄 Sincronizar" onPress={() => {}} />
               </View>
             </View>
 
@@ -454,7 +427,6 @@ export default function Sync() {
               {dbExists ? "📦 Base local detectada" : "⚠️ No hay base local"}
             </Text>
           </View>
-
 
           {/* MODAL ALIMENTADORES */}
           <Modal visible={modalVisible} transparent animationType="slide">
@@ -526,7 +498,6 @@ export default function Sync() {
             </View>
           </Modal>
         </>
-
       )}
     </SafeAreaView>
   );
@@ -534,31 +505,21 @@ export default function Sync() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15, backgroundColor: "#f9f9f9" },
-
   footer: {
     paddingTop: 12,
     paddingBottom: 8,
     borderTopWidth: 1,
     borderTopColor: "#ddd",
   },
-
   loadingContainer: { flex: 1, justifyContent: "center" },
   header: { marginBottom: 10 },
   headerTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
   headerButtons: { flexDirection: "row", justifyContent: "space-between" },
-  bottomButtons: { justifyContent: "center", alignItems: "center", marginVertical: 20 },
   feederRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   feederText: { fontSize: 16 },
   modalBackground: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
   modalContainer: { width: "80%", backgroundColor: "#fff", borderRadius: 10, padding: 15 },
   modalItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#ccc" },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  footerCol: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
+  footerRow: { flexDirection: "row", justifyContent: "space-between" },
+  footerCol: { flex: 1, marginHorizontal: 5 },
 });
