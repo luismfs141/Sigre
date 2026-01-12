@@ -313,7 +313,7 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         validation: {
-          min: 7.5,
+          max: 7.499999,
 
           message: "La distancia horizontal mínima es de 7.5 metros"
         }
