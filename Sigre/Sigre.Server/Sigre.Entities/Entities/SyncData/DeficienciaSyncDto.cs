@@ -81,6 +81,10 @@ namespace Sigre.Entities.Entities.SyncData
         public bool? DefiActivo { get; set; }
         public int? DefiEstadoCriticidad { get; set; }
         public bool DefiInspeccionado { get; set; }
+
+        public string? DefiAccesibilidad { get; set; }
+        public string? DefiTipoCruce { get; set; }
+
     }
 
 

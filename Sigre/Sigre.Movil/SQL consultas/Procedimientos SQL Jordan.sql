@@ -606,7 +606,7 @@ d.DEFI_Estado
 END;
 
 
-/**************\
+
 
 
 ALTER   PROCEDURE [dbo].[sp_GetListLatLongPOSTbySed]
@@ -900,3 +900,10 @@ BEGIN
       AND d.DEFI_IdElemento = @IdElemento;
 END
 
+
+--MODIFICACIÓN TABLA DEFICIENCIAS 
+
+ALTER TABLE dbo.Deficiencias
+ADD DEFI_Accesibilidad VARCHAR(20) NULL,
+    DEFI_TipoCruce     VARCHAR(20) NULL;
+GO

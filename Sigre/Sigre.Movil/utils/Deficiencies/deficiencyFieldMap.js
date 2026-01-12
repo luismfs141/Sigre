@@ -140,7 +140,7 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "text",
         required: false,
         readonly: true,
-        
+
       },
       {
         key: "DefiComentario",
@@ -171,9 +171,8 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         validation: {
-          min: 0.0001,
-          max: 1,
-          message: "La distancia horizontal debe ser:\n - Mayor a 0 metros y\n - Menor o igual a 1 metro."
+          max: 0.999999,
+          message: "La distancia horizontal debe ser menor a 1 metro."
         }
       },
       // ✅ NUEVO LISTBOX / PICKER
@@ -205,12 +204,12 @@ export const DEFICIENCY_FIELD_MAP = {
 
             if (acc === 1) {
               // Accesible: v >= 3
-              if (v > 3) return "Si es Accesible, la distancia vertical debe ser menor a 3.00 m.";
+              if (v >= 3) return "Si es Accesible, la distancia vertical debe ser menor a 3.00 m.";
               return null;
             }
 
             // No accesible: 1.80 <= v < 3.00
-            if (v > 1.8) {
+            if (v >= 1.8) {
               return "Si es No accesible, la distancia vertical debe ser menor a 1.80 m.";
             }
             return null;
@@ -224,60 +223,75 @@ export const DEFICIENCY_FIELD_MAP = {
 
 
   "7006": {
-  label: "VANO - DEF 7006",
-  fields: [
-    // ✅ hasta NumSuministro (incluye Subsanación + NumSuministro inmediatamente después)
-    ...COMMON_BEFOREOBS_UNTIL_SUMINISTRO,
+    label: "VANO - DEF 7006",
+    fields: [
+      // ✅ hasta NumSuministro (incluye Subsanación + NumSuministro inmediatamente después)
+      ...COMMON_BEFOREOBS_UNTIL_SUMINISTRO,
 
-    // ✅ Tipo de cruce (va después de NumSuministro)
-    {
-      key: "DefiCol1",
-      label: "Tipo de cruce*",
-      type: "text",
-      selectable: true,
-      required: true,
-      valueMap: {
-        1: "Calle",
-        2: "Avenida",
-        3: "Cruce de trenes"
+      // ✅ Tipo de cruce (va después de NumSuministro)
+      {
+        key: "DefiTipoCruce",
+        label: "Tipo de cruce*",
+        type: "text",
+        selectable: true,
+        required: true,
+        valueMap: {
+          1: "Calle",
+          2: "Avenida",
+          3: "Cruce de trenes",
+          4: "Longitudinal"
+        },
+        validation: { message: "Seleccione el tipo de cruce" }
       },
-      validation: { message: "Seleccione el tipo de cruce" }
-    },
 
-    // ✅ lo que quedaba antes de Observación (si algún día agregas algo más)
-    ...COMMON_BEFOREOBS_AFTER_SUMINISTRO,
+      // ✅ lo que quedaba antes de Observación (si algún día agregas algo más)
+      ...COMMON_BEFOREOBS_AFTER_SUMINISTRO,
 
-    // ✅ Distancia vertical depende de tipo de cruce
-    {
-      key: "DefiDistVertical",
-      label: "Distancia Vertical (m)",
-      type: "number",
-      required: true,
-      validation: {
-        custom: (value, values) => {
-          const v = Number(value);
-          const tipo = Number(values?.DefiCol1);
+      // ✅ Distancia vertical depende de tipo de cruce
+      {
+        key: "DefiDistVertical",
+        label: "Distancia Vertical (m)",
+        type: "number",
+        required: true,
+        validation: {
+          custom: (value, values) => {
+            const v = Number(value);
+            const tipo = Number(values?.DefiTipoCruce);
 
-          if (!Number.isFinite(v)) return "Ingrese un número válido en distancia vertical.";
-          if (![1, 2, 3].includes(tipo)) return "Seleccione primero el tipo de cruce.";
+            if (!Number.isFinite(v)) {
+              return "Ingrese un número válido en distancia vertical.";
+            }
 
-          const maxByTipo = { 1: 5.5, 2: 6.5, 3: 7.5 };
-          const max = maxByTipo[tipo];
+            const limites = {
+              1: 5.5, // Calle
+              2: 6.5, // Avenida
+              3: 7.5, // Cruce de trenes
+              4: 4.0  // Longitudinal
+            };
 
-          if (v > max) {
-            const tipoTxt = tipo === 1 ? "Calle" : tipo === 2 ? "Avenida" : "Cruce de trenes";
-            return `Para ${tipoTxt}, la distancia vertical debe ser mayor o igual a ${max.toFixed(2)} m.`;
+            if (!limites[tipo]) {
+              return "Seleccione primero el tipo de cruce.";
+            }
+
+            if (v >= limites[tipo]) {
+              const tipoTxt =
+                tipo === 1 ? "Calle" :
+                  tipo === 2 ? "Avenida" :
+                    tipo === 3 ? "Cruce de trenes" :
+                      "Longitudinal";
+
+              return `Para ${tipoTxt}, la distancia vertical debe ser menor a ${limites[tipo].toFixed(2)} m.`;
+            }
+
+            return null;
           }
-
-          return null;
         }
-      }
-    },
+      },
 
-    // ✅ Observación y Comentario al final
-    ...COMMON_FROM_OBSERVACION
-  ]
-},
+      // ✅ Observación y Comentario al final
+      ...COMMON_FROM_OBSERVACION
+    ]
+  },
 
 
 
@@ -299,7 +313,7 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         validation: {
-          min: 7.5,
+          max: 7.499999,
 
           message: "La distancia horizontal mínima es de 7.5 metros"
         }

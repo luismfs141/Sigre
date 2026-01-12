@@ -132,6 +132,8 @@ namespace Sigre.DataAccess
                      TipiInterno = d.TipiInterno,//
                      DefiInspeccionado = d.DefiInspeccionado,
                      DefiKeyWords = d.DefiKeyWords,
+                     DefiAccesibilidad = d.DefiAccesibilidad,
+                     DefiTipoCruce = d.DefiTipoCruce,
                      EstadoOffLine = 0,
                  }).ToList();
 
@@ -274,6 +276,8 @@ namespace Sigre.DataAccess
                  TipiInterno = d.TipiInterno,//
                  DefiInspeccionado = d.DefiInspeccionado,
                  DefiKeyWords = d.DefiKeyWords == null? "":d.DefiKeyWords,
+                 DefiAccesibilidad = d.DefiAccesibilidad,
+                 DefiTipoCruce = d.DefiTipoCruce,
                  EstadoOffLine = 0,
              });
 
@@ -344,6 +348,8 @@ namespace Sigre.DataAccess
                     TipiInterno = d.TipiInterno,//
                     DefiInspeccionado = d.DefiInspeccionado,
                     DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    DefiAccesibilidad = d.DefiAccesibilidad,
+                    DefiTipoCruce = d.DefiTipoCruce,
                     EstadoOffLine = 0,
                 }
             ).ToList();
@@ -542,6 +548,12 @@ namespace Sigre.DataAccess
                         DefiActivo = dto.DefiActivo,
                         DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
                         DefiInspeccionado = dto.DefiInspeccionado,
+
+                        DefiAccesibilidad = dto.DefiAccesibilidad,
+                        DefiTipoCruce = dto.DefiTipoCruce,
+
+
+
                     };
 
                     ctx.Deficiencias.Add(nueva);
@@ -567,6 +579,10 @@ namespace Sigre.DataAccess
                     existente.DefiInspeccionado = dto.DefiInspeccionado;
                     existente.DefiUsuarioMod = dto.DefiUsuarioMod;
                     existente.DefiFecModificacion = DateTime.Now;
+
+                    existente.DefiAccesibilidad = dto.DefiAccesibilidad;
+                    existente.DefiTipoCruce = dto.DefiTipoCruce;
+
 
                     ctx.SaveChanges();
                     resultado.Add((dto.DefiInterno, existente.DefiInterno));

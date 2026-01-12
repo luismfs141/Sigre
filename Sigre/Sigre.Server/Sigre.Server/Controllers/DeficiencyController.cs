@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Sigre.DataAccess;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
@@ -12,6 +13,8 @@ namespace Sigre.Server.Controllers
     [Route("api/[controller]")]
     public class DeficiencyController : Controller
     {
+
+
         [Route("save")]
         [HttpPost]
         public object Save(Deficiencia x_deficiencia)
@@ -112,5 +115,10 @@ namespace Sigre.Server.Controllers
 
             return Ok(response);
         }
+
+
+
+
+
     }
 }

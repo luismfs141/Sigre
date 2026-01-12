@@ -1,4 +1,10 @@
+
+
+
 import { runQuery } from "./db";
+
+// const emptyToNull = (v) =>
+//   typeof v === "string" && v.trim() === "" ? null : v;
 
 export const getDeficiencyByIdLocal = async (defiInterno) => {
   try {
@@ -187,6 +193,8 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiEstadoCriticidad",
       "DefiInspeccionado",
       "DefiCol1",
+      "DefiAccesibilidad",
+      "DefiTipoCruce",
       "EstadoOffLine"
     ];
 
@@ -210,6 +218,16 @@ export const saveOrUpdateDeficiency = async (def) => {
         def.DefiInterno
       ];
 
+      // const updateValues = [
+      //   ...updateFields.map(f =>
+      //     f === "EstadoOffLine"
+      //       ? estado
+      //       : (emptyToNull(def[f]) ?? null)
+      //   ),
+      //   def.DefiInterno
+      // ];
+
+
       await runQuery(updateQuery, updateValues);
       return def.DefiInterno;
     }
@@ -225,6 +243,13 @@ export const saveOrUpdateDeficiency = async (def) => {
     const insertValues = insertFields.map(f =>
       f === "EstadoOffLine" ? 2 : def[f] ?? null
     );
+    // const insertValues = insertFields.map(f =>
+    //   f === "EstadoOffLine"
+    //     ? 2
+    //     : (emptyToNull(def[f]) ?? null)
+    // );
+
+
 
     const result = await runQuery(insertQuery, insertValues);
 
