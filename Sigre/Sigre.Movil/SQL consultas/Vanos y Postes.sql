@@ -25,131 +25,6 @@ WHERE p.POST_Etiqueta = @etiqueta
 GO
 
 
-------------------------------------------------------------------
--- BUSCA DEFICIENCIAS POR ETIQUETA DE ELEMENTO + CODI_Codigo
-------------------------------------------------------------------
-DECLARE @etiqueta varchar(50) = '%00132%';
-
-;WITH Q AS
-(
-    SELECT
-        ElementoEtiqueta =
-            CASE d.DEFI_TipoElemento
-                WHEN 'POST' THEN p.POST_Etiqueta
-                WHEN 'VANO' THEN v.VANO_Codigo
-                ELSE NULL
-            END,
-        CODI_Codigo = c.CODI_Codigo,
-        p.POST_EsBT,
-        d.*
-    FROM dbo.Deficiencias d
-    LEFT JOIN dbo.Postes p
-        ON d.DEFI_TipoElemento = 'POST'
-       AND d.DEFI_IdElemento   = p.POST_Interno
-    LEFT JOIN dbo.Vanos v
-        ON d.DEFI_TipoElemento = 'VANO'
-       AND d.DEFI_IdElemento   = v.VANO_Interno
-    LEFT JOIN dbo.Tipificaciones t
-        ON d.TIPI_Interno = t.TIPI_Interno
-    LEFT JOIN dbo.Codigos c
-        ON t.CODI_Interno = c.CODI_Interno
-)
-SELECT
-    Q.DEFI_IdElemento,
-    Q.ElementoEtiqueta,
-    Q.DEFI_FechaCreacion,
-    Q.DEFI_FecModificacion,
-    Q.DEFI_TipoElemento,
-    Q.CODI_Codigo,
-    Q.DEFI_Interno,
-    case q.DEFI_EstadoCriticidad 
-        when '1' then 'Leve'
-        when '2' then 'Moderado'
-        when '3' then 'Grave'
-    end as Criticidad,
-    case Q.DEFI_EstadoSubsanacion
-        when '0' then 'Por subsanar'
-        when '1' then 'Subsanación Preventiva'
-        when '2' then 'Subsanación Definitiva'
-    end as [Estado subsanación],
-    Q.DEFI_Observacion,
-    Q.DEFI_Comentario,
-    Q.DEFI_Activo,
-    Q.DEFI_NumSuministro,
-    Q.DEFI_DistHorizontal,
-    Q.DEFI_DistVertical,
-    [******] = '',
-    q.*
-FROM Q
-WHERE Q.ElementoEtiqueta LIKE @etiqueta
-    AND Q.POST_EsBT = 1
-ORDER BY Q.DEFI_FechaCreacion DESC;
-GO
-
-
-
-------------------------------------------------------------------
--- BUSCA DEFICIENCIAS POR CODIGO DE ELEMENTO + CODI_Codigo
-------------------------------------------------------------------
-DECLARE @codigo varchar(50) = '%35899%';
-
-;WITH Q AS
-(
-    SELECT
-        ElementoEtiqueta =
-            CASE d.DEFI_TipoElemento
-                WHEN 'POST' THEN p.POST_Etiqueta
-                WHEN 'VANO' THEN v.VANO_Codigo
-                ELSE NULL
-            END,
-        CODI_Codigo = c.CODI_Codigo,
-        p.POST_EsBT,
-        d.*
-    FROM dbo.Deficiencias d
-    LEFT JOIN dbo.Postes p
-        ON d.DEFI_TipoElemento = 'POST'
-       AND d.DEFI_IdElemento   = p.POST_Interno
-    LEFT JOIN dbo.Vanos v
-        ON d.DEFI_TipoElemento = 'VANO'
-       AND d.DEFI_IdElemento   = v.VANO_Interno
-    LEFT JOIN dbo.Tipificaciones t
-        ON d.TIPI_Interno = t.TIPI_Interno
-    LEFT JOIN dbo.Codigos c
-        ON t.CODI_Interno = c.CODI_Interno
-)
-SELECT
-    Q.DEFI_IdElemento,
-    Q.ElementoEtiqueta,
-    Q.DEFI_FechaCreacion,
-    Q.DEFI_FecModificacion,
-    Q.DEFI_TipoElemento,
-    Q.CODI_Codigo,
-    Q.DEFI_Interno,
-    case q.DEFI_EstadoCriticidad 
-        when '1' then 'Leve'
-        when '2' then 'Moderado'
-        when '3' then 'Grave'
-    end as Criticidad,
-    case Q.DEFI_EstadoSubsanacion
-        when '0' then 'Por subsanar'
-        when '1' then 'Subsanación Preventiva'
-        when '2' then 'Subsanación Definitiva'
-    end as [Estado subsanación],
-    Q.DEFI_Observacion,
-    Q.DEFI_Comentario,
-    Q.DEFI_Activo,
-    Q.DEFI_NumSuministro,
-    Q.DEFI_DistHorizontal,
-    Q.DEFI_DistVertical,
-    [******] = '',
-    q.*
-FROM Q
-WHERE Q.ElementoEtiqueta LIKE @codigo
-ORDER BY Q.DEFI_FechaCreacion DESC;
-GO
-
-
-
 --------------------------------
 -- VANOS -----------------------
 --------------------------------
@@ -168,6 +43,216 @@ WHERE v.VANO_Codigo like @VanoCodigo
     AND V.VANO_EsBT = 1
     AND A.ALIM_Etiqueta = @alimentador
 
+
+
+------------------------------------------------------------------
+-- BUSCA DEFICIENCIAS POR ETIQUETA DE POSTE O CÓDIGO DE VANO
+------------------------------------------------------------------
+DECLARE @codigo varchar(50) = '00132'; --Varias si es especifico o contiene
+
+;WITH Q AS
+(
+    SELECT
+        ElementoEtiqueta =
+            CASE d.DEFI_TipoElemento
+                WHEN 'POST' THEN p.POST_Etiqueta
+                WHEN 'VANO' THEN v.VANO_Codigo
+                ELSE NULL
+            END,
+        CODI_Codigo = c.CODI_Codigo,
+        p.POST_EsBT,
+        d.*
+    FROM dbo.Deficiencias d
+    LEFT JOIN dbo.Postes p
+        ON d.DEFI_TipoElemento = 'POST'
+       AND d.DEFI_IdElemento   = p.POST_Interno
+    LEFT JOIN dbo.Vanos v
+        ON d.DEFI_TipoElemento = 'VANO'
+       AND d.DEFI_IdElemento   = v.VANO_Interno
+    LEFT JOIN dbo.Tipificaciones t
+        ON d.TIPI_Interno = t.TIPI_Interno
+    LEFT JOIN dbo.Codigos c
+        ON t.CODI_Interno = c.CODI_Interno
+)
+SELECT
+    q.DEFI_Interno,
+    Q.DEFI_IdElemento,
+    Q.ElementoEtiqueta,
+    Q.DEFI_FechaCreacion,
+    Q.DEFI_FecModificacion,
+    Q.DEFI_TipoElemento,
+    Q.CODI_Codigo,
+    Q.DEFI_Interno,
+    case q.DEFI_EstadoCriticidad 
+        when '1' then 'Leve'
+        when '2' then 'Moderado'
+        when '3' then 'Grave'
+    end as Criticidad,
+    case Q.DEFI_EstadoSubsanacion
+        when '0' then 'Por subsanar'
+        when '1' then 'Subsanación Preventiva'
+        when '2' then 'Subsanación Definitiva'
+    end as [Estado subsanación],
+    Q.DEFI_Observacion,
+    Q.DEFI_Comentario,
+    Q.DEFI_Activo,
+    Q.DEFI_NumSuministro,
+    Q.DEFI_DistHorizontal,
+    Q.DEFI_Accesibilidad,
+    Q.DEFI_TipoCruce,
+    Q.DEFI_DistVertical,
+    [******] = '',
+    q.*
+FROM Q
+WHERE Q.ElementoEtiqueta LIKE @codigo
+AND (
+        Q.DEFI_TipoElemento <> 'POST'
+        OR Q.POST_EsBT = 1
+      )
+ORDER BY Q.DEFI_FechaCreacion DESC;
+GO
+
+
+
+--------------------------------
+-- delete defi VANOS -----------------------
+--------------------------------
+
+
+delete from Deficiencias
+where DEFI_Interno = 111468
+
+
+
+
+
+
+------------------------------------------------------------------
+-- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
+------------------------------------------------------------------
+
+DECLARE @SUB_ETI VARCHAR(20) = '%2817%'
+(
+    SELECT  
+            ALI.ALIM_Interno AS [Id Alimentador],
+            ALI.ALIM_Etiqueta AS [Etiqueta alimentador],
+            S.SED_Interno AS [ID Sub Interno],
+            S.SED_Etiqueta AS [Etiqueta Sub],
+            Elemento = 'Poste',
+            P.POST_Interno AS [ID Elemento interno],
+            P.POST_Etiqueta AS [Etiqueta elemento]
+        
+    FROM Postes AS P
+    LEFT JOIN Seds AS S
+        ON P.POST_Subestacion = S.SED_Interno
+    LEFT JOIN Alimentadores AS ALI
+        ON P.ALIM_Interno = ALI.ALIM_Interno
+    WHERE S.SED_Etiqueta LIKE @SUB_ETI
+
+
+    union all
+
+
+    SELECT  ALI.ALIM_Interno AS [Id Alimentador],
+            ALI.ALIM_Etiqueta AS [Etiqueta alimentador],
+            S.SED_Interno AS [ID Sub Interno],
+            S.SED_Etiqueta AS [Etiqueta Sub],
+            Elemento = 'Vano',
+            V.VANO_Interno AS [ID Interno],
+            V.VANO_Codigo [Etiqueta]
+    FROM Vanos AS V
+    LEFT JOIN Seds AS S
+        ON V.VANO_Subestacion = S.SED_Interno
+    LEFT JOIN Alimentadores AS ALI
+        ON V.ALIM_Interno = ALI.ALIM_Interno
+
+    WHERE S.SED_Etiqueta LIKE @SUB_ETI
+)
+ORDER BY Elemento, [Etiqueta elemento]
+
+
+------------------------------------------------------------------
+-- TOADAS LAS DEFICIENCIAS DE UNA SUBESTACIÓN --------
+------------------------------------------------------------------
+
+DECLARE @SUB_ETI VARCHAR(20) = '%2817%';
+
+SELECT  
+        D.DEFI_Interno,
+        ROW_NUMBER() OVER (PARTITION BY D.DEFI_IdElemento ORDER BY D.DEFI_FechaCreacion) AS Nro, 
+        D.DEFI_TipoElemento,
+        ElementoEtiqueta =
+            CASE d.DEFI_TipoElemento
+                WHEN 'POST' THEN p.POST_Etiqueta
+                WHEN 'VANO' THEN v.VANO_Codigo
+                ELSE NULL
+            END,
+        D.DEFI_FechaCreacion,
+        D.DEFI_FecModificacion,
+        C.CODI_Codigo,
+        D.DEFI_Interno,
+        case D.DEFI_EstadoCriticidad 
+            when '1' then 'Leve'
+            when '2' then 'Moderado'
+            when '3' then 'Grave'
+        end as Criticidad,
+        case D.DEFI_EstadoSubsanacion
+            when '0' then 'Por subsanar'
+            when '1' then 'Subsanación Preventiva'
+            when '2' then 'Subsanación Definitiva'
+        end as [Estado subsanación],
+        D.DEFI_NumSuministro,
+        D.DEFI_Observacion,
+        D.DEFI_Comentario,
+        D.DEFI_Activo,
+        D.DEFI_DistHorizontal,
+        D.DEFI_Accesibilidad,
+        D.DEFI_TipoCruce,
+        D.DEFI_DistVertical,
+        [***] = '',
+        *
+FROM Deficiencias AS D
+    LEFT JOIN Tipificaciones  AS T
+        ON D.TIPI_Interno = T.TIPI_Interno
+    LEFT JOIN Codigos AS C
+        ON T.CODI_Interno = C.CODI_Interno
+       LEFT JOIN Vanos AS V
+        ON D.DEFI_IdElemento = V.VANO_Interno
+    LEFT JOIN Postes AS P
+        ON D.DEFI_IdElemento = P.POST_Interno
+WHERE D.DEFI_IdElemento IN
+
+(
+    SELECT P.POST_Interno
+        FROM Postes AS P
+        INNER JOIN Seds AS S
+            ON P.POST_Subestacion = S.SED_Interno
+        WHERE S.SED_Etiqueta LIKE @SUB_ETI
+UNION ALL
+    SELECT V.VANO_Interno
+        FROM Vanos AS V
+        INNER JOIN Seds AS S
+            ON V.VANO_Subestacion = S.SED_Interno
+        WHERE S.SED_Etiqueta LIKE @SUB_ETI
+)
+
+ORDER BY D.DEFI_IdElemento, Nro;
+
+
+
+
+------------------------------------------------------------------
+-- BORRAR DEFICIENCIAS MASIVO ------------------------------------
+------------------------------------------------------------------
+BEGIN TRANSACTION
+
+DELETE FROM Deficiencias
+WHERE DEFI_Interno IN 
+(
+
+)
+
+ROLLBACK
 
 
 
@@ -207,46 +292,17 @@ GO
 ------------------------------------------------------------------
 
 
-select * from Deficiencias order by DEFI_FechaCreacion desc
+
+
+------------------------------------------------------------------
+------------------------------------------------------------------
+------------------------------------------------------------------
 
 
 
-
-select DEFI_FechaCreacion,DEFI_Comentario,DEFI_Observacion,DEFI_Activo,* from Deficiencias
-order by 1 desc
-
-
-
-
-select * from Archivos order by ARCH_Fecha desc
-
-
-
-
-
-
-select *
-from Archivos
-order by ARCH_Fecha desc
-
-
-select * from Postes where POST_Etiqueta like '%057714%'
-
-select * from Postes order by POST_Inspeccionado desc
-select * from Vanos order by VANO_Inspeccionado desc
-
-select * from ArmadoTipo
-
-301329
-247970
-
-select DEFI_FechaCreacion,DEFI_Observacion,DEFI_Comentario,* from Deficiencias
-order by 2 desc
-
-
-
-select * from Postes
-where POST_Etiqueta like '%011958%'
+------------------------------------------------------------------
+------------------------------------------------------------------
+------------------------------------------------------------------
 
 
 
@@ -259,4 +315,10 @@ where POST_Etiqueta like '%011958%'
 
 
 
-EXEC sp_columns 'Vanos';
+
+
+
+
+
+
+

@@ -572,6 +572,12 @@ namespace Sigre.DataAccess
 
                     existente.DefiEstado = dto.DefiEstado;
                     existente.DefiObservacion = dto.DefiObservacion;
+
+                    existente.DefiComentario = dto.DefiComentario;
+                    existente.DefiNumSuministro = dto.DefiNumSuministro;
+                    existente.DefiDistHorizontal = dto.DefiDistHorizontal;
+                    existente.DefiDistVertical = dto.DefiDistVertical;
+
                     existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
                     existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
                     existente.DefiLatitud = dto.DefiLatitud;

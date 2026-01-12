@@ -907,3 +907,44 @@ ALTER TABLE dbo.Deficiencias
 ADD DEFI_Accesibilidad VARCHAR(20) NULL,
     DEFI_TipoCruce     VARCHAR(20) NULL;
 GO
+
+
+
+
+
+ALTER PROCEDURE [dbo].[sp_GetDeficienciasPorElemento]
+    @TipoElemento VARCHAR(20),
+    @IdElemento INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+    case
+when  d.TIPI_Interno <> 0 then 'Deficiencia'
+else 'Sin Deficiencia'
+end Estado,
+        d.DEFI_Estado,
+        d.DEFI_FecRegistro,
+        d.DEFI_EstadoCriticidad,
+        d.DEFI_Comentario,
+        d.DEFI_Observacion,
+        d.DEFI_DistHorizontal,
+        d.DEFI_DistVertical,
+        d.DEFI_TipoRetenida,
+        d.DEFI_RetenidaMaterial,
+        d.DEFI_TipoArmado,
+        d.DEFI_ArmadoMaterial,
+        c.CODI_Codigo,
+        u.USUA_Nombres,
+        u.USUA_Apellidos
+    FROM Deficiencias d
+    left JOIN Tipificaciones t 
+        ON t.TIPI_Interno = d.TIPI_Interno
+    left JOIN Codigos c 
+        ON c.CODI_Interno = t.CODI_Interno
+    INNER JOIN Usuarios U
+        ON convert(nvarchar,u.USUA_Interno) = Convert(nvarchar,d.DEFI_UsuarioInic)
+    WHERE d.DEFI_TipoElemento = @TipoElemento
+      AND d.DEFI_IdElemento = @IdElemento;
+END

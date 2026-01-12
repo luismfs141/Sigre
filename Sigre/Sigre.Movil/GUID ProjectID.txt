@@ -3,3 +3,8 @@
 
 
 eas build -p android --profile production-apk
+
+
+
+eas build -p android --profile development
+
