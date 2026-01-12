@@ -5,10 +5,16 @@ import {
   BackHandler,
   Button,
   FlatList,
+  Platform,
   StyleSheet,
+  ToastAndroid // Opcional: Para feedback visual rápido
+  ,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+// ✅ 1. IMPORTACIÓN CRÍTICA PARA MANEJO DE ARCHIVOS
+import * as FileSystem from "expo-file-system/legacy";
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
@@ -20,6 +26,9 @@ import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { useDeficiency } from "../../hooks/useDeficiency";
 import { useFiles } from "../../hooks/useFiles";
+
+// ✅ 2. DEFINIR RUTA BASE (Debe ser idéntica a la de Multimedia.js)
+const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Inspection() {
   const { selectedItem, setSelectedTypification, selectedDeficiency, setSelectedDeficiency } = useDatos();
@@ -38,7 +47,7 @@ export default function Inspection() {
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
 
   /* =======================
-     CARGA INICIAL
+      CARGA INICIAL
      ======================= */
   useEffect(() => {
     if (!selectedItem) {
@@ -81,7 +90,7 @@ export default function Inspection() {
 
   /* =======================
       BACK HANDLER
-    ======================= */
+     ======================= */
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
@@ -119,7 +128,7 @@ export default function Inspection() {
 
 
   /* =======================
-     ELIMINAR DEFICIENCIA
+      ELIMINAR DEFICIENCIA (Desde el Modal de Edición)
      ======================= */
   const handleDeficiencyDeleted = typificationId => {
     if (typificationId == null) return;
@@ -129,7 +138,7 @@ export default function Inspection() {
   };
 
   /* =======================
-     ABRIR MODAL
+      ABRIR MODAL
      ======================= */
   const openFormModal = item => {
     setCurrentItem(item);
@@ -145,8 +154,46 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
-  const handleLocalDelete = async (selectedItem) => {
-    if (!selectedItem) return;
+  /* ==============================================================================
+     ✅ 3. FUNCIÓN DE LIMPIEZA FÍSICA (GARBAGE COLLECTION)
+     Esta función busca y elimina fotos huérfanas antes de borrar la data SQL.
+     ============================================================================== */
+  const cleanPhysicalFiles = async (defId) => {
+    if (!defId) return;
+
+    try {
+        // Leemos el directorio donde guardas las fotos
+        const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
+        
+        // Buscamos archivos que pertenezcan a esta deficiencia específica.
+        // Patrón basado en Multimedia.js: "..._DEF_{ID}_..."
+        const targetString = `_DEF_${defId}`; 
+        
+        const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
+
+        if (filesToDelete.length > 0) {
+            console.log(`🗑️ [CLEANUP] Borrando ${filesToDelete.length} archivos físicos para ID: ${defId}`);
+            
+            // Borrado en paralelo para no congelar la UI
+            await Promise.all(filesToDelete.map(async (file) => {
+                const filePath = APP_MEDIA_DIR + file;
+                await FileSystem.deleteAsync(filePath, { idempotent: true });
+            }));
+        } else {
+            console.log(`ℹ️ [CLEANUP] No se encontraron archivos físicos para ID: ${defId}`);
+        }
+    } catch (error) {
+        // El borrado físico no debe detener el borrado lógico, solo lo logueamos.
+        console.warn("⚠️ Error menor limpiando archivos físicos:", error);
+    }
+  };
+
+  /* =======================
+      MANEJAR ELIMINACIÓN LOCAL (Confirmación + Limpieza)
+     ======================= */
+  const handleLocalDelete = async (itemToDelete) => {
+    // Validación de seguridad
+    if (!itemToDelete) return;
 
     Alert.alert(
       "Eliminar tipificación",
@@ -158,11 +205,23 @@ export default function Inspection() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteDeficiency(selectedItem.defId);
+              // 1. ✅ LIMPIEZA FÍSICA PRIMERO
+              // Pasamos el defId (que es el DefiInterno o ServerId)
+              await cleanPhysicalFiles(itemToDelete.defId);
+
+              // 2. ✅ LIMPIEZA LÓGICA (SQL) DESPUÉS
+              await deleteDeficiency(itemToDelete.defId);
+              
+              // 3. Actualizar UI
               setModalDeficiencyVisible(false);
               refreshList();
+              
+              if (Platform.OS === 'android') {
+                ToastAndroid.show("Deficiencia eliminada correctamente", ToastAndroid.SHORT);
+              }
             } catch (err) {
               console.error("❌ Error en handleLocalDelete:", err);
+              Alert.alert("Error", "No se pudo eliminar la deficiencia completamente.");
             }
           }
         }
@@ -171,32 +230,6 @@ export default function Inspection() {
     );
   };
 
-  // const handleSelectTypification = (def) => {
-  //   if (!selectedItem) return;
-
-  //   const elementId =
-  //     selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
-
-  //   const typeElement = selectedItem.PostInterno
-  //     ? "POST"
-  //     : selectedItem.VanoInterno
-  //       ? "VANO"
-  //       : "SED";
-
-  //   const currentDef = {
-  //     detail: def.detail ?? "",
-  //     deficiency: def.deficiency,
-  //     elementId,
-  //     typeElement,
-  //     typificationId: def.id,
-  //     typificationCode: def.code,
-  //     tableId: def.tableId
-  //   };
-
-  //   setCurrentDeficiency(currentDef);
-  //   setModalDeficiencyVisible(true);
-  //   setNewDefModalVisible(false);
-  // };
   const handleSelectTypification = (def) => {
     if (!selectedItem) return;
 
@@ -232,7 +265,7 @@ export default function Inspection() {
 
 
   /* =======================
-     RENDER ITEM
+      RENDER ITEM
      ======================= */
   const renderItem = ({ item }) => {
     if (item.type === "general") {
@@ -247,7 +280,8 @@ export default function Inspection() {
     return (
       <SelectedDeficiencyItem
         item={item}
-        onDelete={handleLocalDelete}
+        // ✅ Pasamos el objeto 'item' completo para tener acceso al defId en el handler
+        onDelete={() => handleLocalDelete(item)} 
         onPhotos={(it) => {
           setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
           router.push("/(drawer)/multimedia");

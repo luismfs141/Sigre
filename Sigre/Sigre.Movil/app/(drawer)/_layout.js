@@ -75,6 +75,13 @@ export default function DrawerLayout() {
           drawerIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
         }}
       />
+      <Drawer.Screen
+        name="dailyZip"
+        options={{
+          title: "Reporte Diario (ZIP)",
+          drawerIcon: ({ color, size }) => <Ionicons name="archive" size={size} color={color} />,
+        }}
+      />
 
       {/* Botón de logout */}
       <Drawer.Screen
