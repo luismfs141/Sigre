@@ -120,4 +120,8 @@ public partial class Deficiencia
     public string? DefiCol3 { get; set; }
 
     public virtual Inspeccione? InspInternoNavigation { get; set; }
+
+    public string? DefiAccesibilidad { get; set; }
+    public string? DefiTipoCruce { get; set; }
+
 }

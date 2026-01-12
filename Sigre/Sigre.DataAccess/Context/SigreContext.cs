@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 
@@ -246,14 +244,31 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col2");
+
+
             entity.Property(e => e.DefiCol3)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col3");
+
             entity.Property(e => e.DefiComentario)
                 .HasMaxLength(120)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Comentario");
+
+            entity.Property(e => e.DefiAccesibilidad)
+    .HasMaxLength(20)
+    .IsUnicode(false)
+    .HasColumnName("DEFI_Accesibilidad");
+
+            entity.Property(e => e.DefiTipoCruce)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("DEFI_TipoCruce");
+
+
+
+
             entity.Property(e => e.DefiCoordX).HasColumnName("DEFI_CoordX");
             entity.Property(e => e.DefiCoordY).HasColumnName("DEFI_CoordY");
             entity.Property(e => e.DefiDistHorizontal)
