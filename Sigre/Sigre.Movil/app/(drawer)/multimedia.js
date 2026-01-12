@@ -350,7 +350,10 @@ export default function Multimedia() {
                         : deficiencia.DefiInterno;
     }
 
-    return await saveArchivoLocal({
+    console.log(photoData);
+    return await saveArchivoLocal(
+      {
+      
       ArchInterno: null, // Null para que sea INSERT
       ArchTipo: isAudio ? 0 : (slot > 0 ? slot : 1), 
       ArchTabla: "Deficiencias", 

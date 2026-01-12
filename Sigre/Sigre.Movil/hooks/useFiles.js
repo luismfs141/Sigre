@@ -27,22 +27,25 @@ export function useFiles() {
   // ===============================
   // 🔹 NORMALIZAR ANTES DE GUARDAR
   // ===============================
-  const normalizeArchivoBeforeSave = useCallback((archivo) => (
-     console.log("🧪 archivo:", archivo),
-    {
-  
-    archTipo: Number(archivo.ArchTipo),
-    archTabla: archivo.ArchTabla ?? "Deficiencias",
-    archCodTabla: Number(archivo.ArchCodTabla),
-    archNombre: archivo.ArchNombre,
-    archLatit: archivo.ArchLatit ?? null,
-    archLong: archivo.ArchLong ?? null,
-    archFech: archivo.ArchFech ?? nowPeruISO(),
-    archTipoElemento: archivo.ArchTipoElemento ?? null,
-    archIdElemento: archivo.ArchIdElemento ?? null,
-    tipiInterno: archivo.TipiInterno ?? null,
-    archActiv: archivo.ArchActiv ?? 1
-  }), []);
+  const normalizeArchivoBeforeSave = useCallback((archivo) => {
+    console.log("🧪 archivo:", archivo);
+    return {
+      archTipo: Number(archivo.ArchTipo),
+      archTabla: archivo.ArchTabla ?? "Deficiencias",
+      archCodTabla: Number(archivo.ArchCodTabla),
+      archNombre: archivo.ArchNombre,
+
+      // 🔑 CORRECCIÓN: usar latUtm/lonUtm si existe
+      archLatit: archivo.ArchLatitud ?? null,
+      archLong: archivo.ArchLongitud ?? null,
+
+      archFech: archivo.fechaISO ?? archivo.ArchFech ?? nowPeruISO(),
+      archTipoElemento: archivo.ArchTipoElemento ?? null,
+      archIdElemento: archivo.ArchIdElemento ?? null,
+      tipiInterno: archivo.TipiInterno ?? null,
+      archActiv: archivo.ArchActiv ?? 1
+    };
+  }, []);
 
 
   // ===============================
@@ -158,6 +161,7 @@ export function useFiles() {
 
     // 🔹 Normalización EXISTENTE (NO SE TOCA)
     const normalized = normalizeArchivoBeforeSave(data);
+    console.log(normalized);
 
     // 🔹 Adaptación a estructura SQLite (saveOrUpdate)
     const archivoForDB = {

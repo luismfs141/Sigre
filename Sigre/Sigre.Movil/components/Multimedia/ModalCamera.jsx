@@ -2,13 +2,13 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
   Text,
-  View,
-  Image,
-  ActivityIndicator
+  View
 } from "react-native";
 import { fromLatLon } from "utm";
 import { nowPeruISO } from "../../utils/dateUtils";
@@ -87,40 +87,78 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   /* ======================
      📸 TOMA DE FOTO (MODIFICADO)
   ====================== */
-  const takePhoto = async () => {
-    if (!cameraRef.current || processing) return;
-    setProcessing(true);
+  // const takePhoto = async () => {
+  //   if (!cameraRef.current || processing) return;
+  //   setProcessing(true);
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: false,
-      });
+  //   try {
+  //     const photo = await cameraRef.current.takePictureAsync({
+  //       quality: 0.7,
+  //       skipProcessing: false,
+  //     });
 
-      if (!photo?.uri) return;
+  //     if (!photo?.uri) return;
 
-      const coords = await getCurrentLocation();
-      let utm = null;
+  //     const coords = await getCurrentLocation();
+  //     let utm = null;
 
-      if (coords) {
-        utm = convertToUTM(coords.latitude, coords.longitude);
-      }
+  //     if (coords) {
+  //       utm = convertToUTM(coords.latitude, coords.longitude);
+  //     }
 
-      // ✅ EN LUGAR DE CERRAR, GUARDAMOS EN TEMPORAL PARA MOSTRAR PREVIEW
-      setTempPhoto({
-        uri: photo.uri,
-        latUtm: utm?.utmY ?? null,
-        lonUtm: utm?.utmX ?? null,
-        utmZone: utm?.zone ?? null,
-        fechaISO: nowPeruISO(),
-      });
+  //     // ✅ EN LUGAR DE CERRAR, GUARDAMOS EN TEMPORAL PARA MOSTRAR PREVIEW
+  //     setTempPhoto({
+  //       uri: photo.uri,
+  //       latUtm: utm?.utmY ?? null,
+  //       lonUtm: utm?.utmX ?? null,
+  //       utmZone: utm?.zone ?? null,
+  //       fechaISO: nowPeruISO(),
+  //     });
       
-    } catch (e) {
-      console.error("❌ Error cámara:", e);
-    } finally {
-      setProcessing(false);
+  //   } catch (e) {
+  //     console.error("❌ Error cámara:", e);
+  //   } finally {
+  //     setProcessing(false);
+  //   }
+  // };
+
+  const takePhoto = async () => {
+  if (!cameraRef.current || processing) return;
+  setProcessing(true);
+
+  try {
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.7,
+      skipProcessing: false,
+    });
+
+    if (!photo?.uri) return;
+
+    const coords = await getCurrentLocation();
+    let utm = null;
+
+    if (coords) {
+      utm = convertToUTM(coords.latitude, coords.longitude);
     }
-  };
+
+    // Guardamos en temporal para mostrar preview
+    const temp = {
+      uri: photo.uri,
+      latUtm: utm?.utmY ?? null,
+      lonUtm: utm?.utmX ?? null,
+      utmZone: utm?.zone ?? null,
+      fechaISO: nowPeruISO(),
+    };
+
+    setTempPhoto(temp);
+    
+  } catch (e) {
+    console.error("❌ Error cámara:", e);
+  } finally {
+    setProcessing(false);
+  }
+};
+
 
   /* ======================
      ACCIONES PREVIEW
