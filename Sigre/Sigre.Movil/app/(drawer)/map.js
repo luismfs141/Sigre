@@ -86,6 +86,8 @@ const Map = () => {
   const [heading, setHeading] = useState(0);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [showGapSelector, setShowGapSelector] = useState(false);
+  const [overlappedGaps, setOverlappedGaps] = useState([]);
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
@@ -299,6 +301,19 @@ const Map = () => {
     }
   };
 
+  const areCoordsEqual = (a, b, tolerance = 0.00001) => {
+    return Math.abs(Number(a) - Number(b)) <= tolerance;
+  };
+
+  const findOverlappedGaps = (gap, allGaps) => {
+    return allGaps.filter(g =>
+      areCoordsEqual(g.VanoLatitudIni, gap.VanoLatitudIni) &&
+      areCoordsEqual(g.VanoLongitudIni, gap.VanoLongitudIni) &&
+      areCoordsEqual(g.VanoLatitudFin, gap.VanoLatitudFin) &&
+      areCoordsEqual(g.VanoLongitudFin, gap.VanoLongitudFin)
+    );
+  };
+
   const getCleanLabel = (pin) => {
     const raw = pin.Label || pin.ElementCode || "";
 
@@ -374,7 +389,16 @@ const Map = () => {
             strokeWidth={3}
             strokeColor={getGapColorByInspected(gap)}
             tappable
-            onPress={() => onMarkerPress(gap)}
+            onPress={() => {
+              const overlapped = findOverlappedGaps(gap, memoGaps);
+
+              if (overlapped.length === 1) {
+                onMarkerPress(overlapped[0]);
+              } else if (overlapped.length > 1) {
+                setOverlappedGaps(overlapped);
+                setShowGapSelector(true);
+              }
+            }}
           />
         ))}
 
@@ -480,13 +504,43 @@ const Map = () => {
         })}
 
       </MapView>
+      {/* 🔽 MODAL FUERA DEL MAPVIEW */}
+        {showGapSelector && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Seleccione un Vano</Text>
 
-      <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
-        <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
-      </TouchableOpacity>
-    </View>
-  );
-};
+              {overlappedGaps.map((gap, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setShowGapSelector(false);
+                    onMarkerPress(gap);
+                  }}
+                >
+                  <Text style={styles.modalText}>
+                    {gap.VanoCodigo || "Vano sin código"} - {gap.VanoEtiqueta || ""}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setShowGapSelector(false)}
+              >
+                <Text style={{ color: "red" }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+            <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
+              <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+            </TouchableOpacity>
+          </View>
+        );
+      };
 
 const styles = StyleSheet.create({
   floatBtn: {
@@ -505,6 +559,49 @@ const styles = StyleSheet.create({
   placeholderText: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
   loadingOverlay: { position: "absolute", top: "50%", left: "50%", zIndex: 100 },
   map: { width: "100%", height: "100%" },
+  modalOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9999,     // iOS
+  elevation: 20    // Android
+},
+
+modalBox: {
+  width: "85%",
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  padding: 15,
+},
+
+modalTitle: {
+  fontSize: 16,
+  fontWeight: "bold",
+  marginBottom: 10,
+  textAlign: "center",
+},
+
+modalItem: {
+  paddingVertical: 10,
+  borderBottomWidth: 1,
+  borderBottomColor: "#eee",
+},
+
+modalText: {
+  fontSize: 14,
+  color: "#333",
+},
+
+modalCancel: {
+  marginTop: 10,
+  alignItems: "center",
+}
+
 });
 
 export default Map;
