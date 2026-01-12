@@ -1,7 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useDispatch, useSelector } from "react-redux";
-
-
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useContext, useEffect, useState } from "react";
@@ -18,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { closeDatabase } from '../../database/offlineDB/db';
@@ -26,16 +24,11 @@ import { useOffline } from "../../hooks/useOffline";
 
 export default function Sync() {
 
-
-
-
   const { user } = useContext(AuthContext);
   const { offlineLoading, downloadDatabase } = useOffline();
   const { dbName, setDbName, selectedFeeder, setSelectedFeeder } = useDatos();
   const dispatch = useDispatch();
   const isAppLoading = useSelector((state) => state.app.isLoading);
-
-
 
   const {
     feedersByUser,
@@ -82,93 +75,6 @@ export default function Sync() {
   //───────────────────────────────────────────────
   // DESCARGAR BASE
   //───────────────────────────────────────────────
-
-  // const handleDownload = async () => {
-  //   try {
-  //     let nombreBase;
-
-  //     //──────────────────────
-  //     // PROYECTO 0 — BAJA TENSIÓN
-  //     //──────────────────────
-  //     if (user?.proyecto === 0) {
-  //       if (!selectedFeeder)
-  //         return Alert.alert("Selecciona un alimentador");
-
-  //       if (selectedSubstations.length === 0)
-  //         return Alert.alert("Selecciona al menos una subestación");
-
-  //       const sedsIds = selectedSubstations.map(s => parseInt(s.id));
-
-  //       nombreBase = `sigre_offline_${Date.now()}.db`;
-
-  //       const fileUri = await downloadDatabase(
-  //         user.id,
-  //         sedsIds,
-  //         0,
-  //         nombreBase
-  //       );
-
-  //       if (!fileUri) throw new Error("Descarga fallida");
-
-  //       await closeDatabase();
-  //       await new Promise(r => setTimeout(r, 150));
-
-  //       await setDbName(`${nombreBase}`);
-
-  //       setSelectedFeeders([]);
-  //       setSelectedSubstations([]);
-  //       // ❌ NO pongas setSelectedFeeder(null) aquí
-  //       // Lo dejamos tal cual, porque este es justo el alimentador activo para la base descargada
-
-  //       setDbExists(true);
-  //       return Alert.alert("Éxito", "Base descargada correctamente.");
-  //     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  //     //──────────────────────
-  //     // PROYECTO 1 — MEDIA TENSIÓN
-  //     //──────────────────────
-  //     if (!selectedFeeders.length)
-  //       return Alert.alert("Selecciona al menos un alimentador");
-
-  //     const feederIds = selectedFeeders.map(f => parseInt(f.id));
-
-  //     nombreBase = `sigre_offline_${Date.now()}.db`;
-
-  //     const fileUri = await downloadDatabase(
-  //       user.id,
-  //       feederIds,
-  //       1,
-  //       nombreBase
-  //     );
-
-  //     if (!fileUri) throw new Error("Descarga fallida");
-
-  //     await closeDatabase();
-  //     await new Promise(r => setTimeout(r, 150));
-
-  //     await setDbName(`${nombreBase}.db`);
-  //     setSelectedFeeders([]);
-
-  //     setDbExists(true);
-  //     Alert.alert("Éxito", "Base descargada correctamente.");
-  //   } catch (e) {
-  //     console.log(e);
-  //     Alert.alert("Error", "No se pudo descargar la base.");
-  //   }
-  // };
 
   const handleDownload = async () => {
     if (isAppLoading) return;
@@ -274,26 +180,59 @@ export default function Sync() {
   //───────────────────────────────────────────────
   const handleSync = async () => {
     try {
-      const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
-
-      await closeDatabase();
-      await FileSystem.deleteAsync(dbPath, { idempotent: true });
-
-      await AsyncStorage.removeItem("selectedFeeders");
-      await AsyncStorage.removeItem("offline_db_name");
-
-      setSelectedFeeders([]);
-      setSelectedFeeder(null);
-      setSelectedSubstations([]);
-      setSubstationsByFeeder([]);
-
-      setDbExists(false);
-      setDbName(null);
-
-      Alert.alert("Listo", "Base eliminada.");
-    } catch {
+      Alert.alert(
+        "Sincronización",
+        "La sincronización se realizó correctamente."
+      );
+    } catch (e) {
+      console.log("❌ Error en sincronización:", e);
       Alert.alert("Error", "No se pudo sincronizar.");
     }
+  };
+
+  //───────────────────────────────────────────────
+  // ELIMINAR BASE (CON CONFIRMACIÓN)
+  //───────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!dbName) {
+      return Alert.alert("Aviso", "No hay base para eliminar.");
+    }
+
+    Alert.alert(
+      "Confirmar eliminación",
+      "¿Estás seguro de que deseas eliminar la base local?\nEsta acción no se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+
+              await closeDatabase();
+              await FileSystem.deleteAsync(dbPath, { idempotent: true });
+
+              await AsyncStorage.removeItem("selectedFeeders");
+              await AsyncStorage.removeItem("offline_db_name");
+
+              setSelectedFeeders([]);
+              setSelectedFeeder(null);
+              setSelectedSubstations([]);
+              setSubstationsByFeeder([]);
+
+              setDbExists(false);
+              setDbName(null);
+
+              Alert.alert("Listo", "Base eliminada correctamente.");
+            } catch (e) {
+              console.log("❌ Error eliminando base:", e);
+              Alert.alert("Error", "No se pudo eliminar la base.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   //───────────────────────────────────────────────
@@ -402,138 +341,6 @@ export default function Sync() {
           <Text style={{ marginTop: 10 }}>Procesando...</Text>
         </View>
       ) : (
-        // <>
-        //   {/* HEADER */}
-        //   <View style={styles.header}>
-        //     <Text style={styles.headerTitle}>
-        //       Proyecto: {user?.proyecto === 0 ? "Baja Tensión" : "Media Tensión"}
-        //     </Text>
-
-        //     <View style={styles.headerButtons}>
-        //       <Button title="➕ Alimentador" onPress={() => setModalVisible(true)} />
-        //       {user?.proyecto === 0 && (
-        //         <Button title="🏢 Subestaciones" onPress={openSubModal} />
-        //       )}
-        //     </View>
-        //   </View>
-
-        //   {/* LISTA ALIMENTADORES */}
-        //   <FlatList
-        //     data={selectedFeeders}
-        //     keyExtractor={i => i.id.toString()}
-        //     renderItem={({ item }) => (
-        //       <View style={styles.feederRow}>
-        //         <Text style={styles.feederText}>{item.name}</Text>
-        //         <Button title="❌" onPress={() => removeFeeder(item)} />
-        //       </View>
-        //     )}
-        //   />
-
-        //   {/* SEDs SELECCIONADOS */}
-        //   {user?.proyecto === 0 && selectedSubstations.length > 0 && (
-        //     <View>
-        //       <Text style={{ fontWeight: "bold", fontSize: 16 }}>SED seleccionados:</Text>
-        //       <FlatList
-        //         data={selectedSubstations}
-        //         keyExtractor={i => i.id.toString()}
-        //         renderItem={({ item }) => (
-        //           <View style={styles.feederRow}>
-        //             <Text style={styles.feederText}>{item.name}</Text>
-        //             <Button title="❌" onPress={() => toggleSubstation({ sedInterno: item.id })} />
-        //           </View>
-        //         )}
-        //       />
-        //     </View>
-        //   )}
-
-        //   {/* BOTONES */}
-        //   <View style={styles.bottomButtons}>
-        //     {!dbExists && <Button title="📥 Descargar Base" onPress={handleDownload} />}
-
-        //     {dbExists && (
-        //       <>
-        //         <Button title="💾 Exportar Base" onPress={handleExport} />
-        //         <View style={{ height: 10 }} />
-        //         <Button title="🔄 Sincronizar" onPress={handleSync} />
-        //       </>
-        //     )}
-        //   </View>
-
-        //   <Text style={{ marginTop: 10, fontWeight: "bold", color: dbExists ? "green" : "red" }}>
-        //     {dbExists ? "📦 Base local detectada" : "⚠️ No hay base local"}
-        //   </Text>
-
-        //   {/* MODAL ALIMENTADORES */}
-        //   <Modal visible={modalVisible} transparent animationType="slide">
-        //     <View style={styles.modalBackground}>
-        //       <View style={styles.modalContainer}>
-        //         <Text style={{ fontWeight: "bold" }}>Selecciona un alimentador</Text>
-
-        //         <FlatList
-        //           data={feedersByUser.filter(
-        //             f => !selectedFeeders.some(sf => sf.id === f.alimInterno)
-        //           )}
-        //           keyExtractor={i => i.alimInterno.toString()}
-        //           renderItem={({ item }) => (
-        //             <TouchableOpacity
-        //               style={styles.modalItem}
-        //               onPress={() => addFeeder(item)}
-        //             >
-        //               <Text>{item.alimEtiqueta}</Text>
-        //             </TouchableOpacity>
-        //           )}
-        //         />
-
-        //         <Button title="Cerrar" onPress={() => setModalVisible(false)} />
-        //       </View>
-        //     </View>
-        //   </Modal>
-
-        //   {/* MODAL SEDS */}
-        //   <Modal visible={modalSubVisible} transparent animationType="slide">
-        //     <View style={styles.modalBackground}>
-        //       <View style={[styles.modalContainer, { height: "70%" }]}>
-        //         <Text style={{ fontWeight: "bold" }}>Selecciona una subestación</Text>
-
-        //         <TextInput
-        //           placeholder="Buscar SED..."
-        //           value={searchSed}
-        //           onChangeText={setSearchSed}
-        //           style={{
-        //             backgroundColor: "#eee",
-        //             padding: 10,
-        //             borderRadius: 10,
-        //             marginVertical: 10,
-        //           }}
-        //         />
-
-        //         <FlatList
-        //           data={substationsByFeeder.filter(s =>
-        //             (s.sedCodigo ?? "")
-        //               .toLowerCase()
-        //               .includes(searchSed.toLowerCase())
-        //           )}
-        //           keyExtractor={i => i.sedInterno.toString()}
-        //           renderItem={({ item }) => {
-        //             const isSelected = selectedSubstations.some(s => s.id === item.sedInterno);
-
-        //             return (
-        //               <TouchableOpacity
-        //                 style={[styles.modalItem, isSelected && { backgroundColor: "#cce5ff" }]}
-        //                 onPress={() => toggleSubstation(item)}
-        //               >
-        //                 <Text>{item.sedCodigo}</Text>
-        //               </TouchableOpacity>
-        //             );
-        //           }}
-        //         />
-
-        //         <Button title="Cerrar" onPress={() => setModalSubVisible(false)} />
-        //       </View>
-        //     </View>
-        //   </Modal>
-        // </>
-
         <>
           {/* HEADER */}
           <View style={styles.header}>
@@ -604,29 +411,50 @@ export default function Sync() {
             />
           </View>
 
-          {/* FOOTER FIJO (SIEMPRE VISIBLE) */}
+          {/* FOOTER FIJO (2 FILAS / 2 COLUMNAS) */}
           <View style={styles.footer}>
-            {!dbExists && (
-              <Button
-                title={isAppLoading ? "Descargando..." : "📥 Descargar Base"}
-                onPress={handleDownload}
-                disabled={isAppLoading}
-              />
-            )}
+            {/* FILA 1 */}
+            <View style={styles.footerRow}>
+              <View style={styles.footerCol}>
+                <Button
+                  title="📥 Descargar Base"
+                  onPress={handleDownload}
+                />
+              </View>
 
+              <View style={styles.footerCol}>
+                <Button
+                  title="💾 Exportar Base"
+                  onPress={handleExport}
+                />
+              </View>
+            </View>
 
-            {dbExists && (
-              <>
-                <Button title="💾 Exportar Base" onPress={handleExport} disabled={isAppLoading} />
-                <View style={{ height: 10 }} />
-                <Button title="🔄 Sincronizar" onPress={handleSync} disabled={isAppLoading} />
-              </>
-            )}
+            {/* ESPACIO ENTRE FILAS */}
+            <View style={{ height: 10 }} />
+
+            {/* FILA 2 */}
+            <View style={styles.footerRow}>
+              <View style={styles.footerCol}>
+                <Button
+                  title="🗑️ Eliminar Base"
+                  onPress={handleDelete}
+                />
+              </View>
+
+              <View style={styles.footerCol}>
+                <Button
+                  title="🔄 Sincronizar"
+                  onPress={handleSync}
+                />
+              </View>
+            </View>
 
             <Text style={{ marginTop: 10, fontWeight: "bold", color: dbExists ? "green" : "red" }}>
               {dbExists ? "📦 Base local detectada" : "⚠️ No hay base local"}
             </Text>
           </View>
+
 
           {/* MODAL ALIMENTADORES */}
           <Modal visible={modalVisible} transparent animationType="slide">
@@ -724,4 +552,13 @@ const styles = StyleSheet.create({
   modalBackground: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
   modalContainer: { width: "80%", backgroundColor: "#fff", borderRadius: 10, padding: 15 },
   modalItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#ccc" },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  footerCol: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
 });
