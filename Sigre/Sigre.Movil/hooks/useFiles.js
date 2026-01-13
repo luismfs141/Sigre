@@ -161,7 +161,7 @@ export function useFiles() {
 
     // 🔹 Normalización EXISTENTE (NO SE TOCA)
     const normalized = normalizeArchivoBeforeSave(data);
-    console.log(normalized);
+    console.log('data: ',data);
 
     // 🔹 Adaptación a estructura SQLite (saveOrUpdate)
     const archivoForDB = {
