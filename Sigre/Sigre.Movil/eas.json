@@ -40,7 +40,10 @@
     "production-apk": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
-      "env": { "ENVIRONMENT": "production" }
+      "env": { 
+        "ENVIRONMENT": "production" ,
+        "EAS_BUILD_DISABLE_MAVEN_CACHE": "1"
+      }
     }
   }
 }

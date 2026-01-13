@@ -61,7 +61,7 @@ export default function DailyZipScreen() {
   const [totalArchivos, setTotalArchivos] = useState(0);
 
   // 📁 Ruta raíz
-  const raizSigre = FileSystem.documentDirectory + "SigreMovil/";
+  const raizSigre = FileSystem.documentDirectory + "SigreMedios/";
 
   /**
    * 🔍 Verifica si existe SigreMovil y cuenta archivos
@@ -186,7 +186,7 @@ export default function DailyZipScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📦 Exportar Evidencias</Text>
-      <Text style={styles.subtitle}>Ruta: SigreMovil</Text>
+      <Text style={styles.subtitle}>Ruta: SigreMedios</Text>
 
       <Text style={styles.info}>
         Archivos encontrados: {totalArchivos}
