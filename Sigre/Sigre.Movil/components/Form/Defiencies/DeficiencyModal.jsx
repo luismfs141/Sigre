@@ -308,6 +308,7 @@ export default function DeficiencyModal({
 
       if (errors.length) {
         alert(errors.join("\n"));
+        setIsSaving(false);
         return;
       }
 
