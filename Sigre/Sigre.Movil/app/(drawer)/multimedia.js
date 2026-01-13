@@ -4,7 +4,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import JSZip from "jszip"; // 📦 LIBRERÍA PARA ZIP
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -33,7 +33,29 @@ import ModalCamera from "../../components/Multimedia/ModalCamera";
 import PhotoCard from "../../components/Multimedia/PhotoCard";
 
 const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Def1", "Def2"];
-const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
+
+// ==============================================================================
+// HELPERS PARA RUTAS Y CARPETAS
+// ==============================================================================
+const ensureDirExists = async (dir) => {
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  }
+};
+
+const buildMediaPath = (
+  nombreAlimentador,
+  codigoSed,
+  tipoCarpeta,
+  codigo,
+  codigoDeficiencia
+) => {
+  return (
+    FileSystem.documentDirectory +
+    `SigreMovil/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}/`
+  );
+};
 
 export default function Multimedia() {
   // ==============================================================================
@@ -57,17 +79,6 @@ export default function Multimedia() {
   const [audios, setAudios] = useState([]);
   const [deletedIds, setDeletedIds] = useState([]); 
 
-  // Crear directorio inicial si no existe
-  useEffect(() => {
-    async function init() {
-      const dirInfo = await FileSystem.getInfoAsync(APP_MEDIA_DIR);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(APP_MEDIA_DIR, { intermediates: true });
-      }
-    }
-    init();
-  }, []);
-
   // ==============================================================================
   // 2. CARGA DE DATOS (LECTURA INTELIGENTE ONLINE/OFFLINE)
   // ==============================================================================
@@ -77,43 +88,35 @@ export default function Multimedia() {
     setDeletedIds([]); // Reiniciar cola de borrado al entrar
 
     try {
-      // 1. Obtenemos la deficiencia actualizada desde la BD Local
       const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
       
-      // 2. LÓGICA DE IDENTIDAD DUAL (CRÍTICO):
-      // Si DefiServerId existe y es mayor a 0, significa que ya se sincronizó -> Usamos ServerId.
-      // Si no, estamos en modo Offline/Nuevo -> Usamos DefiInterno.
       const idBusqueda = (deficiencia.DefiServerId && deficiencia.DefiServerId > 0)
                          ? deficiencia.DefiServerId
                          : deficiencia.DefiInterno;
 
-      console.log(`[Load] Buscando medios. ID Usado (ArchCodTabla): ${idBusqueda}`);
-
-      // 3. Traemos TODOS los medios asociados a ese ID
       const medios = await fetchMediosByDeficienciaId(idBusqueda);
-      
-      // 4. Filtramos: Solo mostramos los que tengan ArchActivo en 1
-      // (Esto evita que se muestren las fotos borradas anteriormente)
       const activos = medios.filter(m => Number(m.ArchActivo) === 1);
 
       const photosTmp = Array(6).fill(null);
       const audiosTmp = [];
 
       for (const m of activos) {
-        const filename = m.ArchNombre.split("/").pop();
-        const localUri = APP_MEDIA_DIR + filename;
+        // Ahora ArchNombre guarda: SigreMovil/.../archivo.jpg
+        const localUri = FileSystem.documentDirectory + m.ArchNombre;
         const fileInfo = await FileSystem.getInfoAsync(localUri);
 
-        // Solo mostramos si el archivo físico realmente existe en el celular
         if (fileInfo.exists) {
           if (Number(m.ArchTipo) === 0) {
-            // Audio
             audiosTmp.push({ uri: localUri, title: "Audio", id: m.ArchInterno, type: 0 });
           } else if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-            // Foto
             photosTmp[Number(m.ArchTipo) - 1] = {
-              uri: localUri, latUtm: m.ArchLatitud, lonUtm: m.ArchLongitud, 
-              fechaISO: m.ArchFecha, id: m.ArchInterno, originalPath: localUri, type: Number(m.ArchTipo)
+              uri: localUri,
+              latUtm: m.ArchLatitud,
+              lonUtm: m.ArchLongitud, 
+              fechaISO: m.ArchFecha,
+              id: m.ArchInterno,
+              originalPath: localUri,
+              type: Number(m.ArchTipo)
             };
           }
         }
@@ -151,7 +154,6 @@ export default function Multimedia() {
   const handleDeletePhoto = (index) => {
     const photo = photos[index];
     if (photo?.id) {
-      // Agregamos a la lista negra para procesar el Soft Delete al guardar
       setDeletedIds(prev => [...prev, { id: photo.id, path: photo.originalPath, type: photo.type }]);
     }
     setPhotos(prev => { const copy = [...prev]; copy[index] = null; return copy; });
@@ -173,28 +175,23 @@ export default function Multimedia() {
   };
 
   // ==============================================================================
-  // 4. EXPORTAR ZIP (Extraído para uso futuro)
+  // 4. EXPORTAR ZIP
   // ==============================================================================
   const exportarFotosZip = async () => {
     const fotosValidas = photos.filter(p => p !== null);
     if (fotosValidas.length === 0) return Alert.alert("Sin fotos", "No hay fotos para exportar.");
 
     try {
+      const feeder = await findFeederById(selectedItem.AlimInterno);
       setLoading({ active: true, msg: "Estructurando carpetas..." });
 
-      let nombreAlimentador = "SIN_ALIM";
-      if (selectedSed?.AlimInterno) {
-        const feederObj = await findFeederById(selectedSed.AlimInterno);
-        nombreAlimentador = feederObj?.ALIM_Etiqueta || feederObj?.alimEtiqueta || "ALIM_UNK";
-      }
-      const codigoSed = selectedSed?.SedCodigo || "SIN_SED";
+      let nombreAlimentador = feeder.alimEtiqueta;
+      let codigoSed = selectedSed?.SedCodigo;
       const { tipo, codigo } = getElementoInfo();
       const tipoCarpeta = tipo === "Vano" ? "Vano" : "Poste";
-      
-      // Intentamos usar el ID interno para el nombre de la carpeta
-      const codigoDeficiencia = selectedDeficiency?.DefiInterno || selectedDeficiency?.id || "DEF_UNK";
+      const codigoDeficiencia = selectedDeficiency?.typificationCode;
 
-      const carpetaRuta = `Pictures/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}`;
+      const carpetaRuta = `SigreMovil/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}`;
 
       const zip = new JSZip();
       const folder = zip.folder(carpetaRuta);
@@ -231,7 +228,7 @@ export default function Multimedia() {
   };
 
   // ==============================================================================
-  // 5. GUARDAR DATOS (LOGICA CORREGIDA ARCHACTIVO & IDs)
+  // 5. GUARDAR DATOS
   // ==============================================================================
   const finalizar = async () => {
     if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
@@ -239,41 +236,27 @@ export default function Multimedia() {
     try {
       setLoading({ active: true, msg: "Guardando..." });
 
-      // Obtener datos frescos de BD para determinar IDs
       const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
-      
       if (!deficiencyData) throw new Error("No se encontró la deficiencia en BD local.");
 
       const { tipo, codigo } = getElementoInfo();
-      // Nombre base para archivos físicos
-      const filePrefix = `${tipo.charAt(0)}_${codigo}_DEF_${deficiencyData.DefiInterno}`;
 
-      // --------------------------------------------------------------------------
-      // PASO A: DETERMINAR ID DE ENLACE (Online vs Offline)
-      // --------------------------------------------------------------------------
       let codTablaParaGuardar;
       if (deficiencyData.DefiServerId && deficiencyData.DefiServerId > 0) {
-          codTablaParaGuardar = deficiencyData.DefiServerId; // CASO ONLINE
+          codTablaParaGuardar = deficiencyData.DefiServerId;
       } else {
-          codTablaParaGuardar = deficiencyData.DefiInterno;  // CASO OFFLINE
+          codTablaParaGuardar = deficiencyData.DefiInterno;
       }
 
       // --------------------------------------------------------------------------
-      // PASO B: PROCESAR ELIMINADOS (SOFT DELETE) - ¡CRÍTICO!
+      // BORRADOS (SOFT DELETE)
       // --------------------------------------------------------------------------
       for (const item of deletedIds) {
-        console.log(`[Delete] Marcando como inactivo ID: ${item.id}`);
-        
         await saveArchivoLocal({
-          ArchInterno: item.id,      // ID del archivo a modificar
-          
-          // ESTOS DOS CAMPOS SON LA CLAVE:
-          ArchActivo: 0,             // 0 explícito (Asegúrate que tu BD no lo convierta a 1)
-          ArchNombre: "DELETED",     // Cambiamos nombre para confirmar que se editó
-          
-          EstadoOffLine: 1,          // 1 = Pendiente de Sincronizar (Update)
-          
-          // Mantenemos integridad referencial
+          ArchInterno: item.id,
+          ArchActivo: 0,
+          ArchNombre: "DELETED",
+          EstadoOffLine: 1,
           ArchCodTabla: codTablaParaGuardar,
           ArchTabla: "Deficiencias",
           ArchTipo: item.type,
@@ -282,42 +265,62 @@ export default function Multimedia() {
       }
 
       // --------------------------------------------------------------------------
-      // PASO C: GUARDAR FOTOS NUEVAS
+      // DATOS PARA ESTRUCTURA
+      // --------------------------------------------------------------------------
+      const feeder = await findFeederById(selectedItem.AlimInterno);
+      let nombreAlimentador = feeder.alimEtiqueta;
+      let codigoSed = selectedSed?.SedCodigo;
+      const tipoCarpeta = tipo === "Vano" ? "Vano" : "Poste";
+      const codigoDeficiencia = selectedDeficiency?.typificationCode;
+
+      const carpetaBase = buildMediaPath(
+        nombreAlimentador,
+        codigoSed,
+        tipoCarpeta,
+        codigo,
+        codigoDeficiencia
+      );
+
+      await ensureDirExists(carpetaBase);
+
+      // --------------------------------------------------------------------------
+      // GUARDAR FOTOS
       // --------------------------------------------------------------------------
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
-        // Solo guardamos si es nueva (no tiene ID asignado aún)
-        if (photo?.uri && !photo.id) { 
-          const fname = `${filePrefix}_IMG_${Date.now()}_${i}.jpg`;
-          const destUri = APP_MEDIA_DIR + fname;
-          
-          // 1. Mover archivo a carpeta de la App
+        if (photo?.uri && !photo.id) {
+          const fname = `${tipo}_${codigo}_${PHOTO_SLOTS[i].replace(/\s/g, "")}.jpg`;
+          const destUri = carpetaBase + fname;
+
           await FileSystem.copyAsync({ from: photo.uri, to: destUri });
-          
-          // 2. Guardar registro en BD usando función auxiliar
+
+          const relativePath = `SigreMovil/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}/${fname}`;
+
           await saveFileRecord({ 
-            filename: fname, 
+            filename: relativePath, 
             slot: i + 1, 
             isAudio: false, 
             photoData: photo,
-            codTablaReal: codTablaParaGuardar // Pasamos el ID ya calculado
+            codTablaReal: codTablaParaGuardar
           });
         }
       }
 
       // --------------------------------------------------------------------------
-      // PASO D: GUARDAR AUDIOS NUEVOS
+      // GUARDAR AUDIOS
       // --------------------------------------------------------------------------
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
         if (audio?.uri && !audio.id) {
-          const fname = `${filePrefix}_AUDIO_${Date.now()}_${i}.m4a`;
-          const destUri = APP_MEDIA_DIR + fname;
-          
+          const fname = `${tipo}_${codigo}_AUDIO_${Date.now()}_${i}.m4a`;
+          const destUri = carpetaBase + fname;
+
           await FileSystem.copyAsync({ from: audio.uri, to: destUri });
-          
+
+          const relativePath = `SigreMovil/${nombreAlimentador}/${codigoSed}/${tipoCarpeta}/${codigo}/${codigoDeficiencia}/${fname}`;
+
           await saveFileRecord({ 
-            filename: fname, 
+            filename: relativePath, 
             slot: 0, 
             isAudio: true,
             codTablaReal: codTablaParaGuardar 
@@ -340,8 +343,6 @@ export default function Multimedia() {
   const saveFileRecord = async ({ filename, slot, isAudio, photoData, codTablaReal }) => {
     const { tipo } = getElementoInfo();
     
-    // Aquí recibimos el 'codTablaReal' ya calculado en finalizar() para evitar recálculos
-    // pero por seguridad, si viene null, lo recalculamos.
     let finalCodTabla = codTablaReal;
     if (!finalCodTabla) {
         const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
@@ -350,25 +351,19 @@ export default function Multimedia() {
                         : deficiencia.DefiInterno;
     }
 
-    console.log(photoData);
-    return await saveArchivoLocal(
-      {
-      
-      ArchInterno: null, // Null para que sea INSERT
+    return await saveArchivoLocal({
+      ArchInterno: null,
       ArchTipo: isAudio ? 0 : (slot > 0 ? slot : 1), 
       ArchTabla: "Deficiencias", 
-      
-      ArchCodTabla: finalCodTabla, // <--- ID CORRECTO (SERVER O INTERNO)
-      
-      ArchNombre: `SigreMedios/${filename}`, 
+      ArchCodTabla: finalCodTabla,
+      ArchNombre: filename, // ← ahora guardamos la ruta completa
       ArchLatitud: photoData?.latUtm ?? null, 
       ArchLongitud: photoData?.lonUtm ?? null, 
       ArchFecha: photoData?.fechaISO ?? null, 
       ArchTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
       ArchIdElemento: selectedDeficiency.elementId, 
-      
-      ArchActivo: 1,      // Las nuevas nacen activas
-      EstadoOffLine: 1    // Pendiente de Sincronizar (Insert)
+      ArchActivo: 1,
+      EstadoOffLine: 1
     });
   };
 
@@ -390,12 +385,10 @@ export default function Multimedia() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
         {/* SECCIÓN FOTOS */}
         <View style={styles.section}>
           <View style={styles.headerRow}>
              <Text style={styles.title}>📸 Registro de Fotos</Text>
-             {/* Botón ZIP solo si hay fotos visibles */}
              {photos.some(p => p !== null) && (
                 <TouchableOpacity style={styles.zipButton} onPress={exportarFotosZip}>
                   <Text style={styles.zipText}>📦 Exportar ZIP</Text>
