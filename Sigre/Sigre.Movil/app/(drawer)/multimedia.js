@@ -363,7 +363,8 @@ export default function Multimedia() {
       ArchTipoElemento: tipo.toUpperCase() === "POSTE" ? "POST" : "VANO",
       ArchIdElemento: selectedDeficiency.elementId, 
       ArchActivo: 1,
-      EstadoOffLine: 1
+      EstadoOffLine: 1,
+      TipiInterno: selectedDeficiency.typificationId,
     });
   };
 
