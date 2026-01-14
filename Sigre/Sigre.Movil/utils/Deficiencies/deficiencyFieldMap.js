@@ -239,7 +239,8 @@ export const DEFICIENCY_FIELD_MAP = {
           1: "Calle",
           2: "Avenida",
           3: "Cruce de trenes",
-          4: "Longitudinal"
+          4: "Longitudinal un piso",
+          5: "Longitudinal cochera"
         },
         validation: { message: "Seleccione el tipo de cruce" }
       },
@@ -266,7 +267,8 @@ export const DEFICIENCY_FIELD_MAP = {
               1: 5.5, // Calle
               2: 6.5, // Avenida
               3: 7.5, // Cruce de trenes
-              4: 4.0  // Longitudinal
+              4: 4.0, // Longitudinal un piso
+              5: 5.5  // Longitudinal cochera
             };
 
             if (!limites[tipo]) {
@@ -278,7 +280,8 @@ export const DEFICIENCY_FIELD_MAP = {
                 tipo === 1 ? "Calle" :
                   tipo === 2 ? "Avenida" :
                     tipo === 3 ? "Cruce de trenes" :
-                      "Longitudinal";
+                      tipo === 4 ? "Longitudinal un piso" :
+                        "Longitudinal cochera";
 
               return `Para ${tipoTxt}, la distancia vertical debe ser menor a ${limites[tipo].toFixed(2)} m.`;
             }

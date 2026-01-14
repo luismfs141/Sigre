@@ -1,8 +1,8 @@
 --------------------------------
 -- POSTES ----------------------
 --------------------------------
-DECLARE @etiqueta varchar(50) = '00132';
-DECLARE @alimentador varchar(50) = 'MARIANO MELGAR';
+DECLARE @etiqueta varchar(50) = 'VBT000104754';
+DECLARE @alimentador varchar(50) = 'MEJIA';
 
 SELECT
     a.ALIM_Etiqueta,
@@ -28,8 +28,8 @@ GO
 --------------------------------
 -- VANOS -----------------------
 --------------------------------
-DECLARE @VanoCodigo varchar(50) = '%35899%';
-DECLARE @alimentador varchar(50) = 'MARIANO MELGAR';
+DECLARE @VanoCodigo varchar(50) = 'VBT000104754';
+DECLARE @alimentador varchar(50) = 'mejia';
 SELECT
     v.VANO_Codigo,
     v.VANO_NodoInicial,
@@ -44,7 +44,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
     AND A.ALIM_Etiqueta = @alimentador
 
 
-
+    select * from Vanos where VANO_Subestacion = '1712' order by 2
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR ETIQUETA DE POSTE O CÓDIGO DE VANO
 ------------------------------------------------------------------
@@ -55,27 +55,27 @@ DECLARE @codigo varchar(50) = '00132'; --Varias si es especifico o contiene
     SELECT
         ElementoEtiqueta =
             CASE d.DEFI_TipoElemento
-                WHEN 'POST' THEN p.POST_Etiqueta
-                WHEN 'VANO' THEN v.VANO_Codigo
+                WHEN 'POST' THEN P.POST_Etiqueta
+                WHEN 'VANO' THEN V.VANO_Codigo
                 ELSE NULL
             END,
-        CODI_Codigo = c.CODI_Codigo,
-        p.POST_EsBT,
-        d.*
-    FROM dbo.Deficiencias d
-    LEFT JOIN dbo.Postes p
-        ON d.DEFI_TipoElemento = 'POST'
-       AND d.DEFI_IdElemento   = p.POST_Interno
-    LEFT JOIN dbo.Vanos v
-        ON d.DEFI_TipoElemento = 'VANO'
-       AND d.DEFI_IdElemento   = v.VANO_Interno
-    LEFT JOIN dbo.Tipificaciones t
-        ON d.TIPI_Interno = t.TIPI_Interno
-    LEFT JOIN dbo.Codigos c
-        ON t.CODI_Interno = c.CODI_Interno
+        CODI_Codigo = C.CODI_Codigo,
+        P.POST_EsBT,
+        D.*
+    FROM dbo.Deficiencias AS D
+    LEFT JOIN Postes AS P
+        ON D.DEFI_TipoElemento = 'POST'
+       AND D.DEFI_IdElemento   = P.POST_Interno
+    LEFT JOIN dbo.Vanos AS V
+        ON D.DEFI_TipoElemento = 'VANO'
+       AND D.DEFI_IdElemento   = V.VANO_Interno
+    LEFT JOIN Tipificaciones AS T
+        ON D.TIPI_Interno = T.TIPI_Interno
+    LEFT JOIN Codigos AS C
+        ON T.CODI_Interno = C.CODI_Interno
 )
 SELECT
-    q.DEFI_Interno,
+    Q.DEFI_Interno,
     Q.DEFI_IdElemento,
     Q.ElementoEtiqueta,
     Q.DEFI_FechaCreacion,
@@ -83,7 +83,7 @@ SELECT
     Q.DEFI_TipoElemento,
     Q.CODI_Codigo,
     Q.DEFI_Interno,
-    case q.DEFI_EstadoCriticidad 
+    case Q.DEFI_EstadoCriticidad 
         when '1' then 'Leve'
         when '2' then 'Moderado'
         when '3' then 'Grave'
@@ -112,7 +112,7 @@ AND (
 ORDER BY Q.DEFI_FechaCreacion DESC;
 GO
 
-
+select * from Deficiencias
 
 --------------------------------
 -- delete defi VANOS -----------------------
@@ -131,7 +131,7 @@ where DEFI_Interno = 111468
 -- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%2817%'
+DECLARE @SUB_ETI VARCHAR(20) = '%8102%'
 (
     SELECT  
             ALI.ALIM_Interno AS [Id Alimentador],
@@ -168,14 +168,14 @@ DECLARE @SUB_ETI VARCHAR(20) = '%2817%'
 
     WHERE S.SED_Etiqueta LIKE @SUB_ETI
 )
-ORDER BY Elemento, [Etiqueta elemento]
+ORDER BY [Etiqueta elemento]
 
 
 ------------------------------------------------------------------
 -- TOADAS LAS DEFICIENCIAS DE UNA SUBESTACIÓN --------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%2817%';
+DECLARE @SUB_ETI VARCHAR(20) = '%8102%';
 
 SELECT  
         D.DEFI_Interno,
@@ -239,8 +239,6 @@ UNION ALL
 ORDER BY D.DEFI_IdElemento, Nro;
 
 
-
-
 ------------------------------------------------------------------
 -- BORRAR DEFICIENCIAS MASIVO ------------------------------------
 ------------------------------------------------------------------
@@ -260,7 +258,7 @@ ROLLBACK
 ------------------------------------------------------------------
 -- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
 ------------------------------------------------------------------
-DECLARE @etiqueta varchar(20) = '%35899%';
+DECLARE @etiqueta varchar(20) = '%327219%';
 
 ;WITH Q AS
 (
