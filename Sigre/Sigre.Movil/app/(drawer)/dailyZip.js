@@ -14,9 +14,12 @@ import * as Sharing from "expo-sharing";
 import JSZip from "jszip";
 
 // ================= CONFIG =================
-const TAMANIO_BLOQUE = 50; // 👉 50 archivos por ZIP
-const RAIZ_SIGRE = FileSystem.documentDirectory + "SigreMedios/";
-const ESTADO_ZIP = RAIZ_SIGRE + ".zip_state.json";
+const TAMANIO_BLOQUE = 50; // 👉 50 archivos por bloque
+const RAIZ_MEDIOS = FileSystem.documentDirectory + "SigreMedios/";
+const RAIZ_MOVIL = FileSystem.documentDirectory + "SigreMovil/";
+const ESTADO_ZIP = (root) => root + ".zip_state.json";
+// Carpeta pública (para Android suele resolverse como Download)
+const CARPETA_PUBLICA = FileSystem.documentDirectory + "../Download/SigreExport/";
 // ========================================
 
 /**
@@ -79,14 +82,15 @@ const contarArchivos = async (folderUri) => {
 };
 
 /**
- * 💾 Leer estado de exportación (para reanudar)
+ * 💾 Leer estado de exportación (para reanudar ZIP)
  */
-const leerEstadoZip = async () => {
+const leerEstadoZip = async (root) => {
   try {
-    const info = await FileSystem.getInfoAsync(ESTADO_ZIP);
+    const estado = ESTADO_ZIP(root);
+    const info = await FileSystem.getInfoAsync(estado);
     if (!info.exists) return 0;
 
-    const contenido = await FileSystem.readAsStringAsync(ESTADO_ZIP);
+    const contenido = await FileSystem.readAsStringAsync(estado);
     const json = JSON.parse(contenido);
     return json.lastPart || 0;
   } catch (err) {
@@ -96,67 +100,70 @@ const leerEstadoZip = async () => {
 };
 
 /**
- * 📝 Guardar progreso
+ * 📝 Guardar progreso ZIP
  */
-const guardarEstadoZip = async (parte) => {
+const guardarEstadoZip = async (root, parte) => {
   const data = { lastPart: parte };
   await FileSystem.writeAsStringAsync(
-    ESTADO_ZIP,
+    ESTADO_ZIP(root),
     JSON.stringify(data),
     { encoding: FileSystem.EncodingType.UTF8 }
   );
 };
 
 /**
- * 🧹 Limpiar estado cuando todo finaliza
+ * 🧹 Limpiar estado ZIP
  */
-const limpiarEstadoZip = async () => {
+const limpiarEstadoZip = async (root) => {
   try {
-    await FileSystem.deleteAsync(ESTADO_ZIP, { idempotent: true });
+    await FileSystem.deleteAsync(ESTADO_ZIP(root), { idempotent: true });
   } catch {}
 };
 
 export default function DailyZipScreen() {
   const [loading, setLoading] = useState(false);
   const [totalArchivos, setTotalArchivos] = useState(0);
+  const [rootKey, setRootKey] = useState("MEDIOS"); // MEDIOS | MOVIL
+
+  const RAIZ_ACTIVA = rootKey === "MEDIOS" ? RAIZ_MEDIOS : RAIZ_MOVIL;
 
   /**
-   * 🔍 Verifica si existe SigreMedios y cuenta archivos
+   * 🔍 Verifica si existe la raíz activa y cuenta archivos
    */
   const verificarContenido = async () => {
     try {
-      const info = await FileSystem.getInfoAsync(RAIZ_SIGRE);
+      const info = await FileSystem.getInfoAsync(RAIZ_ACTIVA);
 
       if (!info.exists) {
-        console.log("❌ No existe SigreMedios");
+        console.log("❌ No existe la carpeta:", RAIZ_ACTIVA);
         setTotalArchivos(0);
         return;
       }
 
-      const total = await contarArchivos(RAIZ_SIGRE);
+      const total = await contarArchivos(RAIZ_ACTIVA);
       console.log("📂 Archivos encontrados:", total);
       setTotalArchivos(total);
     } catch (e) {
-      console.log("❌ Error verificando SigreMedios:", e);
+      console.log("❌ Error verificando:", e);
       setTotalArchivos(0);
     }
   };
 
   useEffect(() => {
     verificarContenido();
-  }, []);
+  }, [rootKey]);
 
   /**
-   * 📦 EXPORTAR ZIP EN BLOQUES DE 50 (CON REANUDACIÓN)
+   * 📦 OPCIÓN A: EXPORTAR ZIP EN BLOQUES (CON REANUDACIÓN)
    */
   const exportarZip = async () => {
     try {
       setLoading(true);
 
-      const info = await FileSystem.getInfoAsync(RAIZ_SIGRE);
+      const info = await FileSystem.getInfoAsync(RAIZ_ACTIVA);
       if (!info.exists) {
         setLoading(false);
-        return Alert.alert("Sin archivos", "No existe la carpeta SigreMedios.");
+        return Alert.alert("Sin archivos", "No existe la carpeta seleccionada.");
       }
 
       if (totalArchivos === 0) {
@@ -164,39 +171,30 @@ export default function DailyZipScreen() {
         return Alert.alert("Vacío", "No hay archivos para exportar.");
       }
 
-      console.log("🔍 Buscando archivos...");
-      const archivos = await obtenerArchivosRecursivos(RAIZ_SIGRE);
-
+      const archivos = await obtenerArchivosRecursivos(RAIZ_ACTIVA);
       if (archivos.length === 0) {
         setLoading(false);
         return Alert.alert("Vacío", "No se encontraron archivos.");
       }
 
       const totalPartes = Math.ceil(archivos.length / TAMANIO_BLOQUE);
-
-      // 🔁 Leer desde qué parte continuar
-      let parteActual = await leerEstadoZip();
+      let parteActual = await leerEstadoZip(RAIZ_ACTIVA);
 
       Alert.alert(
-        "Exportación",
+        "Exportación ZIP",
         `Se exportarán ${totalPartes} partes.\n\nContinuando desde la parte ${parteActual + 1}.`
       );
 
-      // 🔁 Procesar en bloques
       for (let p = parteActual; p < totalPartes; p++) {
         const inicio = p * TAMANIO_BLOQUE;
         const bloque = archivos.slice(inicio, inicio + TAMANIO_BLOQUE);
         const zip = new JSZip();
 
-        console.log(`📦 Creando ZIP parte ${p + 1} de ${totalPartes}`);
-
-        // ➕ Agregar archivos al ZIP
         for (const archivo of bloque) {
           try {
             const fileBase64 = await FileSystem.readAsStringAsync(archivo.uri, {
               encoding: FileSystem.EncodingType.Base64,
             });
-
             zip.file(archivo.name, fileBase64, { base64: true });
           } catch (err) {
             console.log("⚠️ Error con archivo:", archivo.name, err);
@@ -204,67 +202,272 @@ export default function DailyZipScreen() {
         }
 
         try {
-          // 🧩 Generar ZIP
           const zipBase64 = await zip.generateAsync({ type: "base64" });
-
-          // 💾 Guardar archivo temporal
-          const tmpName = `tmp_SigreMedios_parte_${p + 1}.zip`;
+          const tmpName = `tmp_${rootKey}_parte_${p + 1}.zip`;
           const tmpUri = FileSystem.cacheDirectory + tmpName;
 
           await FileSystem.writeAsStringAsync(tmpUri, zipBase64, {
             encoding: FileSystem.EncodingType.Base64,
           });
 
-          // ✅ Renombrar a definitivo
-          const finalName = `SigreMedios_parte_${p + 1}_de_${totalPartes}.zip`;
+          const finalName = `${rootKey}_parte_${p + 1}_de_${totalPartes}.zip`;
           const finalUri = FileSystem.cacheDirectory + finalName;
 
-          await FileSystem.moveAsync({
-            from: tmpUri,
-            to: finalUri,
-          });
+          await FileSystem.moveAsync({ from: tmpUri, to: finalUri });
 
-          // 💾 Guardar checkpoint
-          await guardarEstadoZip(p + 1);
+          await guardarEstadoZip(RAIZ_ACTIVA, p + 1);
 
-          // 📤 Compartir ZIP
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(finalUri);
           } else {
             Alert.alert("Exportado", "ZIP creado en:\n" + finalUri);
           }
-
         } catch (errorZip) {
           console.log("❌ Falló ZIP parte", p + 1, errorZip);
           Alert.alert(
             "Proceso interrumpido",
-            `La exportación se detuvo en la parte ${p + 1}.\n\nPuedes reintentar y continuará automáticamente desde aquí.`
+            `Se detuvo en la parte ${p + 1}. Reintenta y continuará.`
           );
           setLoading(false);
           return;
         }
       }
 
-      // 🧹 Todo completado
-      await limpiarEstadoZip();
+      await limpiarEstadoZip(RAIZ_ACTIVA);
       setLoading(false);
-
-      Alert.alert("Éxito", "Todos los archivos fueron exportados correctamente.");
-
+      Alert.alert("Éxito", "Todos los archivos fueron exportados en ZIP.");
     } catch (error) {
-      console.error("❌ Error general exportando ZIP:", error);
+      console.error("❌ Error ZIP:", error);
       setLoading(false);
       Alert.alert("Error", "No se pudo generar los ZIP.");
     }
   };
 
   /**
-   * 🧹 BORRAR TODO SigreMedios
+   * 📂 OPCIÓN 1: COMPARTIR CARPETA COMPLETA
    */
-  const limpiarSigreMedios = async () => {
+  const compartirCarpeta = async () => {
+    try {
+      const info = await FileSystem.getInfoAsync(RAIZ_ACTIVA);
+      if (!info.exists) return Alert.alert("No existe", "La carpeta no existe.");
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(RAIZ_ACTIVA);
+      } else {
+        Alert.alert("No disponible", "Compartir no está disponible.");
+      }
+    } catch (e) {
+      console.log("❌ Error compartiendo carpeta:", e);
+      Alert.alert("Error", "No se pudo compartir la carpeta.");
+    }
+  };
+
+  /**
+   * 📤 OPCIÓN 2: COMPARTIR ARCHIVOS POR BLOQUES (SIN ZIP)
+   */
+  const compartirPorBloques = async () => {
+    try {
+      setLoading(true);
+      const archivos = await obtenerArchivosRecursivos(RAIZ_ACTIVA);
+      if (archivos.length === 0) {
+        setLoading(false);
+        return Alert.alert("Vacío", "No hay archivos.");
+      }
+
+      const totalPartes = Math.ceil(archivos.length / TAMANIO_BLOQUE);
+
+      for (let p = 0; p < totalPartes; p++) {
+        const bloque = archivos.slice(
+          p * TAMANIO_BLOQUE,
+          (p + 1) * TAMANIO_BLOQUE
+        );
+
+        for (const archivo of bloque) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(archivo.uri);
+          }
+        }
+      }
+
+      setLoading(false);
+      Alert.alert("Listo", "Archivos compartidos por partes (sin ZIP).");
+    } catch (e) {
+      console.log("❌ Error compartiendo por bloques:", e);
+      setLoading(false);
+      Alert.alert("Error", "No se pudieron compartir los archivos.");
+    }
+  };
+
+  /**
+   * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (Download)
+   */
+/**
+ * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (USANDO SAF)
+ * El usuario elige la carpeta (Download, Documents, etc.)
+ */
+  // const copiarACarpetaPublica = async () => {
+  //   try {
+  //     setLoading(true);
+
+  //     const archivos = await obtenerArchivosRecursivos(RAIZ_ACTIVA);
+  //     if (archivos.length === 0) {
+  //       setLoading(false);
+  //       return Alert.alert("Vacío", "No hay archivos.");
+  //     }
+
+  //     // 📂 Pedir al usuario que seleccione una carpeta
+  //     const permiso = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+  //     if (!permiso.granted) {
+  //       setLoading(false);
+  //       return Alert.alert("Cancelado", "No se otorgó permiso para acceder a la carpeta.");
+  //     }
+
+  //     const carpetaDestino = permiso.directoryUri;
+  //     console.log("📁 Carpeta destino:", carpetaDestino);
+
+  //     // 🔁 Copiar archivos uno por uno
+  //     for (const archivo of archivos) {
+  //       const nombre = archivo.name.split("/").pop();
+
+  //       // Crear archivo destino
+  //       const archivoDestino = await FileSystem.StorageAccessFramework.createFileAsync(
+  //         carpetaDestino,
+  //         nombre,
+  //         "application/octet-stream"
+  //       );
+
+  //       // Leer archivo origen en base64
+  //       const base64 = await FileSystem.readAsStringAsync(archivo.uri, {
+  //         encoding: FileSystem.EncodingType.Base64,
+  //       });
+
+  //       // Escribir en carpeta pública
+  //       await FileSystem.writeAsStringAsync(archivoDestino, base64, {
+  //         encoding: FileSystem.EncodingType.Base64,
+  //       });
+  //     }
+
+  //     setLoading(false);
+  //     Alert.alert(
+  //       "Exportado",
+  //       "Archivos copiados correctamente a la carpeta seleccionada."
+  //     );
+  //   } catch (e) {
+  //     console.log("❌ Error copiando a pública:", e);
+  //     setLoading(false);
+  //     Alert.alert("Error", "No se pudieron copiar los archivos.");
+  //   }
+  // };
+
+
+  /**
+   * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (USANDO SAF)
+   * ✅ Mantiene la estructura de subcarpetas
+   */
+  const copiarACarpetaPublica = async () => {
+    try {
+      setLoading(true);
+
+      const archivos = await obtenerArchivosRecursivos(RAIZ_ACTIVA);
+      if (archivos.length === 0) {
+        setLoading(false);
+        return Alert.alert("Vacío", "No hay archivos.");
+      }
+
+      // 📂 El usuario elige la carpeta destino (Download, Documents, SD, etc.)
+      const permiso =
+        await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+      if (!permiso.granted) {
+        setLoading(false);
+        return Alert.alert("Cancelado", "No se otorgó permiso para acceder a la carpeta.");
+      }
+
+      const raizDestino = permiso.directoryUri;
+      console.log("📁 Carpeta destino:", raizDestino);
+
+      // 🗂️ Cache de carpetas creadas para no recrearlas
+      const carpetasCreadas = {};
+
+      /**
+       * Crea (si no existe) una carpeta dentro de otra usando SAF
+       * Retorna el URI de la carpeta creada/encontrada
+       */
+      const asegurarCarpeta = async (parentUri, nombreCarpeta) => {
+        const key = parentUri + "/" + nombreCarpeta;
+        if (carpetasCreadas[key]) return carpetasCreadas[key];
+
+        // Buscar si ya existe
+        const items = await FileSystem.StorageAccessFramework.readDirectoryAsync(parentUri);
+        const existente = items.find((uri) => uri.endsWith("/" + nombreCarpeta));
+
+        if (existente) {
+          carpetasCreadas[key] = existente;
+          return existente;
+        }
+
+        // Crear si no existe
+        const nueva = await FileSystem.StorageAccessFramework.makeDirectoryAsync(
+          parentUri,
+          nombreCarpeta
+        );
+        carpetasCreadas[key] = nueva;
+        return nueva;
+      };
+
+      // 🔁 Copiar archivo por archivo recreando carpetas
+      for (const archivo of archivos) {
+        // archivo.name = "cliente1/2024-01/foto1.jpg"
+        const partes = archivo.name.split("/");
+        const nombreArchivo = partes.pop(); // foto1.jpg
+        const carpetas = partes; // ["cliente1", "2024-01"]
+
+        // 📂 Crear la ruta de carpetas en destino
+        let destinoActual = raizDestino;
+        for (const carpeta of carpetas) {
+          destinoActual = await asegurarCarpeta(destinoActual, carpeta);
+        }
+
+        // 📄 Crear archivo en la carpeta final
+        const archivoDestino =
+          await FileSystem.StorageAccessFramework.createFileAsync(
+            destinoActual,
+            nombreArchivo,
+            "application/octet-stream"
+          );
+
+        // 📥 Leer origen en base64
+        const base64 = await FileSystem.readAsStringAsync(archivo.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // 📤 Escribir en destino
+        await FileSystem.writeAsStringAsync(archivoDestino, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      setLoading(false);
+      Alert.alert(
+        "Exportado",
+        "Archivos copiados manteniendo la estructura de carpetas."
+      );
+    } catch (e) {
+      console.log("❌ Error copiando con estructura:", e);
+      setLoading(false);
+      Alert.alert("Error", "No se pudieron copiar los archivos.");
+    }
+  };
+
+
+  /**
+   * 🧹 BORRAR TODO (CARPETA ACTIVA)
+   */
+  const limpiarCarpeta = async () => {
     Alert.alert(
       "Confirmar borrado",
-      "¿Deseas eliminar TODAS las fotos y audios de SigreMedios?\n\n⚠️ Esta acción no se puede deshacer.",
+      "¿Deseas eliminar TODOS los archivos de la carpeta seleccionada?\n\n⚠️ No se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -274,28 +477,24 @@ export default function DailyZipScreen() {
             try {
               setLoading(true);
 
-              const info = await FileSystem.getInfoAsync(RAIZ_SIGRE);
+              const info = await FileSystem.getInfoAsync(RAIZ_ACTIVA);
               if (!info.exists) {
                 setLoading(false);
-                return Alert.alert("No existe", "La carpeta SigreMedios no existe.");
+                return Alert.alert("No existe", "La carpeta no existe.");
               }
 
-              // Eliminar carpeta completa
-              await FileSystem.deleteAsync(RAIZ_SIGRE, { idempotent: true });
-
-              // Volver a crearla vacía
-              await FileSystem.makeDirectoryAsync(RAIZ_SIGRE, {
+              await FileSystem.deleteAsync(RAIZ_ACTIVA, { idempotent: true });
+              await FileSystem.makeDirectoryAsync(RAIZ_ACTIVA, {
                 intermediates: true,
               });
 
-              await limpiarEstadoZip();
+              await limpiarEstadoZip(RAIZ_ACTIVA);
 
               setLoading(false);
               setTotalArchivos(0);
-
-              Alert.alert("Listo", "La carpeta SigreMedios fue limpiada correctamente.");
+              Alert.alert("Listo", "La carpeta fue limpiada correctamente.");
             } catch (error) {
-              console.error("❌ Error limpiando SigreMedios:", error);
+              console.error("❌ Error limpiando:", error);
               setLoading(false);
               Alert.alert("Error", "No se pudo limpiar la carpeta.");
             }
@@ -308,7 +507,9 @@ export default function DailyZipScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📦 Exportar Evidencias</Text>
-      <Text style={styles.subtitle}>Ruta: SigreMedios</Text>
+      <Text style={styles.subtitle}>
+        Carpeta activa: {rootKey === "MEDIOS" ? "SigreMedios" : "SigreMovil"}
+      </Text>
 
       <Text style={styles.info}>
         Archivos encontrados: {totalArchivos}
@@ -318,19 +519,50 @@ export default function DailyZipScreen() {
         <ActivityIndicator size="large" />
       ) : (
         <>
+          {/* Selector de carpeta raíz */}
+          <View style={styles.buttonContainer}>
+            <Button
+              title="📁 Usar SigreMedios"
+              onPress={() => setRootKey("MEDIOS")}
+            />
+          </View>
+          <View style={styles.buttonContainer}>
+            <Button
+              title="📁 Usar SigreMovil"
+              onPress={() => setRootKey("MOVIL")}
+            />
+          </View>
+
           <View style={styles.buttonContainer}>
             <Button title="🔄 Actualizar" onPress={verificarContenido} />
           </View>
 
+          {/* OPCIÓN A: ZIP */}
           <View style={styles.buttonContainer}>
             <Button title="📦 Generar ZIP (50 archivos c/u)" onPress={exportarZip} />
           </View>
 
+          {/* OPCIÓN 1 */}
+          <View style={styles.buttonContainer}>
+            <Button title="📂 Compartir carpeta completa" onPress={compartirCarpeta} />
+          </View>
+
+          {/* OPCIÓN 2 */}
+          <View style={styles.buttonContainer}>
+            <Button title="📤 Compartir por bloques (sin ZIP)" onPress={compartirPorBloques} />
+          </View>
+
+          {/* OPCIÓN 3 */}
+          <View style={styles.buttonContainer}>
+            <Button title="📁 Copiar a carpeta pública (Download)" onPress={copiarACarpetaPublica} />
+          </View>
+
+          {/* BORRAR */}
           <View style={styles.buttonContainer}>
             <Button
               title="🧹 Borrar Todo"
               color="#DC2626"
-              onPress={limpiarSigreMedios}
+              onPress={limpiarCarpeta}
             />
           </View>
         </>
@@ -356,14 +588,14 @@ const styles = StyleSheet.create({
   subtitle: {
     textAlign: "center",
     color: "#666",
-    marginBottom: 20,
+    marginBottom: 10,
   },
   info: {
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 20,
     fontSize: 16,
   },
   buttonContainer: {
-    marginVertical: 8,
+    marginVertical: 6,
   },
 });
