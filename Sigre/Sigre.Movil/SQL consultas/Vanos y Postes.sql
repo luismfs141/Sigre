@@ -48,7 +48,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR ETIQUETA DE POSTE O CÓDIGO DE VANO
 ------------------------------------------------------------------
-DECLARE @codigo varchar(50) = '00132'; --Varias si es especifico o contiene
+DECLARE @codigo varchar(50) = '%108357%'; --Varias si es especifico o contiene
 
 ;WITH Q AS
 (
@@ -112,14 +112,19 @@ AND (
 ORDER BY Q.DEFI_FechaCreacion DESC;
 GO
 
-select * from Deficiencias
+
+
+
+
+
+
 
 --------------------------------
 -- delete defi VANOS -----------------------
 --------------------------------
 
 
-delete from Deficiencias
+delete from 
 where DEFI_Interno = 111468
 
 

@@ -1,3 +1,289 @@
+// import { useCallback, useRef } from "react";
+// import { api } from "../config";
+// import { useDatos } from "../context/DatosContext";
+// import { nowPeruISO } from "../utils/dateUtils";
+// import { useConnectivity } from "./useConnectivity";
+
+// import {
+//   deleteFileById,
+//   getArchivosByBasePathLocal,
+//   getArchivosPendientes,
+//   getFilesByElementAndTypi,
+//   getMediosByDeficienciaIdLocal,
+//   getNextArchCodTablaLocal,
+//   markArchivoAsSynced,
+//   markArchivoDeletedLocal,
+//   saveOrUpdateArchivoLocal,
+//   updateArchivoIdAfterSync
+// } from "../database/offlineDB/files";
+
+// export function useFiles() {
+//   const { checkDatabase } = useDatos();
+//   const { isOnline } = useConnectivity();
+//   const client = api();
+
+//   const syncingRef = useRef(false);
+
+//   // ===============================
+//   // 🔹 NORMALIZAR ANTES DE GUARDAR
+//   // ===============================
+//   const normalizeArchivoBeforeSave = useCallback((archivo) => {
+//     console.log("🧪 archivo:", archivo);
+//     return {
+//       archTipo: Number(archivo.ArchTipo),
+//       archTabla: archivo.ArchTabla ?? "Deficiencias",
+//       archCodTabla: Number(archivo.ArchCodTabla),
+//       archNombre: archivo.ArchNombre,
+
+//       // 🔑 CORRECCIÓN: usar latUtm/lonUtm si existe
+//       archLatit: archivo.ArchLatitud ?? null,
+//       archLong: archivo.ArchLongitud ?? null,
+
+//       archFech: archivo.fechaISO ?? archivo.ArchFech ?? nowPeruISO(),
+//       archTipoElemento: archivo.ArchTipoElemento ?? null,
+//       archIdElemento: archivo.ArchIdElemento ?? null,
+//       tipiInterno: archivo.TipiInterno ?? null,
+//       archActiv: archivo.ArchActiv ?? 1
+//     };
+//   }, []);
+
+
+//   // ===============================
+//   // 🔹 NORMALIZAR PARA SYNC
+//   // ===============================
+
+//   const normalizeArchivoForSync = (arch) => ({
+//     ArchInterno: arch.ArchInterno,
+//     ArchServerId: arch.ArchServerId ?? null,
+
+//     ArchTabla: arch.ArchTabla ?? "Deficiencias",
+//     ArchCodTabla: arch.ArchCodTabla ?? null,
+
+//     // 🔴 CLAVE: STRING
+//     ArchTipo: String(arch.ArchTipo),
+
+//     ArchNombre: arch.ArchNombre,
+
+//     ArchLatitud: arch.ArchLatitud ?? null,
+//     ArchLongitud: arch.ArchLongitud ?? null,
+
+//     // ✔️ DateTime compatible con ASP.NET
+//     ArchFecha: arch.ArchFecha
+//       ? arch.ArchFecha.replace(" ", "T")
+//       : nowPeruISO(),
+
+//     ArchTipoElemento: arch.ArchTipoElemento ?? null,
+//     ArchIdElemento: arch.ArchIdElemento ?? null,
+//     TipiInterno: arch.TipiInterno ?? null,
+
+//     // 🔒 Solo informativo (SQLite)
+//     DefiServerId: arch.DefiServerId ?? null,
+
+//     ArchActivo: Boolean(arch.ArchActivo),
+//     EstadoOffLine: Number(arch.EstadoOffLine)
+//   });
+
+//   // ===============================
+//   // 🔄 AUTO SYNC
+//   // ===============================
+//   const autoSyncArchivo = useCallback(async (archInternoLocal) => {
+//     console.log("🔄 [autoSyncArchivo] START →", archInternoLocal);
+
+//     if (syncingRef.current) return;
+//     syncingRef.current = true;
+
+//     try {
+//       const online = await isOnline();
+//       if (!online) return;
+
+//       const pendientes = await getArchivosPendientes();
+
+//       const arch = pendientes.find(a =>
+//         a.ArchInterno === archInternoLocal &&
+//         [1, 2, 3].includes(Number(a.EstadoOffLine))
+//       );
+
+//       if (!arch) return;
+
+//       // 🚫 NO VALIDAR DefiServerId
+//       const payload = [normalizeArchivoForSync(arch)];
+
+//       console.log("📤 Payload:", payload);
+
+//       const response = await client.post(
+//         "/File/SyncFromSQLite",
+//         payload,
+//         { timeout: 15000 }
+//       );
+
+//       const map = response.data?.[0];
+//       if (!map) return;
+
+//       if (map.localId !== map.serverId) {
+//         await updateArchivoIdAfterSync(map.localId, map.serverId);
+//       } else {
+//         await markArchivoAsSynced(map.serverId);
+//       }
+
+//       console.log("✅ Archivo sincronizado");
+
+//     } catch (err) {
+//       console.error("❌ [autoSyncArchivo]", err?.response?.data || err.message);
+//     } finally {
+//       syncingRef.current = false;
+//       console.log("🔓 [autoSyncArchivo] END");
+//     }
+//   }, [isOnline, client]);
+
+//   // ===============================
+//   // 💾 SAVE
+//   // ===============================
+//   // const saveArchivoLocal = useCallback(async (data) => {
+//   //   const dbOk = await checkDatabase();
+//   //   if (!dbOk) return null;
+
+//   //   const normalized = normalizeArchivoBeforeSave(data);
+//   //   console.log("💾 Guardando archivo:", normalized);
+
+//   //   const localId = await insertArchivoLocal(normalized);
+
+//   //   if (localId) {
+//   //     await autoSyncArchivo(localId);
+//   //   }
+
+//   //   return localId;
+//   // }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
+
+//   const saveArchivoLocal = useCallback(async (data) => {
+
+//     const dbOk = await checkDatabase();
+//     if (!dbOk) return null;
+
+//     // 🔹 Normalización EXISTENTE (NO SE TOCA)
+//     const normalized = normalizeArchivoBeforeSave(data);
+//     console.log('data: ',data);
+
+//     // 🔹 Adaptación a estructura SQLite (saveOrUpdate)
+//     const archivoForDB = {
+//       ArchInterno: data.ArchInterno ?? null,   // 👈 clave para UPDATE
+//       ArchTipo: normalized.archTipo,
+//       ArchTabla: normalized.archTabla,
+//       ArchCodTabla: normalized.archCodTabla,
+//       ArchNombre: normalized.archNombre,
+//       ArchLatitud: normalized.archLatit,
+//       ArchLongitud: normalized.archLong,
+//       ArchFecha: normalized.archFech,
+//       ArchTipoElemento: normalized.archTipoElemento,
+//       ArchIdElemento: normalized.archIdElemento,
+//       TipiInterno: normalized.tipiInterno,
+//       ArchActivo: normalized.archActiv,
+//       EstadoOffLine: data.EstadoOffLine ?? null,
+//       DefiServerId: data.DefiServerId ?? null
+//     };
+
+//     console.log("💾 saveOrUpdateArchivoLocal:", archivoForDB);
+
+//     const localId = await saveOrUpdateArchivoLocal(archivoForDB);
+
+//     // 🔄 Mantener sincronización automática
+//     if (localId) {
+//       await autoSyncArchivo(localId);
+//     }
+
+//     return localId;
+//   }, [
+//     checkDatabase,
+//     autoSyncArchivo,
+//     normalizeArchivoBeforeSave
+//   ]);
+
+
+//   // ===============================
+//   // 🗑️ DELETE Y MOD RUTA
+//   // ===============================
+//   const markArchivoAsDeleted = useCallback(
+//     async (archInterno, newRelativePath) => {
+//       const dbOk = await checkDatabase();
+//       if (!dbOk) return false;
+
+//       await markArchivoDeletedLocal(archInterno, newRelativePath);
+//       await autoSyncArchivo(archInterno);
+
+//       return true;
+//     },
+//     [checkDatabase, autoSyncArchivo]
+//   );
+
+//   // ===============================
+//   // 🗑️ DELETE Y MOD RUTA
+//   // ===============================
+//   const deletedFile = useCallback(
+//     async (archInterno) => {
+//       const dbOk = await checkDatabase();
+//       if (!dbOk) return false;
+
+//       await deleteFileById(archInterno);
+//       await autoSyncArchivo(archInterno);
+
+//       return true;
+//     },
+//     [checkDatabase, autoSyncArchivo]
+//   );
+
+//   // ---------------- Obtener archivos por elemento y tipificación ----------------
+//   const fetchFilesByElementAndTypi = useCallback(
+//     async (idElement, typeElement, tipiInterno) => {
+//       const dbOk = await checkDatabase();
+//       if (!dbOk) return [];
+
+//       try {
+//         const archivos = await getFilesByElementAndTypi(idElement, typeElement, tipiInterno);
+//         return archivos;
+//       } catch (err) {
+//         console.error("❌ Error obteniendo archivos por tipificación:", err);
+//         return [];
+//       }
+//     },
+//     [checkDatabase]
+//   );
+
+//   // ---------------- Obtener TODOS los medios por Deficiencia ----------------
+//   const fetchMediosByDeficienciaId = useCallback(
+//     async (deficienciaId) => {
+//       const dbOk = await checkDatabase();
+//       if (!dbOk) return [];
+
+//       try {
+//         const medios = await getMediosByDeficienciaIdLocal(deficienciaId);
+//         return medios;
+//       } catch (err) {
+//         console.error(
+//           "❌ Error obteniendo medios por deficiencia:",
+//           err
+//         );
+//         return [];
+//       }
+//     },
+//     [checkDatabase]
+//   );
+
+
+//   return {
+//     getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
+//     saveArchivoLocal,
+//     getArchivosByBasePath: useCallback(
+//       (basePathPrefix) => getArchivosByBasePathLocal(basePathPrefix),
+//       []
+//     ),
+//     markArchivoAsDeleted,
+//     fetchFilesByElementAndTypi,
+//     fetchMediosByDeficienciaId,
+//     deletedFile
+//   };
+// }
+
+
+
 import { useCallback, useRef } from "react";
 import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
@@ -17,6 +303,11 @@ import {
   updateArchivoIdAfterSync
 } from "../database/offlineDB/files";
 
+const toNum = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export function useFiles() {
   const { checkDatabase } = useDatos();
   const { isOnline } = useConnectivity();
@@ -25,63 +316,71 @@ export function useFiles() {
   const syncingRef = useRef(false);
 
   // ===============================
-  // 🔹 NORMALIZAR ANTES DE GUARDAR
+  // 🔹 NORMALIZAR ANTES DE GUARDAR (SQLite)
   // ===============================
   const normalizeArchivoBeforeSave = useCallback((archivo) => {
-    console.log("🧪 archivo:", archivo);
+    // console.log("🧪 archivo:", archivo);
+
     return {
-      archTipo: Number(archivo.ArchTipo),
+      archTipo: toNum(archivo.ArchTipo, 0),
       archTabla: archivo.ArchTabla ?? "Deficiencias",
-      archCodTabla: Number(archivo.ArchCodTabla),
+      archCodTabla: toNum(archivo.ArchCodTabla, 0),
       archNombre: archivo.ArchNombre,
 
-      // 🔑 CORRECCIÓN: usar latUtm/lonUtm si existe
       archLatit: archivo.ArchLatitud ?? null,
       archLong: archivo.ArchLongitud ?? null,
 
-      archFech: archivo.fechaISO ?? archivo.ArchFech ?? nowPeruISO(),
+      // soporta fechaISO / ArchFecha / ArchFech
+      archFech: archivo.fechaISO ?? archivo.ArchFecha ?? archivo.ArchFech ?? nowPeruISO(),
+
       archTipoElemento: archivo.ArchTipoElemento ?? null,
       archIdElemento: archivo.ArchIdElemento ?? null,
       tipiInterno: archivo.TipiInterno ?? null,
-      archActiv: archivo.ArchActiv ?? 1
+
+      // ✅ CLAVE: acepta 0/1 o "0"/"1"
+      archActiv: toNum(archivo.ArchActivo ?? archivo.ArchActiv ?? 1, 1),
     };
   }, []);
 
-
   // ===============================
-  // 🔹 NORMALIZAR PARA SYNC
+  // 🔹 NORMALIZAR PARA SYNC (API)
   // ===============================
+  const normalizeArchivoForSync = (arch) => {
+    const activoNum = toNum(arch.ArchActivo ?? 1, 1);
 
-  const normalizeArchivoForSync = (arch) => ({
-    ArchInterno: arch.ArchInterno,
-    ArchServerId: arch.ArchServerId ?? null,
+    return {
+      ArchInterno: arch.ArchInterno,
+      ArchServerId: arch.ArchServerId ?? null,
 
-    ArchTabla: arch.ArchTabla ?? "Deficiencias",
-    ArchCodTabla: arch.ArchCodTabla ?? null,
+      ArchTabla: arch.ArchTabla ?? "Deficiencias",
+      ArchCodTabla: arch.ArchCodTabla ?? null,
 
-    // 🔴 CLAVE: STRING
-    ArchTipo: String(arch.ArchTipo),
+      // ✅ OBLIGATORIO: el backend lo espera como STRING
+      ArchTipo: String(arch.ArchTipo),
 
-    ArchNombre: arch.ArchNombre,
+      //ArchNombre: arch.ArchNombre,------------------------------------------------------------------------------------------------- modi
+      ArchNombre: arch.ArchNombre ?? arch.ARCH_NOMBRE ?? arch.archNombre ?? null,
 
-    ArchLatitud: arch.ArchLatitud ?? null,
-    ArchLongitud: arch.ArchLongitud ?? null,
+      ArchLatitud: arch.ArchLatitud ?? null,
+      ArchLongitud: arch.ArchLongitud ?? null,
 
-    // ✔️ DateTime compatible con ASP.NET
-    ArchFecha: arch.ArchFecha
-      ? arch.ArchFecha.replace(" ", "T")
-      : nowPeruISO(),
+      // ✅ robusto
+      ArchFecha: arch.ArchFecha
+        ? String(arch.ArchFecha).replace(" ", "T")
+        : nowPeruISO(),
 
-    ArchTipoElemento: arch.ArchTipoElemento ?? null,
-    ArchIdElemento: arch.ArchIdElemento ?? null,
-    TipiInterno: arch.TipiInterno ?? null,
+      ArchTipoElemento: arch.ArchTipoElemento ?? null,
+      ArchIdElemento: arch.ArchIdElemento ?? null,
+      TipiInterno: arch.TipiInterno ?? null,
 
-    // 🔒 Solo informativo (SQLite)
-    DefiServerId: arch.DefiServerId ?? null,
+      DefiServerId: arch.DefiServerId ?? null,
 
-    ArchActivo: Boolean(arch.ArchActivo),
-    EstadoOffLine: Number(arch.EstadoOffLine)
-  });
+      // ✅ boolean REAL (no Boolean("0"))
+      ArchActivo: activoNum === 1,
+
+      EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
+    };
+  };
 
   // ===============================
   // 🔄 AUTO SYNC
@@ -100,15 +399,18 @@ export function useFiles() {
 
       const arch = pendientes.find(a =>
         a.ArchInterno === archInternoLocal &&
-        [1, 2, 3].includes(Number(a.EstadoOffLine))
+        [1, 2, 3].includes(toNum(a.EstadoOffLine))
       );
 
       if (!arch) return;
 
-      // 🚫 NO VALIDAR DefiServerId
       const payload = [normalizeArchivoForSync(arch)];
+      //console.log("📤 Payload:", payload);
 
-      console.log("📤 Payload:", payload);
+console.log("🧾 ArchNombre a sincronizar:", arch.ArchNombre);
+console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
+
+
 
       const response = await client.post(
         "/File/SyncFromSQLite",
@@ -136,34 +438,14 @@ export function useFiles() {
   }, [isOnline, client]);
 
   // ===============================
-  // 💾 SAVE
+  // 💾 SAVE / UPDATE (SQLite)
   // ===============================
-  // const saveArchivoLocal = useCallback(async (data) => {
-  //   const dbOk = await checkDatabase();
-  //   if (!dbOk) return null;
-
-  //   const normalized = normalizeArchivoBeforeSave(data);
-  //   console.log("💾 Guardando archivo:", normalized);
-
-  //   const localId = await insertArchivoLocal(normalized);
-
-  //   if (localId) {
-  //     await autoSyncArchivo(localId);
-  //   }
-
-  //   return localId;
-  // }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
-
   const saveArchivoLocal = useCallback(async (data) => {
-
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
-    // 🔹 Normalización EXISTENTE (NO SE TOCA)
     const normalized = normalizeArchivoBeforeSave(data);
-    console.log('data: ',data);
 
-    // 🔹 Adaptación a estructura SQLite (saveOrUpdate)
     const archivoForDB = {
       ArchInterno: data.ArchInterno ?? null,   // 👈 clave para UPDATE
       ArchTipo: normalized.archTipo,
@@ -176,8 +458,12 @@ export function useFiles() {
       ArchTipoElemento: normalized.archTipoElemento,
       ArchIdElemento: normalized.archIdElemento,
       TipiInterno: normalized.tipiInterno,
+
+      // ✅ 0/1 numérico en SQLite (tu Multimedia manda "0")
       ArchActivo: normalized.archActiv,
-      EstadoOffLine: data.EstadoOffLine ?? null,
+
+      // ✅ evita nulls raros
+      EstadoOffLine: data.EstadoOffLine ?? 1,
       DefiServerId: data.DefiServerId ?? null
     };
 
@@ -185,96 +471,64 @@ export function useFiles() {
 
     const localId = await saveOrUpdateArchivoLocal(archivoForDB);
 
-    // 🔄 Mantener sincronización automática
     if (localId) {
       await autoSyncArchivo(localId);
     }
 
     return localId;
-  }, [
-    checkDatabase,
-    autoSyncArchivo,
-    normalizeArchivoBeforeSave
-  ]);
-
+  }, [checkDatabase, autoSyncArchivo, normalizeArchivoBeforeSave]);
 
   // ===============================
-  // 🗑️ DELETE Y MOD RUTA
+  // 🗑️ MARK DELETED (solo ruta/activo)
   // ===============================
-  const markArchivoAsDeleted = useCallback(
-    async (archInterno, newRelativePath) => {
-      const dbOk = await checkDatabase();
-      if (!dbOk) return false;
+  const markArchivoAsDeleted = useCallback(async (archInterno, newRelativePath) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return false;
 
-      await markArchivoDeletedLocal(archInterno, newRelativePath);
-      await autoSyncArchivo(archInterno);
+    await markArchivoDeletedLocal(archInterno, newRelativePath);
+    await autoSyncArchivo(archInterno);
 
-      return true;
-    },
-    [checkDatabase, autoSyncArchivo]
-  );
+    return true;
+  }, [checkDatabase, autoSyncArchivo]);
 
-  // ===============================
-  // 🗑️ DELETE Y MOD RUTA
-  // ===============================
-  const deletedFile = useCallback(
-    async (archInterno) => {
-      const dbOk = await checkDatabase();
-      if (!dbOk) return false;
+  const deletedFile = useCallback(async (archInterno) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return false;
 
-      await deleteFileById(archInterno);
-      await autoSyncArchivo(archInterno);
+    await deleteFileById(archInterno);
+    await autoSyncArchivo(archInterno);
 
-      return true;
-    },
-    [checkDatabase, autoSyncArchivo]
-  );
+    return true;
+  }, [checkDatabase, autoSyncArchivo]);
 
-  // ---------------- Obtener archivos por elemento y tipificación ----------------
-  const fetchFilesByElementAndTypi = useCallback(
-    async (idElement, typeElement, tipiInterno) => {
-      const dbOk = await checkDatabase();
-      if (!dbOk) return [];
+  const fetchFilesByElementAndTypi = useCallback(async (idElement, typeElement, tipiInterno) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
 
-      try {
-        const archivos = await getFilesByElementAndTypi(idElement, typeElement, tipiInterno);
-        return archivos;
-      } catch (err) {
-        console.error("❌ Error obteniendo archivos por tipificación:", err);
-        return [];
-      }
-    },
-    [checkDatabase]
-  );
+    try {
+      return await getFilesByElementAndTypi(idElement, typeElement, tipiInterno);
+    } catch (err) {
+      console.error("❌ Error obteniendo archivos por tipificación:", err);
+      return [];
+    }
+  }, [checkDatabase]);
 
-  // ---------------- Obtener TODOS los medios por Deficiencia ----------------
-  const fetchMediosByDeficienciaId = useCallback(
-    async (deficienciaId) => {
-      const dbOk = await checkDatabase();
-      if (!dbOk) return [];
+  const fetchMediosByDeficienciaId = useCallback(async (deficienciaId) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
 
-      try {
-        const medios = await getMediosByDeficienciaIdLocal(deficienciaId);
-        return medios;
-      } catch (err) {
-        console.error(
-          "❌ Error obteniendo medios por deficiencia:",
-          err
-        );
-        return [];
-      }
-    },
-    [checkDatabase]
-  );
-
+    try {
+      return await getMediosByDeficienciaIdLocal(deficienciaId);
+    } catch (err) {
+      console.error("❌ Error obteniendo medios por deficiencia:", err);
+      return [];
+    }
+  }, [checkDatabase]);
 
   return {
     getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
     saveArchivoLocal,
-    getArchivosByBasePath: useCallback(
-      (basePathPrefix) => getArchivosByBasePathLocal(basePathPrefix),
-      []
-    ),
+    getArchivosByBasePath: useCallback((basePathPrefix) => getArchivosByBasePathLocal(basePathPrefix), []),
     markArchivoAsDeleted,
     fetchFilesByElementAndTypi,
     fetchMediosByDeficienciaId,

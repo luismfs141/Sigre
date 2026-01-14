@@ -1,23 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { ActivityIndicator, Alert, BackHandler, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
 // ✅ Importación para FileSystem (Legacy/Expo)
 import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import JSZip from "jszip";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // --- TUS CONTEXTOS Y HOOKS ---
@@ -32,7 +23,11 @@ import ModalAudio from "../../components/Multimedia/ModalAudio";
 import ModalCamera from "../../components/Multimedia/ModalCamera";
 import PhotoCard from "../../components/Multimedia/PhotoCard";
 
+import PhotoModal from "../../components/Modal/PhotoModal";
+
 const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Medidor", "Adicional"];
+
+
 
 
 // ==============================================================================
@@ -141,7 +136,6 @@ const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFileUri }
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// AAAAMMDD y HHMMSSmm (mm = centésimas 00-99)
 const getStampParts = (d = new Date()) => {
   const y = d.getFullYear();
   const mo = pad2(d.getMonth() + 1);
@@ -152,23 +146,44 @@ const getStampParts = (d = new Date()) => {
   const ss = pad2(d.getSeconds());
   const cs = pad2(Math.floor(d.getMilliseconds() / 10)); // 00..99
 
-  return {
-    date: `${y}${mo}${da}`,       // AAAAMMDD
-    time: `${hh}${mi}${ss}${cs}`  // HHMMSSmm
-  };
+  return { date: `${y}${mo}${da}`, time: `${hh}${mi}${ss}${cs}` };
 };
 
-
-// Evita colisiones de nombre cuando guardas varios archivos en el mismo segundo
-const getUniqueStampParts = (offsetMs = 0) => getStampParts(new Date(Date.now() + offsetMs));
+// ✅ AHORA SÍ: debajo de getStampParts
+const getUniqueStampParts = (offsetMs = 0) =>
+  getStampParts(new Date(Date.now() + offsetMs));
 
 const buildMediaName = ({ prefix, sed, codigo, def, suffix, ext, date, time }) => {
-  const sSed = safeSeg(sed, "SIN_SED");
+  const sSed = safeSeg(sed, "SINSED");
   const sCod = safeSeg(codigo, "UNK");
-  const sDef = safeSeg(def, "SIN_DEF");
-  const sSuffix = String(suffix); // "0" o "1..6"
-  return `${prefix}-${sSed}-${sCod}-${sDef}-${date}-${time}-${sSuffix}.${ext}`;
+  const sDef = safeSeg(def, "SINDEF");
+  return `${prefix}-${sSed}-${sCod}-${sDef}-${date}-${time}-${suffix}.${ext}`;
 };
+
+
+// ==============================================================================
+// HELPER PARA ELIMINADOS
+// ==============================================================================
+
+const ROOT_MEDIA = "SIGRE.MOVIL/";
+const ROOT_TRASH = "ELIMINADOS/";
+
+const cleanUri = (u) => (u ? u.split("?")[0] : u);
+
+const toTrashRelativePath = (oldRelativePath) => {
+  if (!oldRelativePath) return null;
+  if (oldRelativePath.startsWith(ROOT_MEDIA)) {
+    return ROOT_TRASH + oldRelativePath.substring(ROOT_MEDIA.length);
+  }
+  // fallback: si viene sin SIGRE.MOVIL al inicio
+  return ROOT_TRASH + oldRelativePath.replace(/^\/+/, "");
+};
+
+const getDirFromRelative = (relPath) => {
+  const idx = relPath.lastIndexOf("/");
+  return idx >= 0 ? relPath.substring(0, idx + 1) : "";
+};
+
 
 
 
@@ -177,9 +192,11 @@ const buildMediaName = ({ prefix, sed, codigo, def, suffix, ext, date, time }) =
 // ==============================================================================
 export default function Multimedia() {
   const router = useRouter();
+  const replaceTargetRef = useRef(null);
+
   const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
   const { findFeederById } = useFeeder();
-  const { saveArchivoLocal, fetchMediosByDeficienciaId } = useFiles();
+  const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted } = useFiles();
   const { fetchDeficiencyByIdLocal } = useDeficiency();
 
   const [cameraModal, setCameraModal] = useState(false);
@@ -191,6 +208,15 @@ export default function Multimedia() {
   const [photos, setPhotos] = useState(Array(6).fill(null));
   const [audios, setAudios] = useState([]);
   const [deletedIds, setDeletedIds] = useState([]);
+
+  const [originalPhotos, setOriginalPhotos] = useState(Array(6).fill(null));
+  const [originalAudios, setOriginalAudios] = useState([]);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // para reemplazo de foto
+  const [replaceTarget, setReplaceTarget] = useState(null); // { index, oldPhoto }
+  const [previewIndex, setPreviewIndex] = useState(null);
+
 
   // ==============================================================================
   // CARGA DE DATOS (CON CACHE BUSTING PARA LA UI)
@@ -218,9 +244,9 @@ export default function Multimedia() {
         if (m.ArchNombre && !m.ArchNombre.startsWith("file://")) {
           finalUri = FileSystem.documentDirectory + m.ArchNombre;
         }
-        else if (m.ArchNombre && m.ArchNombre.includes("SigreMedios")) {
-          const parts = m.ArchNombre.split("SigreMedios");
-          if (parts.length > 1) finalUri = FileSystem.documentDirectory + "SigreMedios" + parts[1];
+        else if (m.ArchNombre && m.ArchNombre.includes("SIGRE.MOVIL")) {
+          const parts = m.ArchNombre.split("SIGRE.MOVIL");
+          if (parts.length > 1) finalUri = FileSystem.documentDirectory + "SIGRE.MOVIL" + parts[1];
         }
 
         if (finalUri) {
@@ -246,6 +272,13 @@ export default function Multimedia() {
       }
       setPhotos(photosTmp);
       setAudios(audiosTmp);
+
+      // snapshot original (para cancelar)
+      setOriginalPhotos(photosTmp);
+      setOriginalAudios(audiosTmp);
+      setDeletedIds([]);
+      setIsDirty(false);
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -267,24 +300,51 @@ export default function Multimedia() {
   }, [selectedDeficiency?.id])
   );
 
-  const handleDeletePhoto = (index) => {
+  const handleDeletePhoto = async (index) => {
     const photo = photos[index];
+    if (!photo) return;
+
+    // Si es EXISTENTE (tiene id) -> se marca para mover a ELIMINADOS al FINALIZAR
     if (photo?.id) {
       setDeletedIds(prev => [...prev, { id: photo.id, path: photo.originalPath, type: photo.type }]);
+    } else {
+      // Si es NUEVA (temporal) -> se borra temporal ahora (no llega a BD)
+      try {
+        const u = cleanUri(photo.uri);
+        const info = await FileSystem.getInfoAsync(u);
+        if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
+      } catch { }
     }
+
     setPhotos(prev => { const c = [...prev]; c[index] = null; return c; });
+    setIsDirty(true);
   };
 
-  const handleDeleteAudio = (index) => {
+
+
+
+
+  const handleDeleteAudio = async (index) => {
     const audio = audios[index];
+    if (!audio) return;
+
     if (audio?.id) {
       const relativePath = audio.uri.replace(FileSystem.documentDirectory, "");
-      // Quitamos query params si los hubiera para el path limpio
-      const cleanPath = relativePath.split('?')[0];
-      setDeletedIds(prev => [...prev, { id: audio.id, path: cleanPath, type: audio.type }]);
+      const cleanPath = relativePath.split("?")[0];
+      setDeletedIds(prev => [...prev, { id: audio.id, path: cleanPath, type: 0 }]);
+    } else {
+      // temporal nuevo
+      try {
+        const u = cleanUri(audio.uri);
+        const info = await FileSystem.getInfoAsync(u);
+        if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
+      } catch { }
     }
+
     setAudios(prev => prev.filter((_, i) => i !== index));
+    setIsDirty(true);
   };
+
 
   const getElementoInfo = () => {
     if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
@@ -300,7 +360,7 @@ export default function Multimedia() {
       setLoading({ active: true, msg: "Generando ZIP..." });
       const feeder = await findFeederById(selectedItem.AlimInterno);
       const { tipo, codigo } = getElementoInfo();
-      const folderPath = `SigreMedios/${safeSeg(feeder.alimEtiqueta)}/${safeSeg(selectedSed?.SedCodigo, "SIN_SED")}/${tipo === "Vano" ? "Vano" : "Poste"}/${safeSeg(codigo)}/${safeSeg(selectedDeficiency?.typificationCode, "SIN_DEF")}`;
+      const folderPath = `SIGRE.MOVIL/${safeSeg(feeder.alimEtiqueta)}/${safeSeg(selectedSed?.SedCodigo, "SINSED")}/${tipo === "Vano" ? "Vano" : "Poste"}/${safeSeg(codigo)}/${safeSeg(selectedDeficiency?.typificationCode, "SINDEF")}`;
       const zip = new JSZip();
       const folder = zip.folder(folderPath);
       for (let i = 0; i < photos.length; i++) {
@@ -308,7 +368,7 @@ export default function Multimedia() {
         if (photo?.uri) {
           const cleanUri = photo.uri.split('?')[0];
 
-          const { date, time } = getUniqueStampParts(i); // <-- evita repetidos
+          const { date, time } = getUniqueStampParts(i * 11); // <-- evita repetidos
           const fname = buildMediaName({
             prefix: "FOT",
             sed: selectedSed?.SedCodigo,
@@ -351,10 +411,40 @@ export default function Multimedia() {
       const feeder = await findFeederById(selectedItem.AlimInterno);
 
       const sAlim = safeSeg(feeder.alimEtiqueta);
-      const sSed = safeSeg(selectedSed?.SedCodigo, "SIN_SED");
+      const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "Vano" : "Poste";
       const sCod = safeSeg(codigo);
-      const sDef = safeSeg(selectedDeficiency?.typificationCode, "SIN_DEF");
+      //const sDef = safeSeg(selectedDeficiency?.typificationCode, "SINDEF");
+      const tipCode = String(selectedDeficiency?.typificationCode ?? "");
+      let defSegment = safeSeg(tipCode, "SINDEF");
+
+      // suministro: preferible desde la deficiencia (si tu tabla lo tiene)
+      const suministroRaw =
+        deficiencyData?.DefiNumSuministro?.trim?.() ??
+        selectedItem?.VanoNumSuministro ??
+        selectedItem?.VanoSuministro;
+
+
+      const suministro = safeSeg(suministroRaw, "SINSUM");
+
+      if (tipCode === "7004") {
+        // TODO: aquí debes calcular el correlativo N consultando SQLite.
+        // Si aún no tienes query, por defecto ponemos 1:
+        const correlativo = 1;
+
+        defSegment = `7004.${correlativo}.${suministro}`;
+      }
+
+
+      const hasNewPhotos = photos.some(p => p && !p.id);
+      const hasNewAudios = audios.some(a => a && !a.id);
+      const hasDeletedPhotos = deletedIds.some(d => d.type !== 0);
+      const hasDeletedAudios = deletedIds.some(d => d.type === 0);
+
+      // Solo crear carpetas SAF si realmente se usarán
+      const needPictures = hasNewPhotos || hasDeletedPhotos;
+      const needMusic = hasNewAudios || hasDeletedAudios;
+
 
       // 1. DETERMINAR RUTA (Herencia + Nueva)
       let relativeFolderPath;
@@ -369,76 +459,134 @@ export default function Multimedia() {
         const lastSlashIndex = referenciaRuta.originalPath.lastIndexOf("/");
         relativeFolderPath = lastSlashIndex !== -1
           ? referenciaRuta.originalPath.substring(0, lastSlashIndex + 1)
-          : `SigreMedios/${sAlim}/${sSed}/${sTipo}/${sCod}/${sDef}/`;
+          : `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/${defSegment}/`;
       } else {
-        relativeFolderPath = `SigreMedios/${sAlim}/${sSed}/${sTipo}/${sCod}/${sDef}/`;
+        relativeFolderPath = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/${defSegment}/`;
       }
 
       const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
-      await ensureDirExists(carpetaBase);
+
+      if (hasNewPhotos || hasNewAudios) {
+        await ensureDirExists(carpetaBase);
+      }
+
 
       // 2. SAF PÚBLICO
       let picturesTargetDir = null;
       let musicTargetDir = null;
+      let picturesTrashDir = null;
+      let musicTrashDir = null;
+
       try {
-        const picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
-        const musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
-        const pathSegments = relativeFolderPath.split('/').filter(seg => seg.length > 0);
+        const pathSegments = relativeFolderPath.split("/").filter(seg => seg.length > 0);
 
-        if (picturesRoot) picturesTargetDir = await ensureSafPath(picturesRoot, pathSegments);
-        if (musicRoot) musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
-      } catch (e) { console.warn("SAF Error:", e.message); }
+        // ✅ Solo Pictures si hay fotos nuevas o fotos eliminadas
+        if (needPictures) {
+          const picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+          if (picturesRoot) {
+            picturesTargetDir = await ensureSafPath(picturesRoot, pathSegments);
 
-      // 3. ELIMINADOS
+            if (hasDeletedPhotos) {
+              const trashSegments = ["ELIMINADOS", ...pathSegments.slice(1)];
+              picturesTrashDir = await ensureSafPath(picturesRoot, trashSegments);
+            }
+          }
+        }
+
+        // ✅ Solo Music si hay audios nuevos o audios eliminados
+        if (needMusic) {
+          const musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
+          if (musicRoot) {
+            musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
+
+            if (hasDeletedAudios) {
+              const trashSegments = ["ELIMINADOS", ...pathSegments.slice(1)];
+              musicTrashDir = await ensureSafPath(musicRoot, trashSegments);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("SAF Error:", e.message);
+      }
+
+
+      // 3. ELIMINADOS -> mover a carpeta ELIMINADOS (sin borrar del disco)
       if (deletedIds.length > 0) {
         for (const item of deletedIds) {
           const oldRelativePath = item.path;
-          const fileName = oldRelativePath.split('/').pop();
-          const extension = fileName.split('.').pop();
-          const namePart = fileName.replace(`.${extension}`, "");
+          const fileName = oldRelativePath.split("/").pop();
 
-          const newFileName = `${namePart}_ELIMINADA_${Date.now()}`;
-          const newRelativePath = oldRelativePath.replace(fileName, `${newFileName}.${extension}`);
+          const trashRelativePath = toTrashRelativePath(oldRelativePath);
 
           const oldUri = FileSystem.documentDirectory + oldRelativePath;
-          const newUri = FileSystem.documentDirectory + newRelativePath;
+          const trashUri = FileSystem.documentDirectory + trashRelativePath;
 
-          // A) GESTIÓN PÚBLICA (SAF)
-          if (picturesTargetDir && item.type !== 0) {
-            try {
+          // A) SAF (mover = copiar a ELIMINADOS y borrar original público)
+          try {
+            if (item.type !== 0 && picturesTargetDir && picturesTrashDir) {
+              // copia al trash usando el archivo local (oldUri)
+              await writeFileIntoSafDir({
+                dirUri: picturesTrashDir,
+                fileName,
+                mimeType: "image/jpeg",
+                sourceFileUri: oldUri
+              });
+
+              // borrar original público si existe
               const files = await SAF.readDirectoryAsync(picturesTargetDir);
               const oldSafFile = files.find(u => decodeURIComponent(u).includes(fileName));
-              if (oldSafFile) {
-                await writeFileIntoSafDir({
-                  dirUri: picturesTargetDir, fileName: `${newFileName}.${extension}`,
-                  mimeType: "image/jpeg", sourceFileUri: oldUri
-                });
-                await SAF.deleteAsync(oldSafFile);
-              }
-            } catch (e) { console.warn("Error borrando SAF:", e.message); }
+              if (oldSafFile) await SAF.deleteAsync(oldSafFile);
+            }
+
+            if (item.type === 0 && musicTargetDir && musicTrashDir) {
+              await writeFileIntoSafDir({
+                dirUri: musicTrashDir,
+                fileName,
+                mimeType: "audio/mp4",
+                sourceFileUri: oldUri
+              });
+
+              const files = await SAF.readDirectoryAsync(musicTargetDir);
+              const oldSafFile = files.find(u => decodeURIComponent(u).includes(fileName));
+              if (oldSafFile) await SAF.deleteAsync(oldSafFile);
+            }
+          } catch (e) {
+            console.warn("SAF move-to-trash error:", e.message);
           }
 
-          // B) GESTIÓN INTERNA
-          const info = await FileSystem.getInfoAsync(oldUri);
-          if (info.exists) {
-            await FileSystem.moveAsync({ from: oldUri, to: newUri });
+          // B) mover local a ELIMINADOS
+          try {
+            const info = await FileSystem.getInfoAsync(oldUri);
+            if (info.exists) {
+              const trashDir = FileSystem.documentDirectory + getDirFromRelative(trashRelativePath);
+              await ensureDirExists(trashDir);
+              await FileSystem.moveAsync({ from: oldUri, to: trashUri });
+            }
+
+
+          } catch (e) {
+            console.warn("Move local to ELIMINADOS error:", e.message);
           }
 
-          // C) UPDATE BD (ArchActivo = 0)
-          await saveArchivoLocal({
-            ArchInterno: item.id,
-            ArchActivo: "0", // BIT 0
-            ArchNombre: newRelativePath,
-            EstadoOffLine: 1,
-            ArchCodTabla: codTablaParaGuardar,
-            ArchTabla: "Deficiencias",
-            ArchTipo: item.type,
-            ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
-            TipiInterno: currentTipiInterno,
-            ArchIdElemento: currentElementId
-          });
+          // C) update BD: ArchActivo=0 y ArchNombre apunta al nuevo path ELIMINADOS
+          // await saveArchivoLocal({
+          //   ArchInterno: item.id,
+          //   ArchActivo: "0",
+          //   ArchNombre: trashRelativePath,
+          //   //EstadoOffLine: 1,---------------------------------------------------------------------------------aqui error
+          //   EstadoOffLine: 3,
+          //   ArchCodTabla: codTablaParaGuardar,
+          //   ArchTabla: "Deficiencias",
+          //   ArchTipo: item.type,
+          //   ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
+          //   TipiInterno: currentTipiInterno,
+          //   ArchIdElemento: currentElementId
+          // });
+          await markArchivoAsDeleted(item.id, trashRelativePath);
+
         }
       }
+
 
       // 4. FOTOS NUEVAS
       for (let i = 0; i < photos.length; i++) {
@@ -448,12 +596,12 @@ export default function Multimedia() {
         // Limpiamos cache buster si lo tuviera (para la copia)
         const cleanSrcUri = photo.uri.split('?')[0];
 
-        const { date, time } = getUniqueStampParts(i); // <-- evita repetidos
+        const { date, time } = getUniqueStampParts(i * 11); // <-- evita repetidos
         const fname = buildMediaName({
           prefix: "FOT",
           sed: selectedSed?.SedCodigo,
           codigo,
-          def: selectedDeficiency?.typificationCode,
+          def: defSegment,
           suffix: i + 1,   // <-- 1..6
           ext: "jpg",
           date,
@@ -482,12 +630,12 @@ export default function Multimedia() {
         if (!audio || audio.id) continue;
 
         const cleanSrcUri = audio.uri.split('?')[0];
-        const { date, time } = getUniqueStampParts(1000 + i); // <-- offset para que no choque
+        const { date, time } = getUniqueStampParts(1000 + i * 11); // <-- offset para que no choque
         const fname = buildMediaName({
           prefix: "AUD",
           sed: selectedSed?.SedCodigo,
           codigo,
-          def: selectedDeficiency?.typificationCode,
+          def: defSegment,
           suffix: 0,       // <-- SIEMPRE 0
           ext: "m4a",
           date,
@@ -525,9 +673,149 @@ export default function Multimedia() {
       ArchInterno: null, ArchTipo: isAudio ? 0 : slot, ArchTabla: "Deficiencias", ArchCodTabla: codTablaReal,
       ArchNombre: filename, ArchLatitud: photoData?.latUtm ?? null, ArchLongitud: photoData?.lonUtm ?? null,
       ArchFecha: photoData?.fechaISO ?? new Date().toISOString(), ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
-      ArchIdElemento: elementId, TipiInterno: tipiId, ArchActivo: 1, EstadoOffLine: 1,
+      ArchIdElemento: elementId, TipiInterno: tipiId, ArchActivo: 1, EstadoOffLine: 2,
     });
   };
+
+  const discardChanges = async () => {
+    // borrar temporales NUEVOS (sin id)
+    const tempPhotoUris = photos
+      .filter(p => p && !p.id && p.uri)
+      .map(p => cleanUri(p.uri));
+
+    const tempAudioUris = audios
+      .filter(a => a && !a.id && a.uri)
+      .map(a => cleanUri(a.uri));
+
+    for (const u of [...tempPhotoUris, ...tempAudioUris]) {
+      try {
+        const info = await FileSystem.getInfoAsync(u);
+        if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
+      } catch { }
+    }
+
+    // restaurar snapshot
+    setPhotos(originalPhotos);
+    setAudios(originalAudios);
+    setDeletedIds([]);
+    setIsDirty(false);
+    setPreviewPhoto(null);
+    setPreviewIndex(null);
+    setReplaceTarget(null);
+    setCameraModal(false);
+    setAudioModal(false);
+  };
+
+  const onCancel = () => {
+    if (!isDirty) return router.replace("/inspection");
+
+    Alert.alert(
+      "Descartar cambios",
+      "Tienes cambios sin guardar. ¿Deseas descartarlos?",
+      [
+        { text: "Seguir editando", style: "cancel" },
+        {
+          text: "Descartar",
+          style: "destructive",
+          onPress: async () => {
+            await discardChanges();
+            router.replace("/inspection");
+          }
+        }
+      ]
+    );
+  };
+
+  const closePreview = () => {
+    setPreviewPhoto(null);
+    setPreviewIndex(null);
+  };
+
+  const closeCamera = (restorePreview = true) => {
+    setCameraModal(false);
+
+    const target = replaceTargetRef.current;
+
+    // ✅ Si cerraste cámara SIN tomar foto (X/back) y estabas reemplazando,
+    // entonces sí vuelve al preview anterior.
+    if (restorePreview && target?.oldPhoto?.uri) {
+      setPreviewIndex(target.index ?? null);
+      setPreviewPhoto(target.oldPhoto.uri);
+    }
+
+    // limpiar modo reemplazo
+    replaceTargetRef.current = null;
+    setReplaceTarget(null);
+    setPhotoIndex(null);
+  };
+
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return;
+
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        // 1) Si estás en cámara -> cerrar cámara (X)
+        if (cameraModal) {
+          closeCamera();
+          return true;
+        }
+
+        // 2) Si estás viendo preview -> cerrar preview
+        if (previewPhoto) {
+          closePreview();
+          return true;
+        }
+
+        // 3) Si estás en Multimedia normal -> cancelar (con confirm si hay cambios)
+        onCancel();
+        return true;
+      });
+
+      return () => sub.remove();
+    }, [cameraModal, previewPhoto, isDirty, replaceTarget])
+  );
+
+
+  const startReplacePhoto = (index) => {
+    const oldPhoto = photos[index];
+    if (!oldPhoto) return;
+
+    const target = { index, oldPhoto };
+    replaceTargetRef.current = target;   // ✅ ref (inmediato)
+    setReplaceTarget(target);            // ✅ state (UI)
+    setPhotoIndex(index);
+    setCameraModal(true);
+  };
+
+  const onFinalize = () => {
+    if (!isDirty) {
+      return Alert.alert("Sin cambios", "No hay cambios para guardar.");
+    }
+
+    // Recordatorio: slots 1-4 obligatorios (solo aviso, no bloqueo)
+    const requiredIdx = [0, 1, 2, 3];
+    const missing = requiredIdx.filter((i) => !photos[i]);
+
+    if (missing.length > 0) {
+      const faltan = missing.map((i) => `• ${PHOTO_SLOTS[i]}`).join("\n");
+
+      return Alert.alert(
+        "Fotos obligatorias (recordatorio)",
+        `Faltan estas fotos:\n\n${faltan}\n\nPuedes continuar igual.`,
+        [
+          {
+            text: "Aceptar",
+            onPress: () => finalizar()
+          }
+        ]
+      );
+    }
+
+    finalizar();
+  };
+
+
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -543,10 +831,23 @@ export default function Multimedia() {
           </View>
           <View style={styles.grid}>
             {PHOTO_SLOTS.map((title, index) => (
-              <PhotoCard key={index} title={title} uri={photos[index]?.uri}
-                onPress={() => photos[index]?.uri ? setPreviewPhoto(photos[index].uri) : (setPhotoIndex(index), setCameraModal(true))}
-                onDelete={() => handleDeletePhoto(index)}
+              <PhotoCard
+                key={index}
+                title={title}
+                uri={photos[index]?.uri}
+                onPress={() => {
+                  if (photos[index]?.uri) {
+                    setPreviewPhoto(photos[index].uri);
+                    setPreviewIndex(index);
+                  } else {
+                    setReplaceTarget(null);
+                    setPhotoIndex(index);
+                    setCameraModal(true);
+                  }
+                }}
+
               />
+
             ))}
           </View>
         </View>
@@ -560,7 +861,13 @@ export default function Multimedia() {
           </View>
           {audios.map((audio, index) => (
             <View key={index} style={{ marginBottom: 8 }}>
-              <AudioCard title={audio.title} uri={audio.uri} onDelete={() => handleDeleteAudio(index)} />
+              <AudioCard
+                title={audio.title}
+                uri={audio.uri}
+                onDelete={() => handleDeleteAudio(index)}
+              />
+
+
             </View>
           ))}
           {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
@@ -569,29 +876,102 @@ export default function Multimedia() {
 
       <View style={styles.footer}>
         <View style={styles.footerRow}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace("/inspection")}>
+          {/* <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace("/inspection")}> */}
+          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+
+
             <Text style={styles.cancelButtonText}>CANCELAR</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.finishButton} onPress={finalizar}>
-            <Text style={styles.finishText}>FINALIZAR</Text>
+          <TouchableOpacity
+            style={[styles.finishButton, !isDirty && styles.finishButtonDisabled]}
+            onPress={onFinalize}
+          >
+            <Text style={[styles.finishText, !isDirty && styles.finishTextDisabled]}>
+              FINALIZAR
+            </Text>
           </TouchableOpacity>
+
         </View>
       </View>
 
-      <ModalCamera visible={cameraModal} onClose={() => setCameraModal(false)}
-        onPhoto={(p) => setPhotos(prev => { const c = [...prev]; c[photoIndex] = p; return c; })}
+      <ModalCamera
+        visible={cameraModal}
+        onClose={() => closeCamera(true)}
+        onRequestClose={() => closeCamera(true)}
+
+        onPhoto={async (p) => {
+          // si es reemplazo, marca la anterior como eliminada (tu lógica ok)
+          const target = replaceTargetRef.current;
+          if (target?.oldPhoto) {
+            const old = target.oldPhoto;
+
+            if (old?.id) {
+              setDeletedIds(prev => [...prev, { id: old.id, path: old.originalPath, type: old.type }]);
+            } else if (old?.uri) {
+              try {
+                const u = cleanUri(old.uri);
+                const info = await FileSystem.getInfoAsync(u);
+                if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
+              } catch { }
+            }
+          }
+
+          // colocar nueva foto
+          setPhotos(prev => {
+            const c = [...prev];
+            c[photoIndex] = p;
+            return c;
+          });
+
+          setIsDirty(true);
+
+          // ✅ IMPORTANTÍSIMO: cerrar preview y volver a multimedia
+          setPreviewPhoto(null);
+          setPreviewIndex(null);
+
+          // ✅ cerrar cámara SIN restaurar preview viejo
+          replaceTargetRef.current = null;
+          setReplaceTarget(null);
+          setPhotoIndex(null);
+          setCameraModal(false);
+        }}
+
+
       />
       <ModalAudio visible={audioModal} onClose={() => setAudioModal(false)}
-        onAudioRecorded={(u) => setAudios(prev => [...prev, { uri: u, title: `Nota ${prev.length + 1}` }])}
+        onAudioRecorded={(u) => {
+          setAudios(prev => [...prev, { uri: u, title: `Nota ${prev.length + 1}` }]);
+          setIsDirty(true);
+        }}
+
       />
-      <Modal visible={!!previewPhoto} transparent>
-        <View style={styles.previewContainer}>
-          <Image source={{ uri: previewPhoto }} style={styles.previewImage} />
-          <TouchableOpacity style={styles.closePreview} onPress={() => setPreviewPhoto(null)}>
-            <Text style={{ fontWeight: 'bold' }}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
+      <PhotoModal
+        visible={!!previewPhoto}
+        uri={previewPhoto}
+        title={previewIndex != null ? PHOTO_SLOTS[previewIndex] : "Foto"}
+        onClose={() => {
+          setPreviewPhoto(null);
+          setPreviewIndex(null);
+        }}
+        onReplace={() => {
+          if (previewIndex == null) return;
+
+          // cerrar preview
+          setPreviewPhoto(null);
+
+          // abrir cámara en modo reemplazo (tu función ya existe)
+          startReplacePhoto(previewIndex);
+        }}
+        onDelete={async () => {
+          if (previewIndex == null) return;
+          // aquí se ejecuta SOLO si el usuario confirma
+          await handleDeletePhoto(previewIndex);
+          setPreviewPhoto(null);
+          setPreviewIndex(null);
+        }}
+      />
+
+
       <Modal visible={loading.active} transparent animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingBox}>
@@ -605,6 +985,9 @@ export default function Multimedia() {
 }
 
 const styles = StyleSheet.create({
+  finishButtonDisabled: { backgroundColor: "#9CA3AF" },
+  finishTextDisabled: { color: "#F3F4F6" },
+
   safeArea: { flex: 1, backgroundColor: "#F6F6F6" },
   scrollContent: { paddingHorizontal: 12, paddingBottom: 100 },
   section: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
@@ -630,3 +1013,4 @@ const styles = StyleSheet.create({
   loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: 'center' },
   loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
 });
+

@@ -57,8 +57,12 @@ export default function DeficiencyModal({
       setSelectConfig(null);
       setShowLocationModal(false);
       setActiveLocationField(null);
+
+      // ✅ IMPORTANTE
+      setIsSaving(false);
     }
   }, [visible]);
+
 
 
 
@@ -313,7 +317,12 @@ export default function DeficiencyModal({
       }
 
       await saveDeficiency(localDef, userId);
+
+      // ✅ libera el botón antes de cerrar
+      setIsSaving(false);
+
       onClose();
+
     } catch (error) {
       console.error(error);
       alert("Error al guardar");
@@ -345,9 +354,10 @@ export default function DeficiencyModal({
               {/* HEADER */}
               <View style={styles.header}>
                 <Text style={styles.title}>{title}</Text>
-                <TouchableOpacity onPress={onClose}>
+                <TouchableOpacity onPress={onClose} disabled={isSaving}>
                   <Text style={styles.close}>✕</Text>
                 </TouchableOpacity>
+
               </View>
 
               {/* FORM */}

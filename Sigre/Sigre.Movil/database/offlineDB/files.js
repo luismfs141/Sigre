@@ -51,7 +51,7 @@ export const insertArchivoLocal = async ({
   archActiv = 1,
 }) => {
   try {
-        // 🔎 LOG COMPLETO
+    // 🔎 LOG COMPLETO
     console.log("🧪 insertArchivoLocal → payload:", {
       archTipo,
       archTabla,
@@ -159,13 +159,12 @@ export const markArchivoDeletedLocal = async (
   newRelativePath
 ) => {
   try {
-    await runQuery(
-      `
-      UPDATE Archivos
-      SET ArchActivo = 0,
-          ArchNombre = ?
-      WHERE ArchInterno = ?;
-    `,
+    await runQuery( //---------------------------------------------------------------------------------------------------------------------------------------------------
+      `UPDATE Archivos
+     SET ArchActivo = 0,
+         ArchNombre = ?, 
+         EstadoOffLine = 3
+     WHERE ArchInterno = ?`,
       [newRelativePath, archInterno]
     );
 
@@ -200,7 +199,8 @@ export const updateArchivoIdAfterSync = async (localId, serverId) => {
     `
     UPDATE Archivos
     SET DefiServerId = ?, EstadoOffLine = NULL
-    WHERE ArchInterno = ? OR DefiServerId = ?
+    WHERE ArchInterno = ? 
+    
     `,
     [serverId, localId, localId]
   );

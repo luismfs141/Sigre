@@ -155,17 +155,42 @@ namespace Sigre.DataAccess
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
                 }
 
+                //// ===============================
+                //// 🔹 DELETE LÓGICO
+                //// ===============================
+                //else if (dto.EstadoOffLine == 3)
+                //{
+                //    var existente = ctx.Archivos
+                //        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
+
+                //    if (existente == null) continue;
+
+                //    existente.ArchActivo = false;
+                //    ctx.SaveChanges();
+
+                //    resultado.Add((dto.ArchInterno, existente.ArchInterno));
+                //}
+
+
+
                 // ===============================
                 // 🔹 DELETE LÓGICO
                 // ===============================
                 else if (dto.EstadoOffLine == 3)
                 {
+                    if (!dto.DefiServerId.HasValue) continue;
+
                     var existente = ctx.Archivos
                         .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
 
                     if (existente == null) continue;
 
+                    // ✅ IMPORTANTE: actualizar la ruta también
+                    if (!string.IsNullOrWhiteSpace(dto.ArchNombre))
+                        existente.ArchNombre = dto.ArchNombre;
+
                     existente.ArchActivo = false;
+
                     ctx.SaveChanges();
 
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
