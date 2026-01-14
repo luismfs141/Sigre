@@ -1,15 +1,17 @@
 import * as Location from "expo-location";
-import { KeyboardAvoidingView, Platform } from "react-native";
-
-import { useEffect, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
+
+import { useEffect, useState } from "react";
+
 import LocationModal from "../../../components/Modal/LocationModal";
 import { useDeficiency } from "../../../hooks/useDeficiency";
 import { createEmptyDeficiency } from "../../../utils/Deficiencies/deficiencyFactory";
@@ -32,6 +34,8 @@ export default function DeficiencyModal({
   const [selectConfig, setSelectConfig] = useState(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [activeLocationField, setActiveLocationField] = useState(null);
+  // En DeficiencyModal.js
+  const [isSaving, setIsSaving] = useState(false);
   const isEmpty = v =>
     v === null || v === undefined || v === "";
 
@@ -251,60 +255,72 @@ export default function DeficiencyModal({
   };
 
   const handleSave = async () => {
+    // 🛑 BLOQUEO INICIAL: Si ya se está guardando, ignorar nuevos clics
+    if (isSaving) return;
     // ✅ 1) REQUERIDOS (mejorado)
     const missing = fields.filter(f => f.required && isEmptyValue(f, localDef[f.key]));
     if (missing.length) {
       alert(`Campos obligatorios: ${missing.map(f => f.label).join(", ")}`);
       return;
     }
+    // 🔒 ACTIVAR BLOQUEO
+    setIsSaving(true)
+    try {
+      // ✅ 2) VALIDACIONES (min/max + custom)
+      const errors = [];
 
-    // ✅ 2) VALIDACIONES (min/max + custom)
-    const errors = [];
+      for (const f of fields) {
+        const raw = localDef[f.key];
 
-    for (const f of fields) {
-      const raw = localDef[f.key];
+        // si está vacío, no validar rangos (required ya filtró arriba)
+        if (isEmptyValue(f, raw)) continue;
 
-      // si está vacío, no validar rangos (required ya filtró arriba)
-      if (isEmptyValue(f, raw)) continue;
+        // ✅ 2A) custom (AQUÍ se ejecuta tu lógica condicional y verás el console.log)
+        if (f.validation?.custom) {
+          const msg = f.validation.custom(raw, localDef);
+          if (msg) errors.push(msg);
+          continue; // si quieres que custom sea la autoridad, no seguir con min/max
+        }
 
-      // ✅ 2A) custom (AQUÍ se ejecuta tu lógica condicional y verás el console.log)
-      if (f.validation?.custom) {
-        const msg = f.validation.custom(raw, localDef);
-        if (msg) errors.push(msg);
-        continue; // si quieres que custom sea la autoridad, no seguir con min/max
+        // ✅ 2B) min/max (solo si existen)
+        const hasMin = f.validation?.min !== undefined;
+        const hasMax = f.validation?.max !== undefined;
+
+        if ((hasMin || hasMax) && f.type === "number") {
+          const n = toNumber(raw);
+
+          if (!Number.isFinite(n)) {
+            errors.push(`${f.label}: Ingrese un número válido.`);
+            continue;
+          }
+
+          if (hasMin && n < f.validation.min) {
+            errors.push(f.validation.message || `${f.label}: mínimo ${f.validation.min}`);
+            continue;
+          }
+
+          if (hasMax && n > f.validation.max) {
+            errors.push(f.validation.message || `${f.label}: máximo ${f.validation.max}`);
+            continue;
+          }
+        }
       }
 
-      // ✅ 2B) min/max (solo si existen)
-      const hasMin = f.validation?.min !== undefined;
-      const hasMax = f.validation?.max !== undefined;
-
-      if ((hasMin || hasMax) && f.type === "number") {
-        const n = toNumber(raw);
-
-        if (!Number.isFinite(n)) {
-          errors.push(`${f.label}: Ingrese un número válido.`);
-          continue;
-        }
-
-        if (hasMin && n < f.validation.min) {
-          errors.push(f.validation.message || `${f.label}: mínimo ${f.validation.min}`);
-          continue;
-        }
-
-        if (hasMax && n > f.validation.max) {
-          errors.push(f.validation.message || `${f.label}: máximo ${f.validation.max}`);
-          continue;
-        }
+      if (errors.length) {
+        alert(errors.join("\n"));
+        setIsSaving(false);
+        return;
       }
-    }
 
-    if (errors.length) {
-      alert(errors.join("\n"));
-      return;
-    }
+      await saveDeficiency(localDef, userId);
+      onClose();
+    } catch (error) {
+      console.error(error);
+      alert("Error al guardar");
 
-    await saveDeficiency(localDef, userId);
-    onClose();
+      // 3. DESBLOQUEAR SOLO SI HUBO ERROR (Para intentar de nuevo)
+      setIsSaving(false); // <--- NUEVO
+    }
   };
 
 
@@ -421,13 +437,21 @@ export default function DeficiencyModal({
                 </View>
               </ScrollView>
 
+
               {/* BOTONES */}
               <View style={styles.buttons}>
                 <TouchableOpacity
-                  style={styles.btnSave}
+                  style={[
+                    styles.btnSave,
+                    // 🎨 CAMBIO VISUAL: Bajamos la opacidad si está guardando
+                    isSaving && { opacity: 0.5, backgroundColor: '#888' }
+                  ]}
                   onPress={handleSave}
+                  disabled={isSaving} // 🚫 DESHABILITADO FÍSICO
                 >
-                  <Text style={styles.btnText}>Guardar</Text>
+                  <Text style={styles.btnText}>
+                    {isSaving ? "Guardando..." : "Guardar"} {/* 📝 TEXTO DINÁMICO */}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
