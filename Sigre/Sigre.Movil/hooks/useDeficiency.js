@@ -192,8 +192,6 @@ export const useDeficiency = () => {
         [1, 2, 3].includes(Number(d.EstadoOffLine)) // 🔴 FIX
       );
 
-
-
       if (!def) return;
       const payload = [normalizeDeficiencyForSync(def)];
       const response = await client.post(
@@ -201,48 +199,6 @@ export const useDeficiency = () => {
         payload,
         { timeout: 15000 }
       );
-
-
-      // if (!def) return;
-
-      // const payload = [normalizeDeficiencyForSync(def)];
-
-      // // ✅ LOG CHICO: lo que te interesa validar
-      // console.log("📤 SYNC campos clave:", {
-      //   DefiInterno: payload[0].DefiInterno,
-      //   DefiServerId: payload[0].DefiServerId,
-      //   EstadoOffLine: payload[0].EstadoOffLine,
-
-      //   DefiComentario: payload[0].DefiComentario,
-      //   DefiDistVertical: payload[0].DefiDistVertical,
-      //   DefiNumSuministro: payload[0].DefiNumSuministro,
-
-      //   DefiAccesibilidad: payload[0].DefiAccesibilidad,
-      //   DefiTipoCruce: payload[0].DefiTipoCruce,
-
-      //   DefiFecRegistro: payload[0].DefiFecRegistro,
-      //   DefiFecModificacion: payload[0].DefiFecModificacion,
-      //   DefiFechaCreacion: payload[0].DefiFechaCreacion,
-      // });
-
-      // // ✅ LOG GRANDE: payload completo (por si falta un campo)
-      // console.log("📤 SYNC payload JSON:", JSON.stringify(payload, null, 2));
-
-      // const response = await client.post(
-      //   "/Deficiency/SyncFromSQLite",
-      //   payload,
-      //   { timeout: 15000 }
-      // );
-
-
-
-
-
-
-
-
-
-
 
       const map = response.data?.[0];
       if (!map) return;
@@ -338,26 +294,39 @@ export const useDeficiency = () => {
     if (!dbOk) return [];
 
     try {
-      // Obtener deficiencias desde la base de datos usando el hook
       const rawDefs = await fetchDeficienciesForFlatList(elementId, typeElement);
-      // Normalizar datos para FlatList
-      const flatListData = rawDefs.map(def => ({
-        id: def.DefiInterno, // asegurarse que siempre haya id
-        type: "def",
-        defId: def.DefiInterno, // id de la deficiencia
-        name: `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? ` Suministro: ${def.DefiNumSuministro}` : ""}`,
-        data: {
-          detail: def.Deficiency ?? "",
-          elementId: def.DefiIdElemento,
-          typeElement: def.DefiTipoElemento,
-          typificationId: def.TipiInterno,
-          typificationCode: def.Code,
-          tableId: def.TablInterno,
-          numSuministro: def.DefiNumSuministro
-        },
-        photos: [],
-        audio: null
-      }));
+
+      const flatListData = rawDefs.map(def => {
+        const hasTypification = !!def.TipiInterno;
+
+        return {
+          id: def.DefiInterno,
+          type: "def",
+          defId: def.DefiInterno,
+
+          // 🧠 Si NO tiene tipificación → es "Sin Deficiencia"
+          name: hasTypification
+            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${
+                def.DefiNumSuministro ? ` Suministro: ${def.DefiNumSuministro}` : ""
+              }`
+            : `0000 → ${def.Deficiency ?? "Sin Deficiencia"}`,
+
+          data: {
+            detail: def.Deficiency ?? "No se seleccionará ninguna deficiencia",
+            elementId: def.DefiIdElemento,
+            typeElement: def.DefiTipoElemento,
+
+            // 🔹 Sin Deficiencia: no hay tipificación
+            typificationId: def.TipiInterno ?? 0,
+            typificationCode: def.Code ?? "0000",
+            tableId: def.TablInterno ?? null,
+            numSuministro: def.DefiNumSuministro
+          },
+
+          photos: [],
+          audio: null
+        };
+      });
 
       return flatListData;
     } catch (error) {
@@ -365,7 +334,6 @@ export const useDeficiency = () => {
       return [];
     }
   };
-
 
   return {
     loading,

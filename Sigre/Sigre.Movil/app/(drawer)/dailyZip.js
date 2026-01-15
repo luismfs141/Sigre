@@ -299,69 +299,6 @@ export default function DailyZipScreen() {
   };
 
   /**
-   * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (Download)
-   */
-/**
- * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (USANDO SAF)
- * El usuario elige la carpeta (Download, Documents, etc.)
- */
-  // const copiarACarpetaPublica = async () => {
-  //   try {
-  //     setLoading(true);
-
-  //     const archivos = await obtenerArchivosRecursivos(RAIZ_ACTIVA);
-  //     if (archivos.length === 0) {
-  //       setLoading(false);
-  //       return Alert.alert("Vacío", "No hay archivos.");
-  //     }
-
-  //     // 📂 Pedir al usuario que seleccione una carpeta
-  //     const permiso = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-
-  //     if (!permiso.granted) {
-  //       setLoading(false);
-  //       return Alert.alert("Cancelado", "No se otorgó permiso para acceder a la carpeta.");
-  //     }
-
-  //     const carpetaDestino = permiso.directoryUri;
-  //     console.log("📁 Carpeta destino:", carpetaDestino);
-
-  //     // 🔁 Copiar archivos uno por uno
-  //     for (const archivo of archivos) {
-  //       const nombre = archivo.name.split("/").pop();
-
-  //       // Crear archivo destino
-  //       const archivoDestino = await FileSystem.StorageAccessFramework.createFileAsync(
-  //         carpetaDestino,
-  //         nombre,
-  //         "application/octet-stream"
-  //       );
-
-  //       // Leer archivo origen en base64
-  //       const base64 = await FileSystem.readAsStringAsync(archivo.uri, {
-  //         encoding: FileSystem.EncodingType.Base64,
-  //       });
-
-  //       // Escribir en carpeta pública
-  //       await FileSystem.writeAsStringAsync(archivoDestino, base64, {
-  //         encoding: FileSystem.EncodingType.Base64,
-  //       });
-  //     }
-
-  //     setLoading(false);
-  //     Alert.alert(
-  //       "Exportado",
-  //       "Archivos copiados correctamente a la carpeta seleccionada."
-  //     );
-  //   } catch (e) {
-  //     console.log("❌ Error copiando a pública:", e);
-  //     setLoading(false);
-  //     Alert.alert("Error", "No se pudieron copiar los archivos.");
-  //   }
-  // };
-
-
-  /**
    * 📁 OPCIÓN 3: COPIAR A CARPETA PÚBLICA (USANDO SAF)
    * ✅ Mantiene la estructura de subcarpetas
    */

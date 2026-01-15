@@ -7,13 +7,11 @@ import {
   FlatList,
   Platform,
   StyleSheet,
-  ToastAndroid // Opcional: Para feedback visual rápido
-  ,
+  ToastAndroid,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-// ✅ 1. IMPORTACIÓN CRÍTICA PARA MANEJO DE ARCHIVOS
 import * as FileSystem from "expo-file-system/legacy";
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
@@ -25,18 +23,15 @@ import SelectedDeficiencyItem from "../../components/SelectedDeficiencyItem";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { useDeficiency } from "../../hooks/useDeficiency";
-import { useFiles } from "../../hooks/useFiles";
 
-// ✅ 2. DEFINIR RUTA BASE (Debe ser idéntica a la de Multimedia.js)
 const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Inspection() {
-  const { selectedItem, setSelectedTypification, selectedDeficiency, setSelectedDeficiency } = useDatos();
+  const { selectedItem, setSelectedDeficiency } = useDatos();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useContext(AuthContext);
 
-  const { fetchFilesByElementAndTypi, deletedFile } = useFiles();
   const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
 
   const [items, setItems] = useState([]);
@@ -45,6 +40,23 @@ export default function Inspection() {
   const [newDefModalVisible, setNewDefModalVisible] = useState(false);
   const [currentItem, setCurrentItem] = useState(null);
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
+
+  /* =======================
+      HELPERS DE VALIDACIÓN
+     ======================= */
+  const existeSinDeficiencia = () =>
+    items.some(
+      it =>
+        it.type === "def" &&
+        String(it.data?.typificationCode).trim() === "0000"
+    );
+
+  const existenOtrasDeficiencias = () =>
+    items.some(
+      it =>
+        it.type === "def" &&
+        String(it.data?.typificationCode).trim() !== "0000"
+    );
 
   /* =======================
       CARGA INICIAL
@@ -61,15 +73,12 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const loadDefs = async () => {
       try {
-        const existingDefs = await deficienciesForFlatList(
-          elementId,
-          typeElement
-        );
+        const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
         const generalItem = {
           id: "general",
@@ -86,7 +95,6 @@ export default function Inspection() {
 
     loadDefs();
   }, [selectedItem]);
-
 
   /* =======================
       BACK HANDLER
@@ -111,8 +119,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
@@ -124,17 +132,6 @@ export default function Inspection() {
     };
 
     setItems([generalItem, ...existingDefs]);
-  };
-
-
-  /* =======================
-      ELIMINAR DEFICIENCIA (Desde el Modal de Edición)
-     ======================= */
-  const handleDeficiencyDeleted = typificationId => {
-    if (typificationId == null) return;
-
-    setItems(prev => prev.filter(item => item.defId !== typificationId));
-    setModalDeficiencyVisible(false);
   };
 
   /* =======================
@@ -149,50 +146,35 @@ export default function Inspection() {
     }
 
     setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
-
     setCurrentDeficiency({ ...item.data });
     setModalDeficiencyVisible(true);
   };
 
-  /* ==============================================================================
-     ✅ 3. FUNCIÓN DE LIMPIEZA FÍSICA (GARBAGE COLLECTION)
-     Esta función busca y elimina fotos huérfanas antes de borrar la data SQL.
-     ============================================================================== */
+  /* =======================
+      LIMPIEZA FÍSICA
+     ======================= */
   const cleanPhysicalFiles = async (defId) => {
     if (!defId) return;
 
     try {
-        // Leemos el directorio donde guardas las fotos
-        const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
-        
-        // Buscamos archivos que pertenezcan a esta deficiencia específica.
-        // Patrón basado en Multimedia.js: "..._DEF_{ID}_..."
-        const targetString = `_DEF_${defId}`; 
-        
-        const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
+      const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
+      const targetString = `_DEF_${defId}`;
+      const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
 
-        if (filesToDelete.length > 0) {
-            console.log(`🗑️ [CLEANUP] Borrando ${filesToDelete.length} archivos físicos para ID: ${defId}`);
-            
-            // Borrado en paralelo para no congelar la UI
-            await Promise.all(filesToDelete.map(async (file) => {
-                const filePath = APP_MEDIA_DIR + file;
-                await FileSystem.deleteAsync(filePath, { idempotent: true });
-            }));
-        } else {
-            console.log(`ℹ️ [CLEANUP] No se encontraron archivos físicos para ID: ${defId}`);
-        }
+      await Promise.all(
+        filesToDelete.map(file =>
+          FileSystem.deleteAsync(APP_MEDIA_DIR + file, { idempotent: true })
+        )
+      );
     } catch (error) {
-        // El borrado físico no debe detener el borrado lógico, solo lo logueamos.
-        console.warn("⚠️ Error menor limpiando archivos físicos:", error);
+      console.warn("⚠️ Error menor limpiando archivos físicos:", error);
     }
   };
 
   /* =======================
-      MANEJAR ELIMINACIÓN LOCAL (Confirmación + Limpieza)
+      ELIMINAR DEFICIENCIA
      ======================= */
   const handleLocalDelete = async (itemToDelete) => {
-    // Validación de seguridad
     if (!itemToDelete) return;
 
     Alert.alert(
@@ -205,33 +187,58 @@ export default function Inspection() {
           style: "destructive",
           onPress: async () => {
             try {
-              // 1. ✅ LIMPIEZA FÍSICA PRIMERO
-              // Pasamos el defId (que es el DefiInterno o ServerId)
               await cleanPhysicalFiles(itemToDelete.defId);
-
-              // 2. ✅ LIMPIEZA LÓGICA (SQL) DESPUÉS
               await deleteDeficiency(itemToDelete.defId);
-              
-              // 3. Actualizar UI
               setModalDeficiencyVisible(false);
               refreshList();
-              
+
               if (Platform.OS === 'android') {
                 ToastAndroid.show("Deficiencia eliminada correctamente", ToastAndroid.SHORT);
               }
             } catch (err) {
-              console.error("❌ Error en handleLocalDelete:", err);
-              Alert.alert("Error", "No se pudo eliminar la deficiencia completamente.");
+              console.error("❌ Error eliminando deficiencia:", err);
+              Alert.alert("Error", "No se pudo eliminar la deficiencia.");
             }
           }
         }
-      ],
-      { cancelable: true }
+      ]
     );
   };
 
+  /* =======================
+      SELECCIONAR TIPIFICACIÓN
+     ======================= */
   const handleSelectTypification = (def) => {
     if (!selectedItem) return;
+
+    const code = String(def.code).trim();
+
+    // ❌ Si existe "Sin Deficiencia", no permitir nada más
+    if (code !== "0000" && existeSinDeficiencia()) {
+      Alert.alert(
+        "No permitido",
+        "Debe eliminar primero 'Sin Deficiencia' para registrar una nueva deficiencia."
+      );
+      return;
+    }
+
+    // ❌ No permitir crear otro 0000
+    if (code === "0000" && existeSinDeficiencia()) {
+      Alert.alert(
+        "No permitido",
+        "Ya existe un registro de 'Sin Deficiencia' para este elemento."
+      );
+      return;
+    }
+
+    // ❌ No permitir 0000 si ya hay otras deficiencias
+    if (code === "0000" && existenOtrasDeficiencias()) {
+      Alert.alert(
+        "No permitido",
+        "Debe eliminar primero las deficiencias existentes para registrar 'Sin Deficiencia'."
+      );
+      return;
+    }
 
     const elementId =
       selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
@@ -239,22 +246,18 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const currentDef = {
       detail: def.detail ?? "",
-      deficiency: def.deficiency,
+      deficiency: def.deficiency ?? "Sin Deficiencia",
       elementId,
       typeElement,
       typificationId: def.id,
       typificationCode: def.code,
       tableId: def.tableId,
-
-      // ✅ 7004 puede repetirse: crear SIEMPRE nuevo cuando se elige desde lista
       forceNew: String(def.code) === "7004",
-
-      // ✅ clave única para que no “recicle” estado visual
       nonce: Date.now()
     };
 
@@ -262,7 +265,6 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
     setNewDefModalVisible(false);
   };
-
 
   /* =======================
       RENDER ITEM
@@ -280,9 +282,8 @@ export default function Inspection() {
     return (
       <SelectedDeficiencyItem
         item={item}
-        // ✅ Pasamos el objeto 'item' completo para tener acceso al defId en el handler
-        onDelete={() => handleLocalDelete(item)} 
-        onPhotos={(it) => {
+        onDelete={() => handleLocalDelete(item)}
+        onPhotos={() => {
           setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
           router.push("/(drawer)/multimedia");
         }}
@@ -304,7 +305,16 @@ export default function Inspection() {
       <View style={{ padding: 8 }}>
         <Button
           title="Nueva Deficiencia"
-          onPress={() => setNewDefModalVisible(true)}
+          onPress={() => {
+            if (existeSinDeficiencia()) {
+              Alert.alert(
+                "No permitido",
+                "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
+              );
+              return;
+            }
+            setNewDefModalVisible(true);
+          }}
         />
       </View>
 
@@ -314,18 +324,17 @@ export default function Inspection() {
         onClose={() => setModalGeneralVisible(false)}
       />
 
-
       <DeficiencyModal
         visible={modalDeficiencyVisible}
         deficiency={currentDeficiency}
         userId={user.id}
         selectedItem={selectedItem}
-        onDelete={handleDeficiencyDeleted}
         onClose={() => {
           setModalDeficiencyVisible(false);
           refreshList();
         }}
       />
+
       <ListaTipificaciones
         visible={newDefModalVisible}
         selectedItem={selectedItem}
