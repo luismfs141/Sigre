@@ -116,9 +116,23 @@ namespace Sigre.Server.Controllers
             return Ok(response);
         }
 
+        [HttpGet("GetById")]
+        public IActionResult GetById(int x_defiInterno)
+        {
+            DADeficiency dADeficiency = new DADeficiency();
 
+            var deficiencia = dADeficiency.DADEFI_GetById(x_defiInterno);
 
+            if (deficiencia == null)
+            {
+                return NotFound(new
+                {
+                    estado = "Error",
+                    mensaje = "No se encontró la deficiencia con el ID proporcionado"
+                });
+            }
 
-
+            return Ok(deficiencia);
+        }
     }
 }

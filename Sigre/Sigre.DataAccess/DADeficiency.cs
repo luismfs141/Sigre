@@ -613,5 +613,16 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+
+        public Deficiencia DADEFI_GetById(int x_defiInterno)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var deficiencia = ctx.Deficiencias
+                    .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
+
+                return deficiencia;
+            }
+        }
     }
 }
