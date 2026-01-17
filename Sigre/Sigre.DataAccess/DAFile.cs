@@ -155,24 +155,6 @@ namespace Sigre.DataAccess
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
                 }
 
-                //// ===============================
-                //// 🔹 DELETE LÓGICO
-                //// ===============================
-                //else if (dto.EstadoOffLine == 3)
-                //{
-                //    var existente = ctx.Archivos
-                //        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
-
-                //    if (existente == null) continue;
-
-                //    existente.ArchActivo = false;
-                //    ctx.SaveChanges();
-
-                //    resultado.Add((dto.ArchInterno, existente.ArchInterno));
-                //}
-
-
-
                 // ===============================
                 // 🔹 DELETE LÓGICO
                 // ===============================

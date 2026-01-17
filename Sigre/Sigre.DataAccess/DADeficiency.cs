@@ -391,7 +391,6 @@ namespace Sigre.DataAccess
             }
         }
 
-
         public List<Deficiencia> DADEFI_GetByProject(List<int> x_ids, int x_project)
         {
             if (x_project == 0)
@@ -551,8 +550,6 @@ namespace Sigre.DataAccess
 
                         DefiAccesibilidad = dto.DefiAccesibilidad,
                         DefiTipoCruce = dto.DefiTipoCruce,
-
-
 
                     };
 

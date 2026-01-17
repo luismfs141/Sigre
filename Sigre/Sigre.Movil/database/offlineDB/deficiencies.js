@@ -260,3 +260,25 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
     return [];
   }
 };
+
+export const markDeficiencyAsSyncing = async (defiInterno) => {
+  await runQuery(
+    `
+    UPDATE Deficiencias
+    SET EstadoOffLine = 4
+    WHERE DefiInterno = ?
+    `,
+    [defiInterno]
+  );
+
+  return true;
+};
+
+export const getDeficienciesPendientesReanudables = async () => {
+  return await runQuery(`
+    SELECT *
+    FROM Deficiencias
+    WHERE EstadoOffLine IN (1, 2, 3, 4)
+    ORDER BY DefiInterno
+  `);
+};
