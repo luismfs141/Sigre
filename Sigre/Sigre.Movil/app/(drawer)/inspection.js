@@ -137,7 +137,20 @@ export default function Inspection() {
   /* =======================
       ABRIR MODAL
      ======================= */
-  const openFormModal = item => {
+  // const openFormModal = item => {
+  //   setCurrentItem(item);
+
+  //   if (item.type === "general") {
+  //     setModalGeneralVisible(true);
+  //     return;
+  //   }
+
+  //   setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
+  //   setCurrentDeficiency({ ...item.data });
+  //   setModalDeficiencyVisible(true);
+  // };
+
+  const openFormModal = (item) => {
     setCurrentItem(item);
 
     if (item.type === "general") {
@@ -145,11 +158,15 @@ export default function Inspection() {
       return;
     }
 
-    setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
-    setCurrentDeficiency({ ...item.data });
+    setCurrentDeficiency({
+      ...item.data,
+      defiInterno: item.defId, // 🔥 asegurado
+      nonce: Date.now()
+    });
+
     setModalDeficiencyVisible(true);
   };
-
+  
   /* =======================
       LIMPIEZA FÍSICA
      ======================= */

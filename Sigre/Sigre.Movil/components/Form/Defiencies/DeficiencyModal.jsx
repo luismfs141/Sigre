@@ -26,7 +26,6 @@ export default function DeficiencyModal({
   visible,
   deficiency,
   onClose,
-  onDelete, // 👈 callback al padre (Inspection)
   userId,
   selectedItem,
 }) {
@@ -40,12 +39,10 @@ export default function DeficiencyModal({
     v === null || v === undefined || v === "";
 
   const {
+    fetchDeficiencyByIdLocal,
     fetchDeficiencyByTypificationElement,
-    saveDeficiency,
-    deleteDeficiency
+    saveDeficiency
   } = useDeficiency();
-
-
 
   // --------------------------------------------------
   // LIMPIAR CAMPOS
@@ -62,9 +59,6 @@ export default function DeficiencyModal({
       setIsSaving(false);
     }
   }, [visible]);
-
-
-
 
   // --------------------------------------------------
   // CARGA / INICIALIZACIÓN
@@ -102,61 +96,29 @@ export default function DeficiencyModal({
     })();
   }, [localDef]);
 
-
-
   useEffect(() => {
     if (!deficiency) return;
 
-    // const load = async () => {
-    //   const {
-    //     elementId,
-    //     typeElement,
-    //     typificationId,
-    //     typificationCode,
-    //     tableId
-    //   } = deficiency;
-
-    //   const result = await fetchDeficiencyByTypificationElement(
-    //     elementId,
-    //     typeElement,
-    //     typificationId
-    //   );
-
-    //   if (result && result.length > 0) {
-    //     setLocalDef({ ...result[0], typificationId, typificationCode });
-    //   } else {
-    //     setLocalDef(
-    //       createEmptyDeficiency({
-    //         typificationId,
-    //         typificationCode,
-    //         tableId,
-    //         elementId,
-    //         typeElement,
-    //         userId,
-    //         selectedItem
-    //       })
-    //     );
-    //   }
-    // };
     const load = async () => {
-      const {
-        elementId,
-        typeElement,
-        typificationId,
-        typificationCode,
-        tableId,
-        forceNew
-      } = deficiency;
 
-      // ✅ SI VIENE forceNew => SIEMPRE nuevo registro (NO cargar el existente)
-      if (forceNew) {
+      // 🟢 CASO 1: viene DefiInterno → cargar EXACTO
+      if (deficiency.defiInterno) {
+        const def = await fetchDeficiencyByIdLocal(deficiency.defiInterno);
+        if (def) {
+          setLocalDef({
+            ...def,
+            typificationCode: deficiency.typificationCode,
+            typificationId: deficiency.typificationId,
+          });
+          return;
+        }
+      }
+
+      // 🟡 CASO 2: forceNew
+      if (deficiency.forceNew) {
         setLocalDef(
           createEmptyDeficiency({
-            typificationId,
-            typificationCode,
-            tableId,
-            elementId,
-            typeElement,
+            ...deficiency,
             userId,
             selectedItem
           })
@@ -164,23 +126,19 @@ export default function DeficiencyModal({
         return;
       }
 
-      // 🟢 Caso normal (únicas): cargar si existe, sino crear
+      // 🔵 CASO 3: fallback por tipificación
       const result = await fetchDeficiencyByTypificationElement(
-        elementId,
-        typeElement,
-        typificationId
+        deficiency.elementId,
+        deficiency.typeElement,
+        deficiency.typificationId
       );
 
-      if (result && result.length > 0) {
-        setLocalDef({ ...result[0], typificationId, typificationCode });
+      if (result?.length) {
+        setLocalDef(result[0]);
       } else {
         setLocalDef(
           createEmptyDeficiency({
-            typificationId,
-            typificationCode,
-            tableId,
-            elementId,
-            typeElement,
+            ...deficiency,
             userId,
             selectedItem
           })
@@ -188,9 +146,9 @@ export default function DeficiencyModal({
       }
     };
 
-
     load();
   }, [deficiency]);
+
 
   if (!visible || !localDef) return null;
 
@@ -200,36 +158,9 @@ export default function DeficiencyModal({
   //const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${localDef.DefiInterno ?? 0}`;
   const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${deficiency?.nonce ?? 0}-${localDef.DefiInterno ?? 0}`;
 
-
   // --------------------------------------------------
   // 💾 GUARDAR
   // --------------------------------------------------
-  // const handleSave = async () => {
-  //   const missing = fields.filter(f => f.required && !localDef[f.key]);
-  //   if (missing.length) {
-  //     alert(
-  //       `Campos obligatorios: ${missing.map(f => f.label).join(", ")}`
-  //     );
-  //     return;
-  //   }
-
-  //   const invalid = fields
-  //     .filter(f => f.validation && localDef[f.key] != null)
-  //     .filter(
-  //       f =>
-  //         localDef[f.key] < f.validation.min ||
-  //         localDef[f.key] > f.validation.max
-  //     );
-
-  //   if (invalid.length) {
-  //     alert(invalid.map(f => f.validation.message).join("\n"));
-  //     return;
-  //   }
-
-  //   await saveDeficiency(localDef, userId);
-  //   onClose();
-  // };
-
   const isEmptyValue = (field, value) => {
     if (value === null || value === undefined) return true;
 
@@ -250,7 +181,6 @@ export default function DeficiencyModal({
 
     return false;
   };
-
 
   const toNumber = (v) => {
     if (v === null || v === undefined) return NaN;
@@ -331,7 +261,6 @@ export default function DeficiencyModal({
       setIsSaving(false); // <--- NUEVO
     }
   };
-
 
   // --------------------------------------------------
   // RENDER
