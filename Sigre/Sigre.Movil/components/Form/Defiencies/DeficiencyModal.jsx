@@ -97,7 +97,7 @@ export default function DeficiencyModal({
   }, [localDef]);
 
   useEffect(() => {
-    if (!deficiency || !visible) return;
+    if (!deficiency) return;
 
     const load = async () => {
 
@@ -126,19 +126,6 @@ export default function DeficiencyModal({
         return;
       }
 
-      // ✅ SI VIENE DefiInterno => CARGAR POR ID (esto arregla 7004 duplicados)
-      const defiInterno =
-        deficiency.DefiInterno ?? deficiency.defId ?? deficiency.id ?? null;
-
-      if (defiInterno) {
-        const byId = await fetchDeficiencyByIdLocal(defiInterno);
-
-        if (!cancelled && byId) {
-          setLocalDef({ ...byId, typificationId, typificationCode });
-          return;
-        }
-      }
-
       // 🔵 CASO 3: fallback por tipificación
       const result = await fetchDeficiencyByTypificationElement(
         deficiency.elementId,
@@ -159,6 +146,8 @@ export default function DeficiencyModal({
       }
     };
 
+    load();
+  }, [deficiency]);
 
 
   if (!visible || !localDef) return null;
