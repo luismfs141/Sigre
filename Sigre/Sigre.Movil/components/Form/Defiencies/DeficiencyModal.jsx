@@ -41,6 +41,7 @@ export default function DeficiencyModal({
 
   const {
     fetchDeficiencyByTypificationElement,
+    fetchDeficiencyByIdLocal,
     saveDeficiency,
     deleteDeficiency
   } = useDeficiency();
@@ -104,40 +105,67 @@ export default function DeficiencyModal({
 
 
 
+  // useEffect(() => {
+  //   if (!deficiency) return;
+  //   const load = async () => {
+  //     const {
+  //       elementId,
+  //       typeElement,
+  //       typificationId,
+  //       typificationCode,
+  //       tableId,
+  //       forceNew
+  //     } = deficiency;
+
+  //     // ✅ SI VIENE forceNew => SIEMPRE nuevo registro (NO cargar el existente)
+  //     if (forceNew) {
+  //       setLocalDef(
+  //         createEmptyDeficiency({
+  //           typificationId,
+  //           typificationCode,
+  //           tableId,
+  //           elementId,
+  //           typeElement,
+  //           userId,
+  //           selectedItem
+  //         })
+  //       );
+  //       return;
+  //     }
+
+  //     // 🟢 Caso normal (únicas): cargar si existe, sino crear
+  //     const result = await fetchDeficiencyByTypificationElement(
+  //       elementId,
+  //       typeElement,
+  //       typificationId
+  //     );
+
+  //     if (result && result.length > 0) {
+  //       setLocalDef({ ...result[0], typificationId, typificationCode });
+  //     } else {
+  //       setLocalDef(
+  //         createEmptyDeficiency({
+  //           typificationId,
+  //           typificationCode,
+  //           tableId,
+  //           elementId,
+  //           typeElement,
+  //           userId,
+  //           selectedItem
+  //         })
+  //       );
+  //     }
+  //   };
+
+
+  //   load();
+  // }, [deficiency]);
+
   useEffect(() => {
-    if (!deficiency) return;
+    if (!deficiency || !visible) return;
 
-    // const load = async () => {
-    //   const {
-    //     elementId,
-    //     typeElement,
-    //     typificationId,
-    //     typificationCode,
-    //     tableId
-    //   } = deficiency;
+    let cancelled = false;
 
-    //   const result = await fetchDeficiencyByTypificationElement(
-    //     elementId,
-    //     typeElement,
-    //     typificationId
-    //   );
-
-    //   if (result && result.length > 0) {
-    //     setLocalDef({ ...result[0], typificationId, typificationCode });
-    //   } else {
-    //     setLocalDef(
-    //       createEmptyDeficiency({
-    //         typificationId,
-    //         typificationCode,
-    //         tableId,
-    //         elementId,
-    //         typeElement,
-    //         userId,
-    //         selectedItem
-    //       })
-    //     );
-    //   }
-    // };
     const load = async () => {
       const {
         elementId,
@@ -148,8 +176,9 @@ export default function DeficiencyModal({
         forceNew
       } = deficiency;
 
-      // ✅ SI VIENE forceNew => SIEMPRE nuevo registro (NO cargar el existente)
+      // ✅ SIEMPRE nuevo (tu caso 7004 cuando lo creas desde tipificación)
       if (forceNew) {
+        if (cancelled) return;
         setLocalDef(
           createEmptyDeficiency({
             typificationId,
@@ -164,12 +193,27 @@ export default function DeficiencyModal({
         return;
       }
 
-      // 🟢 Caso normal (únicas): cargar si existe, sino crear
+      // ✅ SI VIENE DefiInterno => CARGAR POR ID (esto arregla 7004 duplicados)
+      const defiInterno =
+        deficiency.DefiInterno ?? deficiency.defId ?? deficiency.id ?? null;
+
+      if (defiInterno) {
+        const byId = await fetchDeficiencyByIdLocal(defiInterno);
+
+        if (!cancelled && byId) {
+          setLocalDef({ ...byId, typificationId, typificationCode });
+          return;
+        }
+      }
+
+      // 🟡 Fallback: (para casos antiguos donde no llegue DefiInterno)
       const result = await fetchDeficiencyByTypificationElement(
         elementId,
         typeElement,
         typificationId
       );
+
+      if (cancelled) return;
 
       if (result && result.length > 0) {
         setLocalDef({ ...result[0], typificationId, typificationCode });
@@ -188,9 +232,13 @@ export default function DeficiencyModal({
       }
     };
 
-
     load();
-  }, [deficiency]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, deficiency?.nonce, deficiency?.DefiInterno, deficiency?.id, deficiency?.defId, deficiency?.forceNew]);
+
 
   if (!visible || !localDef) return null;
 

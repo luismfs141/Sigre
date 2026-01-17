@@ -1,8 +1,9 @@
-import { TouchableOpacity } from "react-native-gesture-handler";
-import { View, Text, Image, StyleSheet, Alert } from "react-native";
-import { useSelector } from 'react-redux';
-import { useEffect, useState } from "react";
+// components.jsx
 import { useIsFocused } from '@react-navigation/native';
+import { useEffect, useState } from "react";
+import { Alert, Image, StyleSheet, Text, View } from "react-native";
+import { TouchableOpacity } from "react-native-gesture-handler";
+import { useSelector } from 'react-redux';
 
 export const Deficiency =( {object, onPress } ) =>{
 
