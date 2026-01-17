@@ -27,9 +27,6 @@ import PhotoModal from "../../components/Modal/PhotoModal";
 
 const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Medidor", "Adicional"];
 
-
-
-
 // ==============================================================================
 // HELPERS GLOBALES Y SANITIZACIÓN
 // ==============================================================================
@@ -185,8 +182,6 @@ const getDirFromRelative = (relPath) => {
 };
 
 
-
-
 // ==============================================================================
 // COMPONENTE PRINCIPAL
 // ==============================================================================
@@ -320,10 +315,6 @@ export default function Multimedia() {
     setIsDirty(true);
   };
 
-
-
-
-
   const handleDeleteAudio = async (index) => {
     const audio = audios[index];
     if (!audio) return;
@@ -344,7 +335,6 @@ export default function Multimedia() {
     setAudios(prev => prev.filter((_, i) => i !== index));
     setIsDirty(true);
   };
-
 
   const getElementoInfo = () => {
     if (selectedItem?.PostInterno) return { tipo: "Poste", codigo: selectedItem.PostCodigoNodo };
@@ -414,7 +404,6 @@ export default function Multimedia() {
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "Vano" : "Poste";
       const sCod = safeSeg(codigo);
-      //const sDef = safeSeg(selectedDeficiency?.typificationCode, "SINDEF");
       const tipCode = String(selectedDeficiency?.typificationCode ?? "");
       let defSegment = safeSeg(tipCode, "SINDEF");
 
@@ -423,7 +412,6 @@ export default function Multimedia() {
         deficiencyData?.DefiNumSuministro?.trim?.() ??
         selectedItem?.VanoNumSuministro ??
         selectedItem?.VanoSuministro;
-
 
       const suministro = safeSeg(suministroRaw, "SINSUM");
 
@@ -435,7 +423,6 @@ export default function Multimedia() {
         defSegment = `7004.${correlativo}.${suministro}`;
       }
 
-
       const hasNewPhotos = photos.some(p => p && !p.id);
       const hasNewAudios = audios.some(a => a && !a.id);
       const hasDeletedPhotos = deletedIds.some(d => d.type !== 0);
@@ -444,7 +431,6 @@ export default function Multimedia() {
       // Solo crear carpetas SAF si realmente se usarán
       const needPictures = hasNewPhotos || hasDeletedPhotos;
       const needMusic = hasNewAudios || hasDeletedAudios;
-
 
       // 1. DETERMINAR RUTA (Herencia + Nueva)
       let relativeFolderPath;
@@ -469,7 +455,6 @@ export default function Multimedia() {
       if (hasNewPhotos || hasNewAudios) {
         await ensureDirExists(carpetaBase);
       }
-
 
       // 2. SAF PÚBLICO
       let picturesTargetDir = null;
@@ -508,7 +493,6 @@ export default function Multimedia() {
       } catch (e) {
         console.warn("SAF Error:", e.message);
       }
-
 
       // 3. ELIMINADOS -> mover a carpeta ELIMINADOS (sin borrar del disco)
       if (deletedIds.length > 0) {
@@ -567,26 +551,9 @@ export default function Multimedia() {
           } catch (e) {
             console.warn("Move local to ELIMINADOS error:", e.message);
           }
-
-          // C) update BD: ArchActivo=0 y ArchNombre apunta al nuevo path ELIMINADOS
-          // await saveArchivoLocal({
-          //   ArchInterno: item.id,
-          //   ArchActivo: "0",
-          //   ArchNombre: trashRelativePath,
-          //   //EstadoOffLine: 1,---------------------------------------------------------------------------------aqui error
-          //   EstadoOffLine: 3,
-          //   ArchCodTabla: codTablaParaGuardar,
-          //   ArchTabla: "Deficiencias",
-          //   ArchTipo: item.type,
-          //   ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
-          //   TipiInterno: currentTipiInterno,
-          //   ArchIdElemento: currentElementId
-          // });
           await markArchivoAsDeleted(item.id, trashRelativePath);
-
         }
       }
-
 
       // 4. FOTOS NUEVAS
       for (let i = 0; i < photos.length; i++) {
@@ -607,7 +574,6 @@ export default function Multimedia() {
           date,
           time
         });
-
 
         const destUri = carpetaBase + fname;
 
@@ -749,7 +715,6 @@ export default function Multimedia() {
     setPhotoIndex(null);
   };
 
-
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== "android") return;
@@ -775,7 +740,6 @@ export default function Multimedia() {
       return () => sub.remove();
     }, [cameraModal, previewPhoto, isDirty, replaceTarget])
   );
-
 
   const startReplacePhoto = (index) => {
     const oldPhoto = photos[index];
@@ -814,8 +778,6 @@ export default function Multimedia() {
 
     finalizar();
   };
-
-
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -866,8 +828,6 @@ export default function Multimedia() {
                 uri={audio.uri}
                 onDelete={() => handleDeleteAudio(index)}
               />
-
-
             </View>
           ))}
           {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
@@ -876,10 +836,7 @@ export default function Multimedia() {
 
       <View style={styles.footer}>
         <View style={styles.footerRow}>
-          {/* <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace("/inspection")}> */}
           <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-
-
             <Text style={styles.cancelButtonText}>CANCELAR</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -936,7 +893,6 @@ export default function Multimedia() {
           setCameraModal(false);
         }}
 
-
       />
       <ModalAudio visible={audioModal} onClose={() => setAudioModal(false)}
         onAudioRecorded={(u) => {
@@ -970,8 +926,6 @@ export default function Multimedia() {
           setPreviewIndex(null);
         }}
       />
-
-
       <Modal visible={loading.active} transparent animationType="fade">
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingBox}>
@@ -1013,4 +967,3 @@ const styles = StyleSheet.create({
   loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: 'center' },
   loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
 });
-

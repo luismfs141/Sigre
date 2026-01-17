@@ -26,7 +26,7 @@ import { useSed } from "../../hooks/useSed";
 export default function Sync() {
 
   const { user } = useContext(AuthContext);
-  const { offlineLoading, downloadDatabase } = useOffline();
+  const { offlineLoading, downloadDatabase, syncing, syncAllPending } = useOffline();
   const { dbName, setDbName, selectedFeeder, setSelectedFeeder } = useDatos();
   const dispatch = useDispatch();
   const isAppLoading = useSelector((state) => state.app.isLoading);
@@ -233,6 +233,48 @@ export default function Sync() {
   };
 
   //───────────────────────────────────────────────
+  // 🔄 SINCRONIZAR OFFLINE → SERVIDOR
+  //───────────────────────────────────────────────
+  const handleSync = async () => {
+    if (!dbExists) {
+      return Alert.alert("Aviso", "No existe una base local para sincronizar.");
+    }
+
+    if (syncing) return;
+
+    dispatch({
+      type: "APP/SET_LOADING_MESSAGE",
+      payload: "Sincronizando información..."
+    });
+    dispatch({ type: "APP/SET_LOADING", payload: true });
+
+    try {
+      const result = await syncAllPending();
+
+      if (result?.ok) {
+        Alert.alert(
+          "Sincronización completa",
+          `Se sincronizaron ${result.synced} registros correctamente.`
+        );
+      } else {
+        Alert.alert(
+          "Sincronización incompleta",
+          "La sincronización no pudo completarse. Se reanudará en el próximo intento."
+        );
+      }
+    } catch (e) {
+      console.log("❌ Error sincronizando:", e);
+      Alert.alert(
+        "Error",
+        "Ocurrió un error durante la sincronización. Intenta nuevamente."
+      );
+    } finally {
+      dispatch({ type: "APP/SET_LOADING", payload: false });
+      dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
+    }
+  };
+
+  //───────────────────────────────────────────────
   // ALIMENTADORES
   //───────────────────────────────────────────────
   const addFeeder = async (feeder) => {
@@ -419,7 +461,11 @@ export default function Sync() {
                 <Button title="🗑️ Eliminar Base" onPress={handleDelete} />
               </View>
               <View style={styles.footerCol}>
-                <Button title="🔄 Sincronizar" onPress={() => {}} />
+                <Button
+                  title={syncing ? "⏳ Sincronizando..." : "🔄 Sincronizar"}
+                  onPress={handleSync}
+                  disabled={!dbExists || syncing}
+                />
               </View>
             </View>
 
