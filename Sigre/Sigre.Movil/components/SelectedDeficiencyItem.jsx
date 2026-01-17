@@ -21,6 +21,17 @@ export default function SelectedDeficiencyItem({
   return (
     <View style={styles.card}>
       {/* ✅ BOTÓN INFO (arriba derecha) */}
+
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{item.order ?? "-"}</Text>
+      </View>
+
+
+      {/* opcional: muestra también # dentro del mismo código */}
+      {String(item?.data?.typificationCode ?? "") !== "0000" && item.orderInCode > 1 && (
+        <Text style={styles.badgeMini}>#{item.orderInCode}</Text>
+      )}
+
       {showInfo && (
         <Pressable
           style={styles.infoBtn}
@@ -240,6 +251,39 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontWeight: "700",
     color: "#333"
+  },
+  badge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#1976d2",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10
+  },
+  badgeText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12
+  },
+
+  // opcional: para mostrar #2, #3...
+  badgeMini: {
+    position: "absolute",
+    top: 12,
+    left: 40,
+    fontSize: 12,
+    color: "#1976d2",
+    fontWeight: "700"
+  },
+  title: {
+    fontWeight: "600",
+    fontSize: 15,
+    paddingLeft: 34,   // ✅ deja espacio para el badge
+    paddingRight: 26   // ✅ deja espacio para el botón info
   },
 
 });

@@ -382,27 +382,36 @@ export const useDeficiency = () => {
     try {
       const rawDefs = await fetchDeficienciesForFlatList(elementId, typeElement);
 
-      const flatListData = rawDefs.map(def => {
+      const contadorPorCode = {};
+
+      const flatListData = rawDefs.map((def, idx) => {
         const hasTypification = !!def.TipiInterno;
+        const code = String(def.Code ?? "0000").trim();
+
+        // ✅ contador por tipificación (7004 #1, 7004 #2, etc.)
+        contadorPorCode[code] = (contadorPorCode[code] ?? 0) + 1;
+        const nroEnCodigo = contadorPorCode[code];
 
         return {
           id: def.DefiInterno,
           type: "def",
           defId: def.DefiInterno,
 
-          // 🧠 Si NO tiene tipificación → es "Sin Deficiencia"
+          // ✅ ORDEN GENERAL en la lista (1,2,3…)
+          order: idx + 1,
+
+          // ✅ ORDEN dentro del mismo código (7004 #1, #2…)
+          orderInCode: nroEnCodigo,
+
           name: hasTypification
             ? `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""
             }`
             : `0000 → ${def.Deficiency ?? "Sin Deficiencia"}`,
 
-
           data: {
             detail: def.Deficiency ?? "No se seleccionará ninguna deficiencia",
             elementId: def.DefiIdElemento,
             typeElement: def.DefiTipoElemento,
-
-            // 🔹 Sin Deficiencia: no hay tipificación
             typificationId: def.TipiInterno ?? 0,
             typificationCode: def.Code ?? "0000",
             tableId: def.TablInterno ?? null,
@@ -415,16 +424,14 @@ export const useDeficiency = () => {
 
             infoTipificacion: def.Code ?? "0000",
             infoDeficiencia: def.Deficiency ?? "",
-            // ✅ si existe def.Typification úsalo; si no, usa def.Component (tu tabla actual)
             infoDescripcion: (def.Typification ?? def.Component) ?? "",
-
-
           },
 
           photos: [],
           audio: null
         };
       });
+
 
       return flatListData;
     } catch (error) {
