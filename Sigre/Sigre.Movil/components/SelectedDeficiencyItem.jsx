@@ -10,11 +10,33 @@ export default function SelectedDeficiencyItem({
   return (
     <View style={styles.card}>
       {/* 🔹 Título */}
-      <Text style={styles.title}>{item.name}</Text>
+      <Text style={styles.title} numberOfLines={2}>
+        {item.name}
+      </Text>
+
 
       {item.data && (
-        <Text style={styles.subtitle}>{item.data.detail}</Text>
+        <View style={styles.infoBlock}>
+          <Text style={styles.subtitle} numberOfLines={2}>
+            <Text style={styles.labelInline}>Observación: </Text>
+            {item.data.observacion?.trim() ? item.data.observacion : "-"}
+          </Text>
+
+          <Text style={styles.subtitle} numberOfLines={2}>
+            <Text style={styles.labelInline}>Comentario: </Text>
+            {item.data.comentario?.trim() ? item.data.comentario : "-"}
+          </Text>
+
+          <Text style={styles.subtitle}>
+            <Text style={styles.labelInline}>Dist. vertical: </Text>
+            {item.data.distVertical ?? 0}
+            {"   "}
+            <Text style={styles.labelInline}>Dist. horizontal: </Text>
+            {item.data.distHorizontal ?? 0}
+          </Text>
+        </View>
       )}
+
 
       {/* 🔹 BOTONES */}
       <View style={styles.actions}>
@@ -65,8 +87,9 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     color: "#666",
-    marginBottom: 8
+    marginBottom: 2
   },
+
   actions: {
     flexDirection: "row",
     marginTop: 8
@@ -90,5 +113,14 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     marginTop: 2
-  }
+  },
+  infoBlock: {
+    marginTop: 4,
+    marginBottom: 8
+  },
+  labelInline: {
+    fontWeight: "700",
+    color: "#666"
+  },
+
 });

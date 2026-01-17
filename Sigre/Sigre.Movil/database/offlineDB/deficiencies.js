@@ -232,6 +232,35 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
 };
 
 
+// export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
+//   try {
+//     const query = `
+//       SELECT 
+//         d.DefiInterno,
+//         d.TablInterno,
+//         d.DefiIdElemento,
+//         d.DefiTipoElemento,
+//         d.DefiNumSuministro,
+//         t.TypificationId AS TipiInterno,
+//         t.Code,
+//         t.Component,
+//         t.Deficiency
+//       FROM Deficiencias d
+//       LEFT JOIN Tipificaciones t
+//         ON d.TipiInterno = t.TypificationId
+//       WHERE d.DefiIdElemento = ?
+//         AND d.DefiTipoElemento = ?
+//         AND DefiActivo = 1
+//       ORDER BY d.DefiInterno ASC;
+//     `;
+//     const results = await runQuery(query, [elementId, typeElement]);
+//     return results;
+//   } catch (error) {
+//     console.error("Error fetching deficiencies for FlatList:", error);
+//     return [];
+//   }
+// };
+
 export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
   try {
     const query = `
@@ -241,6 +270,13 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         d.DefiIdElemento,
         d.DefiTipoElemento,
         d.DefiNumSuministro,
+
+        -- ✅ NUEVO: campos que quieres mostrar en la lista
+        d.DefiObservacion,
+        d.DefiComentario,
+        d.DefiDistVertical,
+        d.DefiDistHorizontal,
+
         t.TypificationId AS TipiInterno,
         t.Code,
         t.Component,
@@ -250,9 +286,10 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         ON d.TipiInterno = t.TypificationId
       WHERE d.DefiIdElemento = ?
         AND d.DefiTipoElemento = ?
-        AND DefiActivo = 1
+        AND d.DefiActivo = 1
       ORDER BY d.DefiInterno ASC;
     `;
+
     const results = await runQuery(query, [elementId, typeElement]);
     return results;
   } catch (error) {
@@ -260,6 +297,7 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
     return [];
   }
 };
+
 
 export const markDeficiencyAsSyncing = async (defiInterno) => {
   await runQuery(
