@@ -99,7 +99,7 @@
 
 
 
-
+// Form/GeneralData/DataGeneralModal.jsx
 import { useRef } from "react";
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import PosteForm from "./PosteForm";

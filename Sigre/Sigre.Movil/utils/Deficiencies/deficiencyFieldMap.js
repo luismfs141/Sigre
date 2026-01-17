@@ -51,19 +51,19 @@ const COMMON_DEFICIENCY_FIELDS = [
     },
     validation: { message: "Seleccione una criticidad" }
   },
-  {
-    key: "DefiEstadoSubsanacion",
-    label: "Estado Subsanación",
-    type: "text",
-    selectable: true,
-    required: true,
-    valueMap: {
-      0: "Por subsanar",
-      1: "Subsanación Preventiva",
-      2: "Subsanación definitiva"
-    },
-    validation: { message: "Seleccione un estado de subsanación" }
-  },
+  // {
+  //   key: "DefiEstadoSubsanacion",
+  //   label: "Estado Subsanación",
+  //   type: "text",
+  //   selectable: true,
+  //   required: true,
+  //   valueMap: {
+  //     0: "Por subsanar",
+  //     1: "Subsanación Preventiva",
+  //     2: "Subsanación definitiva"
+  //   },
+  //   validation: { message: "Seleccione un estado de subsanación" }
+  // },
   {
     key: "DefiNumSuministro",
     label: "Número de suministro",

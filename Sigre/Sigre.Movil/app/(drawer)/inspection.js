@@ -73,8 +73,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const loadDefs = async () => {
       try {
@@ -119,8 +119,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
@@ -158,15 +158,22 @@ export default function Inspection() {
       return;
     }
 
+    // ✅ Importante: guardar el DefiInterno real
+    const defId = item.defId; // = DefiInterno
+
+    setSelectedDeficiency({ ...item.data, id: defId, name: item.name });
+
     setCurrentDeficiency({
       ...item.data,
-      defiInterno: item.defId, // 🔥 asegurado
-      nonce: Date.now()
+      DefiInterno: defId,     // ✅ clave
+      id: defId,
+      nonce: Date.now()       // opcional, pero ayuda a refrescar UI
     });
 
     setModalDeficiencyVisible(true);
   };
-  
+
+
   /* =======================
       LIMPIEZA FÍSICA
      ======================= */
@@ -263,8 +270,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const currentDef = {
       detail: def.detail ?? "",

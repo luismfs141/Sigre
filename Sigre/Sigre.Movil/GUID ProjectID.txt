@@ -1,10 +1,22 @@
 5ee67ca4-4847-420c-bfff-7e7d63fec617
+5ee67ca4-4847-420c-bfff-7e7d63fec617
+5ee67ca4-4847-420c-bfff-7e7d63fec617
 
 
-
+COMPILAR PRODUCCIÓN
+-------------------
 eas build -p android --profile production-apk
 
 
 
-eas build -p android --profile development
 
+COMPILAR DEVELOPMENT
+--------------------
+eas build -p android --profile development
+eas build --profile development --platform android
+
+
+
+PARA INICIAR
+----------------------
+npx expo start --dev-client --clear
