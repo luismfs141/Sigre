@@ -411,7 +411,14 @@ export const useDeficiency = () => {
             observacion: def.DefiObservacion ?? "",
             comentario: def.DefiComentario ?? "",
             distVertical: def.DefiDistVertical ?? 0,
-            distHorizontal: def.DefiDistHorizontal ?? 0
+            distHorizontal: def.DefiDistHorizontal ?? 0,
+
+            infoTipificacion: def.Code ?? "0000",
+            infoDeficiencia: def.Deficiency ?? "",
+            // ✅ si existe def.Typification úsalo; si no, usa def.Component (tu tabla actual)
+            infoDescripcion: (def.Typification ?? def.Component) ?? "",
+
+
           },
 
           photos: [],

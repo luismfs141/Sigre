@@ -280,7 +280,9 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         t.TypificationId AS TipiInterno,
         t.Code,
         t.Component,
-        t.Deficiency
+        t.Deficiency,
+        t.Typification
+
       FROM Deficiencias d
       LEFT JOIN Tipificaciones t
         ON d.TipiInterno = t.TypificationId
