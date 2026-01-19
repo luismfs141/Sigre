@@ -71,7 +71,7 @@ namespace Sigre.DataAccess
         {
             using var ctx = new SigreContext();
 
-            var query =
+            var archPostes =
                 from ar in ctx.Archivos
                 join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
                 join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno
@@ -80,8 +80,21 @@ namespace Sigre.DataAccess
                       && x_seds.Contains(s.SedInterno)
                 select ar;
 
-            return query.ToList();
+            var archVanos =
+                from ar in ctx.Archivos
+                join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
+                join v in ctx.Vanos on df.DefiIdElemento equals v.VanoInterno
+                join s in ctx.Seds on v.VanoSubestacion equals s.SedInterno
+                where df.DefiTipoElemento == "VANO"
+                      && x_seds.Contains(s.SedInterno)
+                select ar;
+
+            return archPostes
+                   .Union(archVanos)
+                   .Distinct()
+                   .ToList();
         }
+
 
         public Archivo DAARCH_GetTableData()
         {

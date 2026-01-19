@@ -73,8 +73,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const loadDefs = async () => {
       try {
@@ -119,8 +119,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
@@ -149,7 +149,8 @@ export default function Inspection() {
   //   setCurrentDeficiency({ ...item.data });
   //   setModalDeficiencyVisible(true);
   // };
-  const openFormModal = item => {
+
+  const openFormModal = (item) => {
     setCurrentItem(item);
 
     if (item.type === "general") {
@@ -157,22 +158,15 @@ export default function Inspection() {
       return;
     }
 
-    // ✅ Importante: guardar el DefiInterno real
-    const defId = item.defId; // = DefiInterno
-
-    setSelectedDeficiency({ ...item.data, id: defId, name: item.name });
-
     setCurrentDeficiency({
       ...item.data,
-      DefiInterno: defId,     // ✅ clave
-      id: defId,
-      nonce: Date.now()       // opcional, pero ayuda a refrescar UI
+      defiInterno: item.defId, // 🔥 asegurado
+      nonce: Date.now()
     });
 
     setModalDeficiencyVisible(true);
   };
-
-
+  
   /* =======================
       LIMPIEZA FÍSICA
      ======================= */
@@ -269,8 +263,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-        ? "VANO"
-        : "SED";
+      ? "VANO"
+      : "SED";
 
     const currentDef = {
       detail: def.detail ?? "",
