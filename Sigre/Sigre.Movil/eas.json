@@ -42,7 +42,8 @@
       "android": { "buildType": "apk" },
       "env": { 
         "ENVIRONMENT": "production" ,
-        "EAS_BUILD_DISABLE_MAVEN_CACHE": "1"
+        "EAS_BUILD_DISABLE_MAVEN_CACHE": "1",
+        "NODE_ENV": "production"
       }
     }
   }
