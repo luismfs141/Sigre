@@ -44,7 +44,7 @@ export const useSed = () => {
         return [];
       }
 
-      console.log("✅ SEDs locales recibidas:", data.length);
+      //console.log("✅ SEDs locales recibidas:", data.length);
       return data;
     } catch (err) {
       console.error("❌ Error obteniendo SEDs locales:", err);

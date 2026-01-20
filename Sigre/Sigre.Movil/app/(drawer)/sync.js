@@ -62,7 +62,7 @@ export default function Sync() {
       try {
         console.log("📦 Base local detectada:", dbName);
         const data = await fetchAllSedsLocal();
-        console.log("✅ SEDs locales recibidas:", data);
+        //console.log("✅ SEDs locales recibidas:", data);
         setLocalSeds(Array.isArray(data) ? data : []);
       } catch (e) {
         console.log("❌ Error cargando SEDs locales:", e);
