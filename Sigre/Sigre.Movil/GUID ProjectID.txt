@@ -6,6 +6,7 @@
 COMPILAR PRODUCCIÓN
 -------------------
 eas build -p android --profile production-apk
+eas build -p android --profile production-apk --clear-cache
 
 
 

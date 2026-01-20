@@ -41,7 +41,8 @@ const safeSeg = (value, fallback = "UNK") => {
     .trim();
 
   const out = cleaned.length ? cleaned : fallback;
-  return out.slice(0, 60);
+  return out.toUpperCase().slice(0, 60);
+
 };
 
 const ensureDirExists = async (dir) => {
@@ -179,6 +180,83 @@ const toTrashRelativePath = (oldRelativePath) => {
 const getDirFromRelative = (relPath) => {
   const idx = relPath.lastIndexOf("/");
   return idx >= 0 ? relPath.substring(0, idx + 1) : "";
+};
+// ==============================================================================
+// HELPERS 7004: correlativo por subcarpeta 7004/<N>/ (sin reutilizar)
+// ==============================================================================
+
+const extract7004IndexFromPath = (path) => {
+  if (!path) return null;
+  const p = String(path);
+
+  // nuevo formato: .../7004/<n>/...
+  let m = p.match(/(?:^|\/)7004\/(\d+)(?:\/|$)/);
+  if (m) return parseInt(m[1], 10);
+
+  // formato viejo: .../7004.<n>....
+  m = p.match(/(?:^|\/)7004\.(\d+)(?:\.|\/|$)/);
+  if (m) return parseInt(m[1], 10);
+
+  return null;
+};
+
+const listNumericSubdirs = async (dirUri) => {
+  try {
+    const info = await FileSystem.getInfoAsync(dirUri);
+    if (!info.exists || !info.isDirectory) return [];
+
+    const children = await FileSystem.readDirectoryAsync(dirUri);
+    return children
+      .filter((name) => /^\d+$/.test(name))
+      .map((name) => parseInt(name, 10))
+      .filter((n) => Number.isFinite(n));
+  } catch {
+    return [];
+  }
+};
+
+const listOld7004Folders = async (elementDirUri) => {
+  // busca carpetas hijas tipo: 7004.<n>....
+  try {
+    const info = await FileSystem.getInfoAsync(elementDirUri);
+    if (!info.exists || !info.isDirectory) return [];
+
+    const children = await FileSystem.readDirectoryAsync(elementDirUri);
+    const nums = [];
+
+    for (const name of children) {
+      const m = String(name).match(/^7004\.(\d+)(?:\.|$)/);
+      if (m) nums.push(parseInt(m[1], 10));
+    }
+
+    return nums.filter((n) => Number.isFinite(n));
+  } catch {
+    return [];
+  }
+};
+
+const getNext7004Correlativo = async (elementBaseRel) => {
+  // elementBaseRel: "SIGRE.MOVIL/<alim>/<sed>/<tipo>/<cod>/"
+  const afterRoot = elementBaseRel.startsWith(ROOT_MEDIA)
+    ? elementBaseRel.slice(ROOT_MEDIA.length) // sin "SIGRE.MOVIL/"
+    : elementBaseRel;
+
+  const active7004Dir = FileSystem.documentDirectory + `${elementBaseRel}7004/`;
+  const trash7004Dir = FileSystem.documentDirectory + `${ROOT_TRASH}${afterRoot}7004/`;
+
+  // compatibilidad: carpetas viejas "7004.<n>..."
+  const activeElementDir = FileSystem.documentDirectory + elementBaseRel;
+  const trashElementDir = FileSystem.documentDirectory + `${ROOT_TRASH}${afterRoot}`;
+
+  const nums = [
+    ...(await listNumericSubdirs(active7004Dir)),
+    ...(await listNumericSubdirs(trash7004Dir)),
+    ...(await listOld7004Folders(activeElementDir)),
+    ...(await listOld7004Folders(trashElementDir)),
+  ];
+
+  const max = nums.length ? Math.max(...nums) : 0;
+  return max + 1;
 };
 
 
@@ -350,7 +428,34 @@ export default function Multimedia() {
       setLoading({ active: true, msg: "Generando ZIP..." });
       const feeder = await findFeederById(selectedItem.AlimInterno);
       const { tipo, codigo } = getElementoInfo();
-      const folderPath = `SIGRE.MOVIL/${safeSeg(feeder.alimEtiqueta)}/${safeSeg(selectedSed?.SedCodigo, "SINSED")}/${tipo === "Vano" ? "Vano" : "Poste"}/${safeSeg(codigo)}/${safeSeg(selectedDeficiency?.typificationCode, "SINDEF")}`;
+      const tipCodeZip = String(selectedDeficiency?.typificationCode ?? "");
+
+      // Base por elemento
+      const elementBaseRelZip =
+        `SIGRE.MOVIL/${safeSeg(feeder.alimEtiqueta)}/${safeSeg(selectedSed?.SedCodigo, "SINSED")}/${tipo === "Vano" ? "VANO" : "POSTE"}/${safeSeg(codigo)}/`;
+
+      let defZipFolder = safeSeg(tipCodeZip, "SINDEF"); // carpeta dentro del ZIP
+      let defZipName = defZipFolder;                    // texto dentro del nombre del archivo
+
+      if (tipCodeZip === "7004") {
+        // si ya hay rutas existentes, se extrae el N; si no, se calcula el siguiente
+        const anyPath =
+          photos.find(p => p?.originalPath)?.originalPath ||
+          deletedIds.find(d => d?.path)?.path;
+
+        let corr = extract7004IndexFromPath(anyPath);
+
+        if (corr == null) {
+          corr = await getNext7004Correlativo(elementBaseRelZip);
+        }
+
+        defZipFolder = `7004/${corr}`;
+        defZipName = `7004_${corr}`;
+
+      }
+
+      const folderPath = `${elementBaseRelZip}${defZipFolder}`;
+
       const zip = new JSZip();
       const folder = zip.folder(folderPath);
       for (let i = 0; i < photos.length; i++) {
@@ -363,7 +468,8 @@ export default function Multimedia() {
             prefix: "FOT",
             sed: selectedSed?.SedCodigo,
             codigo, // el código real del elemento
-            def: selectedDeficiency?.typificationCode,
+            def: defZipName,
+
             suffix: i + 1,       // <-- 1..6
             ext: "jpg",
             date,
@@ -376,7 +482,8 @@ export default function Multimedia() {
       }
 
       const zipBase64 = await zip.generateAsync({ type: "base64" });
-      const fileName = `Evidencia_${safeSeg(codigo)}.zip`;
+      const fileName = `EVIDENCIA_${safeSeg(codigo)}.zip`;
+
       const zipUri = FileSystem.cacheDirectory + fileName;
       await FileSystem.writeAsStringAsync(zipUri, zipBase64, { encoding: FileSystem.EncodingType.Base64 });
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(zipUri); }
@@ -402,26 +509,29 @@ export default function Multimedia() {
 
       const sAlim = safeSeg(feeder.alimEtiqueta);
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
-      const sTipo = tipo === "Vano" ? "Vano" : "Poste";
+      const sTipo = tipo === "Vano" ? "VANO" : "POSTE";
+
       const sCod = safeSeg(codigo);
+
+
+
       const tipCode = String(selectedDeficiency?.typificationCode ?? "");
-      let defSegment = safeSeg(tipCode, "SINDEF");
+      const is7004 = tipCode === "7004";
 
-      // suministro: preferible desde la deficiencia (si tu tabla lo tiene)
-      const suministroRaw =
-        deficiencyData?.DefiNumSuministro?.trim?.() ??
-        selectedItem?.VanoNumSuministro ??
-        selectedItem?.VanoSuministro;
+      // defFolderSegment = carpeta dentro del elemento (no-7004 es el código, 7004 se define luego)
+      let defFolderSegment = safeSeg(tipCode, "SINDEF");
 
-      const suministro = safeSeg(suministroRaw, "SINSUM");
+      // defNameSegment = lo que irá en el nombre del archivo (para 7004 será 7004.N)
+      let defNameSegment = defFolderSegment;
 
-      if (tipCode === "7004") {
-        // TODO: aquí debes calcular el correlativo N consultando SQLite.
-        // Si aún no tienes query, por defecto ponemos 1:
-        const correlativo = 1;
+      // Base por elemento (sin deficiencia)
+      const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/`;
 
-        defSegment = `7004.${correlativo}.${suministro}`;
-      }
+
+
+
+
+
 
       const hasNewPhotos = photos.some(p => p && !p.id);
       const hasNewAudios = audios.some(a => a && !a.id);
@@ -433,7 +543,7 @@ export default function Multimedia() {
       const needMusic = hasNewAudios || hasDeletedAudios;
 
       // 1. DETERMINAR RUTA (Herencia + Nueva)
-      let relativeFolderPath;
+      let relativeFolderPath = null;
       let referenciaRuta = photos.find(p => p && p.id && p.originalPath);
 
       if (!referenciaRuta && deletedIds.length > 0) {
@@ -441,16 +551,38 @@ export default function Multimedia() {
         if (borradoConRuta) referenciaRuta = { originalPath: borradoConRuta.path };
       }
 
-      if (referenciaRuta) {
+      // 1A) Si ya existía ruta, se respeta (para que todo quede en la misma carpeta)
+      if (referenciaRuta?.originalPath) {
         const lastSlashIndex = referenciaRuta.originalPath.lastIndexOf("/");
-        relativeFolderPath = lastSlashIndex !== -1
-          ? referenciaRuta.originalPath.substring(0, lastSlashIndex + 1)
-          : `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/${defSegment}/`;
+        if (lastSlashIndex !== -1) {
+          relativeFolderPath = referenciaRuta.originalPath.substring(0, lastSlashIndex + 1);
+        }
+      }
+
+      // 1B) Si NO existía ruta, se crea nueva
+      if (!relativeFolderPath) {
+        if (is7004) {
+          const correlativo = await getNext7004Correlativo(elementBaseRel);
+          defFolderSegment = `7004/${correlativo}`; // ✅ carpeta real
+          defNameSegment = `7004_${correlativo}`;   // ✅ para nombre de archivo
+          relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
+        } else {
+          relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
+          defNameSegment = defFolderSegment;
+        }
       } else {
-        relativeFolderPath = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/${defSegment}/`;
+        // 1C) Si ya había ruta y es 7004, extraemos el N para alinear el nombre del archivo
+        if (is7004) {
+          const corr = extract7004IndexFromPath(relativeFolderPath);
+          defNameSegment = (corr != null) ? `7004_${corr}` : "7004";
+
+        } else {
+          defNameSegment = defFolderSegment;
+        }
       }
 
       const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
+
 
       if (hasNewPhotos || hasNewAudios) {
         await ensureDirExists(carpetaBase);
@@ -568,7 +700,8 @@ export default function Multimedia() {
           prefix: "FOT",
           sed: selectedSed?.SedCodigo,
           codigo,
-          def: defSegment,
+          def: defNameSegment,
+
           suffix: i + 1,   // <-- 1..6
           ext: "jpg",
           date,
@@ -601,7 +734,8 @@ export default function Multimedia() {
           prefix: "AUD",
           sed: selectedSed?.SedCodigo,
           codigo,
-          def: defSegment,
+          def: defNameSegment,
+
           suffix: 0,       // <-- SIEMPRE 0
           ext: "m4a",
           date,

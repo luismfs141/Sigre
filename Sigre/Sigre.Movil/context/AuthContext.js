@@ -31,45 +31,57 @@ export function AuthProvider({ children }) {
   };
 
   const signIn = async (correo, password, proyecto) => {
-  try {
-    const deviceId = await getDeviceId();
-    const url = `${baseURL}User/login`;  // 👈 corregido (antes decía Auth/login)
+    try {
+      const deviceId = await getDeviceId();
+      const url = `${baseURL}User/login`;  // 👈 corregido (antes decía Auth/login)
 
-    console.log("Intentando login en:", url);
-    console.log("Datos enviados:", { correo, password, imei: deviceId });
-    
+      console.log("Intentando login en:", url);
+      console.log("Datos enviados:", { correo, password, imei: deviceId });
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ correo, password, imei: "" }),
-    });
 
-    if (!response.ok) {
-      console.log("Error HTTP:", response.status);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ correo, password, imei: "" }),
+      });
+
+      if (!response.ok) {
+        console.log("Error HTTP:", response.status);
+        return false;
+      }
+
+      const data = await response.json();
+      console.log("Respuesta del servidor:", data);
+
+      const loggedUser = {
+        id: data.usuaInterno,
+        nombre: data.usuaNombres,
+        apellido: data.usuaApellidos,
+        correo: data.usuaCorreo,
+        proyecto,
+        token: data.token,
+        deviceId,
+      };
+
+      console.log("✅ [LOGIN] loggedUser:", loggedUser);
+
+
+
+      setUser(loggedUser);
+      await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
+
+
+      const saved = await AsyncStorage.getItem("user");
+      console.log("💾 [LOGIN] AsyncStorage user:", saved ? JSON.parse(saved) : null);
+
+
+
+      return true;
+    } catch (error) {
+      console.error("Error login:", error);
       return false;
     }
-
-    const data = await response.json();
-    console.log("Respuesta del servidor:", data);
-
-    const loggedUser = {
-      id: data.usuaInterno,
-      nombre: data.usuaNombres,
-      correo: data.usuaCorreo,
-      proyecto,
-      token: data.token,
-      deviceId,
-    };
-
-    setUser(loggedUser);
-    await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
-    return true;
-  } catch (error) {
-    console.error("Error login:", error);
-    return false;
-  }
-};
+  };
 
 
   const signOut = async () => {
