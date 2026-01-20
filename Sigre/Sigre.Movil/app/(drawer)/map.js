@@ -541,7 +541,7 @@ const Map = () => {
         {/* POSTES: ICONO + LABEL */}
         {pinsPost.map((pin, i) => {
           const iconSize = getIconSizeByType(pin.Type);
-          const cleanLabel = formatLabel(pin.ElementCode || pin.Label);
+          const cleanLabel = formatLabel(pin.Label);
           const showLabel = cleanLabel.length > 0;
 
           const coordinate = {
@@ -720,9 +720,9 @@ const Map = () => {
             <View style={modalStyles.modalContainer}>
               <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
 
- {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
+              {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
               <Text style={styles.inputLabel}>Buscar por Código de Poste:</Text>
-              
+
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.inputField}
@@ -735,7 +735,7 @@ const Map = () => {
                   keyboardType="default"
                   placeholderTextColor="#999"
                 />
-                
+
                 {/* La X ahora está dentro del contenedor flexible */}
                 {searchCode.length > 0 && (
                   <TouchableOpacity
@@ -749,7 +749,7 @@ const Map = () => {
 
               {/* OPCIÓN 2: Búsqueda por ETIQUETA (VanoEtiqueta o Label) */}
               <Text style={styles.inputLabel}>Buscar por Etiqueta:</Text>
-              
+
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.inputField}
@@ -761,7 +761,7 @@ const Map = () => {
                   placeholder="Ej: VBT../PTO.."
                   placeholderTextColor="#999"
                 />
-                
+
                 {/* La X ahora está dentro del contenedor flexible */}
                 {searchLabel.length > 0 && (
                   <TouchableOpacity
@@ -895,29 +895,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#000", // O tu color primario
   },
   inputContainer: {
-    flexDirection: 'row',       // 👈 OBLIGATORIO: Pone los elementos en fila horizontal
-    alignItems: 'center',       // 👈 OBLIGATORIO: Centra verticalmente la X
+    flexDirection: "row", // 👈 OBLIGATORIO: Pone los elementos en fila horizontal
+    alignItems: "center", // 👈 OBLIGATORIO: Centra verticalmente la X
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     paddingHorizontal: 10,
     marginBottom: 10,
-    height: 50,                 // Altura fija recomendada
+    height: 50, // Altura fija recomendada
   },
 
   inputField: {
-    flex: 1,                    // 👈 OBLIGATORIO: Ocupa todo el espacio sobrante
+    flex: 1, // 👈 OBLIGATORIO: Ocupa todo el espacio sobrante
     fontSize: 16,
-    color: '#333',
-    height: '100%',
+    color: "#333",
+    height: "100%",
   },
 
   clearButton: {
-    padding: 5,                 // Espacio para el dedo
-    marginLeft: 5,              // Separación del texto
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 5, // Espacio para el dedo
+    marginLeft: 5, // Separación del texto
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 
