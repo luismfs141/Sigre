@@ -154,13 +154,6 @@ const Map = () => {
           ]);
         }
 
-        // ------------------------------------------------------------------
-        // 🕵️‍♂️ RADIOGRAFÍA DE DATOS (AQUÍ ESTÁ LO QUE QUIERES VER)
-        // ------------------------------------------------------------------
-        console.log(`\n📥 [DB LOAD] Carga finalizada:`);
-        console.log(`   👉 Total Gaps: ${gapsLoaded.length}`);
-        console.log(`   👉 Total Pins: ${pinsLoaded.length}`);
-
         if (pinsLoaded.length > 0) {
           // Contamos cuántos son SED (Tipo 1 o 2) y cuántos son Postes (Tipo 5)
           const countSeds = pinsLoaded.filter(
@@ -169,29 +162,6 @@ const Map = () => {
           const countPostes = pinsLoaded.filter(
             (p) => Number(p.Type) === 5,
           ).length;
-
-          console.log(`   📊 REPORTE DE TIPOS:`);
-          console.log(`      🏠 Subestaciones: ${countSeds}`);
-          console.log(`      💡 Postes:        ${countPostes}`);
-
-          // 🔥 ESTO ES LO QUE NECESITAS:
-          // Filtramos solo los POSTES y mostramos los primeros 3 para verificar sus códigos
-          const ejemplosPostes = pinsLoaded
-            .filter((p) => Number(p.Type) === 5)
-            .slice(0, 3);
-
-          if (ejemplosPostes.length > 0) {
-            console.log("   🔎 EJEMPLOS DE POSTES REALES (Primeros 3):");
-            ejemplosPostes.forEach((p, i) => {
-              console.log(
-                `      [${i + 1}] Código: "${p.ElementCode}" | Etiqueta: "${p.Label}" | ID: ${p.Id || p.IdOriginal}`,
-              );
-            });
-          } else {
-            console.warn(
-              "   ⚠️ ALERTA: Hay pines cargados, pero NINGUNO es un Poste (Type 5).",
-            );
-          }
         }
         // ------------------------------------------------------------------
         pinsRef.current = pinsLoaded;
@@ -750,8 +720,9 @@ const Map = () => {
             <View style={modalStyles.modalContainer}>
               <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
 
-              {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
-              <Text style={styles.inputLabel}>Buscar por Código:</Text>
+ {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
+              <Text style={styles.inputLabel}>Buscar por Código de Poste:</Text>
+              
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.inputField}
@@ -761,8 +732,11 @@ const Map = () => {
                     if (t) setSearchLabel(""); // Limpia el otro campo para evitar confusión
                   }}
                   placeholder="Ej: 035840"
-                  keyboardType="default" // Cambiado a default porque los códigos pueden tener letras
+                  keyboardType="default"
+                  placeholderTextColor="#999"
                 />
+                
+                {/* La X ahora está dentro del contenedor flexible */}
                 {searchCode.length > 0 && (
                   <TouchableOpacity
                     onPress={() => setSearchCode("")}
@@ -775,6 +749,7 @@ const Map = () => {
 
               {/* OPCIÓN 2: Búsqueda por ETIQUETA (VanoEtiqueta o Label) */}
               <Text style={styles.inputLabel}>Buscar por Etiqueta:</Text>
+              
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.inputField}
@@ -783,8 +758,11 @@ const Map = () => {
                     setSearchLabel(t);
                     if (t) setSearchCode(""); // Limpia el otro campo
                   }}
-                  placeholder="Ej: VBT..."
+                  placeholder="Ej: VBT../PTO.."
+                  placeholderTextColor="#999"
                 />
+                
+                {/* La X ahora está dentro del contenedor flexible */}
                 {searchLabel.length > 0 && (
                   <TouchableOpacity
                     onPress={() => setSearchLabel("")}
@@ -915,6 +893,31 @@ const styles = StyleSheet.create({
   },
   btnSearch: {
     backgroundColor: "#000", // O tu color primario
+  },
+  inputContainer: {
+    flexDirection: 'row',       // 👈 OBLIGATORIO: Pone los elementos en fila horizontal
+    alignItems: 'center',       // 👈 OBLIGATORIO: Centra verticalmente la X
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    height: 50,                 // Altura fija recomendada
+  },
+
+  inputField: {
+    flex: 1,                    // 👈 OBLIGATORIO: Ocupa todo el espacio sobrante
+    fontSize: 16,
+    color: '#333',
+    height: '100%',
+  },
+
+  clearButton: {
+    padding: 5,                 // Espacio para el dedo
+    marginLeft: 5,              // Separación del texto
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
