@@ -6,13 +6,16 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
+import { Ionicons } from "@expo/vector-icons";
 import { mapStyles, pinStyles } from "../../assets/styles/Map.js";
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
@@ -22,6 +25,7 @@ import { useFeeder } from "../../hooks/useFeeder.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
+import { modalStyles } from "../../styles/modalStyles.js";
 import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
 // ---------------- CONFIG ----------------
@@ -88,6 +92,10 @@ const Map = () => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [showGapSelector, setShowGapSelector] = useState(false);
   const [overlappedGaps, setOverlappedGaps] = useState([]);
+  // Estados para el Modal de Búsqueda
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchCode, setSearchCode] = useState(''); // Para el código
+  const [searchLabel, setSearchLabel] = useState(''); // Para la etiqueta
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
@@ -126,14 +134,18 @@ const Map = () => {
             getGapsBySed(sedId)
           ]);
         }
-
+        console.log(`\n📥 [DB LOAD] Resultado de carga:`);
+        console.log(`   👉 Cantidad de VANOS: ${gapsLoaded.length}`);
+        console.log(`   👉 Cantidad de PINS:  ${pinsLoaded.length}`);
         setPins(pinsLoaded);
         setGaps(gapsLoaded);
 
         if (pinsLoaded.length > 0) {
+          console.log("🔎 ESTRUCTURA DEL PRIMER PIN:", JSON.stringify(pinsLoaded[0], null, 2));
           if (user?.proyecto === 1) {
             setRegionByFeeder(pinsLoaded);
           } else {
+            console.warn("⚠️ ALERTA: La consulta devolvió 0 pines. Revisa si el ID tiene datos en la BD.");
             setRegionBySed(pinsLoaded, selectedSed);
           }
         }
@@ -348,6 +360,112 @@ const Map = () => {
     );
   }
 
+  //---busqueda por codigo y etiqueta ----
+  // ------------------- BÚSQUEDA ROBUSTA (SENIOR FIX) -------------------
+const handleSearchItem = () => {
+    // 1. Normalizar búsqueda (minúsculas y sin espacios extra)
+    const rawSearch = searchCode || searchLabel || ""; 
+    const query = rawSearch.toString().trim().toLowerCase();
+
+    if (!query) {
+      Alert.alert("Atención", "Escribe algo para buscar.");
+      return;
+    }
+
+    let foundItem = null;
+    let itemType = ''; 
+    // 1. REVISAR VANOS
+    if (gaps && gaps.length > 0) {
+       // Solo imprimimos el primero para no llenar la consola
+       const ejemploVano = gaps[0];
+       console.log("\n📘 ESTRUCTURA REAL VANO:", JSON.stringify(ejemploVano, null, 2));
+       // Esto te dirá si usar 'VanoCodigo' o 'vano_codigo', etc.
+    }
+
+    // 2. REVISAR POSTES (PINS)
+    if (pins && pins.length > 0) {
+       // Buscamos un poste real (Type 5)
+       const ejemploPoste = pins.find(p => Number(p.Type) === 5);
+       if (ejemploPoste) {
+          console.log("\nVX ESTRUCTURA REAL POSTE:", JSON.stringify(ejemploPoste, null, 2));
+          
+          // 🧪 Test rápido de tus variables actuales
+          console.log("   ¿Existe PostCodigoNodo?:", ejemploPoste.PostCodigoNodo);
+          console.log("   ¿Existe PostEtiqueta?:  ", ejemploPoste.PostEtiqueta);
+          console.log("   ¿Existe ElementCode?:   ", ejemploPoste.ElementCode); // 👈 Sospecho que este es el bueno
+          console.log("   ¿Existe Label?:         ", ejemploPoste.Label);       // 👈 Y este
+       }
+    }
+    // ------
+
+    // A. BUSCAR EN VANOS
+    if (gaps && gaps.length > 0) {
+      foundItem = gaps.find(gap => {
+        const vCodigo = gap.VanoCodigo ? gap.VanoCodigo.toString().toLowerCase() : "";
+        const vEtiqueta = gap.VanoEtiqueta ? gap.VanoEtiqueta.toString().toLowerCase() : "";
+        // Busca coincidencia en CUALQUIERA de los dos campos
+        return vCodigo.includes(query) || vEtiqueta.includes(query);
+      });
+      if (foundItem) itemType = 'Vano';
+    }
+
+    // B. BUSCAR EN POSTES (Si no encontró Vano)
+    
+    // ✅ CAMBIO CLAVE: Usamos 'memoPins' en lugar de 'pins'
+   // Usamos memoPins para mayor velocidad y seguridad (ya tiene coordenadas numéricas)
+    // Si memoPins te da error, cámbialo por 'pins'
+    if (!foundItem && memoPins && memoPins.length > 0) {
+      
+      foundItem = memoPins.find(pin => {
+        // 🔥 CORRECCIÓN FINAL BASADA EN TUS LOGS:
+        // Usamos 'ElementCode' en vez de PostCodigoNodo
+        const pCodigo = (pin.ElementCode || "").toString().toLowerCase().replace(/(\r\n|\n|\r)/gm, "");
+        
+        // Usamos 'Label' en vez de PostEtiqueta
+        const pEtiqueta = (pin.Label || "").toString().toLowerCase().replace(/(\r\n|\n|\r)/gm, "");
+        
+        return pCodigo.includes(query) || pEtiqueta.includes(query);
+      });
+
+      if (foundItem) {
+        // Identificamos el tipo para logs o lógica futura
+        const t = Number(foundItem.Type);
+        itemType = (t === 5) ? 'Poste' : 'Pin';
+      }
+    }
+
+    // C. RESULTADO
+    if (foundItem) {
+      setShowSearchModal(false);
+      setSearchCode('');
+      setSearchLabel('');
+
+      let targetLat = 0;
+      let targetLng = 0;
+
+      if (itemType === 'Vano') {
+        targetLat = Number(foundItem.VanoLatitudIni);
+        targetLng = Number(foundItem.VanoLongitudIni);
+      } else {
+        targetLat = foundItem.Latitude;
+        targetLng = foundItem.Longitude;
+      }
+
+      if (mapRef.current && targetLat !== 0 && !isNaN(targetLat)) {
+        // 🚀 SUPER ZOOM ANIMATION
+        mapRef.current.animateToRegion({
+          latitude: targetLat,
+          longitude: targetLng,
+          latitudeDelta: 0.0005, // Zoom muy cercano
+          longitudeDelta: 0.0005,
+        }, 1500);
+      } else {
+        Alert.alert("Error", "Coordenadas inválidas en el elemento encontrado.");
+      }
+    } else {
+      Alert.alert("Sin resultados", `No se encontró "${rawSearch}" en la zona.`);
+    }
+  };
   // ------------------- RENDER -------------------
   return (
     <View style={{ flex: 1 }}>
@@ -466,7 +584,7 @@ const Map = () => {
 
           return (
             <Fragment key={`pin-sed-${pin.Id || i}`}>
-              
+
               {/* ICONO */}
               <Marker
                 coordinate={coordinate}
@@ -506,42 +624,138 @@ const Map = () => {
 
       </MapView>
       {/* 🔽 MODAL FUERA DEL MAPVIEW */}
-        {showGapSelector && (
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Seleccione un Vano</Text>
+      {showGapSelector && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Seleccione un Vano</Text>
 
-              {overlappedGaps.map((gap, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setShowGapSelector(false);
-                    onMarkerPress(gap);
-                  }}
-                >
-                  <Text style={styles.modalText}>
-                    {gap.VanoCodigo || "Vano sin código"} - {gap.VanoEtiqueta || ""}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
+            {overlappedGaps.map((gap, idx) => (
               <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setShowGapSelector(false)}
+                key={idx}
+                style={styles.modalItem}
+                onPress={() => {
+                  setShowGapSelector(false);
+                  onMarkerPress(gap);
+                }}
               >
-                <Text style={{ color: "red" }}>Cancelar</Text>
+                <Text style={styles.modalText}>
+                  {gap.VanoCodigo || "Vano sin código"} - {gap.VanoEtiqueta || ""}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        )}
+            ))}
 
-            <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
-              <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowGapSelector(false)}
+            >
+              <Text style={{ color: "red" }}>Cancelar</Text>
             </TouchableOpacity>
           </View>
-        );
-      };
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
+        <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+      </TouchableOpacity>
+
+      {/* 🔽 BOTÓN LUPA FLOTANTE (Top Right) */}
+      <View style={{ position: 'absolute', top: 70, right: 20, zIndex: 10 }}>
+        <TouchableOpacity
+          onPress={() => setShowSearchModal(true)}
+          style={{
+            backgroundColor: 'white',
+            padding: 10,
+            borderRadius: 30,
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }}
+        >
+          <Ionicons name="search" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 🔽 MODAL DE BÚSQUEDA (Estilo unificado) */}
+
+      
+{showSearchModal && (
+  <View style={modalStyles.modalOverlay}>
+    <KeyboardAvoidingView 
+      behavior="padding"
+      style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
+    >
+      {/* NOTA SENIOR: Tu estilo 'modalContainer' tiene height: '80%'. 
+         Si el contenido es poco, sobrará espacio blanco abajo. 
+         Si quieres que se ajuste al contenido, cambia height a 'auto' en modalStyles.
+      */}
+      <View style={modalStyles.modalContainer}>
+        
+        <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
+
+        {/* --- INPUTS (Usan estilos locales porque son específicos) --- */}
+        {/* <Text style={styles.inputLabel}>Código Vano:</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.inputField}
+            value={searchCode}
+            onChangeText={(t) => { setSearchCode(t); if(t) setSearchLabel(''); }}
+            placeholder="Ej: 12345"
+            keyboardType="numeric"
+          />
+          {searchCode.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchCode('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View> */}
+
+        <Text style={styles.inputLabel}>Codigo Vano:</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.inputField}
+            value={searchLabel}
+            onChangeText={(t) => { setSearchLabel(t); if(t) setSearchCode(''); }}
+            placeholder="Ej: VBT..."
+          />
+          {searchLabel.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchLabel('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* --- FOOTER BUTTONS (Usan modalStyles) --- */}
+        <View style={modalStyles.footerButtons}>
+          
+          {/* Botón Cancelar */}
+          <TouchableOpacity 
+            style={[modalStyles.cancelButton, { flex: 1, marginRight: 10 }]} 
+            onPress={() => setShowSearchModal(false)}
+          >
+            <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+
+          {/* Botón Buscar (Usa estilo 'save' porque es la acción positiva) */}
+          <TouchableOpacity 
+            style={[modalStyles.saveButton, { flex: 1, marginLeft: 10 }]} 
+            onPress={handleSearchItem}
+          >
+            <Text style={modalStyles.saveButtonText}>Buscar</Text>
+          </TouchableOpacity>
+          
+        </View>
+
+      </View>
+    </KeyboardAvoidingView>
+  </View>
+)}
+    </View>
+  );
+};
+
+
 
 const styles = StyleSheet.create({
   floatBtn: {
@@ -561,47 +775,66 @@ const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: "50%", left: "50%", zIndex: 100 },
   map: { width: "100%", height: "100%" },
   modalOverlay: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 9999,     // iOS
-  elevation: 20    // Android
-},
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,     // iOS
+    elevation: 20    // Android
+  },
 
-modalBox: {
-  width: "85%",
-  backgroundColor: "#fff",
-  borderRadius: 10,
-  padding: 15,
-},
+  modalBox: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 15,
+  },
 
-modalTitle: {
-  fontSize: 16,
-  fontWeight: "bold",
-  marginBottom: 10,
-  textAlign: "center",
-},
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
 
-modalItem: {
-  paddingVertical: 10,
-  borderBottomWidth: 1,
-  borderBottomColor: "#eee",
-},
+  modalItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
 
-modalText: {
-  fontSize: 14,
-  color: "#333",
-},
+  modalText: {
+    fontSize: 14,
+    color: "#333",
+  },
 
-modalCancel: {
-  marginTop: 10,
-  alignItems: "center",
-}
+  modalCancel: {
+    marginTop: 10,
+    alignItems: "center",
+  },
+
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  btnSearch: {
+    backgroundColor: '#000', // O tu color primario
+  },
+  
 
 });
 
