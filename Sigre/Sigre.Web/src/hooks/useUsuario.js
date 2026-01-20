@@ -28,7 +28,7 @@ export const useUsuario = () => {
     setError('');
 
     try {
-      const response = await api.post('/Auth/Login', {
+      const response = await api.post('/User/Login', {
         correo,
         password,
         imei: null
