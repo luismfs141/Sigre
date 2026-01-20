@@ -1,7 +1,14 @@
 // maps app
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +18,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
@@ -26,7 +33,10 @@ import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
 import { modalStyles } from "../../styles/modalStyles.js";
-import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
+import {
+  getGapColorByInspected,
+  getSourceImageFromType2,
+} from "../../utils/utils.js";
 
 // ---------------- CONFIG ----------------
 const ZOOM_THRESHOLD = 0.003;
@@ -53,6 +63,13 @@ const getLabelOffsetByType = (type) => {
 const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
+  // 🔥 NUEVO: Referencia para guardar los pines "frescos"
+  const pinsRef = useRef([]);
+
+  // Actualizamos la referencia cada vez que cambian los pines
+  useEffect(() => {
+    pinsRef.current = pins;
+  }, [pins]);
 
   const { user } = useContext(AuthContext);
   const {
@@ -77,7 +94,7 @@ const Map = () => {
     setRegionByCoordinate,
     setRegionByFeeder,
     getPinsByRegion,
-    setRegionBySed
+    setRegionBySed,
   } = useMap();
 
   const { fetchLocalFeeders } = useFeeder();
@@ -94,19 +111,20 @@ const Map = () => {
   const [overlappedGaps, setOverlappedGaps] = useState([]);
   // Estados para el Modal de Búsqueda
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchCode, setSearchCode] = useState(''); // Para el código
-  const [searchLabel, setSearchLabel] = useState(''); // Para la etiqueta
+  const [searchCode, setSearchCode] = useState(""); // Para el código
+  const [searchLabel, setSearchLabel] = useState(""); // Para la etiqueta
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
   // ------------------- CARGA DE PINS Y GAPS -------------------
+  // ------------------- CARGA DE PINS Y GAPS (CON RADIOGRAFÍA) -------------------
   useEffect(() => {
+    // 1. Validaciones de seguridad (Si no hay selección, limpia y sal)
     if (user?.proyecto === 1 && !selectedFeeder) {
       setPins([]);
       setGaps([]);
       return;
     }
-
     if (user?.proyecto === 0 && !selectedSed) {
       setPins([]);
       setGaps([]);
@@ -121,33 +139,76 @@ const Map = () => {
         let pinsLoaded = [];
         let gapsLoaded = [];
 
+        // 2. Carga de datos según proyecto
         if (user?.proyecto === 1) {
           const feederId = selectedFeeder.AlimInterno;
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsByFeeder(feederId),
-            getGapsByFeeder(feederId)
+            getGapsByFeeder(feederId),
           ]);
         } else {
           const sedId = selectedSed.SedInterno;
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsBySed(sedId),
-            getGapsBySed(sedId)
+            getGapsBySed(sedId),
           ]);
         }
-        console.log(`\n📥 [DB LOAD] Resultado de carga:`);
-        console.log(`   👉 Cantidad de VANOS: ${gapsLoaded.length}`);
-        console.log(`   👉 Cantidad de PINS:  ${pinsLoaded.length}`);
+
+        // ------------------------------------------------------------------
+        // 🕵️‍♂️ RADIOGRAFÍA DE DATOS (AQUÍ ESTÁ LO QUE QUIERES VER)
+        // ------------------------------------------------------------------
+        console.log(`\n📥 [DB LOAD] Carga finalizada:`);
+        console.log(`   👉 Total Gaps: ${gapsLoaded.length}`);
+        console.log(`   👉 Total Pins: ${pinsLoaded.length}`);
+
+        if (pinsLoaded.length > 0) {
+          // Contamos cuántos son SED (Tipo 1 o 2) y cuántos son Postes (Tipo 5)
+          const countSeds = pinsLoaded.filter(
+            (p) => Number(p.Type) === 1 || Number(p.Type) === 2,
+          ).length;
+          const countPostes = pinsLoaded.filter(
+            (p) => Number(p.Type) === 5,
+          ).length;
+
+          console.log(`   📊 REPORTE DE TIPOS:`);
+          console.log(`      🏠 Subestaciones: ${countSeds}`);
+          console.log(`      💡 Postes:        ${countPostes}`);
+
+          // 🔥 ESTO ES LO QUE NECESITAS:
+          // Filtramos solo los POSTES y mostramos los primeros 3 para verificar sus códigos
+          const ejemplosPostes = pinsLoaded
+            .filter((p) => Number(p.Type) === 5)
+            .slice(0, 3);
+
+          if (ejemplosPostes.length > 0) {
+            console.log("   🔎 EJEMPLOS DE POSTES REALES (Primeros 3):");
+            ejemplosPostes.forEach((p, i) => {
+              console.log(
+                `      [${i + 1}] Código: "${p.ElementCode}" | Etiqueta: "${p.Label}" | ID: ${p.Id || p.IdOriginal}`,
+              );
+            });
+          } else {
+            console.warn(
+              "   ⚠️ ALERTA: Hay pines cargados, pero NINGUNO es un Poste (Type 5).",
+            );
+          }
+        }
+        // ------------------------------------------------------------------
+        pinsRef.current = pinsLoaded;
+        // 3. Guardar en el estado
         setPins(pinsLoaded);
         setGaps(gapsLoaded);
 
+        // 4. Mover la cámara (Region)
         if (pinsLoaded.length > 0) {
-          console.log("🔎 ESTRUCTURA DEL PRIMER PIN:", JSON.stringify(pinsLoaded[0], null, 2));
           if (user?.proyecto === 1) {
             setRegionByFeeder(pinsLoaded);
           } else {
-            console.warn("⚠️ ALERTA: La consulta devolvió 0 pines. Revisa si el ID tiene datos en la BD.");
+            // Nota: Aquí quitamos el console.warn falso que tenías antes
             setRegionBySed(pinsLoaded, selectedSed);
           }
+        } else {
+          console.warn("⚠️ La consulta a BD devolvió 0 resultados.");
         }
       } catch (error) {
         console.error("❌ Error al cargar datos:", error);
@@ -170,15 +231,19 @@ const Map = () => {
         if (status !== "granted") return;
 
         subscription = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Highest, timeInterval: 1000, distanceInterval: 1 },
+          {
+            accuracy: Location.Accuracy.Highest,
+            timeInterval: 1000,
+            distanceInterval: 1,
+          },
           (loc) => {
             if (loc?.coords) {
               setUserLocation({
                 latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude
+                longitude: loc.coords.longitude,
               });
             }
-          }
+          },
         );
       } catch (err) {
         console.warn("Error GPS:", err);
@@ -197,7 +262,7 @@ const Map = () => {
     const initHeading = async () => {
       try {
         headingSub = await Location.watchHeadingAsync((e) =>
-          setHeading(e.trueHeading || 0)
+          setHeading(e.trueHeading || 0),
         );
       } catch (err) {
         console.warn("Error heading:", err);
@@ -217,7 +282,7 @@ const Map = () => {
 
       const { coords } = await Location.getCurrentPositionAsync({
         enableHighAccuracy: true,
-        accuracy: Location.Accuracy.Highest
+        accuracy: Location.Accuracy.Highest,
       });
       if (!coords) return;
 
@@ -225,7 +290,7 @@ const Map = () => {
         latitude: coords.latitude,
         longitude: coords.longitude,
         latitudeDelta: 0.005,
-        longitudeDelta: 0.005
+        longitudeDelta: 0.005,
       };
 
       mapRef.current?.animateToRegion(newRegion, 600);
@@ -245,14 +310,16 @@ const Map = () => {
       .map((p) => ({
         ...p,
         Latitude: Number(p.Latitude),
-        Longitude: Number(p.Longitude)
+        Longitude: Number(p.Longitude),
       }))
-      .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
+      .filter(
+        (p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude),
+      );
   }, [pins]);
 
   const pinsSed = useMemo(
     () => memoPins.filter((p) => isSedType(p.Type)),
-    [memoPins]
+    [memoPins],
   );
 
   const pinsPost = useMemo(() => {
@@ -267,6 +334,7 @@ const Map = () => {
     label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
+    console.log("🔵 Marker presionado:", item);
     try {
       let tipoElemento = "";
       let codigoElemento = "";
@@ -278,7 +346,7 @@ const Map = () => {
         datoElemento = data;
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
-        codigoEtiqueta = datoElemento.PostEtiqueta
+        codigoEtiqueta = datoElemento.PostEtiqueta;
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
 
@@ -304,9 +372,9 @@ const Map = () => {
             onPress: () => {
               setSelectedItem(datoElemento);
               router.push("inspection");
-            }
-          }
-        ]
+            },
+          },
+        ],
       );
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
@@ -318,11 +386,12 @@ const Map = () => {
   };
 
   const findOverlappedGaps = (gap, allGaps) => {
-    return allGaps.filter(g =>
-      areCoordsEqual(g.VanoLatitudIni, gap.VanoLatitudIni) &&
-      areCoordsEqual(g.VanoLongitudIni, gap.VanoLongitudIni) &&
-      areCoordsEqual(g.VanoLatitudFin, gap.VanoLatitudFin) &&
-      areCoordsEqual(g.VanoLongitudFin, gap.VanoLongitudFin)
+    return allGaps.filter(
+      (g) =>
+        areCoordsEqual(g.VanoLatitudIni, gap.VanoLatitudIni) &&
+        areCoordsEqual(g.VanoLongitudIni, gap.VanoLongitudIni) &&
+        areCoordsEqual(g.VanoLatitudFin, gap.VanoLatitudFin) &&
+        areCoordsEqual(g.VanoLongitudFin, gap.VanoLongitudFin),
     );
   };
 
@@ -336,14 +405,21 @@ const Map = () => {
   };
 
   // ------------------- PLACEHOLDER -------------------
-  if ((user?.proyecto === 1 && !selectedFeeder) || (user?.proyecto === 0 && !selectedSed)) {
+  if (
+    (user?.proyecto === 1 && !selectedFeeder) ||
+    (user?.proyecto === 0 && !selectedSed)
+  ) {
     return (
       <View style={styles.placeholderContainer}>
         <Text style={styles.placeholderText}>
-          {user?.proyecto === 1 ? "Seleccione un alimentador" : "Seleccione una SED"}
+          {user?.proyecto === 1
+            ? "Seleccione un alimentador"
+            : "Seleccione una SED"}
         </Text>
 
-        {user?.proyecto === 1 && <DropDown onSelectFeeder={setSelectedFeeder} />}
+        {user?.proyecto === 1 && (
+          <DropDown onSelectFeeder={setSelectedFeeder} />
+        )}
         {user?.proyecto === 0 && <DropDownSed onSelectSed={setSelectedSed} />}
 
         <MapView
@@ -352,7 +428,7 @@ const Map = () => {
             latitude: -12.0464,
             longitude: -77.0428,
             latitudeDelta: 0.05,
-            longitudeDelta: 0.05
+            longitudeDelta: 0.05,
           }}
         />
       </View>
@@ -361,108 +437,80 @@ const Map = () => {
 
   //---busqueda por codigo y etiqueta ----
   // ------------------- BÚSQUEDA ROBUSTA (SENIOR FIX) -------------------
-const handleSearchItem = () => {
-    // 1. Normalizar búsqueda (minúsculas y sin espacios extra)
-    const rawSearch = searchCode || searchLabel || ""; 
+  const handleSearchItem = () => {
+    // 1. Preparar texto
+    const rawSearch = searchCode || searchLabel || "";
     const query = rawSearch.toString().trim().toLowerCase();
 
-    if (!query) {
-      Alert.alert("Atención", "Escribe algo para buscar.");
-      return;
-    }
+    if (!query) return;
+
+    console.log(`🔎 Buscando: "${query}"`);
+
+    // =========================================================
+    // 🔥 EL SECRETO: Usar pinsRef.current
+    // =========================================================
+    // "pinsRef" mira los datos actuales (146 postes), no los antiguos (0).
+    const currentPins = pinsRef.current;
+
+    console.log(
+      `⚡ Escaneando ${currentPins ? currentPins.length : 0} elementos en memoria...`,
+    );
 
     let foundItem = null;
-    let itemType = ''; 
-    // 1. REVISAR VANOS
-    if (gaps && gaps.length > 0) {
-       // Solo imprimimos el primero para no llenar la consola
-       const ejemploVano = gaps[0];
-       console.log("\n📘 ESTRUCTURA REAL VANO:", JSON.stringify(ejemploVano, null, 2));
-       // Esto te dirá si usar 'VanoCodigo' o 'vano_codigo', etc.
-    }
+    let itemType = "";
 
-    // 2. REVISAR POSTES (PINS)
-    if (pins && pins.length > 0) {
-       // Buscamos un poste real (Type 5)
-       const ejemploPoste = pins.find(p => Number(p.Type) === 5);
-       if (ejemploPoste) {
-          console.log("\nVX ESTRUCTURA REAL POSTE:", JSON.stringify(ejemploPoste, null, 2));
-          
-          // 🧪 Test rápido de tus variables actuales
-          console.log("   ¿Existe PostCodigoNodo?:", ejemploPoste.PostCodigoNodo);
-          console.log("   ¿Existe PostEtiqueta?:  ", ejemploPoste.PostEtiqueta);
-          console.log("   ¿Existe ElementCode?:   ", ejemploPoste.ElementCode); // 👈 Sospecho que este es el bueno
-          console.log("   ¿Existe Label?:         ", ejemploPoste.Label);       // 👈 Y este
-       }
-    }
-    // ------
+    // 1. BUSCAR EN PINS (Postes)
+    if (currentPins && currentPins.length > 0) {
+      foundItem = currentPins.find((pin) => {
+        // Buscamos coincidencia exacta o parcial en Código y Etiqueta
+        const pCodigo = (pin.ElementCode || "").toString().toLowerCase();
+        const pEtiqueta = (pin.Label || "").toString().toLowerCase();
 
-    // A. BUSCAR EN VANOS
-    if (gaps && gaps.length > 0) {
-      foundItem = gaps.find(gap => {
-        const vCodigo = gap.VanoCodigo ? gap.VanoCodigo.toString().toLowerCase() : "";
-        const vEtiqueta = gap.VanoEtiqueta ? gap.VanoEtiqueta.toString().toLowerCase() : "";
-        // Busca coincidencia en CUALQUIERA de los dos campos
-        return vCodigo.includes(query) || vEtiqueta.includes(query);
-      });
-      if (foundItem) itemType = 'Vano';
-    }
-
-    // B. BUSCAR EN POSTES (Si no encontró Vano)
-    
-    // ✅ CAMBIO CLAVE: Usamos 'memoPins' en lugar de 'pins'
-   // Usamos memoPins para mayor velocidad y seguridad (ya tiene coordenadas numéricas)
-    // Si memoPins te da error, cámbialo por 'pins'
-    if (!foundItem && memoPins && memoPins.length > 0) {
-      
-      foundItem = memoPins.find(pin => {
-        // 🔥 CORRECCIÓN FINAL BASADA EN TUS LOGS:
-        // Usamos 'ElementCode' en vez de PostCodigoNodo
-        const pCodigo = (pin.ElementCode || "").toString().toLowerCase().replace(/(\r\n|\n|\r)/gm, "");
-        
-        // Usamos 'Label' en vez de PostEtiqueta
-        const pEtiqueta = (pin.Label || "").toString().toLowerCase().replace(/(\r\n|\n|\r)/gm, "");
-        
         return pCodigo.includes(query) || pEtiqueta.includes(query);
       });
 
       if (foundItem) {
-        // Identificamos el tipo para logs o lógica futura
         const t = Number(foundItem.Type);
-        itemType = (t === 5) ? 'Poste' : 'Pin';
+        itemType = t === 5 ? "Poste" : "SED";
+        console.log(`✅ ¡EUREKA! Encontrado ID: ${foundItem.Id}`);
       }
     }
 
-    // C. RESULTADO
+    // 2. SI NO, BUSCAR EN VANOS
+    if (!foundItem && gaps && gaps.length > 0) {
+      foundItem = gaps.find((gap) => {
+        const vCodigo = (gap.VanoCodigo || "").toString().toLowerCase();
+        return vCodigo.includes(query);
+      });
+      if (foundItem) itemType = "Vano";
+    }
+
+    // 3. MOVER CÁMARA
     if (foundItem) {
       setShowSearchModal(false);
-      setSearchCode('');
-      setSearchLabel('');
+      setSearchCode("");
+      setSearchLabel("");
 
-      let targetLat = 0;
-      let targetLng = 0;
+      // Extraemos coordenadas asegurando que sean números
+      const lat = Number(foundItem.Latitude || foundItem.VanoLatitudIni);
+      const lng = Number(foundItem.Longitude || foundItem.VanoLongitudIni);
 
-      if (itemType === 'Vano') {
-        targetLat = Number(foundItem.VanoLatitudIni);
-        targetLng = Number(foundItem.VanoLongitudIni);
-      } else {
-        targetLat = foundItem.Latitude;
-        targetLng = foundItem.Longitude;
-      }
-
-      if (mapRef.current && targetLat !== 0 && !isNaN(targetLat)) {
-        // 🚀 SUPER ZOOM ANIMATION
-        mapRef.current.animateToRegion({
-          latitude: targetLat,
-          longitude: targetLng,
-          latitudeDelta: 0.0005, // Zoom muy cercano
-          longitudeDelta: 0.0005,
-        }, 1500);
-      } else {
-        Alert.alert("Error", "Coordenadas inválidas en el elemento encontrado.");
+      if (mapRef.current && !isNaN(lat)) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: lat,
+            longitude: lng,
+            latitudeDelta: 0.0005,
+            longitudeDelta: 0.0005,
+          },
+          1500,
+        );
       }
     } else {
-      Alert.alert("Sin resultados", `No se encontró "${rawSearch}" en la zona.`);
+      Alert.alert(
+        "Sin resultados",
+        `No se encontró "${rawSearch}" en los ${currentPins.length} elementos.`,
+      );
     }
   };
   // ------------------- RENDER -------------------
@@ -502,7 +550,7 @@ const handleSearchItem = () => {
             key={`gap-${i}`}
             coordinates={[
               { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }
+              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
             ]}
             strokeWidth={3}
             strokeColor={getGapColorByInspected(gap)}
@@ -528,7 +576,7 @@ const handleSearchItem = () => {
 
           const coordinate = {
             latitude: pin.Latitude,
-            longitude: pin.Longitude
+            longitude: pin.Longitude,
           };
 
           return (
@@ -545,7 +593,10 @@ const handleSearchItem = () => {
                   <View style={pinStyles.iconWrapper}>
                     <Image
                       source={getSourceImageFromType2(pin)}
-                      style={[pinStyles.pinIcon, { width: iconSize, height: iconSize }]}
+                      style={[
+                        pinStyles.pinIcon,
+                        { width: iconSize, height: iconSize },
+                      ]}
                     />
                   </View>
                 </View>
@@ -562,7 +613,11 @@ const handleSearchItem = () => {
                   tappable
                   onPress={() => onMarkerPress(pin)}
                 >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                  <View
+                    style={pinStyles.labelCanvas}
+                    collapsable={false}
+                    pointerEvents="none"
+                  >
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{cleanLabel}</Text>
                     </View>
@@ -577,13 +632,12 @@ const handleSearchItem = () => {
         {pinsSed.map((pin, i) => {
           const coordinate = {
             latitude: pin.Latitude,
-            longitude: pin.Longitude
+            longitude: pin.Longitude,
           };
           const label = getCleanLabel(pin);
 
           return (
             <Fragment key={`pin-sed-${pin.Id || i}`}>
-
               {/* ICONO */}
               <Marker
                 coordinate={coordinate}
@@ -605,12 +659,16 @@ const handleSearchItem = () => {
                 <Marker
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: 1.9 }}
-                  centerOffset={{ x: 0, y: 30 }}   // mueve el texto debajo del icono
+                  centerOffset={{ x: 0, y: 30 }} // mueve el texto debajo del icono
                   tracksViewChanges={true}
                   zIndex={2001}
                   tappable={false}
                 >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                  <View
+                    style={pinStyles.labelCanvas}
+                    collapsable={false}
+                    pointerEvents="none"
+                  >
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{label}</Text>
                     </View>
@@ -620,7 +678,6 @@ const handleSearchItem = () => {
             </Fragment>
           );
         })}
-
       </MapView>
       {/* 🔽 MODAL FUERA DEL MAPVIEW */}
       {showGapSelector && (
@@ -638,7 +695,8 @@ const handleSearchItem = () => {
                 }}
               >
                 <Text style={styles.modalText}>
-                  {gap.VanoCodigo || "Vano sin código"} - {gap.VanoEtiqueta || ""}
+                  {gap.VanoCodigo || "Vano sin código"} -{" "}
+                  {gap.VanoEtiqueta || ""}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -658,15 +716,15 @@ const handleSearchItem = () => {
       </TouchableOpacity>
 
       {/* 🔽 BOTÓN LUPA FLOTANTE (Top Right) */}
-      <View style={{ position: 'absolute', top: 70, right: 20, zIndex: 10 }}>
+      <View style={{ position: "absolute", top: 70, right: 20, zIndex: 10 }}>
         <TouchableOpacity
           onPress={() => setShowSearchModal(true)}
           style={{
-            backgroundColor: 'white',
+            backgroundColor: "white",
             padding: 10,
             borderRadius: 30,
             elevation: 5,
-            shadowColor: '#000',
+            shadowColor: "#000",
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.25,
             shadowRadius: 3.84,
@@ -677,84 +735,94 @@ const handleSearchItem = () => {
       </View>
 
       {/* 🔽 MODAL DE BÚSQUEDA (Estilo unificado) */}
-
-      
-{showSearchModal && (
-  <View style={modalStyles.modalOverlay}>
-    <KeyboardAvoidingView 
-      behavior="padding"
-      style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
-    >
-      {/* NOTA SENIOR: Tu estilo 'modalContainer' tiene height: '80%'. 
-         Si el contenido es poco, sobrará espacio blanco abajo. 
-         Si quieres que se ajuste al contenido, cambia height a 'auto' en modalStyles.
-      */}
-      <View style={modalStyles.modalContainer}>
-        
-        <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
-
-        {/* --- INPUTS (Usan estilos locales porque son específicos) --- */}
-        {/* <Text style={styles.inputLabel}>Código Vano:</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.inputField}
-            value={searchCode}
-            onChangeText={(t) => { setSearchCode(t); if(t) setSearchLabel(''); }}
-            placeholder="Ej: 12345"
-            keyboardType="numeric"
-          />
-          {searchCode.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchCode('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View> */}
-
-        <Text style={styles.inputLabel}>Codigo Vano:</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.inputField}
-            value={searchLabel}
-            onChangeText={(t) => { setSearchLabel(t); if(t) setSearchCode(''); }}
-            placeholder="Ej: VBT..."
-          />
-          {searchLabel.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchLabel('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* --- FOOTER BUTTONS (Usan modalStyles) --- */}
-        <View style={modalStyles.footerButtons}>
-          
-          {/* Botón Cancelar */}
-          <TouchableOpacity 
-            style={[modalStyles.cancelButton, { flex: 1, marginRight: 10 }]} 
-            onPress={() => setShowSearchModal(false)}
+      {showSearchModal && (
+        <View style={modalStyles.modalOverlay}>
+          {/* KeyboardAvoidingView para que el teclado no tape el modal */}
+          <KeyboardAvoidingView
+            behavior="padding"
+            style={{
+              flex: 1,
+              width: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
           >
-            <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
-          </TouchableOpacity>
+            <View style={modalStyles.modalContainer}>
+              <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
 
-          {/* Botón Buscar (Usa estilo 'save' porque es la acción positiva) */}
-          <TouchableOpacity 
-            style={[modalStyles.saveButton, { flex: 1, marginLeft: 10 }]} 
-            onPress={handleSearchItem}
-          >
-            <Text style={modalStyles.saveButtonText}>Buscar</Text>
-          </TouchableOpacity>
-          
+              {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
+              <Text style={styles.inputLabel}>Buscar por Código:</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.inputField}
+                  value={searchCode}
+                  onChangeText={(t) => {
+                    setSearchCode(t);
+                    if (t) setSearchLabel(""); // Limpia el otro campo para evitar confusión
+                  }}
+                  placeholder="Ej: 035840"
+                  keyboardType="default" // Cambiado a default porque los códigos pueden tener letras
+                />
+                {searchCode.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchCode("")}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* OPCIÓN 2: Búsqueda por ETIQUETA (VanoEtiqueta o Label) */}
+              <Text style={styles.inputLabel}>Buscar por Etiqueta:</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.inputField}
+                  value={searchLabel}
+                  onChangeText={(t) => {
+                    setSearchLabel(t);
+                    if (t) setSearchCode(""); // Limpia el otro campo
+                  }}
+                  placeholder="Ej: VBT..."
+                />
+                {searchLabel.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchLabel("")}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* --- FOOTER BUTTONS --- */}
+              <View style={modalStyles.footerButtons}>
+                {/* Botón Cancelar */}
+                <TouchableOpacity
+                  style={[
+                    modalStyles.cancelButton,
+                    { flex: 1, marginRight: 10 },
+                  ]}
+                  onPress={() => setShowSearchModal(false)}
+                >
+                  <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                {/* Botón Buscar */}
+                <TouchableOpacity
+                  style={[modalStyles.saveButton, { flex: 1, marginLeft: 10 }]}
+                  onPress={handleSearchItem}
+                >
+                  <Text style={modalStyles.saveButtonText}>Buscar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-
-      </View>
-    </KeyboardAvoidingView>
-  </View>
-)}
+      )}
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   floatBtn: {
@@ -766,12 +834,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 100,
-    elevation: 5
+    elevation: 5,
   },
   btnImg: { width: 40, height: 40, resizeMode: "contain" },
-  placeholderContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  placeholderText: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
-  loadingOverlay: { position: "absolute", top: "50%", left: "50%", zIndex: 100 },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: "#555",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    zIndex: 100,
+  },
   map: { width: "100%", height: "100%" },
   modalOverlay: {
     position: "absolute",
@@ -782,8 +865,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999,     // iOS
-    elevation: 20    // Android
+    zIndex: 9999, // iOS
+    elevation: 20, // Android
   },
 
   modalBox: {
@@ -818,23 +901,21 @@ const styles = StyleSheet.create({
 
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 10,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
   },
   inputLabel: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: 5,
     marginTop: 10,
   },
   btnSearch: {
-    backgroundColor: '#000', // O tu color primario
+    backgroundColor: "#000", // O tu color primario
   },
-  
-
 });
 
 export default Map;
