@@ -4,7 +4,7 @@
 -- TOADAS LAS DEFICIENCIAS DE UNA SUBESTACIÓN --------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%091620';
+DECLARE @SUB_ETI VARCHAR(20) = '%5903%';
 
 SELECT  
         D.DEFI_Interno,
@@ -72,7 +72,7 @@ ORDER BY C.CODI_Codigo, D.DEFI_CodigoElemento;
 -- BUSCA TODOS LOS ARCHIVOS POR CODIGO DE SED ------------------------------
 ------------------------------------------------------------------
 
-DECLARE @SED_CODIGO VARCHAR(50) = '%091620';  -- <-- tu SED_Codigo
+DECLARE @SED_CODIGO VARCHAR(50) = '%5903%';  -- <-- tu SED_Codigo
 
 SELECT
     S.SED_Codigo,
