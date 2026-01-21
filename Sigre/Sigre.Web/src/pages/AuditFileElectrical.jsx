@@ -144,33 +144,33 @@ const AuditFileElectrical = () => {
 
     return (
         <div className="container-fluid p-4">
-            <h2 className="mb-4 text-warning">Multi-File Electrical Audit</h2>
+            <h2 className="mb-4 text-warning">Auditoría Eléctrica Multi-Archivo</h2>
             <div className="row">
                 <div className="col-md-4">
                     {/* GLOBAL CONFIGURATION */}
                     <div className="card shadow-sm mb-4">
                         <div className="card-header bg-warning text-dark">
-                            <h5 className="mb-0">1. Structure Context</h5>
+                            <h5 className="mb-0">1. Estructura de la deficiencia</h5>
                         </div>
                         <div className="card-body">
                             <div className="mb-3">
-                                <label className="form-label">Feeder Label (Alim. Etiqueta)</label>
+                                <label className="form-label">Etiqueta de Alimentador (Alim. Etiqueta)</label>
                                 <input type="text" className="form-control" value={feederLabel} onChange={e => setFeederLabel(e.target.value)} placeholder="e.g. A-123" />
                             </div>
                             <div className="mb-3">
-                                <label className="form-label">SED Code</label>
+                                <label className="form-label">SED Codigo</label>
                                 <input type="text" className="form-control" value={sedCode} onChange={e => setSedCode(e.target.value)} placeholder="e.g. SED-001" />
                             </div>
                             <div className="mb-3">
-                                <label className="form-label">Structure Type</label>
+                                <label className="form-label">Tipo</label>
                                 <select className="form-select" value={structureType} onChange={e => setStructureType(e.target.value)}>
-                                    <option value="Poste">Poste (Pole)</option>
-                                    <option value="Vano">Vano (Span)</option>
+                                    <option value="Poste">POSTE</option>
+                                    <option value="Vano">VANO</option>
                                 </select>
                             </div>
                             <div className="mb-3">
-                                <label className="form-label">Element Code ({structureType})</label>
-                                <input type="text" className="form-control" value={structureCode} onChange={e => setStructureCode(e.target.value)} placeholder="e.g. P-9999" />
+                                <label className="form-label">GIS Codigo ({structureType})</label>
+                                <input type="text" className="form-control" value={structureCode} onChange={e => setStructureCode(e.target.value)} placeholder="e.g. PTOO.../VBT..." />
                             </div>
                         </div>
                     </div>
@@ -178,21 +178,21 @@ const AuditFileElectrical = () => {
                     {/* ADD NEW ITEM FORM */}
                     <div className="card shadow-sm mb-4">
                         <div className="card-header bg-secondary text-white">
-                            <h5 className="mb-0">2. Add Deficiency / Photo</h5>
+                            <h5 className="mb-0">2. Añadir una deficiencia / FOTO</h5>
                         </div>
                         <div className="card-body">
                             <div className="mb-3">
-                                <label className="form-label">Deficiency Code</label>
+                                <label className="form-label">Código de Deficiencia</label>
                                 <input type="text" className="form-control" value={currentDeficiencyCode} onChange={e => setCurrentDeficiencyCode(e.target.value)} placeholder="e.g. D-05" />
                             </div>
                             <div className="mb-3">
-                                <label className="form-label">Photo</label>
+                                <label className="form-label">Foto</label>
                                 <input type="file" className="form-control" accept="image/*" onChange={handleFileChange} />
                             </div>
                             {currentPreview && <img src={currentPreview} alt="Preview" className="img-thumbnail mb-3" style={{maxHeight:'150px'}}/>}
                             
                             <div className="mb-3">
-                                <label className="form-label">Date</label>
+                                <label className="form-label">Fecha</label>
                                 <input type="datetime-local" step="1" className="form-control" value={currentDate} onChange={e => setCurrentDate(e.target.value)} />
                             </div>
                             <div className="row mb-3">
@@ -203,7 +203,7 @@ const AuditFileElectrical = () => {
                                     <input type="text" className="form-control" placeholder="Long" value={currentLong} onChange={e => setCurrentLong(e.target.value)} />
                                 </div>
                             </div>
-                            <button className="btn btn-secondary w-100" onClick={addItem}>Add to List</button>
+                            <button className="btn btn-secondary w-100" onClick={addItem}>Añadir a la Lista</button>
                         </div>
                     </div>
                 </div>
@@ -212,7 +212,7 @@ const AuditFileElectrical = () => {
                     {/* ITEMS LIST */}
                     <div className="card shadow-sm h-100">
                         <div className="card-header bg-light d-flex justify-content-between align-items-center">
-                            <h5 className="mb-0">Selected Items ({items.length})</h5>
+                            <h5 className="mb-0">Elementos Seleccionados ({items.length})</h5>
                             <button className="btn btn-warning fw-bold" disabled={isProcessing} onClick={handleGenerateZip}>
                                 {isProcessing ? 'Processing ZIP...' : 'Generate Folders & ZIP'}
                             </button>
@@ -225,10 +225,10 @@ const AuditFileElectrical = () => {
                                     <table className="table table-hover align-middle">
                                         <thead>
                                             <tr>
-                                                <th>Preview</th>
-                                                <th>Deficiency</th>
-                                                <th>Metadata</th>
-                                                <th>Action</th>
+                                                <th>Vista Previa</th>
+                                                <th>Deficiencia</th>
+                                                <th>Metadatos</th>
+                                                <th>Acción</th>
                                             </tr>
                                         </thead>
                                         <tbody>
