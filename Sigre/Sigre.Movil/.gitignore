@@ -82,3 +82,10 @@ yarn-error.*
 *.tsbuildinfo
 
 # @end expo-cli
+
+.gradle/
+local.properties
+build/
+app/build/
+*.iml
+.idea/

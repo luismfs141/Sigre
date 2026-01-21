@@ -1,18 +1,28 @@
 // maps app
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
+import { Ionicons } from "@expo/vector-icons";
 import { mapStyles, pinStyles } from "../../assets/styles/Map.js";
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
@@ -22,7 +32,11 @@ import { useFeeder } from "../../hooks/useFeeder.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
-import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
+import { modalStyles } from "../../styles/modalStyles.js";
+import {
+  getGapColorByInspected,
+  getSourceImageFromType2,
+} from "../../utils/utils.js";
 
 // ---------------- CONFIG ----------------
 const ZOOM_THRESHOLD = 0.003;
@@ -49,6 +63,13 @@ const getLabelOffsetByType = (type) => {
 const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
+  // 🔥 NUEVO: Referencia para guardar los pines "frescos"
+  const pinsRef = useRef([]);
+
+  // Actualizamos la referencia cada vez que cambian los pines
+  useEffect(() => {
+    pinsRef.current = pins;
+  }, [pins]);
 
   const { user } = useContext(AuthContext);
   const {
@@ -73,7 +94,7 @@ const Map = () => {
     setRegionByCoordinate,
     setRegionByFeeder,
     getPinsByRegion,
-    setRegionBySed
+    setRegionBySed,
   } = useMap();
 
   const { fetchLocalFeeders } = useFeeder();
@@ -88,17 +109,22 @@ const Map = () => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [showGapSelector, setShowGapSelector] = useState(false);
   const [overlappedGaps, setOverlappedGaps] = useState([]);
+  // Estados para el Modal de Búsqueda
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchCode, setSearchCode] = useState(""); // Para el código
+  const [searchLabel, setSearchLabel] = useState(""); // Para la etiqueta
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
   // ------------------- CARGA DE PINS Y GAPS -------------------
+  // ------------------- CARGA DE PINS Y GAPS (CON RADIOGRAFÍA) -------------------
   useEffect(() => {
+    // 1. Validaciones de seguridad (Si no hay selección, limpia y sal)
     if (user?.proyecto === 1 && !selectedFeeder) {
       setPins([]);
       setGaps([]);
       return;
     }
-
     if (user?.proyecto === 0 && !selectedSed) {
       setPins([]);
       setGaps([]);
@@ -113,29 +139,46 @@ const Map = () => {
         let pinsLoaded = [];
         let gapsLoaded = [];
 
+        // 2. Carga de datos según proyecto
         if (user?.proyecto === 1) {
           const feederId = selectedFeeder.AlimInterno;
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsByFeeder(feederId),
-            getGapsByFeeder(feederId)
+            getGapsByFeeder(feederId),
           ]);
         } else {
           const sedId = selectedSed.SedInterno;
           [pinsLoaded, gapsLoaded] = await Promise.all([
             getPinsBySed(sedId),
-            getGapsBySed(sedId)
+            getGapsBySed(sedId),
           ]);
         }
 
+        if (pinsLoaded.length > 0) {
+          // Contamos cuántos son SED (Tipo 1 o 2) y cuántos son Postes (Tipo 5)
+          const countSeds = pinsLoaded.filter(
+            (p) => Number(p.Type) === 1 || Number(p.Type) === 2,
+          ).length;
+          const countPostes = pinsLoaded.filter(
+            (p) => Number(p.Type) === 5,
+          ).length;
+        }
+        // ------------------------------------------------------------------
+        pinsRef.current = pinsLoaded;
+        // 3. Guardar en el estado
         setPins(pinsLoaded);
         setGaps(gapsLoaded);
 
+        // 4. Mover la cámara (Region)
         if (pinsLoaded.length > 0) {
           if (user?.proyecto === 1) {
             setRegionByFeeder(pinsLoaded);
           } else {
+            // Nota: Aquí quitamos el console.warn falso que tenías antes
             setRegionBySed(pinsLoaded, selectedSed);
           }
+        } else {
+          console.warn("⚠️ La consulta a BD devolvió 0 resultados.");
         }
       } catch (error) {
         console.error("❌ Error al cargar datos:", error);
@@ -158,15 +201,19 @@ const Map = () => {
         if (status !== "granted") return;
 
         subscription = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Highest, timeInterval: 1000, distanceInterval: 1 },
+          {
+            accuracy: Location.Accuracy.Highest,
+            timeInterval: 1000,
+            distanceInterval: 1,
+          },
           (loc) => {
             if (loc?.coords) {
               setUserLocation({
                 latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude
+                longitude: loc.coords.longitude,
               });
             }
-          }
+          },
         );
       } catch (err) {
         console.warn("Error GPS:", err);
@@ -185,7 +232,7 @@ const Map = () => {
     const initHeading = async () => {
       try {
         headingSub = await Location.watchHeadingAsync((e) =>
-          setHeading(e.trueHeading || 0)
+          setHeading(e.trueHeading || 0),
         );
       } catch (err) {
         console.warn("Error heading:", err);
@@ -205,7 +252,7 @@ const Map = () => {
 
       const { coords } = await Location.getCurrentPositionAsync({
         enableHighAccuracy: true,
-        accuracy: Location.Accuracy.Highest
+        accuracy: Location.Accuracy.Highest,
       });
       if (!coords) return;
 
@@ -213,7 +260,7 @@ const Map = () => {
         latitude: coords.latitude,
         longitude: coords.longitude,
         latitudeDelta: 0.005,
-        longitudeDelta: 0.005
+        longitudeDelta: 0.005,
       };
 
       mapRef.current?.animateToRegion(newRegion, 600);
@@ -233,14 +280,16 @@ const Map = () => {
       .map((p) => ({
         ...p,
         Latitude: Number(p.Latitude),
-        Longitude: Number(p.Longitude)
+        Longitude: Number(p.Longitude),
       }))
-      .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
+      .filter(
+        (p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude),
+      );
   }, [pins]);
 
   const pinsSed = useMemo(
     () => memoPins.filter((p) => isSedType(p.Type)),
-    [memoPins]
+    [memoPins],
   );
 
   const pinsPost = useMemo(() => {
@@ -255,6 +304,7 @@ const Map = () => {
     label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
+    console.log(item);
     try {
       let tipoElemento = "";
       let codigoElemento = "";
@@ -266,7 +316,7 @@ const Map = () => {
         datoElemento = data;
         tipoElemento = "Poste";
         codigoElemento = datoElemento.PostCodigoNodo;
-        codigoEtiqueta = datoElemento.PostEtiqueta
+        codigoEtiqueta = datoElemento.PostEtiqueta;
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
 
@@ -292,9 +342,9 @@ const Map = () => {
             onPress: () => {
               setSelectedItem(datoElemento);
               router.push("inspection");
-            }
-          }
-        ]
+            },
+          },
+        ],
       );
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
@@ -306,11 +356,12 @@ const Map = () => {
   };
 
   const findOverlappedGaps = (gap, allGaps) => {
-    return allGaps.filter(g =>
-      areCoordsEqual(g.VanoLatitudIni, gap.VanoLatitudIni) &&
-      areCoordsEqual(g.VanoLongitudIni, gap.VanoLongitudIni) &&
-      areCoordsEqual(g.VanoLatitudFin, gap.VanoLatitudFin) &&
-      areCoordsEqual(g.VanoLongitudFin, gap.VanoLongitudFin)
+    return allGaps.filter(
+      (g) =>
+        areCoordsEqual(g.VanoLatitudIni, gap.VanoLatitudIni) &&
+        areCoordsEqual(g.VanoLongitudIni, gap.VanoLongitudIni) &&
+        areCoordsEqual(g.VanoLatitudFin, gap.VanoLatitudFin) &&
+        areCoordsEqual(g.VanoLongitudFin, gap.VanoLongitudFin),
     );
   };
 
@@ -324,14 +375,21 @@ const Map = () => {
   };
 
   // ------------------- PLACEHOLDER -------------------
-  if ((user?.proyecto === 1 && !selectedFeeder) || (user?.proyecto === 0 && !selectedSed)) {
+  if (
+    (user?.proyecto === 1 && !selectedFeeder) ||
+    (user?.proyecto === 0 && !selectedSed)
+  ) {
     return (
       <View style={styles.placeholderContainer}>
         <Text style={styles.placeholderText}>
-          {user?.proyecto === 1 ? "Seleccione un alimentador" : "Seleccione una SED"}
+          {user?.proyecto === 1
+            ? "Seleccione un alimentador"
+            : "Seleccione una SED"}
         </Text>
 
-        {user?.proyecto === 1 && <DropDown onSelectFeeder={setSelectedFeeder} />}
+        {user?.proyecto === 1 && (
+          <DropDown onSelectFeeder={setSelectedFeeder} />
+        )}
         {user?.proyecto === 0 && <DropDownSed onSelectSed={setSelectedSed} />}
 
         <MapView
@@ -340,13 +398,91 @@ const Map = () => {
             latitude: -12.0464,
             longitude: -77.0428,
             latitudeDelta: 0.05,
-            longitudeDelta: 0.05
+            longitudeDelta: 0.05,
           }}
         />
       </View>
     );
   }
 
+  //---busqueda por codigo y etiqueta ----
+  // ------------------- BÚSQUEDA ROBUSTA (SENIOR FIX) -------------------
+  const handleSearchItem = () => {
+    // 1. Preparar texto
+    const rawSearch = searchCode || searchLabel || "";
+    const query = rawSearch.toString().trim().toLowerCase();
+
+    if (!query) return;
+
+    console.log(`🔎 Buscando: "${query}"`);
+
+    // =========================================================
+    // 🔥 EL SECRETO: Usar pinsRef.current
+    // =========================================================
+    // "pinsRef" mira los datos actuales (146 postes), no los antiguos (0).
+    const currentPins = pinsRef.current;
+
+    console.log(
+      `⚡ Escaneando ${currentPins ? currentPins.length : 0} elementos en memoria...`,
+    );
+
+    let foundItem = null;
+    let itemType = "";
+
+    // 1. BUSCAR EN PINS (Postes)
+    if (currentPins && currentPins.length > 0) {
+      foundItem = currentPins.find((pin) => {
+        // Buscamos coincidencia exacta o parcial en Código y Etiqueta
+        const pCodigo = (pin.ElementCode || "").toString().toLowerCase();
+        const pEtiqueta = (pin.Label || "").toString().toLowerCase();
+
+        return pCodigo.includes(query) || pEtiqueta.includes(query);
+      });
+
+      if (foundItem) {
+        const t = Number(foundItem.Type);
+        itemType = t === 5 ? "Poste" : "SED";
+        console.log(`✅ ¡EUREKA! Encontrado ID: ${foundItem.Id}`);
+      }
+    }
+
+    // 2. SI NO, BUSCAR EN VANOS
+    if (!foundItem && gaps && gaps.length > 0) {
+      foundItem = gaps.find((gap) => {
+        const vCodigo = (gap.VanoCodigo || "").toString().toLowerCase();
+        return vCodigo.includes(query);
+      });
+      if (foundItem) itemType = "Vano";
+    }
+
+    // 3. MOVER CÁMARA
+    if (foundItem) {
+      setShowSearchModal(false);
+      setSearchCode("");
+      setSearchLabel("");
+
+      // Extraemos coordenadas asegurando que sean números
+      const lat = Number(foundItem.Latitude || foundItem.VanoLatitudIni);
+      const lng = Number(foundItem.Longitude || foundItem.VanoLongitudIni);
+
+      if (mapRef.current && !isNaN(lat)) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: lat,
+            longitude: lng,
+            latitudeDelta: 0.0005,
+            longitudeDelta: 0.0005,
+          },
+          1500,
+        );
+      }
+    } else {
+      Alert.alert(
+        "Sin resultados",
+        `No se encontró "${rawSearch}" en los ${currentPins.length} elementos.`,
+      );
+    }
+  };
   // ------------------- RENDER -------------------
   return (
     <View style={{ flex: 1 }}>
@@ -384,7 +520,7 @@ const Map = () => {
             key={`gap-${i}`}
             coordinates={[
               { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin }
+              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
             ]}
             strokeWidth={3}
             strokeColor={getGapColorByInspected(gap)}
@@ -405,12 +541,12 @@ const Map = () => {
         {/* POSTES: ICONO + LABEL */}
         {pinsPost.map((pin, i) => {
           const iconSize = getIconSizeByType(pin.Type);
-          const cleanLabel = formatLabel(pin.ElementCode || pin.Label);
+          const cleanLabel = formatLabel(pin.Label);
           const showLabel = cleanLabel.length > 0;
 
           const coordinate = {
             latitude: pin.Latitude,
-            longitude: pin.Longitude
+            longitude: pin.Longitude,
           };
 
           return (
@@ -427,7 +563,10 @@ const Map = () => {
                   <View style={pinStyles.iconWrapper}>
                     <Image
                       source={getSourceImageFromType2(pin)}
-                      style={[pinStyles.pinIcon, { width: iconSize, height: iconSize }]}
+                      style={[
+                        pinStyles.pinIcon,
+                        { width: iconSize, height: iconSize },
+                      ]}
                     />
                   </View>
                 </View>
@@ -444,7 +583,11 @@ const Map = () => {
                   tappable
                   onPress={() => onMarkerPress(pin)}
                 >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                  <View
+                    style={pinStyles.labelCanvas}
+                    collapsable={false}
+                    pointerEvents="none"
+                  >
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{cleanLabel}</Text>
                     </View>
@@ -459,13 +602,12 @@ const Map = () => {
         {pinsSed.map((pin, i) => {
           const coordinate = {
             latitude: pin.Latitude,
-            longitude: pin.Longitude
+            longitude: pin.Longitude,
           };
           const label = getCleanLabel(pin);
 
           return (
             <Fragment key={`pin-sed-${pin.Id || i}`}>
-              
               {/* ICONO */}
               <Marker
                 coordinate={coordinate}
@@ -487,12 +629,16 @@ const Map = () => {
                 <Marker
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: 1.9 }}
-                  centerOffset={{ x: 0, y: 30 }}   // mueve el texto debajo del icono
+                  centerOffset={{ x: 0, y: 30 }} // mueve el texto debajo del icono
                   tracksViewChanges={true}
                   zIndex={2001}
                   tappable={false}
                 >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                  <View
+                    style={pinStyles.labelCanvas}
+                    collapsable={false}
+                    pointerEvents="none"
+                  >
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{label}</Text>
                     </View>
@@ -502,45 +648,159 @@ const Map = () => {
             </Fragment>
           );
         })}
-
       </MapView>
       {/* 🔽 MODAL FUERA DEL MAPVIEW */}
-        {showGapSelector && (
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Seleccione un Vano</Text>
+      {showGapSelector && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Seleccione un Vano</Text>
 
-              {overlappedGaps.map((gap, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setShowGapSelector(false);
-                    onMarkerPress(gap);
-                  }}
-                >
-                  <Text style={styles.modalText}>
-                    {gap.VanoCodigo || "Vano sin código"} - {gap.VanoEtiqueta || ""}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
+            {overlappedGaps.map((gap, idx) => (
               <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setShowGapSelector(false)}
+                key={idx}
+                style={styles.modalItem}
+                onPress={() => {
+                  setShowGapSelector(false);
+                  onMarkerPress(gap);
+                }}
               >
-                <Text style={{ color: "red" }}>Cancelar</Text>
+                <Text style={styles.modalText}>
+                  {gap.VanoCodigo || "Vano sin código"} -{" "}
+                  {gap.VanoEtiqueta || ""}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        )}
+            ))}
 
-            <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
-              <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowGapSelector(false)}
+            >
+              <Text style={{ color: "red" }}>Cancelar</Text>
             </TouchableOpacity>
           </View>
-        );
-      };
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
+        <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
+      </TouchableOpacity>
+
+      {/* 🔽 BOTÓN LUPA FLOTANTE (Top Right) */}
+      <View style={{ position: "absolute", top: 70, right: 20, zIndex: 10 }}>
+        <TouchableOpacity
+          onPress={() => setShowSearchModal(true)}
+          style={{
+            backgroundColor: "white",
+            padding: 10,
+            borderRadius: 30,
+            elevation: 5,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }}
+        >
+          <Ionicons name="search" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 🔽 MODAL DE BÚSQUEDA (Estilo unificado) */}
+      {showSearchModal && (
+        <View style={modalStyles.modalOverlay}>
+          {/* KeyboardAvoidingView para que el teclado no tape el modal */}
+          <KeyboardAvoidingView
+            behavior="padding"
+            style={{
+              flex: 1,
+              width: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <View style={modalStyles.modalContainer}>
+              <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
+
+              {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
+              <Text style={styles.inputLabel}>Buscar por Código de Poste:</Text>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.inputField}
+                  value={searchCode}
+                  onChangeText={(t) => {
+                    setSearchCode(t);
+                    if (t) setSearchLabel(""); // Limpia el otro campo para evitar confusión
+                  }}
+                  placeholder="Ej: 035840"
+                  keyboardType="default"
+                  placeholderTextColor="#999"
+                />
+
+                {/* La X ahora está dentro del contenedor flexible */}
+                {searchCode.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchCode("")}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* OPCIÓN 2: Búsqueda por ETIQUETA (VanoEtiqueta o Label) */}
+              <Text style={styles.inputLabel}>Buscar por Etiqueta:</Text>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.inputField}
+                  value={searchLabel}
+                  onChangeText={(t) => {
+                    setSearchLabel(t);
+                    if (t) setSearchCode(""); // Limpia el otro campo
+                  }}
+                  placeholder="Ej: VBT../PTO.."
+                  placeholderTextColor="#999"
+                />
+
+                {/* La X ahora está dentro del contenedor flexible */}
+                {searchLabel.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchLabel("")}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* --- FOOTER BUTTONS --- */}
+              <View style={modalStyles.footerButtons}>
+                {/* Botón Cancelar */}
+                <TouchableOpacity
+                  style={[
+                    modalStyles.cancelButton,
+                    { flex: 1, marginRight: 10 },
+                  ]}
+                  onPress={() => setShowSearchModal(false)}
+                >
+                  <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                {/* Botón Buscar */}
+                <TouchableOpacity
+                  style={[modalStyles.saveButton, { flex: 1, marginLeft: 10 }]}
+                  onPress={handleSearchItem}
+                >
+                  <Text style={modalStyles.saveButtonText}>Buscar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   floatBtn: {
@@ -552,56 +812,113 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 100,
-    elevation: 5
+    elevation: 5,
   },
   btnImg: { width: 40, height: 40, resizeMode: "contain" },
-  placeholderContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  placeholderText: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
-  loadingOverlay: { position: "absolute", top: "50%", left: "50%", zIndex: 100 },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: "#555",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    zIndex: 100,
+  },
   map: { width: "100%", height: "100%" },
   modalOverlay: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 9999,     // iOS
-  elevation: 20    // Android
-},
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.4)", // fondo oscuro
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999, // iOS
+    elevation: 20, // Android
+  },
 
-modalBox: {
-  width: "85%",
-  backgroundColor: "#fff",
-  borderRadius: 10,
-  padding: 15,
-},
+  modalBox: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 15,
+  },
 
-modalTitle: {
-  fontSize: 16,
-  fontWeight: "bold",
-  marginBottom: 10,
-  textAlign: "center",
-},
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
 
-modalItem: {
-  paddingVertical: 10,
-  borderBottomWidth: 1,
-  borderBottomColor: "#eee",
-},
+  modalItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
 
-modalText: {
-  fontSize: 14,
-  color: "#333",
-},
+  modalText: {
+    fontSize: 14,
+    color: "#333",
+  },
 
-modalCancel: {
-  marginTop: 10,
-  alignItems: "center",
-}
+  modalCancel: {
+    marginTop: 10,
+    alignItems: "center",
+  },
 
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: "#f9f9f9",
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  btnSearch: {
+    backgroundColor: "#000", // O tu color primario
+  },
+  inputContainer: {
+    flexDirection: "row", // 👈 OBLIGATORIO: Pone los elementos en fila horizontal
+    alignItems: "center", // 👈 OBLIGATORIO: Centra verticalmente la X
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#f9f9f9",
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    height: 50, // Altura fija recomendada
+  },
+
+  inputField: {
+    flex: 1, // 👈 OBLIGATORIO: Ocupa todo el espacio sobrante
+    fontSize: 16,
+    color: "#333",
+    height: "100%",
+  },
+
+  clearButton: {
+    padding: 5, // Espacio para el dedo
+    marginLeft: 5, // Separación del texto
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });
 
 export default Map;

@@ -569,6 +569,3 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: "row", justifyContent: "space-between" },
   footerCol: { flex: 1, marginHorizontal: 5 },
 });
-
-
-

@@ -12,8 +12,10 @@ import Cronograma from './pages/Cronograma';
 import Soporte from './pages/Soporte';
 import LoginForm from './pages/Login';
 import Personal from './pages/Personal'
-import Empresa from './pages/Empresa';
+import RoutesPage from './pages/Routes';
 import RegistroCliente from './pages/RegistroCliente';
+import AuditElectrical from './pages/AuditElectrical';
+import AuditFileElectrical from './pages/AuditFileElectrical';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -59,13 +61,15 @@ function App() {
             <Navbar onLogout={handleLogout} />
             <Routes>
               <Route path="/Personal" element={<Personal />} />
-              <Route path="/Empresa" element={<Empresa />} />
+              <Route path="/Routes" element={<RoutesPage />} />
               <Route path="/Menu" element={<Menu />} />
               <Route path="/Grupos" element={<Grupos />} />
               <Route path="/Estado" element={<Estado />} />
               <Route path="/Sorteos" element={<Sorteos />} />
               <Route path="/Cronograma" element={<Cronograma />} />
               <Route path="/Soporte" element={<Soporte />} />
+              <Route path="/AuditElectrical" element={<AuditElectrical />} />
+              <Route path="/AuditFileElectrical" element={<AuditFileElectrical />} />
             </Routes>
           </section>
         </>

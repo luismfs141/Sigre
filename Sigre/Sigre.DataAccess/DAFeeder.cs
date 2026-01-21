@@ -198,7 +198,7 @@ namespace Sigre.DataAccess
                         NodoInicial = p.NodoInicial,
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
-                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label,
+                        ElementCode = string.IsNullOrWhiteSpace(p.ElementCode) ? $"PIN_{Guid.NewGuid():N}" : p.ElementCode,
                         IdSed = p.IdSed
 
                     }).ToList();
@@ -322,7 +322,7 @@ namespace Sigre.DataAccess
                         NodoInicial = p.NodoInicial,
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
-                        ElementCode = string.IsNullOrWhiteSpace(p.Label) ? $"PIN_{Guid.NewGuid():N}" : p.Label,
+                        ElementCode = string.IsNullOrWhiteSpace(p.ElementCode) ? $"PIN_{Guid.NewGuid():N}" : p.ElementCode,
                         IdSed = p.IdSed
 
                     }).ToList();
