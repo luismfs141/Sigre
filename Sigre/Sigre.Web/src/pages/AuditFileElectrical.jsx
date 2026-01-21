@@ -118,21 +118,30 @@ const AuditFileElectrical = () => {
             const zip = new JSZip();
             const rootFolder = "SIGRE.MOVIL";
 
+            let correlative7004 = 0;
+
             for (const item of items) {
                 const compressedBlob = await processImage(item.file);
                 
-                // Path Logic: SIGRE.MOVIL / Feeder / SED / Type / StructureCode / DeficiencyCode
-                 const path = `${rootFolder}/${safeSeg(feederLabel)}/${safeSeg(sedCode, "SINSED")}/${structureType === "Vano" ? "Vano" : "Poste"}/${safeSeg(structureCode)}/${safeSeg(item.deficiencyCode, "SINDEF")}`;
+                // Logic for 7004 exception
+                let extraFolder = "";
+                if (item.deficiencyCode === '7004') {
+                    correlative7004 += 1;
+                    extraFolder = `/${correlative7004}`;
+                }
 
-                // Filename Logic: Audit_YYYY-MM-DDTHH-mm-ss_Lat_Long.jpg
+                // Path Logic: SIGRE.MOVIL / Feeder / SED / Type / StructureCode / DeficiencyCode (/ Correlative)
+                 const path = `${rootFolder}/${safeSeg(feederLabel)}/${safeSeg(sedCode, "SINSED")}/${structureType === "Vano" ? "Vano" : "Poste"}/${safeSeg(structureCode)}/${safeSeg(item.deficiencyCode, "SINDEF")}${extraFolder}`;
+
+                // Filename Logic: GIS_Deficiency_Date_Lat_Long.jpg
                 const safeDate = item.date.replace(/[:\s]/g, '-');
-                const fileName = `Audit_${safeDate}_${item.lat}_${item.long}.jpg`;
+                const fileName = `${safeSeg(structureCode)}_${safeSeg(item.deficiencyCode)}_${safeDate}_${item.lat}_${item.long}.jpg`;
                 
                 zip.folder(path).file(fileName, compressedBlob);
             }
 
             const content = await zip.generateAsync({ type: "blob" });
-            saveAs(content, `Audit_Report_${structureCode}.zip`);
+            saveAs(content, `Audit_Report__${structureCode}.zip`);
 
         } catch (error) {
             console.error("Error generating ZIP:", error);
@@ -155,11 +164,11 @@ const AuditFileElectrical = () => {
                         <div className="card-body">
                             <div className="mb-3">
                                 <label className="form-label">Etiqueta de Alimentador (Alim. Etiqueta)</label>
-                                <input type="text" className="form-control" value={feederLabel} onChange={e => setFeederLabel(e.target.value)} placeholder="e.g. A-123" />
+                                <input type="text" className="form-control" value={feederLabel} onChange={e => setFeederLabel(e.target.value)} placeholder="EJ. MEJIA" />
                             </div>
                             <div className="mb-3">
                                 <label className="form-label">SED Codigo</label>
-                                <input type="text" className="form-control" value={sedCode} onChange={e => setSedCode(e.target.value)} placeholder="e.g. SED-001" />
+                                <input type="text" className="form-control" value={sedCode} onChange={e => setSedCode(e.target.value)} placeholder="e.g. EJ. 8201" />
                             </div>
                             <div className="mb-3">
                                 <label className="form-label">Tipo</label>
@@ -183,7 +192,7 @@ const AuditFileElectrical = () => {
                         <div className="card-body">
                             <div className="mb-3">
                                 <label className="form-label">Código de Deficiencia</label>
-                                <input type="text" className="form-control" value={currentDeficiencyCode} onChange={e => setCurrentDeficiencyCode(e.target.value)} placeholder="e.g. D-05" />
+                                <input type="text" className="form-control" value={currentDeficiencyCode} onChange={e => setCurrentDeficiencyCode(e.target.value)} placeholder="Ej 6002" />
                             </div>
                             <div className="mb-3">
                                 <label className="form-label">Foto</label>
