@@ -3,7 +3,7 @@ import axios from 'axios';
 // 👉 URL base del backend
 const baseURL = 'http://localhost/SigreHost/api/';
 // const baseURL = 'http://localhost:5158/api/';
-
+export const API_URL = baseURL; 
 const api = axios.create({
   baseURL: baseURL,
   timeout: 10000, // un poco más alto por seguridad

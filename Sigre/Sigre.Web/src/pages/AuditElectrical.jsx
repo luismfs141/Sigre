@@ -1,11 +1,10 @@
 import React, { useState, useRef } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import DatePicker from 'react-datepicker'; // Assuming unavailable, so will use standard input
-import 'bootstrap/dist/css/bootstrap.min.css';
-import { format } from 'date-fns';
+import { Upload, FileText, MapPin, Calendar, Download, Loader2, Image as ImageIcon, AlertCircle } from 'lucide-react';
 
 const AuditElectrical = () => {
+    // --- ESTADOS ---
     const [selectedFile, setSelectedFile] = useState(null);
     const [preview, setPreview] = useState(null);
     const [auditDate, setAuditDate] = useState('');
@@ -15,8 +14,7 @@ const AuditElectrical = () => {
     const [showReport, setShowReport] = useState(false);
     const [compressedImageBlob, setCompressedImageBlob] = useState(null);
 
-    const canvasRef = useRef(null);
-
+    // --- LÓGICA ---
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -34,7 +32,7 @@ const AuditElectrical = () => {
             img.src = preview;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // Scale down logic (e.g., max width 800px)
+                // Lógica de escalado (max width 800px)
                 const maxWidth = 800;
                 const scale = maxWidth / img.width;
                 const width = scale < 1 ? maxWidth : img.width;
@@ -46,7 +44,7 @@ const AuditElectrical = () => {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Compress to JPEG with 0.6 quality
+                // Comprimir a JPEG con calidad 0.6
                 canvas.toBlob((blob) => {
                     resolve(blob);
                 }, 'image/jpeg', 0.6);
@@ -57,7 +55,7 @@ const AuditElectrical = () => {
 
     const handleGenerate = async () => {
         if (!selectedFile || !auditDate || !latitude || !longitude) {
-            alert("Please fill all fields and select an image.");
+            alert("Por favor completa todos los campos y selecciona una imagen.");
             return;
         }
 
@@ -67,145 +65,211 @@ const AuditElectrical = () => {
             const compressedBlob = await processImage();
             setCompressedImageBlob(compressedBlob);
             
-            // Create Filename based on inputs
-            // Format: Audit_YYYY-MM-DDTHH-mm-ss_Lat_Long.jpg
+            // Formato: Audit_YYYY-MM-DDTHH-mm-ss_Lat_Long.jpg
             const safeDate = auditDate.replace(/[:\s]/g, '-');
             const fileName = `Audit_${safeDate}_${latitude}_${longitude}.jpg`;
 
-            // Create Zip
+            // Crear Zip
             const zip = new JSZip();
             zip.file(fileName, compressedBlob);
             
-            // Generate Zip
+            // Generar y Descargar Zip
             const content = await zip.generateAsync({ type: "blob" });
             saveAs(content, "Audit_Package.zip");
 
             setShowReport(true);
         } catch (error) {
             console.error("Error processing:", error);
-            alert("Error processing image.");
+            alert("Error al procesar la imagen.");
         } finally {
             setIsProcessing(false);
         }
     };
 
+    // --- RENDER ---
     return (
-        <div className="container-fluid p-4">
-            <h2 className="mb-4 text-primary">Audit Electrical Systems</h2>
+        <div className="p-6 space-y-6 animate-fade-in">
+            {/* Header */}
+            <div>
+                <h1 className="page-header">Auditoría de Sistemas Eléctricos</h1>
+                <p className="text-muted-foreground">Generación de evidencia fotográfica y reportes de campo comprimidos.</p>
+            </div>
             
-            <div className="row">
-                {/* Input Section */}
-                <div className="col-md-5">
-                    <div className="card shadow-sm p-3 mb-4">
-                        <h4 className="card-title mb-3">Data Entry</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* ---------------- SECCIÓN DE ENTRADA (IZQUIERDA) ---------------- */}
+                <div className="lg:col-span-5 space-y-6">
+                    <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-border bg-muted/30">
+                            <h2 className="font-semibold flex items-center gap-2 text-foreground">
+                                <FileText className="w-4 h-4 text-primary" />
+                                Entrada de Datos
+                            </h2>
+                        </div>
                         
-                        <div className="mb-3">
-                            <label className="form-label">Upload Picture</label>
-                            <input 
-                                type="file" 
-                                className="form-control" 
-                                accept="image/*" 
-                                onChange={handleFileChange} 
-                            />
-                        </div>
-
-                        {preview && (
-                            <div className="mb-3 text-center">
-                                <img src={preview} alt="Preview" className="img-thumbnail" style={{ maxHeight: '200px' }} />
+                        <div className="p-6 space-y-4">
+                            {/* Input Imagen */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground">Evidencia Fotográfica</label>
+                                <div className="relative">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleFileChange} 
+                                        className="w-full text-sm text-muted-foreground
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-md file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-primary file:text-primary-foreground
+                                        hover:file:bg-primary/90
+                                        border border-input rounded-md cursor-pointer bg-background"
+                                    />
+                                </div>
                             </div>
-                        )}
 
-                        <div className="mb-3">
-                            <label className="form-label">Date & Time (Seconds)</label>
-                            <input 
-                                type="datetime-local" 
-                                step="1"
-                                className="form-control" 
-                                value={auditDate}
-                                onChange={(e) => setAuditDate(e.target.value)}
-                            />
-                        </div>
+                            {/* Previsualización Pequeña */}
+                            {preview && (
+                                <div className="relative w-full h-48 bg-muted rounded-md overflow-hidden border border-border flex items-center justify-center">
+                                    <img src={preview} alt="Preview" className="h-full object-contain" />
+                                </div>
+                            )}
 
-                        <div className="row mb-3">
-                            <div className="col">
-                                <label className="form-label">Latitude</label>
+                            {/* Fecha y Hora */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                                    Fecha y Hora (Timestamp)
+                                </label>
                                 <input 
-                                    type="text" 
-                                    className="form-control" 
-                                    value={latitude}
-                                    onChange={(e) => setLatitude(e.target.value)}
-                                    placeholder="-12.0464"
+                                    type="datetime-local" 
+                                    step="1"
+                                    className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                                    value={auditDate}
+                                    onChange={(e) => setAuditDate(e.target.value)}
                                 />
                             </div>
-                            <div className="col">
-                                <label className="form-label">Longitude</label>
-                                <input 
-                                    type="text" 
-                                    className="form-control" 
-                                    value={longitude}
-                                    onChange={(e) => setLongitude(e.target.value)}
-                                    placeholder="-77.0428"
-                                />
-                            </div>
-                        </div>
 
-                        <button 
-                            className="btn btn-success w-100" 
-                            onClick={handleGenerate} 
-                            disabled={isProcessing}
-                        >
-                            {isProcessing ? 'Processing & Zipping...' : 'Generate Report & Zip'}
-                        </button>
+                            {/* Coordenadas */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 text-muted-foreground" />
+                                        Latitud
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                                        value={latitude}
+                                        onChange={(e) => setLatitude(e.target.value)}
+                                        placeholder="-12.0464"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground">Longitud</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                                        value={longitude}
+                                        onChange={(e) => setLongitude(e.target.value)}
+                                        placeholder="-77.0428"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Botón de Acción */}
+                            <button 
+                                className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-3 rounded-md font-medium transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={handleGenerate} 
+                                disabled={isProcessing}
+                            >
+                                {isProcessing ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Procesando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="w-4 h-4" /> Generar Reporte & ZIP
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Report Section */}
-                <div className="col-md-7">
-                    {showReport && compressedImageBlob && (
-                        <div className="card shadow border-0" id="report-section">
-                            <div className="card-body">
-                                <div className="text-center mb-4">
-                                    <h1 className="display-6 fw-bold">Electrical Audit Report</h1>
-                                    <p className="text-muted">Field Inspection Generated Document</p>
-                                    <hr />
+                {/* ---------------- SECCIÓN DE REPORTE (DERECHA) ---------------- */}
+                <div className="lg:col-span-7">
+                    {showReport && compressedImageBlob ? (
+                        <div className="bg-card border border-border rounded-lg shadow-sm animate-fade-in overflow-hidden">
+                            {/* Cabecera del Documento */}
+                            <div className="bg-muted/50 p-8 text-center border-b border-border">
+                                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary mb-4">
+                                    <FileText className="w-6 h-6" />
                                 </div>
-                                
-                                <div className="row align-items-center">
-                                    <div className="col-md-12 text-center mb-3">
+                                <h2 className="text-2xl font-bold text-foreground">Reporte de Auditoría</h2>
+                                <p className="text-muted-foreground text-sm mt-1">Documento generado automáticamente</p>
+                            </div>
+
+                            <div className="p-8 space-y-8">
+                                {/* Imagen de Evidencia */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <ImageIcon className="w-4 h-4" /> Evidencia Procesada
+                                    </h3>
+                                    <div className="rounded-lg border border-border overflow-hidden bg-muted/10 shadow-sm">
                                         <img 
                                             src={URL.createObjectURL(compressedImageBlob)} 
                                             alt="Audit Evidence" 
-                                            className="img-fluid rounded border border-secondary"
-                                            style={{ maxHeight: '500px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }}
+                                            className="w-full h-auto object-contain max-h-[400px]"
                                         />
-                                        <p className="mt-2 text-muted fst-italic">Compressed Evidence Image</p>
                                     </div>
+                                    <p className="text-xs text-center text-muted-foreground italic">
+                                        Imagen comprimida (JPEG q=0.6)
+                                    </p>
                                 </div>
 
-                                <div className="row mt-4">
-                                    <div className="col-md-12">
-                                        <div className="alert alert-light border border-info">
-                                            <h5 className="alert-heading text-info">Metadata</h5>
-                                            <ul className="list-group list-group-flush bg-transparent">
-                                                <li className="list-group-item bg-transparent">
-                                                    <strong>Timestamp:</strong> {new Date(auditDate).toLocaleString()}
-                                                </li>
-                                                <li className="list-group-item bg-transparent">
-                                                    <strong>Coordinates:</strong> {latitude}, {longitude}
-                                                </li>
-                                                <li className="list-group-item bg-transparent">
-                                                    <strong>Image Status:</strong> Compressed & Optimized
-                                                </li>
-                                            </ul>
+                                {/* Metadatos */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <AlertCircle className="w-4 h-4" /> Metadatos del Registro
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-background border border-border p-4 rounded-md">
+                                            <span className="text-xs text-muted-foreground block mb-1">Timestamp</span>
+                                            <span className="font-mono text-sm text-foreground font-medium">
+                                                {new Date(auditDate).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="bg-background border border-border p-4 rounded-md">
+                                            <span className="text-xs text-muted-foreground block mb-1">Geolocalización</span>
+                                            <span className="font-mono text-sm text-foreground font-medium">
+                                                {latitude}, {longitude}
+                                            </span>
+                                        </div>
+                                        <div className="bg-background border border-border p-4 rounded-md md:col-span-2">
+                                            <span className="text-xs text-muted-foreground block mb-1">Estado del Archivo</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="badge-success px-2 py-0.5 rounded text-xs font-medium border">
+                                                    Optimizado
+                                                </span>
+                                                <span className="badge-info px-2 py-0.5 rounded text-xs font-medium border">
+                                                    Empaquetado en ZIP
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    )}
-                    {!showReport && (
-                        <div className="d-flex align-items-center justify-content-center h-100 text-muted p-5 bg-light rounded border border-dashed">
-                            <p className="lead">Fill the form and generate to view the Report Preview</p>
+                    ) : (
+                        // Estado Vacío (Placeholder)
+                        <div className="h-full min-h-[400px] border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center text-center p-8 bg-muted/10">
+                            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                                <FileText className="w-8 h-8 text-muted-foreground/50" />
+                            </div>
+                            <h3 className="text-lg font-medium text-foreground">Vista Previa del Reporte</h3>
+                            <p className="text-muted-foreground max-w-xs mt-2 text-sm">
+                                Complete el formulario y haga clic en "Generar" para ver el reporte de auditoría y descargar los archivos.
+                            </p>
                         </div>
                     )}
                 </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import useSidebar from '../assetss/script/Generalbar.jsx';
+
 
 function Content({ title, children }) {
   useSidebar();

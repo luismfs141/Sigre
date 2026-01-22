@@ -1,67 +1,67 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../api/apiConfig';
 
-export const useUsuario = () => {
+export function useUsuario(autoFetch = false) {
+  const [usuarios, setUsuarios] = useState([]);
+  const [perfiles, setPerfiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
-  const getUsuarioLocalStorage = () => {
-    const usuarioStr = localStorage.getItem('usuario');
-    if (!usuarioStr) return null;
-
+  // --- 1. MÉTODOS DE AUTENTICACIÓN (LO QUE TE FALTA) ---
+  
+  // ✅ ESTA ES LA FUNCIÓN QUE TE DABA ERROR. TIENE QUE ESTAR AQUÍ.
+  const getUsuarioLocalStorage = useCallback(() => {
     try {
-      const usuario = JSON.parse(usuarioStr);
-      return {
-        id: usuario.usuaInterno,
-        nombre: usuario.usuaNombres,
-        apellidos: usuario.usuaApellidos,
-        token: usuario.token
-      };
-    } catch (error) {
-      console.error("Error al leer usuario del localStorage:", error);
+      const usuario = localStorage.getItem('usuario');
+      return usuario ? JSON.parse(usuario) : null;
+    } catch (e) {
+      console.error("Error al leer usuario", e);
       return null;
     }
-  };
+  }, []);
 
-  const loginUsuario = async (correo, password) => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await api.post('/User/Login', {
-        correo,
-        password,
-        imei: null
-      });
-
-      if (response.data) {
-        const usuarioData = response.data;
-        localStorage.setItem('usuario', JSON.stringify(usuarioData));
-        localStorage.setItem('token', usuarioData.token);
-        return usuarioData;
-      } else {
-        setError('Credenciales inválidas.');
-        throw new Error('Credenciales inválidas.');
-      }
-    } catch (err) {
-      console.error('Error de login:', err);
-      setError(err.response?.data?.message || 'Error al intentar hacer login');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logoutUsuario = () => {
-    localStorage.removeItem('usuario');
+  const logoutUsuario = useCallback(() => {
     localStorage.removeItem('token');
-  };
+    localStorage.removeItem('usuario');
+  }, []);
 
+  // --- 2. MÉTODOS DE DATOS (CRUD) ---
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const controller = new AbortController();
+    try {
+      const [userRes, perfilRes] = await Promise.all([
+        api.get('User/users', { signal: controller.signal }),
+        api.get('User/profiles', { signal: controller.signal })
+      ]);
+      setUsuarios(userRes.data);
+      setPerfiles(perfilRes.data);
+    } catch (err) {
+      if (err.name !== 'CanceledError') {
+        setError(err.message);
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (autoFetch) fetchData();
+  }, [fetchData, autoFetch]);
+
+  // --- 3. RETORNO (EL OBJETO FINAL) ---
   return {
-    loginUsuario,
-    getUsuarioLocalStorage,
-    logoutUsuario,
+    usuarios,
+    perfiles,
     loading,
-    error
+    error,
+    reload: fetchData,
+    
+    // 👇 ¡IMPORTANTE! TIENES QUE EXPORTAR LA FUNCIÓN AQUÍ
+    getUsuarioLocalStorage, 
+    logoutUsuario
   };
-};
+}

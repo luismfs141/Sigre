@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useGrupo } from '../../hooks/useGrupo';
-import { useDocumento } from '../../hooks/useDocumento';
+
 
 const ButtonAccionGrupo = ({ cliente, grupo, onUnirseGrupo, onSolicitudes, onDocumentos, onIniciarGrupo }) => {
     const [estadoCliente, setEstadoCliente] = useState('');
