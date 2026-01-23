@@ -5,7 +5,7 @@ export default function ImportData() {
   const [file, setFile] = useState(null);
   const [localError, setLocalError] = useState(null);
 
-  const { deficiencias, loading, error, loadFromSqliteFile } = useOffline();
+  const { deficiencias, archivos, loading, error, loadFromSqliteFile } = useOffline();
 
   /* ===============================
      CARGA ARCHIVO SQLITE
@@ -31,72 +31,118 @@ export default function ImportData() {
       {/* CABECERA */}
       <div style={styles.header}>
         <h2 style={styles.title}>Importar datos</h2>
-
         <div style={styles.headerActions}>
           <input type="file" accept=".db" onChange={handleFileChange} />
         </div>
       </div>
 
-      {/* CUERPO */}
+      {/* CUERPO DIVIDIDO */}
       <div style={styles.bodyWrapper}>
-        <div style={styles.body}>
-          {localError && <p style={styles.error}>{localError}</p>}
-          {error && <p style={styles.error}>{error}</p>}
-
+        {/* Tabla Deficiencias */}
+        <div style={styles.tableContainer}>
+          <h3>Deficiencias</h3>
           <table style={styles.table}>
             <thead>
               <tr>
                 <th>DefiInterno</th>
                 <th>Estado</th>
                 <th>Código</th>
-                <th>Latitud</th>
-                <th>Longitud</th>
+                <th>Tipificación</th>
                 <th>Tipo</th>
                 <th>Elemento</th>
                 <th>Fecha</th>
                 <th>Activo</th>
                 <th>Criticidad</th>
-                <th>Inspeccionado</th>
-                <th>ServerId</th>
                 <th>EstadoOffline</th>
               </tr>
             </thead>
             <tbody>
-            {loading ? (
+              {loading ? (
                 <tr>
-                <td colSpan={12} style={styles.empty}>
+                  <td colSpan={13} style={styles.empty}>
                     Cargando datos...
-                </td>
+                  </td>
                 </tr>
-            ) : deficiencias.filter(d => d.estadoOffLine !== null && d.estadoOffLine !== 0).length === 0 ? (
+              ) : deficiencias.filter(d => d.estadoOffLine !== null && d.estadoOffLine !== 0).length === 0 ? (
                 <tr>
-                <td colSpan={12} style={styles.empty}>
+                  <td colSpan={13} style={styles.empty}>
                     No hay registros para mostrar
-                </td>
+                  </td>
                 </tr>
-            ) : (
+              ) : (
                 deficiencias
-                .filter(d => d.estadoOffLine !== null && d.estadoOffLine !== 0) 
-                .map((row) => (
+                  .filter(d => d.estadoOffLine !== null && d.estadoOffLine !== 0)
+                  .map((row) => (
                     <tr key={row.defiInterno}>
-                    <td>{row.defiInterno}</td>
-                    <td>{row.defiEstado}</td>
-                    <td>{row.defiCodigoElemento}</td>
-                    <td>{row.defiLatitud}</td>
-                    <td>{row.defiLongitud}</td>
-                    <td>{row.defiTipoElemento}</td>
-                    <td>{row.defiIdElemento}</td>
-                    <td>{row.defiFecRegistro}</td>
-                    <td>{row.defiActivo?.toString()}</td>
-                    <td>{row.defiEstadoCriticidad}</td>
-                    <td>{row.defiInspeccionado.toString()}</td>
-                    <td>{row.defiServerId}</td>
-                    <td>{row.estadoOffLine}</td>
+                      <td>{row.defiInterno}</td>
+                      <td>{row.defiEstado}</td>
+                      <td>{row.defiCodigoElemento}</td>
+                      <td>{row.tipiInterno}</td>
+                      <td>{row.defiTipoElemento}</td>
+                      <td>{row.defiIdElemento}</td>
+                      <td>{row.defiFecRegistro}</td>
+                      <td>{row.defiActivo?.toString()}</td>
+                      <td>{row.defiEstadoCriticidad}</td>
+                      <td>{row.estadoOffLine}</td>
                     </tr>
-                ))
-            )}
+                  ))
+              )}
             </tbody>
+          </table>
+        </div>
 
+        {/* Tabla Archivos */}
+        <div style={styles.tableContainer}>
+          <h3>Archivos</h3>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>ArchInterno</th>
+                <th>ArchNombre</th>
+                <th>ArchTipo</th>
+                <th>ArchTabla</th>
+                <th>ArchCodTabla</th>
+                <th>Fecha</th>
+                <th>Elemento</th>
+                <th>TipiInterno</th>
+                <th>Activo</th>
+                <th>EstadoOffline</th>
+                <th>DefiServerId</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={13} style={styles.empty}>
+                    Cargando datos...
+                  </td>
+                </tr>
+              ) : archivos.length === 0 ? (
+                <tr>
+                  <td colSpan={13} style={styles.empty}>
+                    No hay archivos para mostrar
+                  </td>
+                </tr>
+              ) : (
+                archivos
+                .filter(d => d.estadoOffLine !== null && d.estadoOffLine !== 0)
+                .map((row) => (
+                  <tr key={row.archInterno}>
+                    <td>{row.archInterno}</td>
+                    <td>{row.archNombre}</td>
+                    <td>{row.archTipo}</td>
+                    <td>{row.archTabla}</td>
+                    <td>{row.archCodTabla}</td>
+                    <td>{row.archFecha}</td>
+                    <td>{row.archIdElemento}</td>
+                    <td>{row.tipiInterno}</td>
+                    <td>{row.archActivo?.toString()}</td>
+                    <td>{row.estadoOffLine}</td>
+                    <td>{row.defiServerId}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
           </table>
         </div>
       </div>
@@ -117,13 +163,20 @@ const styles = {
   title: { fontSize: "22px", fontWeight: 600 },
   headerActions: { display: "flex", gap: "12px", alignItems: "center" },
   bodyWrapper: {
+    display: "flex",
     width: "100%",
     height: "calc(100vh - 110px)",
     overflow: "auto",
-    border: "1px solid #e5e7eb",
-    borderRadius: "8px"
+    gap: "12px"
   },
-  body: { minWidth: "1400px", background: "#fff" },
+  tableContainer: {
+    flex: 1,
+    overflow: "auto",
+    border: "1px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "8px",
+    minWidth: "0" // permite que flex-shrink funcione
+  },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "12px" },
   error: { color: "red", margin: "8px" },
   empty: { textAlign: "center", padding: "16px", color: "#666" }

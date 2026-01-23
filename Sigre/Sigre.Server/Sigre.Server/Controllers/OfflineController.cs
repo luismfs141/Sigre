@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
+using Sigre.Entities.Entities.SyncData;
+using System.Threading.Tasks;
 
 namespace Sigre.Server.Controllers
 {
@@ -20,9 +22,16 @@ namespace Sigre.Server.Controllers
                 return BadRequest("Solo se permiten archivos SQLite (.db)");
 
             var daOffline = new DAOffline();
-            var data = await daOffline.LeerDeficienciasDesdeSqliteAsync(file);
 
-            return Ok(data);
+            var deficiencias = await daOffline.LeerDeficienciasDesdeSqliteAsync(file);
+
+            var archivos = await daOffline.LeerArchivosDesdeSqliteAsync(file);
+
+            return Ok(new
+            {
+                deficiencias,
+                archivos
+            });
         }
     }
 }

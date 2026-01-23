@@ -117,7 +117,73 @@ namespace Sigre.DataAccess
 
             return deficiencias;
         }
+
+        public async Task<List<ArchivoSyncDto>> LeerArchivosDesdeSqliteAsync(IFormFile file)
+        {
+            var archivos = new List<ArchivoSyncDto>();
+
+            // Guardar temporalmente el archivo SQLite
+            var tempFile = Path.GetTempFileName();
+            try
+            {
+                using (var stream = File.Create(tempFile))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                using (var connection = new SqliteConnection($"Data Source={tempFile}"))
+                {
+                    await connection.OpenAsync();
+
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT * FROM Archivos";
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var archivo = new ArchivoSyncDto
+                                {
+                                    ArchInterno = reader.GetNullableInt32("ArchInterno") ?? 0,
+                                    ArchTipo = reader.GetNullableString("ArchTipo"),
+                                    ArchTabla = reader.GetNullableString("ArchTabla"),
+                                    ArchCodTabla = reader.GetNullableInt32("ArchCodTabla"),
+                                    ArchNombre = reader.GetNullableString("ArchNombre"),
+                                    ArchLatitud = reader.GetNullableDouble("ArchLatitud"),
+                                    ArchLongitud = reader.GetNullableDouble("ArchLongitud"),
+                                    ArchFecha = reader.GetNullableDateTime("ArchFecha"),
+                                    ArchTipoElemento = reader.GetNullableString("ArchTipoElemento"),
+                                    ArchIdElemento = reader.GetNullableInt32("ArchIdElemento"),
+                                    TipiInterno = reader.GetNullableInt32("TipiInterno"),
+                                    ArchActivo = reader.GetNullableBool("ArchActivo") ?? false,
+                                    EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                    DefiServerId = reader.GetNullableInt32("DefiServerId") ?? 0, // ✅ usar la que existe
+                                };
+                                archivos.Add(archivo);
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                // Borrar archivo temporal de manera segura
+                try
+                {
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile);
+                }
+                catch (IOException)
+                {
+                    // Ignorar si el archivo está en uso
+                }
+            }
+
+            return archivos;
+        }
     }
+
 
     // Extensiones para lectura nullable usando nombres de columna
     public static class SqliteDataReaderExtensions
