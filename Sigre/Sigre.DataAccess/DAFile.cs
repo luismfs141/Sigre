@@ -194,6 +194,21 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+        // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
+        public bool DAFILE_SoftDelete(int idArchivo)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var archivo = ctx.Archivos.SingleOrDefault(x => x.ArchInterno == idArchivo);
+                if (archivo != null)
+                {
+                    archivo.ArchActivo = false; // O 0, dependiendo de tu tipo de dato en BD
+                    ctx.SaveChanges();
+                    return true;
+                }
+                return false;
+            }
+        }
 
 
     }

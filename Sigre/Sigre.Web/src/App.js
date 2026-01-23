@@ -9,7 +9,7 @@ import Login from './pages/Login';
 import DashboardHome from './pages/DashboardHome';
 import Mapas from './pages/Mapas';
 import Reportes from './pages/Reportes';
-import AuditFileElectrical from './pages/AuditFileElectrical';
+import AuditFileElectrical from './pages/WebInspectionManager';
 import AuditElectrical from './pages/AuditElectrical';
 import ImportData from './pages/ImportData';
 function App() {

@@ -69,6 +69,22 @@ namespace Sigre.Server.Controllers
 
             return Ok(response);
         }
+        [HttpPost("SoftDelete")]
+        public IActionResult SoftDelete(int id)
+        {
+            try
+            {
+                DAFile da = new DAFile();
+                bool result = da.DAFILE_SoftDelete(id);
+                if (result) return Ok(new { message = "Archivo desactivado correctamente" });
+                return NotFound("Archivo no encontrado");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
 
     }
 }

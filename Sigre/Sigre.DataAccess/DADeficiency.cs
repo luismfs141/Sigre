@@ -621,5 +621,21 @@ namespace Sigre.DataAccess
                 return deficiencia;
             }
         }
+        public List<Deficiencia> DADEFI_GetByCodigoGis(string x_codigoGis)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                if (string.IsNullOrEmpty(x_codigoGis))
+                {
+                    return new List<Deficiencia>();
+                }
+
+                var listaDeficiencias = ctx.Deficiencias
+                                           .Where(d => d.DefiCodigoElemento == x_codigoGis)
+                                           .ToList();
+
+                return listaDeficiencias;
+            }
+        }
     }
 }
