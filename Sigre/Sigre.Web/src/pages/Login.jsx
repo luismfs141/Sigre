@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import '../assetss/css/Generalbar.css';
+//import '../assetss/css/Generalbar.css';
 // import { useCliente } from '../hooks/useCliente';
 import { useNavigate } from 'react-router-dom';
 import { useUsuario } from '../hooks/useUsuario';

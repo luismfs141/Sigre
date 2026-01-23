@@ -1,80 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import './assetss/css/Generalbar.css';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
-import Sidebar from './components/Sidebar';
-import Navbar from './components/Navbar';
-import Grupos from './pages/Grupos';
-import Menu from './pages/Menu';
-import Estado from './pages/Estado';
-import Sorteos from './pages/Sorteos';
-import Cronograma from './pages/Cronograma';
-import Soporte from './pages/Soporte';
-import LoginForm from './pages/Login';
-import Personal from './pages/Personal'
-import RoutesPage from './pages/Routes';
-import RegistroCliente from './pages/RegistroCliente';
-import AuditElectrical from './pages/AuditElectrical';
+// 1. Importamos el Layout Principal (El que tiene Sidebar + Navbar)
+import DashboardLayout from './layouts/DashboardLayout';
+
+// 2. Importamos las Páginas
+import Login from './pages/Login';
+import DashboardHome from './pages/DashboardHome';
+import Mapas from './pages/Mapas';
+import Reportes from './pages/Reportes';
 import AuditFileElectrical from './pages/AuditFileElectrical';
-
+import AuditElectrical from './pages/AuditElectrical';
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigate = useNavigate();
-
-  // Verificar si el usuario está autenticado al montar el componente
-  useEffect(() => {
-    if (localStorage.getItem('usuario') === "undefined") {
-        localStorage.removeItem('usuario');
-    }
-
-    const usuarioData = localStorage.getItem('usuario');
-    if (usuarioData) {
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  // Función para manejar el login
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    navigate("/Menu"); // Redirige a la página principal después de iniciar sesión
-  };
-
-  // Función para manejar el logout
-  const handleLogout = () => {
-    localStorage.removeItem('usuario'); // Eliminar los datos del cliente de localStorage
-    setIsAuthenticated(false); // Cambiar el estado de autenticación
-    navigate("/Login"); // Redirigir al login
-  };
-
   return (
-    <div>
-      {/* Mostrar el LoginForm solo si no está autenticado */}
-      {!isAuthenticated ? (
-        <Routes>
-          <Route path="/" element={<LoginForm onLogin={handleLogin} />} />
-          <Route path="/Login" element={<LoginForm onLogin={handleLogin} />} />  
-        </Routes>
-      ) : (
-        <>
-          <Sidebar />
-          <section id="content">
-            <Navbar onLogout={handleLogout} />
-            <Routes>
-              <Route path="/Personal" element={<Personal />} />
-              <Route path="/Routes" element={<RoutesPage />} />
-              <Route path="/Menu" element={<Menu />} />
-              <Route path="/Grupos" element={<Grupos />} />
-              <Route path="/Estado" element={<Estado />} />
-              <Route path="/Sorteos" element={<Sorteos />} />
-              <Route path="/Cronograma" element={<Cronograma />} />
-              <Route path="/Soporte" element={<Soporte />} />
-              <Route path="/AuditElectrical" element={<AuditElectrical />} />
-              <Route path="/AuditFileElectrical" element={<AuditFileElectrical />} />
-            </Routes>
-          </section>
-        </>
-      )}
-    </div>
+    <Routes>
+      
+      {/* =======================================================
+          RUTAS PÚBLICAS
+          (No tienen Sidebar ni Navbar, ocupan toda la pantalla)
+      ======================================================== */}
+      <Route path="/login" element={<Login />} />
+
+
+      {/* =======================================================
+          RUTAS PRIVADAS (DASHBOARD)
+          Todas estas rutas usarán automáticamente el Sidebar y el Navbar
+          porque están "dentro" del DashboardLayout.
+      ======================================================== */}
+      <Route element={<DashboardLayout />}>
+        
+        {/* Ruta principal (Dashboard) */}
+        <Route path="/" element={<DashboardHome />} />
+        
+        {/* Otras secciones */}
+        <Route path="/mapas" element={<Mapas />} />
+        <Route path="/reportes" element={<Reportes />} />
+        <Route path="/subestaciones" element={<div>Página de Subestaciones</div>} />
+        <Route path="/auditoria-electrica" element={<AuditElectrical />} />
+        <Route path="/auditoria-archivo" element={<AuditFileElectrical />} />
+        
+        {/* Ejemplo de ruta sin componente creado aún */}
+        <Route path="/configuracion" element={<div>Página de Configuración</div>} />
+        
+      </Route>
+
+
+      {/* =======================================================
+          REDIRECCIÓN POR DEFECTO
+          Si el usuario entra a una ruta que no existe, lo mandamos al inicio
+      ======================================================== */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+
+    </Routes>
   );
 }
 
