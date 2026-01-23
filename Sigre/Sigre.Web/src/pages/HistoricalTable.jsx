@@ -6,35 +6,26 @@ import { Dialog } from 'primereact/dialog';
 import { Tag } from 'primereact/tag';
 import { ConfirmPopup, confirmPopup } from 'primereact/confirmpopup';
 import { Toast } from 'primereact/toast';
-import { InputText } from 'primereact/inputtext';
-import { Dropdown } from 'primereact/dropdown';
 
 import { useFiles } from '../hooks/useFiles';
 
-// --- SUB-COMPONENTE: MODAL DE EVIDENCIAS ---
+// --- SUB-COMPONENTE: MODAL DE EVIDENCIAS (SOLO LECTURA Y BORRADO) ---
 const EvidenceModal = ({ visible, onHide, deficiency }) => {
-    const { files, loadingFiles, loadFiles, deleteFile, addFile } = useFiles();
+    // Solo necesitamos cargar y borrar. Ya no 'addFile'.
+    const { files, loadingFiles, loadFiles, deleteFile } = useFiles();
     const toast = useRef(null);
 
-    // Estado para el formulario de "Nuevo Archivo"
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [newFile, setNewFile] = useState({
-        tipo: 1, // 1: Panorámica por defecto
-        nombre: ''
-    });
-
-    // Cargar archivos al abrir
+    // Cargar archivos al abrir el modal
     useEffect(() => {
         if (visible && deficiency) {
             loadFiles(deficiency.defiInterno);
         }
     }, [visible, deficiency, loadFiles]);
 
-    // Filtro activo
+    // Filtro: Solo mostrar archivos activos
     const activeFiles = files.filter(f => f.archActivo === true);
 
     // --- ACCIONES ---
-
     const handleDelete = (event, id) => {
         confirmPopup({
             target: event.currentTarget,
@@ -42,57 +33,18 @@ const EvidenceModal = ({ visible, onHide, deficiency }) => {
             icon: 'pi pi-exclamation-triangle',
             accept: async () => {
                 const success = await deleteFile(id);
-                if (success) toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Archivo desactivado.' });
-                else toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar.' });
+                if (success) {
+                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Archivo desactivado correctamente.' });
+                } else {
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar.' });
+                }
             }
         });
     };
 
-    const handleSaveNew = async () => {
-        if (!newFile.nombre) {
-            toast.current.show({ severity: 'warn', summary: 'Falta nombre', detail: 'Ingrese un nombre de archivo.' });
-            return;
-        }
-
-        // Construcción del JSON EXACTO según tu Swagger
-        const payload = {
-            archInterno: 0, // Nuevo
-            archTipo: newFile.tipo.toString(),
-            archTabla: "Deficiencias",
-            archCodTabla: deficiency.defiInterno,
-            archNombre: `SigreMedios/Manual/${deficiency.defiCodigoElemento}/${newFile.nombre}`, // Generamos ruta simulada
-            archLatitud: deficiency.defiLatitud || 0,
-            archLongitud: deficiency.defiLongitud || 0,
-            archFecha: new Date().toISOString(),
-            archTipoElemento: deficiency.defiTipoElemento || "POST",
-            archIdElemento: deficiency.defiIdElemento || 0, // Asumiendo que tienes este dato en 'deficiency'
-            tipiInterno: deficiency.tipiInterno || 0,
-            archActivo: true,
-            estadoOffLine: 0
-        };
-
-        const success = await addFile(payload);
-        if (success) {
-            toast.current.show({ severity: 'success', summary: 'Guardado', detail: 'Registro creado correctamente.' });
-            setShowAddForm(false);
-            setNewFile({ tipo: 1, nombre: '' });
-            loadFiles(deficiency.defiInterno); // Recargar lista
-        } else {
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar en BD.' });
-        }
-    };
-
-    // Opciones para el dropdown de tipo
-    const tiposFoto = [
-        { label: 'Panorámica', value: 1 },
-        { label: 'Frontal', value: 2 },
-        { label: 'Izquierda', value: 3 },
-        { label: 'Derecha', value: 4 }
-    ];
-
-    // Templates de Tabla
+    // Templates para la tabla
     const tipoTemplate = (r) => {
-        const map = { "1": "Panorámica", "2": "Frontal", "3": "Izquierda", "4": "Derecha" };
+        const map = { "1": "Panorámica", "2": "Frontal", "3": "Izquierda", "4": "Derecha", "0": "Otro" };
         return <Tag value={map[r.archTipo] || r.archTipo} severity="info" />;
     };
 
@@ -104,7 +56,7 @@ const EvidenceModal = ({ visible, onHide, deficiency }) => {
                 text 
                 severity="danger" 
                 onClick={(e) => handleDelete(e, rowData.archInterno)} 
-                tooltip="Eliminar"
+                tooltip="Eliminar (Desactivar)"
             />
         </div>
     );
@@ -113,7 +65,7 @@ const EvidenceModal = ({ visible, onHide, deficiency }) => {
         <Dialog 
             header={`Gestión de Archivos | GIS: ${deficiency?.defiCodigoElemento}`} 
             visible={visible} 
-            style={{ width: '90vw', maxWidth: '900px' }} 
+            style={{ width: '90vw', maxWidth: '800px' }} 
             onHide={onHide}
         >
             <Toast ref={toast} />
@@ -121,55 +73,27 @@ const EvidenceModal = ({ visible, onHide, deficiency }) => {
 
             <div className="flex flex-col gap-4">
                 
-                {/* BARRA SUPERIOR: Botón Agregar */}
+                {/* CABECERA SIMPLIFICADA */}
                 <div className="flex justify-between items-center border-b pb-2">
-                    <span className="font-bold text-gray-700">{activeFiles.length} Archivos Activos</span>
-                    <Button 
-                        label={showAddForm ? "Cancelar" : "Subir Nuevo"} 
-                        icon={showAddForm ? "pi pi-times" : "pi pi-plus"} 
-                        size="small" 
-                        severity={showAddForm ? "secondary" : "success"}
-                        onClick={() => setShowAddForm(!showAddForm)}
-                    />
+                    <div>
+                        <span className="font-bold text-gray-700 block">{activeFiles.length} Archivos Activos</span>
+                        <small className="text-gray-500">ID Deficiencia: {deficiency.defiInterno}</small>
+                    </div>
+                    {/* Botón de "Subir Nuevo" ELIMINADO */}
                 </div>
 
-                {/* FORMULARIO DE AGREGAR (Visible condicionalmente) */}
-                {showAddForm && (
-                    <div className="bg-green-50 p-4 rounded border border-green-200 animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                        <div className="flex flex-col gap-1">
-                            <label className="text-xs font-bold text-gray-600">Tipo de Foto</label>
-                            <Dropdown 
-                                value={newFile.tipo} 
-                                options={tiposFoto} 
-                                onChange={(e) => setNewFile({...newFile, tipo: e.value})} 
-                                className="p-inputtext-sm w-full"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-xs font-bold text-gray-600">Nombre de Archivo</label>
-                            <InputText 
-                                value={newFile.nombre} 
-                                onChange={(e) => setNewFile({...newFile, nombre: e.target.value})} 
-                                placeholder="ej. foto_extra.jpg" 
-                                className="p-inputtext-sm w-full"
-                            />
-                        </div>
-                        <Button label="Guardar Registro" icon="pi pi-save" size="small" onClick={handleSaveNew} />
-                    </div>
-                )}
-
-                {/* TABLA DE DATOS */}
+                {/* TABLA DE RESULTADOS */}
                 <DataTable 
                     value={activeFiles} 
                     loading={loadingFiles} 
                     size="small" 
                     stripedRows 
                     paginator rows={5}
-                    emptyMessage="No hay archivos activos."
+                    emptyMessage="No hay archivos activos para esta deficiencia."
                 >
                     <Column field="archInterno" header="ID" sortable style={{width:'80px'}} />
                     <Column field="archTipo" header="Tipo" body={tipoTemplate} />
-                    <Column field="archNombre" header="Ruta / Nombre" style={{maxWidth:'200px'}} className="truncate" />
+                    <Column field="archNombre" header="Ruta / Nombre" style={{maxWidth:'300px'}} className="truncate" />
                     <Column field="archFecha" header="Fecha" body={(r) => new Date(r.archFecha).toLocaleDateString()} />
                     <Column header="Acciones" body={actionTemplate} style={{width:'80px'}} />
                 </DataTable>
@@ -178,7 +102,7 @@ const EvidenceModal = ({ visible, onHide, deficiency }) => {
     );
 };
 
-// --- COMPONENTE PRINCIPAL (HISTORIAL) ---
+// --- COMPONENTE PRINCIPAL (TABLA DE RESULTADOS DE BÚSQUEDA) ---
 export default function HistoricalTable({ data }) {
     const [selectedDef, setSelectedDef] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -189,31 +113,35 @@ export default function HistoricalTable({ data }) {
     };
 
     return (
-        <div className="card border-l-4 border-blue-500 shadow-md bg-white rounded-lg">
+        <div className="card border-l-4 border-blue-500 shadow-md bg-white rounded-lg mt-4">
             <div className="p-3 bg-blue-50 flex justify-between items-center border-b border-blue-100">
                 <div className="flex items-center gap-2">
                     <i className="pi pi-database text-blue-600"></i>
-                    <h3 className="font-bold text-blue-800 m-0 text-sm">Historial Registrado (BD)</h3>
+                    <h3 className="font-bold text-blue-800 m-0 text-sm">Historial Registrado en BD</h3>
                 </div>
                 <Tag value={`${data.length} Deficiencias`} severity="info" />
             </div>
 
             <DataTable value={data} size="small" stripedRows rows={5} paginator className="text-sm">
-                <Column field="defiInterno" header="ID" sortable style={{width:'70px'}} />
-                <Column field="defiCodigoElemento" header="GIS" />
-                <Column field="defiFecRegistro" header="Fecha" body={(r)=> new Date(r.defiFecRegistro).toLocaleDateString()} />
-                <Column field="defiObservacion" header="Observación" className="truncate" style={{maxWidth:'150px'}} />
+                <Column field="defiInterno" header="ID Def." sortable style={{width:'80px'}} />
+                <Column field="defiCodigoElemento" header="Cód. GIS" />
+                <Column field="defiFecRegistro" header="Fecha Reg." body={(r)=> new Date(r.defiFecRegistro).toLocaleDateString()} />
+                <Column field="defiObservacion" header="Observación" className="truncate" style={{maxWidth:'200px'}} />
+                
+                {/* Botón para abrir el modal de gestión de archivos */}
                 <Column header="Archivos" body={(r) => (
                     <Button 
                         icon="pi pi-folder-open" 
-                        label="Gestionar" 
+                        label="Ver / Borrar" 
                         size="small" 
                         outlined 
                         onClick={() => openModal(r)} 
+                        tooltip="Ver evidencias registradas"
                     />
-                )} style={{textAlign:'center', width:'120px'}} />
+                )} style={{textAlign:'center', width:'130px'}} />
             </DataTable>
 
+            {/* Renderizado condicional del modal */}
             {selectedDef && (
                 <EvidenceModal 
                     visible={showModal} 
