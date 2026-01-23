@@ -134,5 +134,25 @@ namespace Sigre.Server.Controllers
 
             return Ok(deficiencia);
         }
+        [HttpGet("GetByGis")]
+        public IActionResult GetByGis(string codigoGis)
+        {
+            try
+            {
+                // Instanciamos tu capa de datos
+                DADeficiency da = new DADeficiency();
+
+                // Llamamos al método que creamos
+                List<Deficiencia> resultado = da.DADEFI_GetByCodigoGis(codigoGis);
+
+                // Retornamos 200 OK con la lista (aunque esté vacía)
+                return Ok(resultado);
+            }
+            catch (System.Exception ex)
+            {
+                // En caso de error, retornamos 400 o 500
+                return BadRequest($"Error al buscar por código GIS: {ex.Message}");
+            }
+        }
     }
 }

@@ -39,7 +39,6 @@ namespace Sigre.DataAccess
         {
             SigreContext ctx = new SigreContext();
 
-            //var deficiencias=ctx.Deficiencias.Where(d=>d.DefiCodigoElemento==CodigoGIS); mi ejemplo
             var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == x_id);
             Deficiencia x_deficiency = original;
             x_deficiency.DefiInspeccionado = true;
@@ -620,6 +619,22 @@ namespace Sigre.DataAccess
                     .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
 
                 return deficiencia;
+            }
+        }
+        public List<Deficiencia> DADEFI_GetByCodigoGis(string x_codigoGis)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                if (string.IsNullOrEmpty(x_codigoGis))
+                {
+                    return new List<Deficiencia>();
+                }
+
+                var listaDeficiencias = ctx.Deficiencias
+                                           .Where(d => d.DefiCodigoElemento == x_codigoGis)
+                                           .ToList();
+
+                return listaDeficiencias;
             }
         }
     }
