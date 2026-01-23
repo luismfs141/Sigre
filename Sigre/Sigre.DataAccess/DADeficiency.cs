@@ -39,6 +39,7 @@ namespace Sigre.DataAccess
         {
             SigreContext ctx = new SigreContext();
 
+            //var deficiencias=ctx.Deficiencias.Where(d=>d.DefiCodigoElemento==CodigoGIS); mi ejemplo
             var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == x_id);
             Deficiencia x_deficiency = original;
             x_deficiency.DefiInspeccionado = true;
