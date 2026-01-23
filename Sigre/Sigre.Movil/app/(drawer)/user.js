@@ -234,7 +234,7 @@ export default function User() {
       {/* 🔹 Modal de Alimentadores */}
       <Modal visible={modalFeeders} animationType="slide" transparent>
         <View style={modalStyles.modalOverlay}>
-          <View style={modalStyles.modalContainer}>
+          <View style={[modalStyles.modalContainer, { height: "85%" }]}>
             <Text style={modalStyles.modalTitle}>
               Alimentadores de {selectedUser?.usuaNombres}
             </Text>
