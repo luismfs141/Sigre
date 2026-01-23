@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using System.Text;
@@ -10,7 +11,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Servicios
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(); //Comentar para Server Online
+//builder.Services.AddSwaggerGen(); //Comentar para Server Online
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "SIGRE API",
+        Version = "v1"
+    });
+
+    // 🔥 Soporte para subida de archivos
+    c.OperationFilter<FileUploadOperationFilter>();
+});
 
 // 🔑 Configuración de JWT
 var key = Encoding.UTF8.GetBytes("esta_es_una_clave_super_segura_123456!");
@@ -40,6 +52,7 @@ builder.Services.AddDbContext<SigreContext>(options =>
 
 // ⚡ Registrar tus clases personalizadas
 builder.Services.AddScoped<DAUser>();
+builder.Services.AddScoped<DAOffline>();
 
 // 🔥 Agregar CORS
 builder.Services.AddCors(options =>
