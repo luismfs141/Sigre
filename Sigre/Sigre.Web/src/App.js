@@ -11,6 +11,7 @@ import Mapas from './pages/Mapas';
 import Reportes from './pages/Reportes';
 import AuditFileElectrical from './pages/WebInspectionManager';
 import AuditElectrical from './pages/AuditElectrical';
+import ImportData from './pages/ImportData';
 function App() {
   return (
     <Routes>
@@ -38,6 +39,7 @@ function App() {
         <Route path="/subestaciones" element={<div>Página de Subestaciones</div>} />
         <Route path="/auditoria-electrica" element={<AuditElectrical />} />
         <Route path="/auditoria-archivo" element={<AuditFileElectrical />} />
+        <Route path="/importar-datos" element={<ImportData />} />
         
         {/* Ejemplo de ruta sin componente creado aún */}
         <Route path="/configuracion" element={<div>Página de Configuración</div>} />

@@ -2,7 +2,9 @@ import axios from 'axios';
 
 // 👉 URL base del backend
 const baseURL = 'http://localhost/SigreHost/api/';
-// const baseURL = 'http://localhost:5158/api/';
+// Producción
+//const baseURL = 'https://sigre-api-a6bbh4drgpgjeshw.canadacentral-01.azurewebsites.net/api/';
+
 export const API_URL = baseURL; 
 const api = axios.create({
   baseURL: baseURL,

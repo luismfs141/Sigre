@@ -46,8 +46,8 @@ const COMMON_DEFICIENCY_FIELDS = [
     required: true,
     valueMap: {
       1: "Leve",
-      2: "Moderado",
-      3: "Grave"
+      //2: "Moderado",
+      3: "Crítico"
     },
     validation: { message: "Seleccione una criticidad" }
   },

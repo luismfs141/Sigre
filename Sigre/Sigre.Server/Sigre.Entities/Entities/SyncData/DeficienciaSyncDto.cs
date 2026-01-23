@@ -10,7 +10,7 @@ namespace Sigre.Entities.Entities.SyncData
     public class DeficienciaSyncDto
     {
         public int DefiInterno { get; set; }          // ID LOCAL
-        public int EstadoOffLine { get; set; }         // 2 = INSERT, 1 = UPDATE
+        public int? EstadoOffLine { get; set; }         // 2 = INSERT, 1 = UPDATE
 
         public int? DefiServerId { get; set; }        // ID del backend
 

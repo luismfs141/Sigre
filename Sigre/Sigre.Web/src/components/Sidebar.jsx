@@ -22,6 +22,7 @@ const navItems = [
   { title: 'Subestaciones', href: '/subestaciones', icon: Building2 },
   { title: 'Auditoría Eléctrica', href: '/auditoria-electrica', icon: ClipboardCheck },
   { title: 'Auditoría Archivo', href: '/auditoria-archivo', icon: FileSearch },
+  { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
 ];
 
 export function Sidebar({ className, onClose }) {
