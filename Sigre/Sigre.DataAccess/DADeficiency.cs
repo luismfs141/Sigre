@@ -27,8 +27,7 @@ namespace Sigre.DataAccess
             }
             else
             {
-                x_deficiency.DefiFecModificacion = DateTime.Now;
-
+                //x_deficiency.DefiFecModificacion = DateTime.Now;
                 var original = ctx.Deficiencias.SingleOrDefault(d => d.DefiInterno == x_deficiency.DefiInterno);
                 ctx.Entry(original).CurrentValues.SetValues(x_deficiency);
             }
@@ -619,6 +618,105 @@ namespace Sigre.DataAccess
                     .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
 
                 return deficiencia;
+            }
+        }
+
+        public Deficiencia DADEFI_ConvertDeficiency(DeficienciaSyncDto def_offline)
+        {
+            return new Deficiencia
+            {
+                // 🔑 Identificadores
+                DefiInterno = def_offline.DefiInterno,
+
+                // 📌 Estado
+                DefiEstado = def_offline.DefiEstado,
+
+                // 🔍 Relaciones
+                InspInterno = def_offline.InspInterno,
+                TablInterno = def_offline.TablInterno,
+                TipiInterno = def_offline.TipiInterno,
+
+                // 📍 Elemento
+                DefiCodigoElemento = def_offline.DefiCodigoElemento,
+                DefiTipoElemento = def_offline.DefiTipoElemento,
+                DefiIdElemento = def_offline.DefiIdElemento,
+
+                // 📅 Fechas
+                DefiFechaDenuncia = def_offline.DefiFechaDenuncia,
+                DefiFechaInspeccion = def_offline.DefiFechaInspeccion,
+                DefiFechaSubsanacion = def_offline.DefiFechaSubsanacion,
+                DefiFecRegistro = def_offline.DefiFecRegistro,
+                DefiFecModificacion = def_offline.DefiFecModificacion,
+                DefiFechaCreacion = def_offline.DefiFechaCreacion,
+
+                // 📝 Descripción
+                DefiObservacion = def_offline.DefiObservacion,
+                DefiComentario = def_offline.DefiComentario,
+                DefiEstadoSubsanacion = def_offline.DefiEstadoSubsanacion,
+
+                // 📐 Coordenadas
+                DefiLatitud = def_offline.DefiLatitud,
+                DefiLongitud = def_offline.DefiLongitud,
+                DefiCoordX = def_offline.DefiCoordX,
+                DefiCoordY = def_offline.DefiCoordY,
+                DefiPointX = def_offline.DefiPointX,
+                DefiPointY = def_offline.DefiPointY,
+
+                // 📏 Distancias
+                DefiDistHorizontal = def_offline.DefiDistHorizontal,
+                DefiDistVertical = def_offline.DefiDistVertical,
+                DefiDistTransversal = def_offline.DefiDistTransversal,
+
+                // 🏗️ Infraestructura
+                DefiTipoMaterial = def_offline.DefiTipoMaterial,
+                DefiNodoInicial = def_offline.DefiNodoInicial,
+                DefiNodoFinal = def_offline.DefiNodoFinal,
+                DefiTipoRetenida = def_offline.DefiTipoRetenida,
+                DefiRetenidaMaterial = def_offline.DefiRetenidaMaterial,
+                DefiTipoArmado = def_offline.DefiTipoArmado,
+                DefiArmadoMaterial = def_offline.DefiArmadoMaterial,
+                DefiNumPostes = def_offline.DefiNumPostes,
+                DefiPozoTierra = def_offline.DefiPozoTierra,
+                DefiPozoTierra2 = def_offline.DefiPozoTierra2,
+
+                // 👤 Usuarios
+                DefiUsuCre = def_offline.DefiUsuCre,
+                DefiUsuNpc = def_offline.DefiUsuNpc,
+                DefiUsuarioInic = def_offline.DefiUsuarioInic,
+                DefiUsuarioMod = def_offline.DefiUsuarioMod,
+
+                // ⚙️ Control
+                DefiActivo = def_offline.DefiActivo ?? true,
+                DefiResponsable = def_offline.DefiResponsable,
+                DefiInspeccionado = def_offline.DefiInspeccionado,
+                DefiEstadoCriticidad = def_offline.DefiEstadoCriticidad,
+
+                // 🚧 Otros
+                DefiAccesibilidad = def_offline.DefiAccesibilidad,
+                DefiTipoCruce = def_offline.DefiTipoCruce,
+                DefiNumSuministro = def_offline.DefiNumSuministro,
+                DefiCodDef = def_offline.DefiCodDef,
+                DefiCodRes = def_offline.DefiCodRes,
+                DefiCodDen = def_offline.DefiCodDen,
+                DefiRefer1 = def_offline.DefiRefer1,
+                DefiRefer2 = def_offline.DefiRefer2,
+                DefiCodAmt = def_offline.DefiCodAmt,
+                DefiNroOrden = def_offline.DefiNroOrden
+            };
+        }
+        public int DADEFI_ExistDeficiency(string codElemento, string tipoElemento, int tipiInterno)
+        {
+            SigreContext ctx = new SigreContext();
+
+            Deficiencia deficiencia = ctx.Deficiencias.SingleOrDefault(d => d.DefiCodigoElemento == codElemento && d.DefiTipoElemento == tipoElemento && d.TipiInterno == tipiInterno);
+
+            if (deficiencia is not null)
+            {
+                return deficiencia.DefiInterno;
+            }
+            else
+            {
+                return 0;
             }
         }
     }

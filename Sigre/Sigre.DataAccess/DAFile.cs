@@ -16,7 +16,7 @@ namespace Sigre.DataAccess
         {
             SigreContext ctx = new SigreContext();
 
-            if (x_archivo.ArchInterno== 0)
+            if (x_archivo.ArchInterno == 0)
             {
                 ctx.Archivos.Add(x_archivo);
             }
@@ -34,7 +34,7 @@ namespace Sigre.DataAccess
 
             var files =
                 (from a in ctx.Archivos
-                 where a.ArchCodTabla == x_deficiency 
+                 where a.ArchCodTabla == x_deficiency
                  select a).ToList();
 
             return files;
@@ -195,6 +195,50 @@ namespace Sigre.DataAccess
             return resultado;
         }
 
+        public int ARCH_ExistPhoto(string ruta)
+        {
+            SigreContext ctx = new SigreContext();
 
+            Archivo archivo = ctx.Archivos.SingleOrDefault(a => a.ArchNombre == ruta);
+
+            if ((archivo is not null))
+            {
+                return archivo.ArchInterno;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        public Archivo ARCH_ConvertFile(ArchivoSyncDto arch_offline)
+        {
+            return new Archivo
+            {
+                // 🔑 Identificadores
+                ArchInterno = arch_offline.ArchInterno,
+
+                // 📁 Información del archivo
+                ArchTipo = arch_offline.ArchTipo,
+                ArchTabla = arch_offline.ArchTabla,
+                ArchCodTabla = (int)arch_offline.ArchCodTabla,
+                ArchNombre = arch_offline.ArchNombre,
+
+                // 📍 Ubicación
+                ArchLatitud = arch_offline.ArchLatitud,
+                ArchLongitud = arch_offline.ArchLongitud,
+
+                // 📅 Fecha
+                ArchFecha = arch_offline.ArchFecha,
+
+                // 🔗 Relación con elemento
+                ArchTipoElemento = arch_offline.ArchTipoElemento,
+                ArchIdElemento = arch_offline.ArchIdElemento,
+                TipiInterno = arch_offline.TipiInterno,
+
+                // ⚙️ Estado
+                ArchActivo = arch_offline.ArchActivo,
+            };
+        }
     }
 }
