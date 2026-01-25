@@ -620,6 +620,63 @@ namespace Sigre.DataAccess
                 return deficiencia;
             }
         }
+        public List<Deficiencia> DADEFI_GetByCodigoGis(string x_codigoGis)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                if (string.IsNullOrEmpty(x_codigoGis))
+                {
+                    return new List<Deficiencia>();
+                }
+
+                var listaDeficiencias = ctx.Deficiencias
+                                           .Where(d => d.DefiCodigoElemento == x_codigoGis)
+                                           .ToList();
+
+                return listaDeficiencias;
+            }
+        }
+        public List<Deficiencia> DADEFI_GetBySed(int x_sed)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Obtener los IDs de POSTES vinculados a la columna POST_Subestacion
+                // Verificamos explícitamente la columna de la imagen (POST_Subestacion)
+                var idPostes = ctx.Postes
+                    .Where(p => p.PostSubestacion == x_sed)
+                    .Select(p => p.PostInterno)
+                    .ToList();
+
+                // 2. Obtener los IDs de VANOS vinculados a su columna de Subestación
+                var idVanos = ctx.Vanos
+                    .Where(v => v.VanoSubestacion == x_sed)
+                    .Select(v => v.VanoInterno)
+                    .ToList();
+
+                // 3. Recuperar Deficiencias (Manejo seguro de nulos en DefiIdElemento)
+
+                // A) Deficiencias de Postes encontrados
+                var defPostes = ctx.Deficiencias
+                    .Where(d => d.DefiTipoElemento == "POST"
+                             && d.DefiIdElemento != null // Asegurar que no sea nulo antes de comparar
+                             && idPostes.Contains((int)d.DefiIdElemento))
+                    .ToList();
+
+                // B) Deficiencias de Vanos encontrados
+                var defVanos = ctx.Deficiencias
+                    .Where(d => d.DefiTipoElemento == "VANO"
+                             && d.DefiIdElemento != null
+                             && idVanos.Contains((int)d.DefiIdElemento))
+                    .ToList();
+
+                // 4. Combinar y retornar
+                var resultado = new List<Deficiencia>();
+                resultado.AddRange(defPostes);
+                resultado.AddRange(defVanos);
+
+                return resultado;
+            }
+        }
 
         public Deficiencia DADEFI_ConvertDeficiency(DeficienciaSyncDto def_offline)
         {

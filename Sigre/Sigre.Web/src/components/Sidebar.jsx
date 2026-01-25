@@ -23,6 +23,7 @@ const navItems = [
   { title: 'Auditoría Eléctrica', href: '/auditoria-electrica', icon: ClipboardCheck },
   { title: 'Auditoría Archivo', href: '/auditoria-archivo', icon: FileSearch },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
+  { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
 ];
 
 export function Sidebar({ className, onClose }) {

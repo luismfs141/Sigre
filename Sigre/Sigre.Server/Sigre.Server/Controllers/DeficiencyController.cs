@@ -134,5 +134,57 @@ namespace Sigre.Server.Controllers
 
             return Ok(deficiencia);
         }
+        [HttpGet("GetByGis")]
+        public IActionResult GetByGis(string codigoGis)
+        {
+            try
+            {
+                // Instanciamos tu capa de datos
+                DADeficiency da = new DADeficiency();
+
+                // Llamamos al método que creamos
+                List<Deficiencia> resultado = da.DADEFI_GetByCodigoGis(codigoGis);
+
+                // Retornamos 200 OK con la lista (aunque esté vacía)
+                return Ok(resultado);
+            }
+            catch (System.Exception ex)
+            {
+                // En caso de error, retornamos 400 o 500
+                return BadRequest($"Error al buscar por código GIS: {ex.Message}");
+            }
+        }
+        [HttpGet("GetBySed")]
+        public IActionResult GetBySed(int x_sed)
+        {
+            try
+            {
+                // Validación básica
+                if (x_sed <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "El ID de la SED debe ser mayor a 0."
+                    });
+                }
+
+                DADeficiency da = new DADeficiency();
+
+                // Llamamos al nuevo método singular
+                var resultado = da.DADEFI_GetBySed(x_sed);
+
+                return Ok(resultado);
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = $"Error al buscar por SED: {ex.Message}"
+                });
+            }
+        }
+
     }
 }

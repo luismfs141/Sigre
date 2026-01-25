@@ -17,6 +17,7 @@ import JSZip from "jszip";
 const TAMANIO_BLOQUE = 50; // 👉 50 archivos por bloque
 const RAIZ_MEDIOS = FileSystem.documentDirectory + "SigreMedios/";
 const RAIZ_MOVIL = FileSystem.documentDirectory + "SigreMovil/";
+const RAIZ_SIGRE_MOVIL = FileSystem.documentDirectory + "SIGRE.MOVIL/";
 const ESTADO_ZIP = (root) => root + ".zip_state.json";
 // Carpeta pública (para Android suele resolverse como Download)
 const CARPETA_PUBLICA = FileSystem.documentDirectory + "../Download/SigreExport/";
@@ -117,15 +118,23 @@ const guardarEstadoZip = async (root, parte) => {
 const limpiarEstadoZip = async (root) => {
   try {
     await FileSystem.deleteAsync(ESTADO_ZIP(root), { idempotent: true });
-  } catch {}
+  } catch { }
 };
 
 export default function DailyZipScreen() {
   const [loading, setLoading] = useState(false);
   const [totalArchivos, setTotalArchivos] = useState(0);
-  const [rootKey, setRootKey] = useState("MEDIOS"); // MEDIOS | MOVIL
+  const [rootKey, setRootKey] = useState("MEDIOS");
+  // MEDIOS | MOVIL | SIGRE
 
-  const RAIZ_ACTIVA = rootKey === "MEDIOS" ? RAIZ_MEDIOS : RAIZ_MOVIL;
+
+  const RAIZ_ACTIVA =
+    rootKey === "MEDIOS"
+      ? RAIZ_MEDIOS
+      : rootKey === "MOVIL"
+        ? RAIZ_MOVIL
+        : RAIZ_SIGRE_MOVIL; // SIGRE
+
 
   /**
    * 🔍 Verifica si existe la raíz activa y cuenta archivos
@@ -445,8 +454,15 @@ export default function DailyZipScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>📦 Exportar Evidencias</Text>
       <Text style={styles.subtitle}>
-        Carpeta activa: {rootKey === "MEDIOS" ? "SigreMedios" : "SigreMovil"}
+        Carpeta activa: {
+          rootKey === "MEDIOS"
+            ? "SigreMedios"
+            : rootKey === "MOVIL"
+              ? "SigreMovil"
+              : "SIGRE.MOVIL (Multimedia)"
+        }
       </Text>
+
 
       <Text style={styles.info}>
         Archivos encontrados: {totalArchivos}
@@ -469,6 +485,13 @@ export default function DailyZipScreen() {
               onPress={() => setRootKey("MOVIL")}
             />
           </View>
+          <View style={styles.buttonContainer}>
+            <Button
+              title="📁 Usar SIGRE.MOVIL (Multimedia)"
+              onPress={() => setRootKey("SIGRE")}
+            />
+          </View>
+
 
           <View style={styles.buttonContainer}>
             <Button title="🔄 Actualizar" onPress={verificarContenido} />

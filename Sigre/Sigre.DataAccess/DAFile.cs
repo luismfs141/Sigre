@@ -194,6 +194,61 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+        // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
+        public bool DAFILE_SoftDelete(int idArchivo)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var archivo = ctx.Archivos.SingleOrDefault(x => x.ArchInterno == idArchivo);
+                if (archivo != null)
+                {
+                    archivo.ArchActivo = false; // O 0, dependiendo de tu tipo de dato en BD
+                    ctx.SaveChanges();
+                    return true;
+                }
+                return false;
+            }
+        }
+        
+
+        public void DAARCH_SaveInWeb(Archivo x_archivo)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // 🔍 LÓGICA DE INSERCIÓN vs ACTUALIZACIÓN
+                if (x_archivo.ArchInterno == 0)
+                {
+                    // === CASO 1: ES NUEVO (INSERT) ===
+                    // Al agregar sin ID, la BD generará el correlativo automático.
+                    ctx.Archivos.Add(x_archivo);
+                }
+                else
+                {
+                    // === CASO 2: YA EXISTE (UPDATE) ===
+                    var original = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == x_archivo.ArchInterno);
+
+                    if (original != null)
+                    {
+                        // Actualizamos solo los datos relevantes que vienen de la Web
+                        original.ArchNombre = x_archivo.ArchNombre;
+                        original.ArchTipo = x_archivo.ArchTipo;
+                        original.ArchActivo = x_archivo.ArchActivo;
+
+                        // Actualizamos metadatos si vienen con valor
+                        if (x_archivo.ArchFecha > DateTime.MinValue)
+                            original.ArchFecha = x_archivo.ArchFecha;
+
+                        original.ArchLatitud = x_archivo.ArchLatitud;
+                        original.ArchLongitud = x_archivo.ArchLongitud;
+
+                        // Nota: No tocamos IDs de tablas foráneas (ArchCodTabla) para evitar romper relaciones por error
+                    }
+                }
+
+                ctx.SaveChanges();
+            }
+        }
+
 
         public int ARCH_ExistPhoto(string ruta)
         {

@@ -69,6 +69,51 @@ namespace Sigre.Server.Controllers
 
             return Ok(response);
         }
+        [HttpPost("SoftDelete")]
+        public IActionResult SoftDelete(int id)
+        {
+            try
+            {
+                DAFile da = new DAFile();
+                bool result = da.DAFILE_SoftDelete(id);
+                if (result) return Ok(new { message = "Archivo desactivado correctamente" });
+                return NotFound("Archivo no encontrado");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+        // En Sigre.Server/Controllers/FileController.cs
+
+        [HttpPost("UploadFileInWeb")]
+        public IActionResult UploadFileInWeb([FromBody] Archivo archivo)
+        {
+            try
+            {
+                DAFile da = new DAFile();
+
+                // Validaciones preventivas
+                if (archivo == null) return BadRequest("El archivo no puede ser nulo.");
+
+                // Si la fecha viene vacía, ponemos la actual del servidor
+                if (archivo.ArchFecha == DateTime.MinValue) archivo.ArchFecha = DateTime.Now;
+
+                // Aseguramos que se guarde como activo
+                archivo.ArchActivo = true;
+
+                // ✅ USAMOS EL NUEVO MÉTODO ESPECÍFICO PARA WEB
+                da.DAARCH_SaveInWeb(archivo);
+
+                return Ok(true);
+            }
+            catch (Exception ex)
+            {
+                // Tip: Devuelve el error interno para que puedas verlo en la consola del navegador si falla
+                return BadRequest($"Error en servidor: {ex.Message} | {ex.InnerException?.Message}");
+            }
+        }
+
 
     }
 }
