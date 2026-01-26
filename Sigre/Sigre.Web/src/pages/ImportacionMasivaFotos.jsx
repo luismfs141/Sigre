@@ -22,9 +22,7 @@ import { ProgressBar } from 'primereact/progressbar';
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "UNKNOWN";
 
 /**
- * Procesa la imagen con marca de agua.
- * - Fuente reducida (0.028)
- * - Posiciones optimizadas para no pisar datos.
+ * 1. Procesa imagen (Alta Calidad) + Marca de Agua (Letra 0.018)
  */
 const processImageWithWatermark = (file, meta) => {
     return new Promise((resolve) => {
@@ -40,14 +38,13 @@ const processImageWithWatermark = (file, meta) => {
                 canvas.width = img.width;
                 canvas.height = img.height;
                 
-                // 1. Dibujar imagen original
                 ctx.drawImage(img, 0, 0);
 
-                // 2. Configurar estilo (Letra más pequeña)
+                // Letra pequeña (1.8%)
                 const fontSize = Math.floor(img.height * 0.018); 
                 
                 ctx.font = `bold ${fontSize}px Arial`;
-                ctx.fillStyle = '#fbfbfb'; 
+                ctx.fillStyle = '#FFFF00'; 
                 ctx.strokeStyle = 'black'; 
                 ctx.lineWidth = fontSize / 5;
                 ctx.textBaseline = 'bottom'; 
@@ -60,64 +57,84 @@ const processImageWithWatermark = (file, meta) => {
 
                 const padding = fontSize;
 
-                // --- POSICIONES ---
-                // Fecha: Arriba Izquierda
-                drawText(` ${meta.dateStr}`, padding, padding + fontSize, 'left');
-
-                // Lat/Long: Arriba Derecha
+                drawText(`📅 ${meta.dateStr}`, padding, padding + fontSize, 'left');
                 drawText(`Lat: ${meta.lat} | Long: ${meta.long}`, img.width - padding, padding + fontSize, 'right');
+                drawText(`GIS: ${meta.gis} | DEF: ${meta.defCode}`, padding, img.height - padding, 'left');
 
-                // GIS/Def: Abajo Izquierda
-                //drawText(`GIS: ${meta.gis} | DEF: ${meta.defCode}`, padding, img.height - padding, 'left');
-
-                // Exportar
                 canvas.toBlob((blob) => {
+                    // Mantiene nombre original
                     const newFile = new File([blob], file.name, { type: 'image/jpeg' });
                     resolve({ 
                         fileObj: newFile,            
                         previewUrl: URL.createObjectURL(blob) 
                     });
-                }, 'image/jpeg', 0.95);
+                }, 'image/jpeg', 0.95); // Calidad alta por defecto para BD
             };
         };
     });
 };
 
+/**
+ * 2. 👇 NUEVA FUNCIÓN: Comprime la imagen para el ZIP Ligero
+ * Reduce dimensiones al 70% y Calidad al 50%
+ */
+const compressImageForLite = (blob) => {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+            URL.revokeObjectURL(url); // Limpieza
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Reducir dimensiones al 70%
+            const scale = 0.7; 
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            // Dibujar re-escalado
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Exportar con calidad BAJA (0.5)
+            canvas.toBlob(resolve, 'image/jpeg', 0.5); 
+        };
+    });
+};
+
 export default function ImportacionMasivaFotos() {
-    // 1. HOOKS
     const { addFile } = useFiles();
     const { fetchByGis } = useDeficiencyByGis(); 
     const { masterTypifications, getCodeById } = useTypification(); 
     
     const toast = useRef(null);
 
-    // 2. ESTADOS
     const [localItems, setLocalItems] = useState([]);         
     const [modalVisible, setModalVisible] = useState(false);
+    
+    // Estados de carga separados para los botones
     const [zipLoading, setZipLoading] = useState(false);
+    const [zipLiteLoading, setZipLiteLoading] = useState(false); // 👈 Nuevo estado
+
     const [processing, setProcessing] = useState(false);
     const [progressVal, setProgressVal] = useState(0);
     const [statusMsg, setStatusMsg] = useState("");
     
-    // Zoom
     const [previewImage, setPreviewImage] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
-
-    // 🔴 SOLUCIÓN AL "PEGADO": Key dinámica para el input
     const [inputKey, setInputKey] = useState(Date.now());
 
-    // =================================================================
-    // 📂 LÓGICA PRINCIPAL
-    // =================================================================
+    // ... (handleFolderSelect y handleSaveToDB SE MANTIENEN IGUALES) ...
+    // Copia exactamente las mismas funciones handleFolderSelect y handleSaveToDB de la respuesta anterior.
+    // Para ahorrar espacio, asumo que están aquí.
+    
+    // ---------------------------------------------------------
+    // Relleno handleFolderSelect y handleSaveToDB para que funcione el copy-paste
+    // ---------------------------------------------------------
     const handleFolderSelect = async (e) => {
         try {
             const rawFiles = Array.from(e.target.files);
-            
-            // Filtro híbrido (Tipo y Extensión)
-            const imageFiles = rawFiles.filter(f => 
-                f.type.startsWith('image/') || 
-                /\.(jpg|jpeg|png|webp|bmp)$/i.test(f.name)
-            );
+            const imageFiles = rawFiles.filter(f => f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|bmp)$/i.test(f.name));
 
             if (imageFiles.length === 0) {
                 toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'No se encontraron imágenes válidas.' });
@@ -128,7 +145,6 @@ export default function ImportacionMasivaFotos() {
             setModalVisible(true);
             setStatusMsg(`Procesando ${imageFiles.length} imágenes...`);
 
-            // Agrupar
             const groups = new Map();
             imageFiles.forEach(file => {
                 const folderPath = file.webkitRelativePath.substring(0, file.webkitRelativePath.lastIndexOf('/'));
@@ -146,8 +162,6 @@ export default function ImportacionMasivaFotos() {
                 const pathParts = folderPath.split('/');
 
                 setStatusMsg(`Grupo ${i+1}/${totalGroups}: Analizando rutas...`);
-
-                // 1. Parseo Ruta
                 const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p.toUpperCase().includes('VANO'));
                 let gisCode = "", defCode = "", feeder = "NA", sed = "NA", structType = "Poste";
 
@@ -163,7 +177,6 @@ export default function ImportacionMasivaFotos() {
                     gisCode = safeSeg(pathParts[pathParts.length - 2]);
                 }
 
-                // 2. BD Match
                 let dbLat = 0, dbLong = 0, dbDateStr = new Date().toISOString().slice(0,10);
                 let dbFound = false;
 
@@ -177,7 +190,6 @@ export default function ImportacionMasivaFotos() {
                                 const visualCode = getCodeById(internalId);
                                 return String(visualCode) === String(defCode);
                             });
-
                             if (specificDef) {
                                 dbLat = specificDef.DEFI_Latitud || specificDef.defiLatitud || 0;
                                 dbLong = specificDef.DEFI_Longitud || specificDef.defiLongitud || 0;
@@ -191,13 +203,10 @@ export default function ImportacionMasivaFotos() {
 
                 const typoExists = masterTypifications.some(t => t.code === defCode);
 
-                // 3. Procesar imágenes
                 const groupPromises = filesInGroup.map(async (file, idx) => {
                     const metaForWatermark = { gis: gisCode, defCode: defCode, lat: dbLat, long: dbLong, dateStr: dbDateStr };
                     const { fileObj, previewUrl } = await processImageWithWatermark(file, metaForWatermark);
-                    const originalName = file.name;
-
-                    // Limpieza ruta "NA"
+                    const originalName = file.name; 
                     const pathSegments = [feeder, sed, structType, gisCode, defCode];
                     const cleanPath = pathSegments.filter(seg => seg && seg !== "NA").join('/');
                     const finalDbPath = `SIGREMOVIL/${cleanPath}/${originalName}`;
@@ -215,22 +224,18 @@ export default function ImportacionMasivaFotos() {
                         dbFound: dbFound
                     };
                 });
-
                 const processedGroup = await Promise.all(groupPromises);
                 processedItems.push(...processedGroup);
                 setProgressVal(Math.round(((i + 1) / totalGroups) * 100));
             }
-
             setLocalItems(prev => [...prev, ...processedItems]);
             toast.current.show({ severity: 'success', summary: 'Completado', detail: `${processedItems.length} fotos procesadas.` });
-
         } catch (error) {
             console.error("Error handleFolderSelect:", error);
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falló la lectura de archivos.' });
         } finally {
             setProcessing(false);
             setModalVisible(false);
-            // 🔴 ESTA ES LA CLAVE: Cambiamos la llave para resetear el input a la fuerza
             setInputKey(Date.now());
         }
     };
@@ -239,7 +244,6 @@ export default function ImportacionMasivaFotos() {
         if (localItems.length === 0) return;
         setProcessing(true);
         setStatusMsg("Subiendo a BD...");
-
         let successCount = 0;
         for (const [idx, item] of localItems.entries()) {
             setProgressVal(Math.round(((idx + 1) / localItems.length) * 100));
@@ -249,14 +253,10 @@ export default function ImportacionMasivaFotos() {
                 archNombre: item.dbPath,
                 archTabla: "Deficiencias",
                 archCodTabla: 0, 
-                archLatitud: item.lat,
-                archLongitud: item.long,
+                archLatitud: item.lat, archLongitud: item.long,
                 archFecha: new Date().toISOString(),
                 archTipoElemento: item.structType === 'Poste' ? "POST" : "VANO",
-                archIdElemento: 0, 
-                tipiInterno: 0, 
-                archActivo: true,
-                estadoOffLine: 0
+                archIdElemento: 0, tipiInterno: 0, archActivo: true, estadoOffLine: 0
             };
             const ok = await addFile(payload, item.processedFile); 
             if(ok) successCount++;
@@ -266,29 +266,53 @@ export default function ImportacionMasivaFotos() {
         toast.current.show({ severity: 'success', summary: 'Subida Finalizada', detail: `${successCount} registros guardados.` });
     };
 
-    const handleGenerateZip = async () => {
+    // ---------------------------------------------------------
+    // 👇 LOGICA ZIP ACTUALIZADA (Soporta Lite)
+    // ---------------------------------------------------------
+    
+    /**
+     * @param {boolean} isLite - Si es true, comprime las imágenes antes de zipear.
+     */
+    const handleGenerateZip = async (isLite = false) => {
         if (localItems.length === 0) return;
-        setZipLoading(true);
+        
+        // Activamos el loading correcto
+        if (isLite) setZipLiteLoading(true);
+        else setZipLoading(true);
+
         const zip = new JSZip();
         
-        const readFileInfo = (blob) => new Promise((resolve) => {
+        // Helper para leer Blob como ArrayBuffer
+        const blobToArrayBuffer = (blob) => new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
             reader.readAsArrayBuffer(blob);
         });
 
+        // Iteramos items
         for (const item of localItems) {
             const folderPath = item.dbPath.substring(0, item.dbPath.lastIndexOf('/'));
             const fileName = item.dbPath.split('/').pop();
+            
             try {
-                const content = await readFileInfo(item.processedFile);
+                let blobToZip = item.processedFile;
+
+                // SI ES MODO LITE, RE-COMPRIMIMOS
+                if (isLite) {
+                    blobToZip = await compressImageForLite(item.processedFile);
+                }
+
+                const content = await blobToArrayBuffer(blobToZip);
                 zip.folder(folderPath).file(fileName, content);
             } catch (e) { console.error(e); }
         }
         
+        const suffix = isLite ? "LIGERO" : "FULL";
         const content = await zip.generateAsync({ type: "blob" });
-        saveAs(content, `CargaMasiva_${new Date().getTime()}.zip`);
-        setZipLoading(false);
+        saveAs(content, `CargaMasiva_${suffix}_${new Date().getTime()}.zip`);
+        
+        if (isLite) setZipLiteLoading(false);
+        else setZipLoading(false);
     };
 
     const clearList = () => { setLocalItems([]); setStatusMsg(""); };
@@ -298,13 +322,12 @@ export default function ImportacionMasivaFotos() {
         <div className="p-4 bg-slate-50 min-h-screen">
             <Toast ref={toast} />
 
-            <Card title="Importación Masiva (Reset Automático)" className="shadow-md">
+            <Card title="Importación Masiva (Opciones de Peso)" className="shadow-md">
                 <Toolbar 
                     left={
                         <div className="flex gap-2 items-center">
                              <div className="relative overflow-hidden inline-block">
                                 <Button label="Seleccionar Carpeta Raíz" icon="pi pi-images" severity="warning" />
-                                {/* 🔴 KEY DINÁMICA: Esto evita que se quede 'pegado' */}
                                 <input 
                                     key={inputKey} 
                                     type="file" 
@@ -321,7 +344,28 @@ export default function ImportacionMasivaFotos() {
                     right={
                         <div className="flex gap-2">
                             <Button label="Guardar BD" icon="pi pi-cloud-upload" severity="success" onClick={handleSaveToDB} disabled={localItems.length === 0} />
-                            <Button label="Descargar ZIP" icon="pi pi-download" severity="help" onClick={handleGenerateZip} loading={zipLoading} disabled={localItems.length === 0} />
+                            
+                            {/* Botón ZIP FULL */}
+                            <Button 
+                                label="ZIP Original" 
+                                icon="pi pi-download" 
+                                severity="help" 
+                                onClick={() => handleGenerateZip(false)} // false = Full Quality
+                                loading={zipLoading} 
+                                disabled={localItems.length === 0 || zipLiteLoading} 
+                            />
+
+                            {/* 👇 Botón ZIP LIGERO */}
+                            <Button 
+                                label="ZIP Ligero" 
+                                icon="pi pi-send" 
+                                severity="info" // Color diferente
+                                onClick={() => handleGenerateZip(true)} // true = Lite Mode
+                                loading={zipLiteLoading} 
+                                disabled={localItems.length === 0 || zipLoading} 
+                                tooltip="Resolución reducida (Ideal correo)"
+                                tooltipOptions={{position: 'bottom'}}
+                            />
                         </div>
                     }
                 />
@@ -330,12 +374,7 @@ export default function ImportacionMasivaFotos() {
                     <DataTable value={localItems} size="small" paginator rows={5} stripedRows emptyMessage="Seleccione carpetas para comenzar.">
                         <Column header="Ver" body={(r)=> (
                             <div className="flex justify-center" title="Clic para ampliar">
-                                <img 
-                                    src={r.preview} 
-                                    onClick={() => openImagePreview(r.preview)} 
-                                    className="h-24 w-auto object-contain border shadow-sm bg-gray-100 cursor-zoom-in hover:shadow-lg transition-all hover:scale-110" 
-                                    alt="prev"
-                                />
+                                <img src={r.preview} onClick={() => openImagePreview(r.preview)} className="h-24 w-auto object-contain border shadow-sm bg-gray-100 cursor-zoom-in hover:shadow-lg transition-all hover:scale-110" alt="prev"/>
                             </div>
                         )} />
                         <Column field="gis" header="GIS / Deficiencia" body={(r)=> (
@@ -343,10 +382,7 @@ export default function ImportacionMasivaFotos() {
                                 <span className="font-bold text-gray-700">{r.gis}</span>
                                 <div className="mt-1">
                                     <Tag severity={r.isValidTypo ? "info" : "warning"} value={`Cód: ${r.defCode}`} />
-                                    {r.dbFound ? 
-                                        <i className="pi pi-check-circle text-green-500 ml-2" title="Sincronizado"></i> : 
-                                        <i className="pi pi-exclamation-triangle text-red-500 ml-2" title="No en BD"></i>
-                                    }
+                                    {r.dbFound ? <i className="pi pi-check-circle text-green-500 ml-2" title="Sincronizado"></i> : <i className="pi pi-exclamation-triangle text-red-500 ml-2" title="No en BD"></i>}
                                 </div>
                             </div>
                         )}/>
