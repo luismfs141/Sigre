@@ -107,6 +107,24 @@ export const useDeficiency = () => {
   };
 
   // ------------------- SET INSPECCIONADO (LOCAL + SYNC) -------------------
+  // const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
+  //   const dbOk = await checkDatabase();
+  //   if (!dbOk) return false;
+
+  //   try {
+  //     await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
+
+  //     // opcional: si ya estaba pendiente por tu lógica normal,
+  //     // esto intentará sincronizar sin tocar EstadoOffLine
+  //     await autoSyncDeficiency(defiInterno);
+
+  //     return true;
+  //   } catch (err) {
+  //     console.error("❌ Error actualizando DefiInspeccionado:", err);
+  //     return false;
+  //   }
+  // };
+
   const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
     const dbOk = await checkDatabase();
     if (!dbOk) return false;
@@ -114,9 +132,14 @@ export const useDeficiency = () => {
     try {
       await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
 
-      // opcional: si ya estaba pendiente por tu lógica normal,
-      // esto intentará sincronizar sin tocar EstadoOffLine
-      await autoSyncDeficiency(defiInterno);
+      // ✅ IMPORTANTE: autoSync debe recibir el OBJETO completo, no solo el ID
+      const defActual = await getDeficiencyByIdLocal(defiInterno);
+      if (!defActual) {
+        console.warn("⚠ No se pudo leer la deficiencia tras actualizar inspeccionado:", defiInterno);
+        return true; // local quedó ok
+      }
+
+      await autoSyncDeficiency(defActual, defActual.DefiInterno);
 
       return true;
     } catch (err) {
@@ -178,55 +201,166 @@ export const useDeficiency = () => {
   };
 
 
-  const normalizeDeficiencyForSync = (def) => ({
-    ...def,
+  // const normalizeDeficiencyForSync = (def) => ({
+  //   ...def,
 
-    // 🔹 STRINGS (OBLIGATORIO)
-    DefiUsuarioInic: def.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
-    DefiUsuarioMod: def.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
-    DefiUsuCre: def.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
-    DefiUsuNpc: def.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
+  //   // 🔹 STRINGS (OBLIGATORIO)
+  //   DefiUsuarioInic: def.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
+  //   DefiUsuarioMod: def.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
+  //   DefiUsuCre: def.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
+  //   DefiUsuNpc: def.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
 
-    DefiObservacion: def.DefiObservacion ?? "",
-    DefiComentario: def.DefiComentario ?? "",
+  //   DefiObservacion: def.DefiObservacion ?? "",
+  //   DefiComentario: def.DefiComentario ?? "",
 
-    // 🔹 BOOLEANS
-    DefiActivo: Boolean(def.DefiActivo),
-    DefiInspeccionado: Boolean(def.DefiInspeccionado),
-    DefiResponsable: Boolean(def.DefiResponsable),
+  //   // 🔹 BOOLEANS
+  //   DefiActivo: Boolean(def.DefiActivo),
+  //   DefiInspeccionado: Boolean(def.DefiInspeccionado),
+  //   DefiResponsable: Boolean(def.DefiResponsable),
 
-    // 🔹 FECHAS
-    DefiFecRegistro: normalizeDate(def.DefiFecRegistro),
-    DefiFecModificacion: normalizeDate(def.DefiFecModificacion),
-    DefiFechaCreacion: normalizeDate(def.DefiFechaCreacion),
-    DefiFechaDenuncia: normalizeDate(def.DefiFechaDenuncia),
-    DefiFechaInspeccion: normalizeDate(def.DefiFechaInspeccion),
-    DefiFechaSubsanacion: normalizeDate(def.DefiFechaSubsanacion),
+  //   // 🔹 FECHAS
+  //   DefiFecRegistro: normalizeDate(def.DefiFecRegistro),
+  //   DefiFecModificacion: normalizeDate(def.DefiFecModificacion),
+  //   DefiFechaCreacion: normalizeDate(def.DefiFechaCreacion),
+  //   DefiFechaDenuncia: normalizeDate(def.DefiFechaDenuncia),
+  //   DefiFechaInspeccion: normalizeDate(def.DefiFechaInspeccion),
+  //   DefiFechaSubsanacion: normalizeDate(def.DefiFechaSubsanacion),
 
-    // 🔹 IDENTIFICADOR ÚNICO
-    DefiCol3: def.DefiCol3
-  });
+  //   // 🔹 IDENTIFICADOR ÚNICO
+  //   DefiCol3: def.DefiCol3
+  // });
+  const normalizeDeficiencyForSync = (def) => {
+    const nowIso = new Date().toISOString();
+
+    // ⚠ DefiFecRegistro suele ser requerido en servidor (si es DateTime no-nullable)
+    const fecRegistro =
+      normalizeDate(def?.DefiFecRegistro) ||
+      normalizeDate(def?.DefiFechaCreacion) ||
+      nowIso;
+
+    const fecMod =
+      normalizeDate(def?.DefiFecModificacion) ||
+      nowIso;
+
+    return {
+      ...def,
+
+      // 🔹 STRINGS (OBLIGATORIO)
+      DefiUsuarioInic: def?.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
+      DefiUsuarioMod: def?.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
+      DefiUsuCre: def?.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
+      DefiUsuNpc: def?.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
+
+      DefiObservacion: def?.DefiObservacion ?? "",
+      DefiComentario: def?.DefiComentario ?? "",
+
+      // 🔹 BOOLEANS
+      DefiActivo: Boolean(def?.DefiActivo),
+      DefiInspeccionado: Boolean(def?.DefiInspeccionado),
+      DefiResponsable: Boolean(def?.DefiResponsable),
+
+      // 🔹 FECHAS (ISO)
+      DefiFecRegistro: fecRegistro,
+      DefiFecModificacion: fecMod,
+      DefiFechaCreacion: normalizeDate(def?.DefiFechaCreacion) || nowIso,
+      DefiFechaDenuncia: normalizeDate(def?.DefiFechaDenuncia),
+      DefiFechaInspeccion: normalizeDate(def?.DefiFechaInspeccion),
+      DefiFechaSubsanacion: normalizeDate(def?.DefiFechaSubsanacion),
+
+      // 🔹 IDENTIFICADOR ÚNICO
+      DefiCol3: def?.DefiCol3
+    };
+  };
 
   // ------------------- AUTO SYNC -------------------
 
 
+  // const normalizeDate = (value) => {
+  //   if (!value) return null;
+
+  //   // Si ya tiene formato ISO con T, no tocar
+  //   if (typeof value === "string" && value.includes("T")) return value;
+
+  //   // Convierte "2026-01-15 09:31:31" -> "2026-01-15T09:31:31"
+  //   if (typeof value === "string") {
+  //     return value.replace(" ", "T");
+  //   }
+
+  //   return value;
+  // };
   const normalizeDate = (value) => {
-    if (!value) return null;
+    // Backend (System.Text.Json) suele exigir ISO 8601 válido
+    if (value === null || value === undefined || value === "") return null;
 
-    // Si ya tiene formato ISO con T, no tocar
-    if (typeof value === "string" && value.includes("T")) return value;
-
-    // Convierte "2026-01-15 09:31:31" -> "2026-01-15T09:31:31"
-    if (typeof value === "string") {
-      return value.replace(" ", "T");
+    // Si viene como número (timestamp)
+    if (typeof value === "number") {
+      const ms = value > 1e12 ? value : value * 1000; // heurística ms/seg
+      const d = new Date(ms);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
     }
 
-    return value;
+    if (typeof value !== "string") return null;
+
+    let s = value.trim();
+    if (!s) return null;
+
+    // "YYYY-MM-DD HH:mm:ss" -> "YYYY-MM-DDTHH:mm:ss"
+    if (s.includes(" ") && !s.includes("T")) s = s.replace(" ", "T");
+
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+
+    // ✅ enviar ISO completo (más compatible)
+    return d.toISOString();
   };
 
-  const autoSyncDeficiency = async (deficiencia, localId) => {
-    console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", deficiencia);
 
+
+
+  // const autoSyncDeficiency = async (deficiencia, localId) => {
+  //   console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", deficiencia);
+
+  //   if (syncing) return;
+  //   syncing = true;
+
+  //   try {
+  //     const online = await isOnline();
+  //     if (!online) {
+  //       console.log("📴 Sin conexión, no se sincroniza");
+  //       return;
+  //     }
+
+  //     const normalized = normalizeDeficiencyForSync(deficiencia);
+  //     const payload = [normalized];
+  //     console.log(payload);
+
+  //     const response = await client.post(
+  //       "/Deficiency/SyncFromSQLite",
+  //       payload,
+  //       { timeout: 15000 }
+  //     );
+
+  //     console.log("📥 Respuesta del servidor:", response.data);
+
+  //     const map = response.data?.[0];
+  //     if (!map) {
+  //       console.log("⚠ Respuesta vacía del servidor");
+  //       return;
+  //     }
+
+  //     await setServerIdToDeficiency(localId, map.serverId);
+      
+  //   } catch (err) {
+  //     console.error(
+  //       "❌ [autoSyncDeficiency] Falló:",
+  //       err?.response?.data || err.message
+  //     );
+  //   } finally {
+  //     syncing = false;
+  //   }
+  // };
+
+  const autoSyncDeficiency = async (defOrObj, localIdParam) => {
     if (syncing) return;
     syncing = true;
 
@@ -237,9 +371,32 @@ export const useDeficiency = () => {
         return;
       }
 
-      const normalized = normalizeDeficiencyForSync(deficiencia);
+      // ✅ Aceptar ID o objeto
+      let def = defOrObj;
+      if (typeof defOrObj === "number" || typeof defOrObj === "string") {
+        const id = Number(defOrObj);
+        def = await getDeficiencyByIdLocal(id);
+      }
+
+      if (!def) {
+        console.warn("⚠ autoSyncDeficiency: no hay deficiencia para sincronizar");
+        return;
+      }
+
+      const localId = localIdParam ?? def.DefiInterno;
+
+      // ✅ Asegurar que el payload lleve DefiInterno (útil para el servidor)
+      const defToSend = {
+        ...def,
+        DefiInterno: def.DefiInterno ?? localId
+      };
+
+      const normalized = normalizeDeficiencyForSync(defToSend);
+
+      // ✅ IMPORTANTE: el backend espera LISTA COMO ROOT (NO WRAPPER)
       const payload = [normalized];
-      console.log(payload);
+
+      console.log("🔄 [autoSyncDeficiency] Enviando (LISTA):", payload);
 
       const response = await client.post(
         "/Deficiency/SyncFromSQLite",
@@ -249,14 +406,14 @@ export const useDeficiency = () => {
 
       console.log("📥 Respuesta del servidor:", response.data);
 
-      const map = response.data?.[0];
-      if (!map) {
-        console.log("⚠ Respuesta vacía del servidor");
+      const map = response.data?.[0] ?? null;
+      if (!map?.serverId) {
+        console.log("⚠ Respuesta sin serverId:", response.data);
         return;
       }
 
       await setServerIdToDeficiency(localId, map.serverId);
-      
+
     } catch (err) {
       console.error(
         "❌ [autoSyncDeficiency] Falló:",
@@ -268,6 +425,66 @@ export const useDeficiency = () => {
   };
 
   // ------------------- SYNC MASIVO -------------------
+  // const syncAllDeficiencies = async () => {
+  //   const online = await isOnline();
+  //   if (!online) return { ok: false };
+
+  //   try {
+  //     const pendientes = await getDeficienciesPendientes();
+  //     if (!pendientes.length) {
+  //       return { ok: true, synced: 0 };
+  //     }
+
+  //     let syncedCount = 0;
+
+  //     for (const localDef of pendientes) {
+  //       // Solo estados sincronizables
+  //       if (![1, 2, 3, 4].includes(Number(localDef.EstadoOffLine))) {
+  //         continue;
+  //       }
+
+  //       const normalized = normalizeDeficiencyForSync(localDef);
+
+  //       try {
+  //         const response = await client.post(
+  //           "/Deficiency/SyncFromSQLite",
+  //           [normalized],
+  //           { timeout: 15000 }
+  //         );
+
+  //         const map = response.data?.[0];
+  //         if (!map?.serverId) {
+  //           console.warn("⚠ ServerId inválido:", map);
+  //           continue;
+  //         }
+
+  //         // ✅ localId VIENE DE SQLITE
+  //         await setServerIdToDeficiency(
+  //           localDef.DefiInterno,
+  //           map.serverId
+  //         );
+
+  //         syncedCount++;
+
+  //       } catch (err) {
+  //         console.error(
+  //           `❌ Error sincronizando DefiInterno ${localDef.DefiInterno}:`,
+  //           err?.response?.data || err.message
+  //         );
+  //         // continúa con el siguiente
+  //       }
+  //     }
+
+  //     return { ok: true, synced: syncedCount };
+
+  //   } catch (err) {
+  //     console.error(
+  //       "❌ Sync masivo deficiencias falló:",
+  //       err?.response?.data || err.message
+  //     );
+  //     return { ok: false };
+  //   }
+  // };
   const syncAllDeficiencies = async () => {
     const online = await isOnline();
     if (!online) return { ok: false };
@@ -281,32 +498,31 @@ export const useDeficiency = () => {
       let syncedCount = 0;
 
       for (const localDef of pendientes) {
-        // Solo estados sincronizables
-        if (![1, 2, 3, 4].includes(Number(localDef.EstadoOffLine))) {
-          continue;
-        }
+        if (![1, 2, 3, 4].includes(Number(localDef.EstadoOffLine))) continue;
 
-        const normalized = normalizeDeficiencyForSync(localDef);
+        // ✅ asegurar DefiInterno
+        const defToSend = {
+          ...localDef,
+          DefiInterno: localDef.DefiInterno
+        };
+
+        const normalized = normalizeDeficiencyForSync(defToSend);
 
         try {
+          // ✅ LISTA COMO ROOT
           const response = await client.post(
             "/Deficiency/SyncFromSQLite",
             [normalized],
             { timeout: 15000 }
           );
 
-          const map = response.data?.[0];
+          const map = response.data?.[0] ?? null;
           if (!map?.serverId) {
-            console.warn("⚠ ServerId inválido:", map);
+            console.warn("⚠ ServerId inválido:", response.data);
             continue;
           }
 
-          // ✅ localId VIENE DE SQLITE
-          await setServerIdToDeficiency(
-            localDef.DefiInterno,
-            map.serverId
-          );
-
+          await setServerIdToDeficiency(localDef.DefiInterno, map.serverId);
           syncedCount++;
 
         } catch (err) {
@@ -314,7 +530,6 @@ export const useDeficiency = () => {
             `❌ Error sincronizando DefiInterno ${localDef.DefiInterno}:`,
             err?.response?.data || err.message
           );
-          // continúa con el siguiente
         }
       }
 
@@ -328,6 +543,8 @@ export const useDeficiency = () => {
       return { ok: false };
     }
   };
+
+
 
 
   const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
