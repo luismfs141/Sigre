@@ -6,6 +6,9 @@ import { runQuery } from "./db";
 // const emptyToNull = (v) =>
 //   typeof v === "string" && v.trim() === "" ? null : v;
 
+
+
+
 export const getDeficiencyByIdLocal = async (defiInterno) => {
   try {
     const rows = await runQuery(
@@ -322,3 +325,21 @@ export const getDeficienciesPendientesReanudables = async () => {
     ORDER BY DefiInterno
   `);
 };
+
+export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
+  const val = Number(inspeccionado) === 1 ? 1 : 0;
+
+  await runQuery(
+    `
+    UPDATE Deficiencias
+    SET DefiInspeccionado = ?
+    WHERE DefiInterno = ?
+    `,
+    [val, defiInterno]
+  );
+
+  return true;
+};
+
+
+

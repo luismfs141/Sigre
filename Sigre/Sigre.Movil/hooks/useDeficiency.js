@@ -13,7 +13,8 @@ import {
   getDeficiencyByTypificationElement,
   markDeficiencyAsSynced,
   saveOrUpdateDeficiency,
-  updateDeficiencyIdAfterSync
+  updateDeficiencyIdAfterSync,
+  updateDefiInspeccionadoLocal
 } from "../database/offlineDB/deficiencies";
 import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";
@@ -97,11 +98,30 @@ export const useDeficiency = () => {
         DefiUsuarioInic: userId,
         DefiLatitud: deficiency.DefiLatitud ?? 0,
         DefiLongitud: deficiency.DefiLongitud ?? 0,
-        DefiInspeccionado: deficiency.DefiInspeccionado ?? 1,
+        DefiInspeccionado: deficiency.DefiInspeccionado ?? 0,
       }),
       DefiUsuarioMod: userId,
       DefiFecModificacion: now
     };
+  };
+
+  // ------------------- SET INSPECCIONADO (LOCAL + SYNC) -------------------
+  const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return false;
+
+    try {
+      await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
+
+      // opcional: si ya estaba pendiente por tu lógica normal,
+      // esto intentará sincronizar sin tocar EstadoOffLine
+      await autoSyncDeficiency(defiInterno);
+
+      return true;
+    } catch (err) {
+      console.error("❌ Error actualizando DefiInspeccionado:", err);
+      return false;
+    }
   };
 
 
@@ -520,6 +540,8 @@ export const useDeficiency = () => {
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
     deficienciesForFlatList,
-    fetchDeficiencyByIdLocal
+    fetchDeficiencyByIdLocal,
+    setDefiInspeccionadoLocal
+
   };
 };
