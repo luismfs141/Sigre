@@ -112,6 +112,42 @@ const ensureSafPath = async (rootUri, segments) => {
   }
   return current;
 };
+// ==============================================================================
+// SAF: helpers de lectura (NO crean carpetas) para verificación post-guardado
+// ==============================================================================
+
+const stripExt = (name = "") => String(name).replace(/\.[^/.]+$/, "");
+
+const findSafSubdir = async (parentUri, dirNameRaw) => {
+  const dirName = safeSeg(dirNameRaw);
+  try {
+    const children = await SAF.readDirectoryAsync(parentUri);
+    const existing = children.find((u) => safDisplayName(u) === dirName);
+    return existing ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const findSafPath = async (rootUri, segments) => {
+  let current = rootUri;
+  for (const seg of segments) {
+    const next = await findSafSubdir(current, seg);
+    if (!next) return null;
+    current = next;
+  }
+  return current;
+};
+
+const buildNameSetFromSafDir = async (dirUri) => {
+  const set = new Set();
+  const items = await SAF.readDirectoryAsync(dirUri);
+  for (const u of items) {
+    const n = safDisplayName(u);
+    if (n) set.add(String(n).toLowerCase());
+  }
+  return set;
+};
 
 const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFileUri }) => {
   const dot = fileName.lastIndexOf(".");
@@ -270,7 +306,10 @@ export default function Multimedia() {
   const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
   const { findFeederById } = useFeeder();
   const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted } = useFiles();
-  const { fetchDeficiencyByIdLocal } = useDeficiency();
+  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal } = useDeficiency();
+
+
+
 
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
@@ -489,6 +528,109 @@ export default function Multimedia() {
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(zipUri); }
     } catch (e) { Alert.alert("Error", e.message); } finally { setLoading({ active: false, msg: "" }); }
   };
+  // ============================================================================
+  // ✅ VERIFICACIÓN POST-GUARDADO: DB (Archivos) vs Carpeta Pública (SAF)
+  // ============================================================================
+  const verificarFotosPublicas = useCallback(async (idBusqueda) => {
+    const result = {
+      pudoVerificar: false,
+      ok: false,
+      fotosDB: [],
+      faltantes: [], // { archTipo, slotName, fileName, motivo }
+      motivoGeneral: null
+    };
+
+    if (Platform.OS !== "android") {
+      result.motivoGeneral = "PLATAFORMA_NO_ANDROID";
+      return result;
+    }
+
+    // ✅ no pedimos permiso aquí (no popups extra). Solo usamos lo ya guardado.
+    const picturesRoot = await AsyncStorage.getItem(KEY_PICTURES_DIR);
+    if (!picturesRoot) {
+      result.motivoGeneral = "NO_HAY_CARPETA_PUBLICA_CONFIGURADA";
+      return result;
+    }
+
+    // leer registros de BD (fotos activas)
+    const medios = await fetchMediosByDeficienciaId(idBusqueda);
+    const fotosDB = (medios ?? [])
+      .filter(m => Number(m.ArchActivo) === 1)
+      .filter(m => {
+        const t = Number(m.ArchTipo);
+        return t >= 1 && t <= 6;
+      });
+
+    result.fotosDB = fotosDB;
+    result.pudoVerificar = true;
+
+    if (fotosDB.length === 0) {
+      // no hay fotos -> verificación OK (pero inspeccionado dependerá de regla 1..4)
+      result.ok = true;
+      return result;
+    }
+
+    // agrupar por carpeta (por si acaso)
+    const grupos = new Map(); // dirRel -> [{archTipo, fileName}]
+    for (const m of fotosDB) {
+      const rel = String(m.ArchNombre ?? "");
+      const lastSlash = rel.lastIndexOf("/");
+      const dirRel = lastSlash >= 0 ? rel.substring(0, lastSlash + 1) : "";
+      const fileName = rel.split("/").pop();
+
+      if (!grupos.has(dirRel)) grupos.set(dirRel, []);
+      grupos.get(dirRel).push({
+        archTipo: Number(m.ArchTipo),
+        fileName: fileName ?? "SIN_NOMBRE"
+      });
+    }
+
+    for (const [dirRel, items] of grupos.entries()) {
+      const segments = dirRel.split("/").filter(Boolean);
+
+      // ✅ buscar carpeta SAF sin crearla
+      const safDir = await findSafPath(picturesRoot, segments);
+      if (!safDir) {
+        for (const it of items) {
+          result.faltantes.push({
+            archTipo: it.archTipo,
+            slotName: PHOTO_SLOTS[it.archTipo - 1] ?? `Slot ${it.archTipo}`,
+            fileName: it.fileName,
+            motivo: "CARPETA_NO_EXISTE_EN_PUBLICO"
+          });
+        }
+        continue;
+      }
+
+      const names = await buildNameSetFromSafDir(safDir);
+
+      for (const it of items) {
+        const base = String(it.fileName ?? "");
+        const baseLower = base.toLowerCase();
+        const noExt = stripExt(base).toLowerCase();
+
+        // ✅ matching robusto (por createFileAsync(nameNoExt,...))
+        const encontrado =
+          names.has(baseLower) ||
+          names.has(noExt) ||
+          names.has(`${noExt}.jpg`) ||
+          names.has(`${noExt}.jpeg`) ||
+          [...names].some(n => n.startsWith(noExt)); // último recurso
+
+        if (!encontrado) {
+          result.faltantes.push({
+            archTipo: it.archTipo,
+            slotName: PHOTO_SLOTS[it.archTipo - 1] ?? `Slot ${it.archTipo}`,
+            fileName: it.fileName,
+            motivo: "ARCHIVO_NO_EXISTE_EN_PUBLICO"
+          });
+        }
+      }
+    }
+
+    result.ok = result.faltantes.length === 0;
+    return result;
+  }, [fetchMediosByDeficienciaId]);
 
   // ==============================================================================
   // 5. GUARDAR DATOS
@@ -758,8 +900,87 @@ export default function Multimedia() {
         });
       }
 
+      // ============================================================================
+      // 6) POST-VERIFICACIÓN (DB vs PÚBLICO) + REGLA DefiInspeccionado
+      // ============================================================================
+      setLoading({ active: true, msg: "Verificando fotos en carpeta pública..." });
+
+      const defAfter = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+      const idBusquedaFinal = (defAfter?.DefiServerId && defAfter.DefiServerId > 0)
+        ? defAfter.DefiServerId
+        : defAfter?.DefiInterno;
+
+      const ver = await verificarFotosPublicas(idBusquedaFinal);
+
+      // Regla mínima: ArchTipo 1..4 activos en DB
+      const requiredTypes = [1, 2, 3, 4];
+      const tiposEnDB = new Set((ver.fotosDB ?? []).map(x => Number(x.ArchTipo)));
+      const tieneMinimoDB = requiredTypes.every(t => tiposEnDB.has(t));
+
+      // Además: en público NO deben faltar las obligatorias (1..4)
+      const faltantesObligatorias = (ver.faltantes ?? []).filter(f => requiredTypes.includes(f.archTipo));
+      const inspeccionadoFinal = tieneMinimoDB && faltantesObligatorias.length === 0;
+
+      setLoading({ active: true, msg: "Actualizando estado de inspección..." });
+      await setDefiInspeccionadoLocal(selectedDeficiency.id, inspeccionadoFinal ? 1 : 0);
+
+  
+      // ============================================================================
+      // 7) Mensaje final con detalle
+      // ============================================================================
+      const lines = [];
+      lines.push("Guardado correctamente.");
+
+      // Resultado verificación carpeta pública
+      if (!ver.pudoVerificar) {
+        lines.push("");
+        lines.push("⚠ Verificación carpeta pública: NO se pudo verificar.");
+        if (ver.motivoGeneral === "NO_HAY_CARPETA_PUBLICA_CONFIGURADA") {
+          lines.push("• No hay carpeta pública configurada (Pictures).");
+        } else if (ver.motivoGeneral === "PLATAFORMA_NO_ANDROID") {
+          lines.push("• No es Android (SAF no aplica).");
+        } else {
+          lines.push("• Motivo desconocido.");
+        }
+      } else if (ver.ok) {
+        lines.push("");
+        lines.push("✅ Verificación carpeta pública: OK (todas las fotos de BD existen en público).");
+      } else {
+        lines.push("");
+        lines.push("⚠ Verificación carpeta pública: HAY PROBLEMAS.");
+        // listar faltantes (máximo 10 líneas para no reventar el Alert)
+        const falt = ver.faltantes.slice(0, 10);
+        for (const f of falt) {
+          lines.push(`• ${f.slotName}: ${f.fileName}`);
+        }
+        if (ver.faltantes.length > 10) {
+          lines.push(`• ...y ${ver.faltantes.length - 10} más`);
+        }
+      }
+
+      // Resultado inspeccionado
+      lines.push("");
+      lines.push(inspeccionadoFinal
+        ? "✅ DefiInspeccionado: 1 (cumple mínimo 1-4 y están en carpeta pública)."
+        : "⚠ DefiInspeccionado: 0 (faltan fotos 1-4 o alguna obligatoria no está en carpeta pública)."
+      );
+
+
+
+
+
+
+
+
+
       setLoading({ active: false, msg: "" });
-      Alert.alert("Éxito", "Guardado correctamente.", [{ text: "OK", onPress: () => router.replace("/inspection") }]);
+
+      Alert.alert(
+        "Éxito",
+        lines.join("\n"),
+        [{ text: "OK", onPress: () => router.replace("/inspection") }]
+      );
+
 
     } catch (err) {
       setLoading({ active: false, msg: "" });

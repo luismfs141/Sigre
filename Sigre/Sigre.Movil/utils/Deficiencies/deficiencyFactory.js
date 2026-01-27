@@ -70,6 +70,7 @@ export const createEmptyDeficiency = ({
     // Tipificación
     typificationId,
     typificationCode,
+    DefiCol3: null,
 
     // Campos dinámicos (usuario)
     ...dynamicFields

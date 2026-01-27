@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
+using Sigre.DataAccess.Context;
+using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.SyncData;
 using System;
 using System.Collections.Generic;
@@ -10,30 +12,30 @@ namespace Sigre.DataAccess
 {
     public class DAOffline
     {
-        public async Task<List<DeficienciaSyncDto>> LeerDeficienciasDesdeSqliteAsync(IFormFile file)
+        public async Task<List<DeficienciaSyncDto>> DAOFF_LeerDeficienciasDesdeSqlite(IFormFile file)
         {
             var deficiencias = new List<DeficienciaSyncDto>();
-
-            // Guardar temporalmente el archivo SQLite
             var tempFile = Path.GetTempFileName();
+
             try
             {
+                // Guardar archivo temporal
                 using (var stream = File.Create(tempFile))
                 {
-                    await file.CopyToAsync(stream);
+                    file.CopyTo(stream);
                 }
 
                 using (var connection = new SqliteConnection($"Data Source={tempFile}"))
                 {
-                    await connection.OpenAsync();
+                    connection.Open();
 
                     using (var command = connection.CreateCommand())
                     {
                         command.CommandText = "SELECT * FROM Deficiencias";
 
-                        using (var reader = await command.ExecuteReaderAsync())
+                        using (var reader = command.ExecuteReader())
                         {
-                            while (await reader.ReadAsync())
+                            while (reader.Read())
                             {
                                 var def = new DeficienciaSyncDto
                                 {
@@ -103,7 +105,6 @@ namespace Sigre.DataAccess
             }
             finally
             {
-                // Borrar archivo temporal de manera segura
                 try
                 {
                     if (File.Exists(tempFile))
@@ -111,14 +112,15 @@ namespace Sigre.DataAccess
                 }
                 catch (IOException)
                 {
-                    // Ignorar si el archivo está en uso
+                    // ignorar
                 }
             }
 
             return deficiencias;
         }
 
-        public async Task<List<ArchivoSyncDto>> LeerArchivosDesdeSqliteAsync(IFormFile file)
+
+        public async Task<List<ArchivoSyncDto>> DAOFF_LeerArchivosDesdeSqliteAsync(IFormFile file)
         {
             var archivos = new List<ArchivoSyncDto>();
 
@@ -179,8 +181,57 @@ namespace Sigre.DataAccess
                     // Ignorar si el archivo está en uso
                 }
             }
-
             return archivos;
+        }
+
+        public async Task<(int deficiencias, int archivos)> DAOFF_SyncDataOffline(IFormFile file)
+        {
+            int defCount = 0;
+            int archCount = 0;
+
+            var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(file))
+                                    .Where(d => d.EstadoOffLine != 0)
+                                    .ToList();
+
+            var archivos_off = (await DAOFF_LeerArchivosDesdeSqliteAsync(file))
+                                .Where(a => a.EstadoOffLine != 0)
+                                .ToList();
+
+            // 🔹 Deficiencias        
+            if (deficiencias_off.Count() > 0)
+            {
+                var dADeficiency = new DADeficiency();
+                foreach (var def_off in deficiencias_off)
+                {
+                    var existente = dADeficiency.DADEFI_ExistDeficiency(def_off.DefiCol3);
+
+                    def_off.DefiInterno = existente.DefiInterno;
+
+                    var deficiencia = dADeficiency.DADEFI_ConvertDeficiency(def_off);
+                    dADeficiency.DADEFI_Save(deficiencia);
+
+                    defCount++;
+                }
+            }
+
+            // 🔹 Archivos
+            if (archivos_off.Count() > 0)
+            {
+                var dAFile = new DAFile();
+                foreach (var arch_off in archivos_off)
+                {
+                    int idArchivo = dAFile.ARCH_ExistPhoto(arch_off.ArchNombre);
+
+                    arch_off.ArchInterno = idArchivo;
+
+                    var archivo = dAFile.ARCH_ConvertFile(arch_off);
+                    dAFile.DAARCH_Save(archivo);
+
+                    archCount++;
+                }
+            }
+
+            return (defCount, archCount);
         }
     }
 

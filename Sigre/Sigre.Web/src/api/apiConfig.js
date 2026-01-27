@@ -8,7 +8,7 @@ const baseURL = 'http://localhost/SigreHost/api/';
 export const API_URL = baseURL; 
 const api = axios.create({
   baseURL: baseURL,
-  timeout: 10000, // un poco más alto por seguridad
+  //timeout: 10000, // un poco más alto por seguridad
 });
 
 // ✅ Interceptor de solicitud: agrega el token JWT automáticamente

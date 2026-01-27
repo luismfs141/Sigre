@@ -114,6 +114,34 @@ namespace Sigre.Server.Controllers
             }
         }
 
+        [HttpPost("UpdateCodTablaBySed")]
+        public IActionResult UpdateCodTablaBySed([FromQuery] string codigoSed)
+        {
+            try
+            {
+                DAFile dAFile = new DAFile();
+                if (string.IsNullOrWhiteSpace(codigoSed))
+                    return BadRequest("El código de la SED es obligatorio.");
+
+                dAFile.DADEFI_UpdateCodTablaBySed(codigoSed);
+
+                return Ok(new
+                {
+                    estado = "Satisfactorio",
+                    mensaje = "Deficiencias actualizadas correctamente",
+                    codigoSed
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = ex.Message,
+                    detalle = ex.InnerException?.Message
+                });
+            }
+        }
 
     }
 }

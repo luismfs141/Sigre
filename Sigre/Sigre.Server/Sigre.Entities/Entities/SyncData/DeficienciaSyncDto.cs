@@ -84,9 +84,7 @@ namespace Sigre.Entities.Entities.SyncData
 
         public string? DefiAccesibilidad { get; set; }
         public string? DefiTipoCruce { get; set; }
+        public string? DefiCol3 {  get; set; }
 
     }
-
-
-
 }

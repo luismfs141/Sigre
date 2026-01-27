@@ -4,8 +4,19 @@ import { useOffline } from "../hooks/useOffline";
 export default function ImportData() {
   const [file, setFile] = useState(null);
   const [localError, setLocalError] = useState(null);
+  const {
+    deficiencias,
+    archivos,
+    loading,
+    syncing,
+    error,
+    loadFromSqliteFile,
+    syncData
+  } = useOffline();
 
-  const { deficiencias, archivos, loading, error, loadFromSqliteFile } = useOffline();
+  const hasOfflineData =
+    deficiencias.some(d => d.estadoOffLine > 0) ||
+    archivos.some(a => a.estadoOffLine > 0);
 
   /* ===============================
      CARGA ARCHIVO SQLITE
@@ -26,12 +37,52 @@ export default function ImportData() {
     await loadFromSqliteFile(selectedFile);
   };
 
+  const handleSync = async () => {
+    if (!file) {
+      setLocalError("Seleccione un archivo SQLite");
+      return;
+    }
+
+    if (!hasOfflineData) {
+      setLocalError("No existen datos offline para sincronizar");
+      return;
+    }
+
+    if (!window.confirm("¿Desea sincronizar los datos offline?")) return;
+
+    try {
+      const result = await syncData(file);
+
+      alert(`✔ Sincronización completa
+  Deficiencias sincronizadas: ${result.deficienciasSincronizadas}
+  Archivos sincronizados: ${result.archivosSincronizados}`);
+
+    } catch {
+      // error manejado en el hook
+    }
+  };
+
   return (
     <div style={styles.page}>
       {/* CABECERA */}
       <div style={styles.header}>
         <h2 style={styles.title}>Importar datos</h2>
+
         <div style={styles.headerActions}>
+          <button
+            onClick={handleSync}
+            disabled={!file || !hasOfflineData || syncing}
+            style={{
+                      padding: "8px 16px",
+                      background: syncing ? "#9ca3af" : "#2563eb",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: syncing ? "not-allowed" : "pointer"
+                    }}
+          >
+            {syncing ? "Sincronizando..." : "Sincronizar datos"}
+          </button>
           <input type="file" accept=".db" onChange={handleFileChange} />
         </div>
       </div>
@@ -179,5 +230,12 @@ const styles = {
   },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "12px" },
   error: { color: "red", margin: "8px" },
-  empty: { textAlign: "center", padding: "16px", color: "#666" }
+  empty: { textAlign: "center", padding: "16px", color: "#666" },
+  error: {
+    background: "#fee2e2",
+    color: "#991b1b",
+    padding: "8px",
+    borderRadius: "6px",
+    marginBottom: "8px"
+  }
 };
