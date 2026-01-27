@@ -105,5 +105,14 @@ namespace Sigre.DataAccess
 
             return seds;
         }
+
+        public Sed DASed_GetByCodigo(string codigo)
+        {
+            SigreContext ctx = new SigreContext();
+
+            var sed = ctx.Seds.SingleOrDefault(s => s.SedCodigo == codigo);
+
+            return sed;
+        }
     }
 }

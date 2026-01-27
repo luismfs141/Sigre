@@ -13,9 +13,8 @@ import {
   getDeficiencyByIdLocal,
   getDeficiencyByTypificationElement,
   saveOrUpdateDeficiency,
-  updateDeficiencyIdAfterSync,
+  setServerIdToDeficiency,
   updateDefiInspeccionadoLocal
-  setServerIdToDeficiency
 } from "../database/offlineDB/deficiencies";
 import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";

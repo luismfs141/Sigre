@@ -50,5 +50,29 @@ export const useFiles = () => {
         }
     };
 
-    return { files, loadingFiles, loadFiles, deleteFile, addFile };
+    const updateCodTablaBySed = useCallback(async (codigoSed) => {
+        if (!codigoSed) {
+            throw new Error('Código de SED inválido');
+        }
+
+        try {
+            const response = await api.post(
+                '/File/UpdateCodTablaBySed',
+                null,
+                { params: { codigoSed } }
+            );
+
+            return response.data?.mensaje || 'Proceso finalizado correctamente';
+        } catch (error) {
+            console.error('Error al actualizar código de tabla:', error);
+
+            const backendMessage =
+                error.response?.data?.mensaje ||
+                'Error al actualizar código de tabla';
+
+            throw new Error(backendMessage);
+        }
+    }, []);
+
+    return { files, loadingFiles, loadFiles, deleteFile, addFile, updateCodTablaBySed };
 };

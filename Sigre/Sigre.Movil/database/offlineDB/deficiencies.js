@@ -342,10 +342,6 @@ export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) =
   return true;
 };
 
-
-
-};
-
 export const setServerIdToDeficiency = async (localId, serverId) => {
   try {
     await runQuery(

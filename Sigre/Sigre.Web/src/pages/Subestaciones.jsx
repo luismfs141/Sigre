@@ -13,6 +13,7 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog'; // Impo
 import { useTypification } from '../hooks/useTypification'
 import { useUsuario } from '../hooks/useUsuario';
 import { useDeficienciesBySed } from '../hooks/useDeficiencyBySed';
+import { useFiles } from '../hooks/useFiles';
 
 // Componentes
 import EvidenceGallery from './EvidenceGallery';
@@ -34,6 +35,7 @@ export default function Subestaciones() {
     const { deficiencies, loading, fetchBySed, clearData } = useDeficienciesBySed();
     const { getCodeById, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
+    const { updateCodTablaBySed } = useFiles();
 
     // --- ACCIONES GENERALES ---
     const handleSearch = async () => {
@@ -155,6 +157,47 @@ export default function Subestaciones() {
         </div>
     );
 
+    const handleUpdateCodTabla = async () => {
+        if (!sedId) {
+            toast.current.show({
+                severity: 'warn',
+                summary: 'Atención',
+                detail: 'Debe ingresar un código de SED.'
+            });
+            return;
+        }
+
+        confirmDialog({
+            message: `¿Actualizar el código de tabla para todas las deficiencias de la SED ${sedId}?`,
+            header: 'Confirmar actualización',
+            icon: 'pi pi-exclamation-triangle',
+            acceptLabel: 'Sí, actualizar',
+            rejectLabel: 'Cancelar',
+            acceptClassName: 'p-button-warning',
+            accept: async () => {
+                try {
+                    await updateCodTablaBySed(sedId);
+
+                    toast.current.show({
+                        severity: 'success',
+                        summary: 'Actualizado',
+                        detail: 'Las deficiencias fueron actualizadas correctamente.'
+                    });
+
+                    await fetchBySed(sedId);
+                } catch (error) {
+                    toast.current.show({
+                        severity: 'error',
+                        summary: 'Error',
+                        detail: 'No se pudo actualizar el código de tabla.'
+                    });
+                }
+            }
+        });
+    };
+
+
+
     // TEMPLATE DE ACCIONES (Editar / Borrar)
     const actionBodyTemplate = (rowData) => {
         const isDeleted = rowData.defiActivo === 0 || rowData.defiActivo === false;
@@ -196,13 +239,18 @@ export default function Subestaciones() {
                         <InputText id="sed_input" value={sedId} onChange={(e) => setSedId(e.target.value)} onKeyDown={handleKeyDown} keyfilter="int" className="w-32 text-center font-bold p-inputtext-sm" />
                         <label htmlFor="sed_input">Cód. SED</label>
                     </span>
+                     {/* BOTON ACTUALIZAR Y NUEVO*/}
                     <Button icon="pi pi-search" loading={loading} onClick={handleSearch} className="p-button-sm" />
-                    
-                    <div className="w-px h-8 bg-gray-300 mx-1"></div>
-                    
-                    {/* BOTÓN NUEVO */}
-                    <Button label="Nuevo" icon="pi pi-plus" severity="success" onClick={openNew} disabled={!sedId} className="p-button-sm font-bold" />
-
+                        <div className="w-px h-8 bg-gray-300 mx-1"></div>
+                        <Button label="Nuevo" icon="pi pi-plus" severity="success" onClick={openNew} disabled={!sedId} className="p-button-sm font-bold" />
+                        <Button
+                            label="Reordenar"
+                            icon="pi pi-refresh"
+                            severity="warning"
+                            onClick={handleUpdateCodTabla}
+                            disabled={!sedId || loading}
+                            className="p-button-sm font-bold"
+                        />
                     {deficiencies.length > 0 && (
                         <Button icon="pi pi-filter-slash" severity="secondary" outlined onClick={() => { setSedId(''); clearData(); }} className="p-button-sm ml-2" tooltip="Limpiar" />
                     )}
