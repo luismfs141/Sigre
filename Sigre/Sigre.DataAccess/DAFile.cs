@@ -209,8 +209,6 @@ namespace Sigre.DataAccess
                 return false;
             }
         }
-        
-
         public void DAARCH_SaveInWeb(Archivo x_archivo)
         {
             using (SigreContext ctx = new SigreContext())
@@ -248,8 +246,6 @@ namespace Sigre.DataAccess
                 ctx.SaveChanges();
             }
         }
-
-
         public int ARCH_ExistPhoto(string ruta)
         {
             SigreContext ctx = new SigreContext();
@@ -265,7 +261,6 @@ namespace Sigre.DataAccess
                 return 0;
             }
         }
-
         public Archivo ARCH_ConvertFile(ArchivoSyncDto arch_offline)
         {
             return new Archivo
@@ -294,6 +289,46 @@ namespace Sigre.DataAccess
                 // ⚙️ Estado
                 ArchActivo = arch_offline.ArchActivo,
             };
+        }
+        public void DADEFI_UpdateCodTablaByDeficiency(int defiInterno)
+        {
+            using var ctx = new SigreContext();
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
+            {
+                var deficiencia = ctx.Deficiencias
+                    .SingleOrDefault(d => d.DefiInterno == defiInterno);
+
+                if (deficiencia == null)
+                    throw new Exception($"Deficiencia {defiInterno} no encontrada");
+
+                var archivos = ctx.Archivos.Where(a =>
+                    a.ArchTabla == "Deficiencias"
+                    && a.ArchIdElemento == deficiencia.DefiIdElemento
+                    && a.ArchTipoElemento == deficiencia.DefiTipoElemento
+                    && a.TipiInterno == deficiencia.TipiInterno
+                    && a.ArchCodTabla != deficiencia.DefiInterno
+                ).ToList();
+
+                if (!archivos.Any())
+                {
+                    tx.Commit();
+                    return;
+                }
+                foreach (var archivo in archivos)
+                {
+                    archivo.ArchCodTabla = deficiencia.DefiInterno;
+                }
+
+                ctx.SaveChanges();
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
     }
 }

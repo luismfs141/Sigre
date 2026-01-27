@@ -101,6 +101,7 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiEstadoCriticidad",
       "DefiInspeccionado",
       "DefiCol1",
+      "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
       "EstadoOffLine"
@@ -321,4 +322,26 @@ export const getDeficienciesPendientesReanudables = async () => {
     WHERE EstadoOffLine IN (1, 2, 3, 4)
     ORDER BY DefiInterno
   `);
+};
+
+export const setServerIdToDeficiency = async (localId, serverId) => {
+  try {
+    await runQuery(
+      `
+      UPDATE Deficiencias
+      SET DefiServerId = ?,
+          EstadoOffLine = NULL
+      WHERE DefiInterno = ?
+      `,
+      [serverId, localId]
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "❌ Error asignando DefiServerId a la deficiencia:",
+      error
+    );
+    return false;
+  }
 };

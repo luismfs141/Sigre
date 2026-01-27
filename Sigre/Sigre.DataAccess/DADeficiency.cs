@@ -467,17 +467,52 @@ namespace Sigre.DataAccess
         }
 
         public List<(int localId, int serverId)> DADefi_SyncFromSQLite(
-            List<DeficienciaSyncDto> deficienciasOffline)
+    List<DeficienciaSyncDto> deficienciasOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
 
             foreach (var dto in deficienciasOffline)
             {
-                // ===============================
-                // 🔹 INSERT (nuevo desde SQLite)
-                // ===============================
-                if (dto.EstadoOffLine == 2)
+                if (string.IsNullOrWhiteSpace(dto.DefiCol3))
+                    continue; // seguridad mínima
+
+                // 🔍 BUSCAR POR IDENTIFICADOR ÚNICO
+                var existente = ctx.Deficiencias
+                    .FirstOrDefault(d => d.DefiCol3 == dto.DefiCol3);
+
+                // ==========================
+                // 🔁 UPDATE
+                // ==========================
+                if (existente != null)
+                {
+                    existente.DefiEstado = dto.DefiEstado;
+                    existente.DefiObservacion = dto.DefiObservacion;
+
+                    existente.DefiComentario = dto.DefiComentario;
+                    existente.DefiNumSuministro = dto.DefiNumSuministro;
+                    existente.DefiDistHorizontal = dto.DefiDistHorizontal;
+                    existente.DefiDistVertical = dto.DefiDistVertical;
+
+                    existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
+                    existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
+                    existente.DefiLatitud = dto.DefiLatitud;
+                    existente.DefiLongitud = dto.DefiLongitud;
+                    existente.DefiInspeccionado = dto.DefiInspeccionado;
+                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
+                    existente.DefiFecModificacion = DateTime.Now;
+
+                    existente.DefiAccesibilidad = dto.DefiAccesibilidad;
+                    existente.DefiTipoCruce = dto.DefiTipoCruce;
+                    existente.DefiActivo = dto.DefiActivo;
+
+                    ctx.SaveChanges();
+                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
+                }
+                // ==========================
+                // ➕ INSERT
+                // ==========================
+                else
                 {
                     var nueva = new Deficiencia
                     {
@@ -527,14 +562,6 @@ namespace Sigre.DataAccess
                         DefiFecModificacion = dto.DefiFecModificacion,
                         DefiFechaCreacion = dto.DefiFechaCreacion,
 
-                        DefiTipoMaterial = dto.DefiTipoMaterial,
-                        DefiNodoInicial = dto.DefiNodoInicial,
-                        DefiNodoFinal = dto.DefiNodoFinal,
-                        DefiTipoRetenida = dto.DefiTipoRetenida,
-                        DefiRetenidaMaterial = dto.DefiRetenidaMaterial,
-                        DefiTipoArmado = dto.DefiTipoArmado,
-                        DefiArmadoMaterial = dto.DefiArmadoMaterial,
-
                         DefiNumPostes = dto.DefiNumPostes,
                         DefiPozoTierra = dto.DefiPozoTierra,
                         DefiResponsable = dto.DefiResponsable,
@@ -549,7 +576,7 @@ namespace Sigre.DataAccess
 
                         DefiAccesibilidad = dto.DefiAccesibilidad,
                         DefiTipoCruce = dto.DefiTipoCruce,
-
+                        DefiCol3 = dto.DefiCol3,
                     };
 
                     ctx.Deficiencias.Add(nueva);
@@ -557,58 +584,11 @@ namespace Sigre.DataAccess
 
                     resultado.Add((dto.DefiInterno, nueva.DefiInterno));
                 }
-                // 🔹 UPDATE
-                else if (dto.EstadoOffLine == 1)
-                {
-                    var existente = dto.DefiServerId.HasValue
-                        ? ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiServerId)
-                        : ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiInterno);
-
-                    if (existente == null) continue;
-
-                    existente.DefiEstado = dto.DefiEstado;
-                    existente.DefiObservacion = dto.DefiObservacion;
-
-                    existente.DefiComentario = dto.DefiComentario;
-                    existente.DefiNumSuministro = dto.DefiNumSuministro;
-                    existente.DefiDistHorizontal = dto.DefiDistHorizontal;
-                    existente.DefiDistVertical = dto.DefiDistVertical;
-
-                    existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
-                    existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
-                    existente.DefiLatitud = dto.DefiLatitud;
-                    existente.DefiLongitud = dto.DefiLongitud;
-                    existente.DefiInspeccionado = dto.DefiInspeccionado;
-                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
-                    existente.DefiFecModificacion = DateTime.Now;
-
-                    existente.DefiAccesibilidad = dto.DefiAccesibilidad;
-                    existente.DefiTipoCruce = dto.DefiTipoCruce;
-
-
-                    ctx.SaveChanges();
-                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
-                }
-                // 🔹 DELETE LÓGICO
-                else if (dto.EstadoOffLine == 3)
-                {
-                    var existente = dto.DefiServerId.HasValue
-                        ? ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiServerId)
-                        : ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == dto.DefiInterno);
-
-                    if (existente == null) continue;
-
-                    existente.DefiActivo = false;
-                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
-                    existente.DefiFecModificacion = DateTime.Now;
-
-                    ctx.SaveChanges();
-                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
-                }
             }
 
             return resultado;
         }
+
 
         public Deficiencia DADEFI_GetById(int x_defiInterno)
         {
@@ -761,20 +741,32 @@ namespace Sigre.DataAccess
                 DefiNroOrden = def_offline.DefiNroOrden
             };
         }
-        public int DADEFI_ExistDeficiency(string codElemento, string tipoElemento, int tipiInterno)
+        //public int DADEFI_ExistDeficiency(string codElemento, string tipoElemento, int tipiInterno)
+        //{
+        //    SigreContext ctx = new SigreContext();
+
+        //    Deficiencia deficiencia = ctx.Deficiencias.SingleOrDefault(d => d.DefiCodigoElemento == codElemento && d.DefiTipoElemento == tipoElemento && d.TipiInterno == tipiInterno);
+
+        //    if (deficiencia is not null)
+        //    {
+        //        return deficiencia.DefiInterno;
+        //    }
+        //    else
+        //    {
+        //        return 0;
+        //    }
+        //}
+        public Deficiencia DADEFI_ExistDeficiency(string codigoUnico)
         {
-            SigreContext ctx = new SigreContext();
+            if (string.IsNullOrWhiteSpace(codigoUnico))
+                return null;
 
-            Deficiencia deficiencia = ctx.Deficiencias.SingleOrDefault(d => d.DefiCodigoElemento == codElemento && d.DefiTipoElemento == tipoElemento && d.TipiInterno == tipiInterno);
+            using var ctx = new SigreContext();
 
-            if (deficiencia is not null)
-            {
-                return deficiencia.DefiInterno;
-            }
-            else
-            {
-                return 0;
-            }
+            return ctx.Deficiencias
+                      .AsNoTracking()
+                      .FirstOrDefault(d => d.DefiCol3 == codigoUnico);
         }
+
     }
 }

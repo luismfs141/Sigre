@@ -203,13 +203,9 @@ namespace Sigre.DataAccess
                 var dADeficiency = new DADeficiency();
                 foreach (var def_off in deficiencias_off)
                 {
-                    int idDeficiencia = dADeficiency.DADEFI_ExistDeficiency(
-                        def_off.DefiCodigoElemento,
-                        def_off.DefiTipoElemento,
-                        def_off.TipiInterno ?? 0
-                    );
+                    var existente = dADeficiency.DADEFI_ExistDeficiency(def_off.DefiCol3);
 
-                    def_off.DefiInterno = idDeficiencia;
+                    def_off.DefiInterno = existente.DefiInterno;
 
                     var deficiencia = dADeficiency.DADEFI_ConvertDeficiency(def_off);
                     dADeficiency.DADEFI_Save(deficiencia);
