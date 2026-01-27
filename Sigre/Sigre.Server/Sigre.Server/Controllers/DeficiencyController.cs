@@ -185,6 +185,51 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+        [HttpPost("SoftDelete")]
+        public IActionResult SoftDelete(int id) 
+        {
+            try
+            {
+                // 1. Validación básica
+                if (id <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "El ID debe ser válido."
+                    });
+                }
 
+                DADeficiency da = new DADeficiency();
+
+
+                bool exito = da.DADEFI_SoftDelete(id);
+
+                if (exito)
+                {
+                    return Ok(new
+                    {
+                        estado = "OK",
+                        mensaje = "Eliminado correctamente."
+                    });
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "No se encontró el registro."
+                    });
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = $"Error interno: {ex.Message}"
+                });
+            }
+        }
     }
 }

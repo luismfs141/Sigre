@@ -8,7 +8,7 @@ import { Tag } from 'primereact/tag';
 import { Splitter, SplitterPanel } from 'primereact/splitter'; 
 import { Skeleton } from 'primereact/skeleton';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog'; // Importante
-
+import api from '../api/apiConfig';
 // Custom Hooks
 import { useTypification } from '../hooks/useTypification'
 import { useUsuario } from '../hooks/useUsuario';
@@ -31,7 +31,7 @@ export default function Subestaciones() {
     
     // Hooks de Datos
     // Asegúrate de que useDeficienciesBySed exponga una forma de actualizar (refresh o setDeficiencies)
-    const { deficiencies, loading, fetchBySed, clearData } = useDeficienciesBySed();
+    const { deficiencies, loading, fetchBySed, clearData, softDeleteDeficiency } = useDeficienciesBySed();
     const { getCodeById, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
 
@@ -63,7 +63,7 @@ export default function Subestaciones() {
 
     // 2. ABRIR EDICIÓN
     const openEdit = (rowData) => {
-        setDeficiencyToEdit({ ...rowData }); // Copia para evitar mutación
+        setDeficiencyToEdit({ ...rowData }); 
         setFormVisible(true);
     };
 
@@ -71,8 +71,8 @@ export default function Subestaciones() {
     const handleSaveSuccess = async (deficiencyData) => {
         try {
             // AQUÍ LLAMARÍAS A TU API REAL
-            // const method = deficiencyData.defiInterno ? 'PUT' : 'POST';
-            // await api.call('/api/Deficiency/save', method, deficiencyData);
+            
+            await api.call('/Deficiency/save', 'POST', deficiencyData);
             
             // Simulación:
             console.log("Guardando en BD:", deficiencyData);
@@ -90,7 +90,7 @@ export default function Subestaciones() {
     };
 
     // 4. ELIMINAR (Soft Delete)
-    const confirmDeleteDeficiency = (rowData) => {
+   const confirmDeleteDeficiency = (rowData) => {
         confirmDialog({
             message: `¿Desactivar la deficiencia del elemento ${rowData.defiCodigoElemento}?`,
             header: 'Confirmar Eliminación',
@@ -98,15 +98,26 @@ export default function Subestaciones() {
             acceptLabel: 'Sí, Eliminar',
             rejectLabel: 'Cancelar',
             acceptClassName: 'p-button-danger',
+            
             accept: async () => {
-                try {
-                    // LLAMADA API SOFT DELETE
-                    // await api.post('/api/Deficiency/softDelete', { id: rowData.defiInterno });
-                    
-                    toast.current.show({ severity: 'info', summary: 'Eliminado', detail: 'Registro desactivado.' });
-                    await fetchBySed(sedId); // Recargar tabla
-                } catch (e) {
-                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falló la eliminación.' });
+                // 2. USAMOS LA FUNCIÓN DEL HOOK
+                // Esta función ya hace la llamada a la API y actualiza la lista local
+                const success = await softDeleteDeficiency(rowData.defiInterno);
+
+                if (success) {
+                    toast.current.show({ 
+                        severity: 'success', // Usamos success (verde) mejor que info
+                        summary: 'Eliminado', 
+                        detail: 'Registro desactivado correctamente.' 
+                    });
+                    // NO hace falta llamar a fetchBySed(sedId) de nuevo
+                    // porque el hook ya eliminó el item de la lista visualmente.
+                } else {
+                    toast.current.show({ 
+                        severity: 'error', 
+                        summary: 'Error', 
+                        detail: 'No se pudo eliminar el registro.' 
+                    });
                 }
             }
         });
