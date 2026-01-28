@@ -27,7 +27,7 @@ export const openDatabase = async (dbName) => {
   // Guardamos el nombre en la instancia
   try { db._dbName = dbName; } catch (e) { /* no crítico */ }
 
-  console.log("✅ openDatabase -> abierta:", dbName);
+  //console.log("✅ openDatabase -> abierta:", dbName);
   return db;
 };
 

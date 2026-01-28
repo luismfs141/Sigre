@@ -78,7 +78,7 @@ export default function Sync() {
   //───────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
-      console.log("👤 Cargando alimentadores del usuario:", user.id);
+      //console.log("👤 Cargando alimentadores del usuario:", user.id);
       getFeedersByUser(user.id);
     }
   }, [user?.id]);
@@ -88,7 +88,7 @@ export default function Sync() {
   //───────────────────────────────────────────────
   useEffect(() => {
     if (!dbName) return;
-    console.log("🗂 Revisando existencia de BD:", dbName);
+    //console.log("🗂 Revisando existencia de BD:", dbName);
     checkDatabase();
   }, [dbName]);
 
@@ -96,7 +96,7 @@ export default function Sync() {
     try {
       const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
       const fileInfo = await FileSystem.getInfoAsync(dbPath);
-      console.log("📁 DB existe?:", fileInfo.exists, "→", dbPath);
+      //console.log("📁 DB existe?:", fileInfo.exists, "→", dbPath);
       setDbExists(fileInfo.exists);
     } catch (e) {
       console.log("❌ Error revisando BD", e);
