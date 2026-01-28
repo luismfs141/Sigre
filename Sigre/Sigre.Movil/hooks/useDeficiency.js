@@ -100,6 +100,7 @@ export const useDeficiency = () => {
         DefiLatitud: deficiency.DefiLatitud ?? 0,
         DefiLongitud: deficiency.DefiLongitud ?? 0,
         DefiInspeccionado: deficiency.DefiInspeccionado ?? 0,
+        //DefiInspeccionado: 0,
       }),
       DefiUsuarioMod: userId,
       DefiFecModificacion: now
