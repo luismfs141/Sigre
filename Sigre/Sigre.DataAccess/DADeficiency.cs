@@ -767,5 +767,30 @@ namespace Sigre.DataAccess
                       .AsNoTracking()
                       .FirstOrDefault(d => d.DefiCol3 == codigoUnico);
         }
+        public bool DADEFI_SoftDelete(int x_defiInterno)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // 1. Buscar el registro por ID
+                var registro = ctx.Deficiencias
+                                  .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
+
+                // Si no existe, retornamos false
+                if (registro == null)
+                {
+                    return false;
+                }
+                // 2. Aplicar el Borrado Lógico
+                registro.DefiActivo = false;
+
+                registro.DefiFecModificacion = DateTime.Now;
+
+
+                // 4. Guardar cambios
+                ctx.SaveChanges();
+
+                return true;
+            }
+        }
     }
 }

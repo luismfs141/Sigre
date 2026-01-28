@@ -1,10 +1,12 @@
-@import "primereact/resources/themes/lara-light-cyan/theme.css";
-@import "primereact/resources/primereact.min.css";
-@import "primeicons/primeicons.css";
+/* 1. TAILWIND PRIMERO (Para evitar que rompa los estilos de los botones) */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* 2. PRIMEREACT DESPUÉS (Para que sus estilos ganen) */
+@import "primereact/resources/themes/lara-light-cyan/theme.css";
+@import "primereact/resources/primereact.min.css";
+@import "primeicons/primeicons.css";
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -73,18 +75,16 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 222 47% 18%;
     --sidebar-ring: 199 89% 48%;
+    --primary-color: hsl(var(--primary)); 
+    --primary-color-text: hsl(var(--primary-foreground));
+    
+    /* Para que el botón sepa qué color usar al pasar el mouse (un poco más claro u oscuro) */
+    --primary-color-text: hsl(var(--primary-foreground));
 
-    /* Data table specific */
-    --table-header: 210 40% 96%;
-    --table-row-hover: 210 40% 98%;
-    --table-border: 214 32% 91%;
+    /* Opcional: Enfocar el 'focus ring' con tu color */
+    --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
 
-    /* Chart colors */
-    --chart-1: 142 71% 45%;
-    --chart-2: 32 95% 44%;
-    --chart-3: 0 72% 41%;
-    --chart-4: 199 89% 48%;
-    --chart-5: 222 47% 11%;
+
   }
 
   .dark {
@@ -134,9 +134,15 @@
     --sidebar-border: 222 47% 15%;
     --sidebar-ring: 199 89% 55%;
 
-    --table-header: 222 47% 14%;
-    --table-row-hover: 222 47% 16%;
-    --table-border: 222 47% 20%;
+
+    --primary-color: hsl(var(--primary)); 
+    --primary-color-text: hsl(var(--primary-foreground));
+    
+    /* Para que el botón sepa qué color usar al pasar el mouse (un poco más claro u oscuro) */
+    --primary-color-text: hsl(var(--primary-foreground));
+
+    /* Opcional: Enfocar el 'focus ring' con tu color */
+    --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
   }
 }
 

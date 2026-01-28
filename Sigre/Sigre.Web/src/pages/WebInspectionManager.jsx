@@ -14,6 +14,7 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
+import { InputTextarea } from 'primereact/inputtextarea'; // ✅ IMPORTADO
 import { Calendar } from 'primereact/calendar';
 import { Dropdown } from 'primereact/dropdown';
 import { ConfirmDialog } from 'primereact/confirmdialog';
@@ -21,10 +22,17 @@ import { Toast } from 'primereact/toast';
 import { Toolbar } from 'primereact/toolbar';
 import { Card } from 'primereact/card';
 
-// ✅ FUNCIÓN UTILITARIA (GLOBAL)
-// 1. Limpia caracteres raros
-// 2. Convierte todo a MAYÚSCULAS como pediste
+// ✅ FUNCIÓN UTILITARIA
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
+
+// ✅ FORMATEO DE FECHA VISUAL
+const formatDateTime = (date) => {
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('es-PE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(new Date(date));
+};
 
 export default function WebInspectionManager() {
     // 1. HOOKS
@@ -41,20 +49,22 @@ export default function WebInspectionManager() {
     const [structureCode, setStructureCode] = useState('');
 
     const [historicalData, setHistoricalData] = useState([]); 
-    const [localItems, setLocalItems] = useState([]);         
+    const [localItems, setLocalItems] = useState([]);        
     const [manualTypoOptions, setManualTypoOptions] = useState([]); 
 
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false); // ✅ Controlar si es edición
     
     const defaultForm = { 
         id: null, 
         selectedDeficiencyId: null, 
         deficiencyCode: '', 
         tipo: 1, 
-        date: new Date(), 
-        lat: '', // ✅ Recuperado
-        long: '', // ✅ Recuperado
+        date: new Date(), // ✅ Fecha por defecto al abrir
+        lat: '', 
+        long: '', 
+        comment: '', // ✅ Nuevo campo Comentario
         file: null, 
         preview: null 
     };
@@ -100,13 +110,22 @@ export default function WebInspectionManager() {
         }
     };
 
+    // 🟢 NUEVO
     const openNewLocal = () => {
         let autoLat = '', autoLong = '';
         if (historicalData.length > 0) {
             const last = historicalData[historicalData.length - 1];
             autoLat = last.defiLatitud || ''; autoLong = last.defiLongitud || '';
         }
+        setIsEditing(false);
         setFormData({ ...defaultForm, id: Date.now(), lat: autoLat, long: autoLong, date: new Date() });
+        setModalVisible(true);
+    };
+
+    // 🟡 EDITAR
+    const openEditLocal = (item) => {
+        setIsEditing(true);
+        setFormData({ ...item });
         setModalVisible(true);
     };
 
@@ -118,7 +137,7 @@ export default function WebInspectionManager() {
     const deleteLocalItem = (id) => setLocalItems(prev => prev.filter(i => i.id !== id));
 
     // =================================================================
-    // 💾 GUARDAR EN BD - (RUTA CORREGIDA A MAYÚSCULAS)
+    // 💾 GUARDAR (NUEVO O EDITAR)
     // =================================================================
     const handleSaveAndSync = async () => {
         if (!formData.file && !formData.preview) return;
@@ -127,32 +146,35 @@ export default function WebInspectionManager() {
             toast.current.show({ severity: 'error', summary: 'Faltan Datos', detail: 'Ingrese ALIMENTADOR y SED arriba.' });
             return;
         }
-
         if (!formData.deficiencyCode) {
              toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta el código de deficiencia.' });
              return;
         }
 
+        // --- MODO EDICIÓN LOCAL ---
+        if (isEditing) {
+            setLocalItems(prev => prev.map(item => item.id === formData.id ? formData : item));
+            setModalVisible(false);
+            toast.current.show({ severity: 'info', summary: 'Actualizado', detail: 'Item actualizado localmente.' });
+            return;
+        }
+
+        // --- MODO NUEVO (Guardar en BD) ---
         let targetDeficiency = null;
         if (formData.selectedDeficiencyId) {
             targetDeficiency = historicalData.find(d => d.defiInterno === formData.selectedDeficiencyId);
         }
 
-        // 1. NOMBRE DE ARCHIVO ESTANDARIZADO
         const dateStr = formData.date.toISOString().slice(0,19).replace(/[:]/g, '-');
         const standardizedName = `${safeSeg(structureCode)}_${safeSeg(formData.deficiencyCode)}_${dateStr}_Tipo${formData.tipo}.jpg`;
 
-        // 2. CONSTRUIR RUTA (TODO MAYÚSCULAS GRACIAS A safeSeg)
-        // Estructura: ALIMENTADOR/SED/TIPO/GIS/CODIGO
         const relativePath = `${safeSeg(feederLabel)}/${safeSeg(sedCode)}/${safeSeg(structureType)}/${safeSeg(structureCode)}/${safeSeg(formData.deficiencyCode)}`;
-        
-        // 3. RUTA FINAL BD (RAÍZ: SIGREMOVIL)
         const dbPath = `SIGREMOVIL/${relativePath}/${standardizedName}`;
 
         const payload = {
             archInterno: 0,
             archTipo: formData.tipo.toString(),
-            archNombre: dbPath, // ✅ SIGREMOVIL/CHACHANI/1709/...
+            archNombre: dbPath,
             archTabla: "Deficiencias",
             archCodTabla: targetDeficiency ? targetDeficiency.defiInterno : 0,
             archLatitud: formData.lat || 0,
@@ -207,7 +229,7 @@ export default function WebInspectionManager() {
         setZipLoading(true);
         try {
             const zip = new JSZip();
-            const root = "SIGREMOVIL"; // ✅ RAÍZ ZIP TAMBIÉN EN MAYÚSCULAS
+            const root = "SIGREMOVIL";
             let c7004 = 0; 
 
             for (const item of localItems) {
@@ -223,6 +245,11 @@ export default function WebInspectionManager() {
                     const dateStr = item.date.toISOString().slice(0,19).replace(/[:]/g, '-');
                     const fname = `${safeSeg(structureCode)}_${safeSeg(item.deficiencyCode)}_${dateStr}_Tipo${item.tipo}.jpg`;
                     
+                    // Opcional: Guardar comentario en .txt
+                    if(item.comment){
+                         zip.folder(path).file(fname.replace('.jpg','.txt'), item.comment);
+                    }
+
                     zip.folder(path).file(fname, blob);
                 } catch (e) { console.error(e); }
             }
@@ -288,15 +315,33 @@ export default function WebInspectionManager() {
                 />
                 
                 <DataTable value={localItems} size="small" emptyMessage="Lista vacía." stripedRows>
-                    <Column header="Vista" body={(r)=><img src={r.preview} alt="img" className="w-10 h-10 rounded border"/>} style={{width:'60px'}} />
-                    <Column field="deficiencyCode" header="Cód. Deficiencia" body={(r)=><span className="font-mono font-bold text-blue-700">{r.deficiencyCode}</span>} />
-                    <Column header="Fecha" body={(r)=> r.date.toLocaleString()} />
-                    <Column body={(r) => <Button icon="pi pi-trash" rounded text severity="danger" onClick={()=>deleteLocalItem(r.id)} />} style={{width:'50px'}} />
+                    <Column header="Vista" body={(r)=><img src={r.preview} alt="img" className="w-10 h-10 rounded border object-cover"/>} style={{width:'60px'}} />
+                    <Column field="deficiencyCode" header="Cód. Def" body={(r)=><span className="font-mono font-bold text-blue-700">{r.deficiencyCode}</span>} />
+                    
+                    {/* ✅ FECHA CON HORA */}
+                    <Column header="Fecha Toma" body={(r)=> formatDateTime(r.date)} style={{minWidth: '130px'}} />
+                    
+                    {/* ✅ COMENTARIO */}
+                    <Column header="Comentario" body={(r) => <span className="text-xs italic text-gray-600">{r.comment || '-'}</span>} />
+
+                    {/* ✅ ACCIONES (EDITAR/BORRAR) */}
+                    <Column body={(r) => (
+                        <div className="flex gap-1">
+                             <Button icon="pi pi-pencil" rounded text severity="info" onClick={() => openEditLocal(r)} tooltip="Editar" />
+                             <Button icon="pi pi-trash" rounded text severity="danger" onClick={()=>deleteLocalItem(r.id)} tooltip="Eliminar" />
+                        </div>
+                    )} style={{width:'100px'}} />
                 </DataTable>
             </Card>
 
-            {/* MODAL */}
-            <Dialog visible={modalVisible} onHide={() => setModalVisible(false)} header="Nueva Evidencia" style={{ width: '90vw', maxWidth: '450px' }} modal>
+            {/* MODAL (Create / Edit) */}
+            <Dialog 
+                visible={modalVisible} 
+                onHide={() => setModalVisible(false)} 
+                header={isEditing ? "Editar Foto" : "Nueva Evidencia"} 
+                style={{ width: '90vw', maxWidth: '450px' }} 
+                modal
+            >
                 <div className="flex flex-col gap-4 pt-2">
                     
                     <div className="flex flex-col gap-1">
@@ -332,13 +377,14 @@ export default function WebInspectionManager() {
                     </div>
 
                      <div className="border-2 border-dashed border-gray-300 p-4 rounded bg-gray-50 text-center relative cursor-pointer hover:bg-gray-100">
+                        {/* Permitir cambiar foto solo si es nuevo, o habilitarlo siempre si deseas */}
                         <input type="file" accept="image/*" onChange={handleFileSelect} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
                         {formData.preview ? <img src={formData.preview} className="h-32 mx-auto object-contain" alt="prev"/> : <span className="text-gray-400">Toque para subir</span>}
                     </div>
 
-                    {/* ✅✅✅ CAMPO FECHA RECUPERADO ✅✅✅ */}
+                    {/* ✅ FECHA INDIVIDUAL EDITABLE */}
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs font-bold text-gray-500">Fecha y Hora</label>
+                        <label className="text-xs font-bold text-blue-700">Fecha y Hora</label>
                         <Calendar 
                             value={formData.date} 
                             onChange={(e) => setFormData({...formData, date: e.value})} 
@@ -348,7 +394,18 @@ export default function WebInspectionManager() {
                         />
                     </div>
 
-                    {/* ✅✅✅ CAMPOS LATITUD Y LONGITUD RECUPERADOS ✅✅✅ */}
+                    {/* ✅ CAMPO COMENTARIO NUEVO */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-600">Comentario</label>
+                        <InputTextarea 
+                            value={formData.comment} 
+                            onChange={(e) => setFormData({...formData, comment: e.target.value})} 
+                            rows={2}
+                            placeholder="Observación de la foto..."
+                        />
+                    </div>
+
+                    {/* CAMPOS LATITUD Y LONGITUD */}
                     <div className="flex gap-2">
                         <div className="w-1/2">
                             <label className="text-xs font-bold text-gray-500">Latitud</label>
@@ -368,7 +425,14 @@ export default function WebInspectionManager() {
                         </div>
                     </div>
 
-                    <Button label="Guardar" icon="pi pi-check" onClick={handleSaveAndSync} disabled={!formData.file} className="mt-2" />
+                    <Button 
+                        label={isEditing ? "Actualizar Cambios" : "Guardar en BD"} 
+                        icon={isEditing ? "pi pi-refresh" : "pi pi-check"} 
+                        onClick={handleSaveAndSync} 
+                        disabled={!formData.file && !formData.preview} 
+                        className="mt-2" 
+                        severity={isEditing ? "info" : "primary"}
+                    />
                 </div>
             </Dialog>
         </div>

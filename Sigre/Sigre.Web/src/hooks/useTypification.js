@@ -44,10 +44,34 @@ export const useTypification = () => {
         }));
   }, [masterTypifications]);
 
+  const getTypificationsByElement = useCallback((elementType) => {
+    if (!masterTypifications.length) return [];
+
+    // A. FILTRADO
+    const filtered = elementType 
+        ? masterTypifications.filter(t => 
+            // Asegúrate de que tu BD usa 'POST', 'VANO', etc. en esta columna
+            t.tipiTipoElemento === elementType || t.defiTipoElemento === elementType
+          )
+        : masterTypifications;
+
+    // B. MAPEO
+    return filtered.map(t => ({
+        // Label: Lo que ve el humano ("6002 - Poste Roto")
+        label: `${t.tipiCodigo || t.code} - ${t.tipiDescripcion || t.typification}`,
+        
+        // Value: Lo que guarda la BD (EL ID INTERNO)
+        // ❌ INCORRECTO: value: t.code 
+        // ✅ CORRECTO: 
+        value: Number(t.tipiInterno || t.typificationId) 
+    }));
+  }, [masterTypifications]);
+
   return {
     masterTypifications,
     getCodeById, // 👈 ESTA ES LA CLAVE PARA AUTOMATIZAR
     fetchTypificationsByTypeElement,
+    getTypificationsByElement,
     loading
   };
 };
