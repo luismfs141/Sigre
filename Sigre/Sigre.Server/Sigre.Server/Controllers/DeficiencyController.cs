@@ -231,5 +231,29 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+
+        
+            [HttpPost("saveOrUpdateWeb")]
+            public IActionResult SaveOrUpdateWeb([FromBody] Deficiencia input)
+            {
+                if (input == null) return BadRequest("No se recibieron datos.");
+
+                try
+                {
+                    // Instanciamos la capa de datos
+                    DADeficiency da = new DADeficiency();
+
+                    // Llamamos al método único que decide si guarda o edita
+                    int idResultado = da.DADEFI_SaveOrUpdateWeb(input);
+
+                    return Ok(new { message = "Operación exitosa", id = idResultado });
+                }
+                catch (Exception ex)
+                {
+                    // Manejo de errores (Loguear ex.Message si es necesario)
+                    return BadRequest($"Error al guardar: {ex.Message}");
+                }
+            }
+        
     }
 }

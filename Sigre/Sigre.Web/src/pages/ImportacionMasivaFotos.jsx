@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
 // --- TUS HOOKS ---
-import { useDeficiencyByGis } from '../hooks/useDeficiencyByGis';
+import { useDeficiencyByGis } from '../hooks/useDeficiency';
 import { useFiles } from '../hooks/useFiles';
 import { useTypification } from '../hooks/useTypification';
 

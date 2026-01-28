@@ -4,7 +4,7 @@ import { saveAs } from 'file-saver';
 import piexif from 'piexifjs'; // IMPORTANTE: npm install piexifjs
 
 // --- TUS HOOKS (Asegúrate que las rutas sean correctas) ---
-import { useDeficiencyByGis } from '../hooks/useDeficiencyByGis'; 
+import { useDeficiencyByGis } from '../hooks/useDeficiency'; 
 import { useFiles } from '../hooks/useFiles'; 
 import { useTypification } from '../hooks/useTypification'; 
 

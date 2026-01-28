@@ -1,84 +1,148 @@
 import React, { useState, useRef } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-import { InputText } from 'primereact/inputtext';
+import { AutoComplete } from 'primereact/autocomplete';
+import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { Tag } from 'primereact/tag';
-import { Splitter, SplitterPanel } from 'primereact/splitter'; 
+import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Skeleton } from 'primereact/skeleton';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog'; 
+import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+
+// --- API ---
 import api from '../api/apiConfig';
 
-// Custom Hooks
-import { useTypification } from '../hooks/useTypification'
+// --- CUSTOM HOOKS ---
+// 🔥 CORRECCIÓN 1: Importamos desde useFeeders (PLURAL) y extraemos useFeeders
+import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
+
+// 🔥 CORRECCIÓN 2: Importamos useDeficienciesBySed (que ya incluye saveDeficiency)
+import { useDeficienciesBySed } from '../hooks/useDeficiency';
+
+import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
-import { useDeficienciesBySed } from '../hooks/useDeficiencyBySed';
 import { useFiles } from '../hooks/useFiles';
 
-// Componentes
+// --- COMPONENTES ---
 import EvidenceGallery from './EvidenceGallery';
-import DeficiencyForm from '../components/Modals/DeficiencyForm'
+import DeficiencyForm from '../components/Modals/DeficiencyForm';
 
 export default function Subestaciones() {
-    // --- ESTADOS ---
-    const [sedId, setSedId] = useState('');
+    // -------------------------------------------------------------------
+    // 1. ESTADOS Y REFERENCIAS
+    // -------------------------------------------------------------------
+    const toast = useRef(null);
+
+    // Estados de Filtros (Cascada)
+    const [selectedFeeder, setSelectedFeeder] = useState(null);
+    const [selectedSed, setSelectedSed] = useState(null);
+    const [filteredSeds, setFilteredSeds] = useState([]);
+
+    // Estados de Selección y Modal
     const [selectedDeficiency, setSelectedDeficiency] = useState(null);
-    
     const [formVisible, setFormVisible] = useState(false);
     const [deficiencyToEdit, setDeficiencyToEdit] = useState(null);
 
-    const toast = useRef(null);
+    // -------------------------------------------------------------------
+    // 2. USO DE HOOKS
+    // -------------------------------------------------------------------
     
-    // Hooks de Datos
-    const { deficiencies, loading, fetchBySed, clearData, softDeleteDeficiency } = useDeficienciesBySed();
+    // Carga inicial de Alimentadores
+    const { feeders, loading: loadingFeeders } = useFeeder();
+
+    // Carga de SEDs dependiente del Alimentador seleccionado
+    const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
+
+    // Gestión de Deficiencias (Tabla principal)
+    // Extraemos saveDeficiency aquí
+    const { 
+        deficiencies, 
+        loading: loadingDef, 
+        fetchBySed, 
+        clearData, 
+        saveDeficiency, 
+        softDeleteDeficiency 
+    } = useDeficienciesBySed();
+
+    // Hooks Auxiliares (Tablas Maestras y Usuarios)
     const { getCodeById, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
-    const { updateCodTablaBySed } = useFiles();
 
-    // --- ACCIONES GENERALES ---
-    const handleSearch = async () => {
-        if (!sedId.trim()) {
-            toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Ingrese un código de SED.' });
+    // -------------------------------------------------------------------
+    // 3. LÓGICA DE FILTROS (AUTOCOMPLETE)
+    // -------------------------------------------------------------------
+    
+    // Filtra localmente la lista de SEDs que ya trajo el hook useSedsByFeeder
+    const searchSeds = (event) => {
+        const query = event.query.toLowerCase();
+        let _filtered = sedsDelAlimentador.filter((sed) => {
+            const codigo = String(sed.sedCodigo || "").toLowerCase();
+            const etiqueta = String(sed.sedEtiqueta || "").toLowerCase();
+            return codigo.includes(query) || etiqueta.includes(query);
+        });
+        setFilteredSeds(_filtered);
+    };
+
+    // Al cambiar el alimentador, limpiamos la SED seleccionada y la tabla
+    const handleFeederChange = (e) => {
+        setSelectedFeeder(e.value);
+        setSelectedSed(null); 
+        setFilteredSeds([]);
+        clearData(); 
+    };
+
+    // -------------------------------------------------------------------
+    // 4. ACCIONES PRINCIPALES (CRUD)
+    // -------------------------------------------------------------------
+
+   const handleSearch = async () => {
+        if (!selectedSed) {
+            toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Seleccione una SED.' });
             return;
         }
         setSelectedDeficiency(null);
-        await fetchBySed(sedId);
+        
+        // Enviamos: selectedSed.sedInterno (1696)
+        const idParaBackend = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+        
+        console.log("Enviando ID al backend:", idParaBackend); 
+        
+        await fetchBySed(idParaBackend);
     };
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') handleSearch();
-    };
-
-    // --- LÓGICA CRUD ---
     const openNew = () => {
-        if (!sedId) {
-            toast.current.show({ severity: 'warn', summary: 'Requerido', detail: 'Primero busque una SED.' });
-            return;
-        }
-        setDeficiencyToEdit(null); 
+        if (!selectedSed) return;
+        setDeficiencyToEdit(null);
         setFormVisible(true);
     };
 
     const openEdit = (rowData) => {
-        setDeficiencyToEdit({ ...rowData }); 
+        setDeficiencyToEdit({ ...rowData });
         setFormVisible(true);
     };
 
+    // 🔥 CORRECCIÓN 3: Sintaxis arreglada y recarga correcta
     const handleSaveSuccess = async (deficiencyData) => {
-        try {
-            // AQUÍ LLAMARÍAS A TU API REAL
-            await api.call('/Deficiency/save', 'POST', deficiencyData);
-            
+        // Llamamos a la función del hook
+        const result = await saveDeficiency(deficiencyData);
+        
+        if (result.success) {
+            // ÉXITO
             setFormVisible(false);
-            toast.current.show({ severity: 'success', summary: 'Éxito', detail: 'Registro guardado.' });
-            await fetchBySed(sedId); 
-
-        } catch (error) {
-            console.error(error);
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo guardar.' });
+            toast.current.show({ severity: 'success', summary: 'Guardado', detail: 'Registro procesado correctamente.' });
+            
+            // Recargar tabla si hay SED seleccionada
+            if (selectedSed) {
+                const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                await fetchBySed(idSed);
+            }
+        } else {
+            // ERROR
+            console.error("Error al guardar:", result.message);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: result.message });
         }
-    };
+    }; // <--- Faltaba esta llave de cierre
 
     const confirmDeleteDeficiency = (rowData) => {
         confirmDialog({
@@ -91,189 +155,196 @@ export default function Subestaciones() {
             accept: async () => {
                 const success = await softDeleteDeficiency(rowData.defiInterno);
                 if (success) {
-                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Registro desactivado correctamente.' });
+                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Registro desactivado.' });
                 } else {
-                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar el registro.' });
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar.' });
                 }
             }
         });
     };
 
-    // --- TEMPLATES DE COLUMNAS (Visualización Ajustada) ---
-    
+    // -------------------------------------------------------------------
+    // 5. TEMPLATES DE LA TABLA
+    // -------------------------------------------------------------------
     const typeTemplate = (rowData) => {
         const isPost = rowData.defiTipoElemento === 'POST';
-        return <Tag value={rowData.defiTipoElemento} severity={isPost ? 'info' : 'warning'} icon={isPost ? 'pi pi-arrows-v' : 'pi pi-arrows-h'} className="text-sm" />;
+        return <Tag value={rowData.defiTipoElemento} severity={isPost ? 'info' : 'warning'} icon={isPost ? 'pi pi-arrows-v' : 'pi pi-arrows-h'} />;
     };
 
     const activeTemplate = (rowData) => {
-        const isActive = rowData.defiActivo === 1 || rowData.defiActivo === true;
-        // Se alinea a la derecha visualmente si se requiere
-        return <Tag value={isActive ? 'ACTIVO' : 'ELIMINADO'} severity={isActive ? 'success' : 'danger'} icon={isActive ? 'pi pi-check-circle' : 'pi pi-times-circle'} style={{ fontSize: '11px' }} />;
+        const isActive = rowData.defiActivo === true || rowData.defiActivo === 1;
+        return <Tag value={isActive ? 'ACTIVO' : 'ELIMINADO'} severity={isActive ? 'success' : 'danger'} style={{ fontSize: '10px' }} />;
     };
 
     const criticidadTemplate = (rowData) => {
         const map = { 1: { l: 'LEVE', s: 'success' }, 2: { l: 'MEDIO', s: 'warning' }, 3: { l: 'CRÍTICO', s: 'danger' } };
         const conf = map[rowData.defiEstadoCriticidad] || { l: 'N/A', s: 'null' };
-        return <Tag value={conf.l} severity={conf.s} style={{ fontSize: '11px' }} />;
+        return <Tag value={conf.l} severity={conf.s} style={{ fontSize: '10px' }} />;
     };
 
     const typificationTemplate = (rowData) => {
         if (loadingTypos) return <Skeleton width="40px" />;
         const code = getCodeById(rowData.tipiInterno); 
-        return <Tag value={code || "S/D"} severity={code ? "info" : "warning"} style={{ fontSize: '12px', fontWeight: 'bold' }} />;
+        return <Tag value={code || "S/D"} severity={code ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />;
     };
 
-    // ✅ Alineado a la derecha y letra más grande
     const inspectorTemplate = (rowData) => {
-        if (loadingUsers) return <Skeleton width="80px" className="ml-auto" />;
-        return <div className="text-right"><span className="text-gray-700 text-sm font-medium uppercase truncate">{getInspectorName(rowData.defiUsuarioInic)}</span></div>;
+        if (loadingUsers) return <Skeleton width="80px" />;
+        return <span className="text-gray-700 text-xs font-medium uppercase truncate">{getInspectorName(rowData.defiUsuarioInic)}</span>;
     };
 
-    // ✅ Alineado a la derecha
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
 
-    // ✅ Alineado a la derecha (Flex justify-end) y letra más grande
-    const suministroTemplate = (rowData) => {
-        const val = rowData.defiNumSuministro;
-        if (!val || val === '0') return <div className="text-right text-gray-300 text-sm italic">S/N</div>;
-        return (
-            <div className="flex items-center justify-end gap-1">
-                <i className="pi pi-bolt text-yellow-500 text-sm"></i>
-                <span className="font-mono font-bold text-gray-700 text-sm">{val}</span>
-            </div>
-        );
-    };
-
-    // ✅ Alineado a la derecha (Flex items-end) y letra más grande
-    const distanciasTemplate = (rowData) => (
-        <div className="flex flex-col items-end text-xs leading-tight">
-            <span><b>DH:</b> {rowData.defiDistHorizontal ?? '-'}</span>
-            <span><b>DV:</b> {rowData.defiDistVertical ?? '-'}</span>
-        </div>
-    );
-
-    const handleUpdateCodTabla = async () => {
-        if (!sedId) {
-            toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Debe ingresar un código de SED.' });
-            return;
-        }
-
-        confirmDialog({
-            message: `¿Actualizar el código de tabla para todas las deficiencias de la SED ${sedId}?`,
-            header: 'Confirmar actualización',
-            icon: 'pi pi-exclamation-triangle',
-            acceptLabel: 'Sí, actualizar',
-            rejectLabel: 'Cancelar',
-            acceptClassName: 'p-button-warning',
-            accept: async () => {
-                try {
-                    await updateCodTablaBySed(sedId);
-                    toast.current.show({ severity: 'success', summary: 'Actualizado', detail: 'Las deficiencias fueron actualizadas correctamente.' });
-                    await fetchBySed(sedId);
-                } catch (error) {
-                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el código de tabla.' });
-                }
-            }
-        });
-    };
-
     const actionBodyTemplate = (rowData) => {
-        const isDeleted = rowData.defiActivo === 0 || rowData.defiActivo === false;
+        const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
         return (
-            <div className="flex gap-1 justify-end"> {/* justify-end para derecha */}
-                <Button 
-                    icon="pi pi-pencil" rounded text severity="info" size="small"
-                    onClick={() => openEdit(rowData)} 
-                    disabled={isDeleted} 
-                    tooltip="Editar"
-                />
-                <Button 
-                    icon="pi pi-trash" rounded text severity="danger" size="small"
-                    onClick={() => confirmDeleteDeficiency(rowData)}
-                    disabled={isDeleted}
-                    tooltip="Eliminar"
-                />
+            <div className="flex gap-1 justify-center">
+                <Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} disabled={isDeleted} tooltip="Editar" />
+                <Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} disabled={isDeleted} tooltip="Eliminar" />
             </div>
         );
     };
 
+    // -------------------------------------------------------------------
+    // 6. RENDERIZADO
+    // -------------------------------------------------------------------
     return (
         <div className="flex flex-col h-screen bg-gray-100 p-2 overflow-hidden">
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* BARRA SUPERIOR */}
-            <div className="bg-white p-3 rounded shadow-sm mb-2 flex items-center justify-between shrink-0">
+            {/* --- BARRA SUPERIOR (FILTROS Y ACCIONES) --- */}
+            <div className="bg-white p-2 rounded shadow-sm mb-2 flex items-center justify-between shrink-0">
+                
+                {/* Título */}
                 <div className="flex items-center gap-2">
-                    <div className="bg-blue-100 p-2 rounded-full"><i className="pi pi-search text-blue-600 text-xl"></i></div>
+                    <div className="bg-blue-100 p-2 rounded-full"><i className="pi pi-search text-blue-600 text-lg"></i></div>
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800 m-0 leading-none">Revisión SED</h2>
-                        <span className="text-sm text-gray-500">Gestión de Deficiencias</span>
+                        <h2 className="text-lg font-bold text-gray-800 m-0 leading-none">Revisión SED</h2>
+                        <span className="text-xs text-gray-500">Gestión de Deficiencias</span>
                     </div>
                 </div>
 
-                <div className="flex gap-2 items-end">
-                    <span className="p-float-label">
-                        <InputText id="sed_input" value={sedId} onChange={(e) => setSedId(e.target.value)} onKeyDown={handleKeyDown} keyfilter="int" className="w-32 text-center font-bold text-lg" />
-                        <label htmlFor="sed_input">Cód. SED</label>
-                    </span>
-                    <Button icon="pi pi-search" loading={loading} onClick={handleSearch} className="p-button-md" />
-                        <div className="w-px h-10 bg-gray-300 mx-1"></div>
-                        <Button label="Nuevo" icon="pi pi-plus" severity="success" onClick={openNew} disabled={!sedId} className="font-bold" />
-                        <Button
-                            label="Reordenar"
-                            icon="pi pi-refresh"
-                            severity="warning"
-                            onClick={handleUpdateCodTabla}
-                            disabled={!sedId || loading}
-                            className="font-bold"
+                {/* Zona de Inputs (Cascada) */}
+                <div className="flex gap-3 items-end">
+                    
+                    {/* 1. Selector de Alimentador */}
+                    <div className="flex flex-col">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Alimentador</label>
+                        <Dropdown 
+                            value={selectedFeeder} 
+                            onChange={handleFeederChange} 
+                            options={feeders} 
+                            optionLabel="label" 
+                            filter 
+                            placeholder="Seleccione..." 
+                            className="w-60 p-inputtext-sm"
+                            disabled={loadingFeeders}
+                            emptyMessage="No hay datos"
                         />
-                    {deficiencies.length > 0 && (
-                        <Button icon="pi pi-filter-slash" severity="secondary" outlined onClick={() => { setSedId(''); clearData(); }} className="ml-2" tooltip="Limpiar" />
+                    </div>
+
+                    {/* 2. Buscador de SED (AutoComplete) */}
+                    <div className="flex flex-col">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Cód. SED</label>
+                        <div className="p-inputgroup">
+                            <AutoComplete 
+                                value={selectedSed} 
+                                suggestions={filteredSeds} 
+                                completeMethod={searchSeds} 
+                                field="sedCodigo" // IMPORTANTE: Muestra el código (ej. "8155")
+                                dropdown 
+                                onChange={(e) => setSelectedSed(e.value)} 
+                                itemTemplate={(item) => (
+                                    <div className="flex flex-col">
+                                        <span className="font-bold">{item.sedCodigo}</span>
+                                        <span className="text-xs text-gray-500">{item.sedEtiqueta}</span>
+                                    </div>
+                                )}
+                                placeholder={loadingSeds ? "Cargando..." : "Buscar SED..."}
+                                className="w-44 p-inputtext-sm font-bold"
+                                forceSelection
+                                disabled={!selectedFeeder || loadingSeds} // Bloqueado si no hay alimentador
+                            />
+                            <Button 
+                                icon="pi pi-search" 
+                                onClick={handleSearch} 
+                                loading={loadingDef}
+                                disabled={!selectedSed} 
+                                className="p-button-primary" 
+                                tooltip="Buscar Deficiencias"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-gray-300 mx-1 self-center"></div>
+                    
+                    {/* Botones de Acción */}
+                    <Button 
+                        label="Nuevo" 
+                        icon="pi pi-plus" 
+                        severity="success" 
+                        onClick={openNew} 
+                        disabled={!selectedSed} 
+                        className="p-button-sm font-bold h-10" 
+                    />
+                    
+                    {(deficiencies.length > 0 || selectedFeeder) && (
+                        <Button 
+                            icon="pi pi-filter-slash" 
+                            severity="secondary" 
+                            outlined 
+                            onClick={() => { 
+                                setSelectedFeeder(null); 
+                                setSelectedSed(null); 
+                                clearData(); 
+                            }} 
+                            className="p-button-sm h-10" 
+                            tooltip="Limpiar Todo" 
+                        />
                     )}
                 </div>
             </div>
 
-            {/* CONTENIDO PRINCIPAL */}
+            {/* --- CONTENIDO PRINCIPAL --- */}
             <div className="flex-grow bg-white rounded shadow border border-gray-300 overflow-hidden">
                 <Splitter style={{ height: '100%' }} className="border-0">
                     
-                    {/* TABLA DE DATOS */}
+                    {/* Panel Izquierdo: Tabla */}
                     <SplitterPanel size={65} minSize={30} className="overflow-auto flex flex-col">
-                        <DataTable
-                            value={deficiencies} loading={loading}
-                            paginator rows={20} size="normal" stripedRows 
-                            // 🟢 SE QUITÓ 'text-sm' para que la letra sea más grande (por defecto rem o text-base)
-                            className="border-none"
+                        <DataTable 
+                            value={deficiencies} 
+                            loading={loadingDef}
+                            paginator rows={20} 
+                            size="small" 
+                            stripedRows
+                            className="text-sm border-none"
                             sortField="defiCodigoElemento" sortOrder={1}
                             scrollable scrollHeight="flex"
-                            selectionMode="single" selection={selectedDeficiency} onSelectionChange={(e) => setSelectedDeficiency(e.value)}
-                            dataKey="defiInterno" rowHover emptyMessage="Sin resultados."
+                            selectionMode="single" 
+                            selection={selectedDeficiency} 
+                            onSelectionChange={(e) => setSelectedDeficiency(e.value)}
+                            dataKey="defiInterno" 
+                            rowHover 
+                            emptyMessage="No hay deficiencias registradas."
                         >
-                            {/* COLUMNAS IZQUIERDA (Datos Principales) */}
-                            <Column field="defiIdElemento" header="ID" sortable style={{ width: '70px' }} />
-                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable style={{ width: '90px', textAlign: 'center' }} />
-                            <Column field="defiCodigoElemento" header="GIS" sortable style={{ fontWeight: 'bold', color: '#1e40af', fontSize: '1.05em' }} />
-                            <Column header="Tipificación" body={typificationTemplate} style={{ textAlign: 'center', width: '110px' }} />
+                            <Column field="defiIdElemento" header="ID" sortable style={{ width: '60px' }} />
+                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable style={{ width: '80px', textAlign: 'center' }} />
+                            <Column field="defiCodigoElemento" header="GIS" sortable style={{ fontWeight: 'bold', color: '#1e40af' }} />
+                            <Column header="Tipificación" body={typificationTemplate} style={{ textAlign: 'center', width: '100px' }} />
                             
-                            {/* OJO (Selección) */}
-                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="pi pi-eye text-blue-600 font-bold text-lg"></i> : null} style={{ width: '40px' }} />
+                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="pi pi-eye text-blue-600 font-bold"></i> : null} style={{ width: '30px' }} />
                             
-                            {/* COLUMNAS DERECHA (Datos Secundarios) - align="right" */}
-                            <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable align="right" style={{ width: '110px' }} />
-                            <Column header="Inspector" body={inspectorTemplate} align="right" style={{ minWidth: '140px' }} />
-                            <Column field="defiActivo" header="Estado" body={activeTemplate} sortable align="right" style={{ width: '100px' }} />
-                            <Column field="defiEstadoCriticidad" header="Crit." body={criticidadTemplate} sortable align="right" style={{ width: '80px' }} />
-                            <Column field="defiNumSuministro" header="Sum." body={suministroTemplate} align="right" style={{ width: '100px' }} />
-                            <Column header="Dist." body={distanciasTemplate} align="right" style={{ width: '90px' }} />
+                            <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
+                            <Column header="Inspector" body={inspectorTemplate} style={{ minWidth: '120px' }} />
+                            <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '90px', textAlign: 'center' }} />
+                            <Column field="defiEstadoCriticidad" header="Crit." body={criticidadTemplate} sortable style={{ width: '70px', textAlign: 'center' }} />
                             
-                            {/* ACCIONES AL FINAL DERECHA */}
-                            <Column header="Acciones" body={actionBodyTemplate} align="right" style={{ width: '100px' }} alignFrozen="right" frozen />
+                            <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                         </DataTable>
                     </SplitterPanel>
 
-                    {/* GALERÍA */}
+                    {/* Panel Derecho: Galería de Fotos */}
                     <SplitterPanel size={35} minSize={20} className="bg-slate-50">
                         <EvidenceGallery deficiency={selectedDeficiency} />
                     </SplitterPanel>
@@ -281,13 +352,13 @@ export default function Subestaciones() {
                 </Splitter>
             </div>
 
-            {/* MODAL DEL FORMULARIO */}
+            {/* --- MODAL FORMULARIO --- */}
             <DeficiencyForm 
                 visible={formVisible}
                 onHide={() => setFormVisible(false)}
                 onSave={handleSaveSuccess}
                 deficiencyToEdit={deficiencyToEdit}
-                sedId={sedId}
+                sedId={selectedSed?.sedCodigo || ''}
                 existingDeficiencies={deficiencies}
             />
         </div>

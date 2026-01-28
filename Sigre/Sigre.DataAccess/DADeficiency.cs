@@ -792,5 +792,86 @@ namespace Sigre.DataAccess
                 return true;
             }
         }
+        public int DADEFI_SaveOrUpdateWeb(Deficiencia input)
+        {
+            using (var ctx = new SigreContext())
+            {
+                Deficiencia existente = null;
+
+                // -------------------------------------------------------
+                // 1. LÓGICA DE BÚSQUEDA (ID > UUID)
+                // -------------------------------------------------------
+                if (input.DefiInterno > 0)
+                {
+                    // Prioridad 1: Búsqueda por ID (Edición Web)
+                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
+                }
+                else if (!string.IsNullOrEmpty(input.DefiCol3))
+                {
+                    // Prioridad 2: Búsqueda por UUID (Sincronización/Seguridad)
+                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
+                }
+
+                // -------------------------------------------------------
+                // 2. ACTUALIZACIÓN (UPDATE)
+                // -------------------------------------------------------
+                if (existente != null)
+                {
+                    // Mapeamos SOLO los campos editables para no borrar datos del sistema
+                    existente.DefiObservacion = input.DefiObservacion;
+                    existente.DefiComentario = input.DefiComentario;
+                    existente.DefiNumSuministro = input.DefiNumSuministro;
+                    existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
+
+                    // Datos Técnicos
+                    existente.DefiDistHorizontal = input.DefiDistHorizontal;
+                    existente.DefiDistVertical = input.DefiDistVertical;
+                    existente.DefiAccesibilidad = input.DefiAccesibilidad;
+                    existente.DefiTipoCruce = input.DefiTipoCruce;
+
+                    // Actualizar ubicación solo si viene válida (distinta de 0)
+                    if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
+                    if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
+
+                    // Auditoría
+                    existente.DefiFecModificacion = DateTime.Now;
+                    // Usamos el usuario que viene o un default
+                    existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
+
+                    ctx.SaveChanges();
+                    return existente.DefiInterno; // Retornamos ID existente
+                }
+
+                // -------------------------------------------------------
+                // 3. INSERCIÓN (INSERT)
+                // -------------------------------------------------------
+                else
+                {
+                    // Asignar valores por defecto obligatorios (Constraints SQL)
+                    input.DefiInterno = 0; // Resetear para IDENTITY
+                    input.DefiEstado = "N"; // Siempre 'N'ueva
+                    input.DefiActivo = true; // bit 1
+                    input.DefiInspeccionado = false; // bit 0
+
+                    // Fechas
+                    var now = DateTime.Now;
+                    input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
+                    input.DefiFechaCreacion = now;
+                    input.DefiFecModificacion = now;
+
+                    // Usuarios (Evitar NULLs)
+                    if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
+                    if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
+
+                    // UUID (Si no viene, lo generamos)
+                    if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
+
+                    ctx.Deficiencias.Add(input);
+                    ctx.SaveChanges();
+
+                    return input.DefiInterno; // Retornamos nuevo ID
+                }
+            }
+        }
     }
 }
