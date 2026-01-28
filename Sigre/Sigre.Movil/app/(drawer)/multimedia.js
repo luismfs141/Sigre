@@ -7,7 +7,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import JSZip from "jszip";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -23,9 +23,49 @@ import ModalAudio from "../../components/Multimedia/ModalAudio";
 import ModalCamera from "../../components/Multimedia/ModalCamera";
 import PhotoCard from "../../components/Multimedia/PhotoCard";
 
+import ViewShot from "react-native-view-shot";
 import PhotoModal from "../../components/Modal/PhotoModal";
 
 const PHOTO_SLOTS = ["Panorámica", "Frontal", "Izquierda", "Derecha", "Medidor", "Adicional"];
+
+const PLACEHOLDER_PREFIX = "__PLACEHOLDER__";
+const PLACEHOLDER_DIR = FileSystem.documentDirectory + "SIGRE.MOVIL/__PLACEHOLDERS__/";
+
+// Nombre consistente para identificar placeholders (solo admin)
+const buildPlaceholderFileName = (archRow) => {
+  const id = archRow?.ArchInterno ?? "0";
+  const tipo = archRow?.ArchTipo ?? "0";
+  return `${PLACEHOLDER_PREFIX}ARCH_${id}_T${tipo}.jpg`;
+};
+
+const buildPlaceholderTargetUri = (archRow) => PLACEHOLDER_DIR + buildPlaceholderFileName(archRow);
+
+// Texto a imprimir dentro del placeholder (se captura como imagen)
+const buildPlaceholderLines = (archRow) => {
+  if (!archRow) return [];
+  // Orden sugerido (si la key no existe, se omite)
+  const preferred = [
+    "ArchInterno","ArchServerId","ArchTabla","ArchCodTabla","ArchTipo","ArchNombre",
+    "ArchActivo","ArchPeso","ArchFech","ArchFecha","ArchLatitud","ArchLongitud",
+    "ArchTipoElemento","ArchIdElemento","TipiInterno","EstadoOffLine"
+  ];
+
+  const lines = [];
+  for (const k of preferred) {
+    if (archRow[k] !== undefined) lines.push(`${k}: ${String(archRow[k])}`);
+  }
+
+  // Resto de campos (para asegurar "todos los campos")
+  const used = new Set(preferred);
+  for (const k of Object.keys(archRow)) {
+    if (used.has(k)) continue;
+    const v = archRow[k];
+    if (v === undefined) continue;
+    lines.push(`${k}: ${String(v)}`);
+  }
+  return lines;
+};
+
 
 // ==============================================================================
 // HELPERS GLOBALES Y SANITIZACIÓN
@@ -111,42 +151,6 @@ const ensureSafPath = async (rootUri, segments) => {
     current = await ensureSafSubdir(current, seg);
   }
   return current;
-};
-// ==============================================================================
-// SAF: helpers de lectura (NO crean carpetas) para verificación post-guardado
-// ==============================================================================
-
-const stripExt = (name = "") => String(name).replace(/\.[^/.]+$/, "");
-
-const findSafSubdir = async (parentUri, dirNameRaw) => {
-  const dirName = safeSeg(dirNameRaw);
-  try {
-    const children = await SAF.readDirectoryAsync(parentUri);
-    const existing = children.find((u) => safDisplayName(u) === dirName);
-    return existing ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const findSafPath = async (rootUri, segments) => {
-  let current = rootUri;
-  for (const seg of segments) {
-    const next = await findSafSubdir(current, seg);
-    if (!next) return null;
-    current = next;
-  }
-  return current;
-};
-
-const buildNameSetFromSafDir = async (dirUri) => {
-  const set = new Set();
-  const items = await SAF.readDirectoryAsync(dirUri);
-  for (const u of items) {
-    const n = safDisplayName(u);
-    if (n) set.add(String(n).toLowerCase());
-  }
-  return set;
 };
 
 const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFileUri }) => {
@@ -303,13 +307,35 @@ export default function Multimedia() {
   const router = useRouter();
   const replaceTargetRef = useRef(null);
 
-  const { selectedItem, selectedSed, selectedDeficiency } = useDatos();
+
+
+
+
+
+
+
+  //const { selectedItem, selectedSed, selectedDeficiency, isAdmin = false } = useDatos();
+const { 
+  selectedItem, 
+  selectedSed, 
+  selectedDeficiency, 
+  isAdmin = false,
+  isInspector = false,
+  profileId,
+  profileName,
+  loadingProfile,
+  dbName,
+  dbReady
+} = useDatos();
+
+
+
+
+
+
   const { findFeederById } = useFeeder();
   const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted } = useFiles();
-  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal } = useDeficiency();
-
-
-
+  const { fetchDeficiencyByIdLocal } = useDeficiency();
 
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
@@ -321,6 +347,12 @@ export default function Multimedia() {
   const [audios, setAudios] = useState([]);
   const [deletedIds, setDeletedIds] = useState([]);
 
+  const [placeholderQueue, setPlaceholderQueue] = useState([]); // jobs de placeholders (solo admin)
+  const [pendingOriginalSnapshot, setPendingOriginalSnapshot] = useState(false);
+  const placeholderShotRef = useRef(null);
+
+  const currentPlaceholderJob = placeholderQueue?.[0] ?? null;
+
   const [originalPhotos, setOriginalPhotos] = useState(Array(6).fill(null));
   const [originalAudios, setOriginalAudios] = useState([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -328,6 +360,43 @@ export default function Multimedia() {
   // para reemplazo de foto
   const [replaceTarget, setReplaceTarget] = useState(null); // { index, oldPhoto }
   const [previewIndex, setPreviewIndex] = useState(null);
+
+
+
+
+
+
+
+
+
+
+
+
+useFocusEffect(
+  useCallback(() => {
+    console.log(
+      `👤 [MULTIMEDIA PERFIL] dbReady=${dbReady} dbName=${dbName ?? "?"} loadingProfile=${loadingProfile} | profileId=${profileId ?? "null"} profileName=${profileName ?? "null"} | admin=${isAdmin} inspector=${isInspector}`
+    );
+  }, [dbReady, dbName, loadingProfile, profileId, profileName, isAdmin, isInspector])
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   // ==============================================================================
@@ -349,8 +418,15 @@ export default function Multimedia() {
 
       const photosTmp = Array(6).fill(null);
       const audiosTmp = [];
+      const placeholderJobs = []; // solo admin
 
       for (const m of activos) {
+        const tipo = Number(m.ArchTipo);
+        const isPhotoSlot = tipo > 0 && tipo <= 6;
+
+        // -----------------------------
+        // Resolver ruta local (privada) si aplica
+        // -----------------------------
         let finalUri = null;
 
         if (m.ArchNombre && !m.ArchNombre.startsWith("file://")) {
@@ -361,35 +437,97 @@ export default function Multimedia() {
           if (parts.length > 1) finalUri = FileSystem.documentDirectory + "SIGRE.MOVIL" + parts[1];
         }
 
+        let localExists = false;
         if (finalUri) {
-          const fileInfo = await FileSystem.getInfoAsync(finalUri);
-          if (fileInfo.exists) {
-            // ✅ TRUCO: Agregamos ?t=... para obligar a React a recargar la imagen
-            // Esto soluciona que no se vea la imagen nueva si tiene el mismo nombre que la borrada
-            const cacheBuster = `?t=${Date.now()}`;
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(finalUri);
+            localExists = !!fileInfo.exists;
+          } catch { /* ignore */ }
+        }
 
-            if (Number(m.ArchTipo) === 0) {
-              audiosTmp.push({
-                uri: finalUri, title: "Audio", id: m.ArchInterno, type: 0
+        // -----------------------------
+        // AUDIO (tipo 0): solo si existe local
+        // -----------------------------
+        if (tipo === 0) {
+          if (finalUri && localExists) {
+            audiosTmp.push({ uri: finalUri, title: "Audio", id: m.ArchInterno, type: 0, originalPath: m.ArchNombre });
+          }
+          continue;
+        }
+
+        // -----------------------------
+        // FOTOS (1..6): existe local -> normal
+        // -----------------------------
+        if (isPhotoSlot && finalUri && localExists) {
+          const cacheBuster = `?t=${Date.now()}`;
+          photosTmp[tipo - 1] = {
+            uri: finalUri + cacheBuster,
+            latUtm: m.ArchLatitud,
+            lonUtm: m.ArchLongitud,
+            fechaISO: m.ArchFecha,
+            id: m.ArchInterno,
+            originalPath: m.ArchNombre,
+            type: tipo
+          };
+          continue;
+        }
+
+        // -----------------------------
+        // ADMIN: si NO existe el archivo real local, crear/usar PLACEHOLDER informativo
+        // - Solo aplica a fotos (1..6)
+        // - Identificable por nombre que empieza con __PLACEHOLDER__
+        // -----------------------------
+        if (isAdmin && isPhotoSlot) {
+          const targetUri = buildPlaceholderTargetUri(m);
+          const cacheBuster = `?t=${Date.now()}`;
+
+          photosTmp[tipo - 1] = {
+            uri: targetUri + cacheBuster,        // se verá cuando el placeholder exista
+            id: m.ArchInterno,                   // mantiene vínculo al registro SQLite
+            originalPath: m.ArchNombre,          // path original del registro (para eliminar/reemplazar)
+            type: tipo,
+            isPlaceholder: true,
+            placeholderUri: targetUri,
+            latUtm: m.ArchLatitud,
+            lonUtm: m.ArchLongitud,
+            fechaISO: m.ArchFecha
+          };
+
+          try {
+            const pInfo = await FileSystem.getInfoAsync(targetUri);
+            if (!pInfo.exists) {
+              placeholderJobs.push({
+                key: String(m.ArchInterno),
+                index: tipo - 1,
+                arch: m,
+                targetUri
               });
-            } else if (Number(m.ArchTipo) > 0 && Number(m.ArchTipo) <= 6) {
-              photosTmp[Number(m.ArchTipo) - 1] = {
-                uri: finalUri + cacheBuster, // <--- AQUI EL FIX VISUAL
-                latUtm: m.ArchLatitud, lonUtm: m.ArchLongitud,
-                fechaISO: m.ArchFecha, id: m.ArchInterno, originalPath: m.ArchNombre, type: Number(m.ArchTipo)
-              };
             }
+          } catch {
+            // si falla getInfo, igual intentamos generarlo
+            placeholderJobs.push({
+              key: String(m.ArchInterno),
+              index: tipo - 1,
+              arch: m,
+              targetUri
+            });
           }
         }
       }
+
       setPhotos(photosTmp);
       setAudios(audiosTmp);
 
       // snapshot original (para cancelar)
+      // (si hay placeholders pendientes, se re-snapshotea al terminar la cola)
       setOriginalPhotos(photosTmp);
       setOriginalAudios(audiosTmp);
+
       setDeletedIds([]);
       setIsDirty(false);
+
+      setPlaceholderQueue(placeholderJobs);
+      setPendingOriginalSnapshot(placeholderJobs.length > 0);
 
     } catch (err) {
       console.error(err);
@@ -408,9 +546,88 @@ export default function Multimedia() {
       setCameraModal(false);
       setAudioModal(false);
       setDeletedIds([]);
+      setPlaceholderQueue([]);
+      setPendingOriginalSnapshot(false);
     };
   }, [selectedDeficiency?.id])
   );
+
+  // ============================================================================
+  // PLACEHOLDERS (SOLO ADMIN): generador secuencial con ViewShot
+  // ============================================================================
+  useEffect(() => {
+    if (!currentPlaceholderJob) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await ensureDirExists(PLACEHOLDER_DIR);
+
+        // Esperar a que el ViewShot renderice (muy importante)
+        await new Promise(r => setTimeout(r, 50));
+
+        const tmpUri = await placeholderShotRef.current?.capture?.({
+          format: "jpg",
+          quality: 0.9,
+          result: "tmpfile"
+        });
+
+        if (cancelled || !tmpUri) return;
+
+        // Si ya existe, no sobreescribir
+        const info = await FileSystem.getInfoAsync(currentPlaceholderJob.targetUri);
+        if (!info.exists) {
+          await FileSystem.moveAsync({ from: tmpUri, to: currentPlaceholderJob.targetUri });
+        } else {
+          // si existe, limpiamos el tmp
+          await FileSystem.deleteAsync(tmpUri, { idempotent: true });
+        }
+
+        const cacheBuster = `?t=${Date.now()}`;
+
+        // Inyectar/actualizar el slot
+        setPhotos(prev => {
+          const c = [...prev];
+          const idx = currentPlaceholderJob.index;
+
+          c[idx] = {
+            ...(c[idx] || {}),
+            uri: currentPlaceholderJob.targetUri + cacheBuster,
+            id: currentPlaceholderJob.arch.ArchInterno,
+            originalPath: currentPlaceholderJob.arch.ArchNombre,
+            type: Number(currentPlaceholderJob.arch.ArchTipo),
+            isPlaceholder: true,
+            placeholderUri: currentPlaceholderJob.targetUri,
+            latUtm: currentPlaceholderJob.arch.ArchLatitud,
+            lonUtm: currentPlaceholderJob.arch.ArchLongitud,
+            fechaISO: currentPlaceholderJob.arch.ArchFecha
+          };
+
+          return c;
+        });
+      } catch (e) {
+        console.warn("[PLACEHOLDER] error generando placeholder:", e?.message ?? e);
+      } finally {
+        if (!cancelled) {
+          setPlaceholderQueue(prev => prev.slice(1));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentPlaceholderJob?.key]);
+
+  // Cuando termina la cola, re-snapshot para que "cancelar" no borre placeholders
+  useEffect(() => {
+    if (!pendingOriginalSnapshot) return;
+    if ((placeholderQueue?.length ?? 0) > 0) return;
+
+    setOriginalPhotos(photos);
+    setOriginalAudios(audios);
+    setPendingOriginalSnapshot(false);
+    // OJO: no marcamos dirty
+  }, [pendingOriginalSnapshot, placeholderQueue?.length]);
 
   const handleDeletePhoto = async (index) => {
     const photo = photos[index];
@@ -418,7 +635,7 @@ export default function Multimedia() {
 
     // Si es EXISTENTE (tiene id) -> se marca para mover a ELIMINADOS al FINALIZAR
     if (photo?.id) {
-      setDeletedIds(prev => [...prev, { id: photo.id, path: photo.originalPath, type: photo.type }]);
+      setDeletedIds(prev => [...prev, { id: photo.id, path: photo.originalPath, type: photo.type, sourceUri: photo?.isPlaceholder ? cleanUri(photo.uri) : undefined, isPlaceholder: !!photo?.isPlaceholder }]);
     } else {
       // Si es NUEVA (temporal) -> se borra temporal ahora (no llega a BD)
       try {
@@ -528,109 +745,6 @@ export default function Multimedia() {
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(zipUri); }
     } catch (e) { Alert.alert("Error", e.message); } finally { setLoading({ active: false, msg: "" }); }
   };
-  // ============================================================================
-  // ✅ VERIFICACIÓN POST-GUARDADO: DB (Archivos) vs Carpeta Pública (SAF)
-  // ============================================================================
-  const verificarFotosPublicas = useCallback(async (idBusqueda) => {
-    const result = {
-      pudoVerificar: false,
-      ok: false,
-      fotosDB: [],
-      faltantes: [], // { archTipo, slotName, fileName, motivo }
-      motivoGeneral: null
-    };
-
-    if (Platform.OS !== "android") {
-      result.motivoGeneral = "PLATAFORMA_NO_ANDROID";
-      return result;
-    }
-
-    // ✅ no pedimos permiso aquí (no popups extra). Solo usamos lo ya guardado.
-    const picturesRoot = await AsyncStorage.getItem(KEY_PICTURES_DIR);
-    if (!picturesRoot) {
-      result.motivoGeneral = "NO_HAY_CARPETA_PUBLICA_CONFIGURADA";
-      return result;
-    }
-
-    // leer registros de BD (fotos activas)
-    const medios = await fetchMediosByDeficienciaId(idBusqueda);
-    const fotosDB = (medios ?? [])
-      .filter(m => Number(m.ArchActivo) === 1)
-      .filter(m => {
-        const t = Number(m.ArchTipo);
-        return t >= 1 && t <= 6;
-      });
-
-    result.fotosDB = fotosDB;
-    result.pudoVerificar = true;
-
-    if (fotosDB.length === 0) {
-      // no hay fotos -> verificación OK (pero inspeccionado dependerá de regla 1..4)
-      result.ok = true;
-      return result;
-    }
-
-    // agrupar por carpeta (por si acaso)
-    const grupos = new Map(); // dirRel -> [{archTipo, fileName}]
-    for (const m of fotosDB) {
-      const rel = String(m.ArchNombre ?? "");
-      const lastSlash = rel.lastIndexOf("/");
-      const dirRel = lastSlash >= 0 ? rel.substring(0, lastSlash + 1) : "";
-      const fileName = rel.split("/").pop();
-
-      if (!grupos.has(dirRel)) grupos.set(dirRel, []);
-      grupos.get(dirRel).push({
-        archTipo: Number(m.ArchTipo),
-        fileName: fileName ?? "SIN_NOMBRE"
-      });
-    }
-
-    for (const [dirRel, items] of grupos.entries()) {
-      const segments = dirRel.split("/").filter(Boolean);
-
-      // ✅ buscar carpeta SAF sin crearla
-      const safDir = await findSafPath(picturesRoot, segments);
-      if (!safDir) {
-        for (const it of items) {
-          result.faltantes.push({
-            archTipo: it.archTipo,
-            slotName: PHOTO_SLOTS[it.archTipo - 1] ?? `Slot ${it.archTipo}`,
-            fileName: it.fileName,
-            motivo: "CARPETA_NO_EXISTE_EN_PUBLICO"
-          });
-        }
-        continue;
-      }
-
-      const names = await buildNameSetFromSafDir(safDir);
-
-      for (const it of items) {
-        const base = String(it.fileName ?? "");
-        const baseLower = base.toLowerCase();
-        const noExt = stripExt(base).toLowerCase();
-
-        // ✅ matching robusto (por createFileAsync(nameNoExt,...))
-        const encontrado =
-          names.has(baseLower) ||
-          names.has(noExt) ||
-          names.has(`${noExt}.jpg`) ||
-          names.has(`${noExt}.jpeg`) ||
-          [...names].some(n => n.startsWith(noExt)); // último recurso
-
-        if (!encontrado) {
-          result.faltantes.push({
-            archTipo: it.archTipo,
-            slotName: PHOTO_SLOTS[it.archTipo - 1] ?? `Slot ${it.archTipo}`,
-            fileName: it.fileName,
-            motivo: "ARCHIVO_NO_EXISTE_EN_PUBLICO"
-          });
-        }
-      }
-    }
-
-    result.ok = result.faltantes.length === 0;
-    return result;
-  }, [fetchMediosByDeficienciaId]);
 
   // ==============================================================================
   // 5. GUARDAR DATOS
@@ -684,46 +798,39 @@ export default function Multimedia() {
       const needPictures = hasNewPhotos || hasDeletedPhotos;
       const needMusic = hasNewAudios || hasDeletedAudios;
 
-      // 1. DETERMINAR RUTA (Herencia + Nueva)
-      let relativeFolderPath = null;
-      let referenciaRuta = photos.find(p => p && p.id && p.originalPath);
 
-      if (!referenciaRuta && deletedIds.length > 0) {
-        const borradoConRuta = deletedIds.find(d => d.path);
-        if (borradoConRuta) referenciaRuta = { originalPath: borradoConRuta.path };
-      }
 
-      // 1A) Si ya existía ruta, se respeta (para que todo quede en la misma carpeta)
-      if (referenciaRuta?.originalPath) {
-        const lastSlashIndex = referenciaRuta.originalPath.lastIndexOf("/");
-        if (lastSlashIndex !== -1) {
-          relativeFolderPath = referenciaRuta.originalPath.substring(0, lastSlashIndex + 1);
-        }
-      }
 
-      // 1B) Si NO existía ruta, se crea nueva
-      if (!relativeFolderPath) {
-        if (is7004) {
-          const correlativo = await getNext7004Correlativo(elementBaseRel);
-          defFolderSegment = `7004/${correlativo}`; // ✅ carpeta real
-          defNameSegment = `7004_${correlativo}`;   // ✅ para nombre de archivo
-          relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
-        } else {
-          relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
-          defNameSegment = defFolderSegment;
-        }
-      } else {
-        // 1C) Si ya había ruta y es 7004, extraemos el N para alinear el nombre del archivo
-        if (is7004) {
-          const corr = extract7004IndexFromPath(relativeFolderPath);
-          defNameSegment = (corr != null) ? `7004_${corr}` : "7004";
 
-        } else {
-          defNameSegment = defFolderSegment;
-        }
-      }
 
-      const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
+
+
+
+      // 1. DETERMINAR RUTA (SIEMPRE CONFIG ACTUAL - SIN HERENCIA) ✅
+let relativeFolderPath = null;
+
+if (is7004) {
+  const correlativo = await getNext7004Correlativo(elementBaseRel);
+  defFolderSegment = `7004/${correlativo}`; // carpeta real
+  defNameSegment = `7004_${correlativo}`;   // para nombre de archivo
+  relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
+} else {
+  // siempre usa el tip actual como carpeta
+  defNameSegment = defFolderSegment;
+  relativeFolderPath = `${elementBaseRel}${defFolderSegment}/`;
+}
+
+const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
+
+
+
+
+
+
+
+
+
+
 
 
       if (hasNewPhotos || hasNewAudios) {
@@ -779,15 +886,18 @@ export default function Multimedia() {
           const oldUri = FileSystem.documentDirectory + oldRelativePath;
           const trashUri = FileSystem.documentDirectory + trashRelativePath;
 
+          // ✅ Para placeholders (admin): el archivo local a mover/copiar NO es oldUri (porque no existe)
+          const sourceLocalUri = item?.sourceUri ? cleanUri(item.sourceUri) : oldUri;
+
           // A) SAF (mover = copiar a ELIMINADOS y borrar original público)
           try {
             if (item.type !== 0 && picturesTargetDir && picturesTrashDir) {
-              // copia al trash usando el archivo local (oldUri)
+              // copia al trash usando el archivo local (sourceLocalUri)
               await writeFileIntoSafDir({
                 dirUri: picturesTrashDir,
                 fileName,
                 mimeType: "image/jpeg",
-                sourceFileUri: oldUri
+                sourceFileUri: sourceLocalUri
               });
 
               // borrar original público si existe
@@ -801,7 +911,7 @@ export default function Multimedia() {
                 dirUri: musicTrashDir,
                 fileName,
                 mimeType: "audio/mp4",
-                sourceFileUri: oldUri
+                sourceFileUri: sourceLocalUri
               });
 
               const files = await SAF.readDirectoryAsync(musicTargetDir);
@@ -814,11 +924,11 @@ export default function Multimedia() {
 
           // B) mover local a ELIMINADOS
           try {
-            const info = await FileSystem.getInfoAsync(oldUri);
+            const info = await FileSystem.getInfoAsync(sourceLocalUri);
             if (info.exists) {
               const trashDir = FileSystem.documentDirectory + getDirFromRelative(trashRelativePath);
               await ensureDirExists(trashDir);
-              await FileSystem.moveAsync({ from: oldUri, to: trashUri });
+              await FileSystem.moveAsync({ from: sourceLocalUri, to: trashUri });
             }
 
 
@@ -900,87 +1010,8 @@ export default function Multimedia() {
         });
       }
 
-      // ============================================================================
-      // 6) POST-VERIFICACIÓN (DB vs PÚBLICO) + REGLA DefiInspeccionado
-      // ============================================================================
-      setLoading({ active: true, msg: "Verificando fotos en carpeta pública..." });
-
-      const defAfter = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
-      const idBusquedaFinal = (defAfter?.DefiServerId && defAfter.DefiServerId > 0)
-        ? defAfter.DefiServerId
-        : defAfter?.DefiInterno;
-
-      const ver = await verificarFotosPublicas(idBusquedaFinal);
-
-      // Regla mínima: ArchTipo 1..4 activos en DB
-      const requiredTypes = [1, 2, 3, 4];
-      const tiposEnDB = new Set((ver.fotosDB ?? []).map(x => Number(x.ArchTipo)));
-      const tieneMinimoDB = requiredTypes.every(t => tiposEnDB.has(t));
-
-      // Además: en público NO deben faltar las obligatorias (1..4)
-      const faltantesObligatorias = (ver.faltantes ?? []).filter(f => requiredTypes.includes(f.archTipo));
-      const inspeccionadoFinal = tieneMinimoDB && faltantesObligatorias.length === 0;
-
-      setLoading({ active: true, msg: "Actualizando estado de inspección..." });
-      await setDefiInspeccionadoLocal(selectedDeficiency.id, inspeccionadoFinal ? 1 : 0);
-
-  
-      // ============================================================================
-      // 7) Mensaje final con detalle
-      // ============================================================================
-      const lines = [];
-      lines.push("Guardado correctamente.");
-
-      // Resultado verificación carpeta pública
-      if (!ver.pudoVerificar) {
-        lines.push("");
-        lines.push("⚠ Verificación carpeta pública: NO se pudo verificar.");
-        if (ver.motivoGeneral === "NO_HAY_CARPETA_PUBLICA_CONFIGURADA") {
-          lines.push("• No hay carpeta pública configurada (Pictures).");
-        } else if (ver.motivoGeneral === "PLATAFORMA_NO_ANDROID") {
-          lines.push("• No es Android (SAF no aplica).");
-        } else {
-          lines.push("• Motivo desconocido.");
-        }
-      } else if (ver.ok) {
-        lines.push("");
-        lines.push("✅ Verificación carpeta pública: OK (todas las fotos de BD existen en público).");
-      } else {
-        lines.push("");
-        lines.push("⚠ Verificación carpeta pública: HAY PROBLEMAS.");
-        // listar faltantes (máximo 10 líneas para no reventar el Alert)
-        const falt = ver.faltantes.slice(0, 10);
-        for (const f of falt) {
-          lines.push(`• ${f.slotName}: ${f.fileName}`);
-        }
-        if (ver.faltantes.length > 10) {
-          lines.push(`• ...y ${ver.faltantes.length - 10} más`);
-        }
-      }
-
-      // Resultado inspeccionado
-      lines.push("");
-      lines.push(inspeccionadoFinal
-        ? "✅ DefiInspeccionado: 1 (cumple mínimo 1-4 y están en carpeta pública)."
-        : "⚠ DefiInspeccionado: 0 (faltan fotos 1-4 o alguna obligatoria no está en carpeta pública)."
-      );
-
-
-
-
-
-
-
-
-
       setLoading({ active: false, msg: "" });
-
-      Alert.alert(
-        "Éxito",
-        lines.join("\n"),
-        [{ text: "OK", onPress: () => router.replace("/inspection") }]
-      );
-
+      Alert.alert("Éxito", "Guardado correctamente.", [{ text: "OK", onPress: () => router.replace("/inspection") }]);
 
     } catch (err) {
       setLoading({ active: false, msg: "" });
@@ -1136,6 +1167,43 @@ export default function Multimedia() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      {/* =========================================================================
+          PLACEHOLDER RENDERER (SOLO ADMIN)
+          - Render oculto fuera de pantalla
+          - Se captura con ViewShot y se guarda como imagen real (jpg)
+      ========================================================================= */}
+      {!!currentPlaceholderJob && (
+        <ViewShot
+          ref={placeholderShotRef}
+          options={{ format: "jpg", quality: 0.9 }}
+          style={{
+            position: "absolute",
+            left: -10000,
+            top: -10000,
+          }}
+        >
+          <View style={{ width: 620, height: 450, backgroundColor: "#fff", padding: 18 }}>
+            <Text style={{ fontSize: 20, fontWeight: "700", marginBottom: 10 }}>
+              {PLACEHOLDER_PREFIX} FOTO NO DISPONIBLE EN ESTE DISPOSITIVO
+            </Text>
+
+            <Text style={{ fontSize: 14, marginBottom: 10 }}>
+              Esta imagen fue generada automáticamente (ADMIN) para evitar {"\n"}
+              validaciones erróneas cuando la BD descargada tiene un registro {"\n"}
+              en Archivos pero el archivo físico no está en el equipo.
+            </Text>
+
+            <View style={{ flex: 1 }}>
+              {buildPlaceholderLines(currentPlaceholderJob.arch).map((line, i) => (
+                <Text key={`${currentPlaceholderJob.key}-${i}`} style={{ fontSize: 14 }}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+          </View>
+        </ViewShot>
+      )}
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <View style={styles.headerRow}>
@@ -1218,7 +1286,7 @@ export default function Multimedia() {
             const old = target.oldPhoto;
 
             if (old?.id) {
-              setDeletedIds(prev => [...prev, { id: old.id, path: old.originalPath, type: old.type }]);
+              setDeletedIds(prev => [...prev, { id: old.id, path: old.originalPath, type: old.type, sourceUri: old?.isPlaceholder ? cleanUri(old.uri) : undefined, isPlaceholder: !!old?.isPlaceholder }]);
             } else if (old?.uri) {
               try {
                 const u = cleanUri(old.uri);
