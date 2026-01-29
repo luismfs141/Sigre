@@ -5,17 +5,43 @@ import {
   isDatabaseAvailable,
   openDatabase
 } from "../database/offlineDB/db";
+import { AuthContext } from "./AuthContext";
 
 const DatosContext = createContext();
 
 // 🔴 CLAVE PARA GUARDAR EL ALIMENTADOR EN STORAGE
 const SELECTED_FEEDER_KEY = "SIGRE_SELECTED_FEEDER";
 
+
 export const DatosProvider = ({ children }) => {
+  const { user } = useContext(AuthContext);
+
   // ------------------ ESTADO BD -------------------------
   const [dbName, setDbName] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [loadingDB, setLoadingDB] = useState(true);
+
+  // ------------------ PERFIL GLOBAL (desde login del servidor) ------------------
+  const profileId = user?.perfilId ?? null;
+  const profileName = user?.perfilNombre ?? null;
+
+  const role = String(profileName ?? "").trim().toUpperCase();
+
+  // ✅ Control por NOMBRE, no por ID (así escalas rápido cuando agregues perfiles)
+  const isAdmin = role === "ADMINISTRADOR" || role === "ADMIN";
+  const isInspector = role === "INSPECTOR";
+  const isSupervisor = role === "SUPERVISOR";
+
+  // Ya no depende de DB
+  const loadingProfile = false;
+
+  // si algún componente llama refreshProfile, que no rompa
+  const refreshProfile = async () => true;
+
+  // útil para comparar dueño
+  const currentUserId = user?.id ?? null;
+
+
 
   // -------------------------------------------------------
   // Cargar última base al iniciar APP
@@ -24,7 +50,7 @@ export const DatosProvider = ({ children }) => {
     try {
       const savedName = await AsyncStorage.getItem("db_name");
       if (savedName) {
-        console.log("📦 Última base cargada:", savedName);
+        //console.log("📦 Última base cargada:", savedName);
         setDbName(savedName);
       } else {
         console.log("⚠ No hay base previa guardada.");
@@ -40,12 +66,16 @@ export const DatosProvider = ({ children }) => {
   const openLocalDB = async () => {
     setLoadingDB(true);
 
+    // 🔥 importantísimo: obliga el cambio false->true al abrir
+    setDbReady(false);
+
     if (!dbName) {
       console.log("⚠ No hay dbName asignado todavía.");
       setDbReady(false);
       setLoadingDB(false);
       return;
     }
+
 
     const exists = await isDatabaseAvailable(dbName);
     if (!exists) {
@@ -57,7 +87,7 @@ export const DatosProvider = ({ children }) => {
 
     try {
       await openDatabase(dbName);
-      console.log("ready:", dbName);
+      //console.log("ready:", dbName);
       setDbReady(true);
     } catch (err) {
       console.error("openLocalDB -> error:", err);
@@ -81,38 +111,6 @@ export const DatosProvider = ({ children }) => {
     return true;
   };
 
-//   const checkDatabase = async () => {
-//   try {
-//     if (!dbName) {
-//       console.warn("⚠ checkDatabase -> No hay dbName");
-//       setDbReady(false);
-//       return false;
-//     }
-
-//     const exists = await isDatabaseAvailable(dbName);
-//     if (!exists) {
-//       console.warn("❌ checkDatabase -> La base NO existe:", dbName);
-//       setDbReady(false);
-//       return false;
-//     }
-
-//     // 🔑 CLAVE: si existe pero NO está abierta → abrirla
-//     if (!dbReady) {
-//       console.log("🗄 checkDatabase -> DB existe pero no está abierta. Abriendo...");
-//       await openDatabase(dbName);
-//       console.log("✅ checkDatabase -> DB abierta:", dbName);
-//       setDbReady(true);
-//     }
-
-//     return true;
-//   } catch (err) {
-//     console.error("❌ checkDatabase -> Error:", err);
-//     setDbReady(false);
-//     return false;
-//   }
-// };
-
-
   // -------------------------------------------------------
   // Cerrar BD actual
   // -------------------------------------------------------
@@ -130,14 +128,18 @@ export const DatosProvider = ({ children }) => {
   const setNewDatabase = async (newName) => {
     console.log("🔄 setNewDatabase ejecutado:", newName);
 
-    await closeLocalDatabase(); // cerrar actual
-    await AsyncStorage.setItem("db_name", newName); // guardar nombre
-    setDbName(newName); // disparar openLocalDB automáticamente
+    // 🔥 fuerza "flip" de estado (evita que el perfil se cargue antes de abrir DB)
+    setDbReady(false);
 
-    // (opcional) si cambias de base, puedes limpiar el alimentador guardado:
+    await closeLocalDatabase();               // cerrar actual
+    await AsyncStorage.setItem("db_name", newName);
+    setDbName(newName);                      // disparará openLocalDB()
+
     await AsyncStorage.removeItem(SELECTED_FEEDER_KEY);
     _setSelectedFeeder(null);
+
   };
+
 
   // Cuando cambia dbName → abrir base
   useEffect(() => {
@@ -150,9 +152,11 @@ export const DatosProvider = ({ children }) => {
     loadLastDatabaseName();
   }, []);
 
+
+
+
   // -------------------- ESTADOS DE DATOS ------------------------
 
-  // 🔴 selectedFeeder ahora tiene un setter interno + uno “persistente”
   const [selectedFeeder, _setSelectedFeeder] = useState(null);
   const [feeders, setFeeders] = useState([]);
   const [pins, setPins] = useState([]);
@@ -181,19 +185,13 @@ export const DatosProvider = ({ children }) => {
         const raw = await AsyncStorage.getItem(SELECTED_FEEDER_KEY);
         if (raw) {
           const stored = JSON.parse(raw);
-          console.log(
-            "[DatosContext] alimentador restaurado de storage:",
-            stored
-          );
+          console.log("[DatosContext] alimentador restaurado de storage:", stored);
           _setSelectedFeeder(stored);
         } else {
           console.log("[DatosContext] no había alimentador guardado");
         }
       } catch (e) {
-        console.log(
-          "[DatosContext] error leyendo alimentador de storage:",
-          e
-        );
+        console.log("[DatosContext] error leyendo alimentador de storage:", e);
       }
     })();
   }, []);
@@ -207,39 +205,17 @@ export const DatosProvider = ({ children }) => {
       try {
         if (feeder) {
           const minimal = {
-            id:
-              feeder.id ??
-              feeder.AlimInterno ??
-              feeder.alimInterno ??
-              null,
-            name:
-              feeder.name ??
-              feeder.AlimEtiqueta ??
-              feeder.alimEtiqueta ??
-              null,
-            AlimInterno:
-              feeder.AlimInterno ??
-              feeder.alimInterno ??
-              feeder.id ??
-              null,
-            AlimEtiqueta:
-              feeder.AlimEtiqueta ??
-              feeder.alimEtiqueta ??
-              feeder.name ??
-              null
+            id: feeder.id ?? feeder.AlimInterno ?? feeder.alimInterno ?? null,
+            name: feeder.name ?? feeder.AlimEtiqueta ?? feeder.alimEtiqueta ?? null,
+            AlimInterno: feeder.AlimInterno ?? feeder.alimInterno ?? feeder.id ?? null,
+            AlimEtiqueta: feeder.AlimEtiqueta ?? feeder.alimEtiqueta ?? feeder.name ?? null
           };
-          await AsyncStorage.setItem(
-            SELECTED_FEEDER_KEY,
-            JSON.stringify(minimal)
-          );
+          await AsyncStorage.setItem(SELECTED_FEEDER_KEY, JSON.stringify(minimal));
         } else {
           await AsyncStorage.removeItem(SELECTED_FEEDER_KEY);
         }
       } catch (e) {
-        console.log(
-          "[DatosContext] error guardando alimentador en storage:",
-          e
-        );
+        console.log("[DatosContext] error guardando alimentador en storage:", e);
       }
     })();
   };
@@ -255,7 +231,20 @@ export const DatosProvider = ({ children }) => {
         openLocalDB,
         checkDatabase,
         setNewDatabase,
-        
+
+        // Perfil global (roles)
+        profileId,
+        profileName,
+        isAdmin,
+        isInspector,
+        isSupervisor,
+        loadingProfile,
+        refreshProfile,
+
+        // Usuario actual
+        currentUserId,
+
+
         setSelectedTypification,
         selectedTypification,
 
@@ -263,9 +252,8 @@ export const DatosProvider = ({ children }) => {
         selectedDeficiency,
 
         // Datos
-        //////////////////////////////////// alimentador
         selectedFeeder,
-        setSelectedFeeder: setSelectedFeederPersist, // 👈 usamos el persistente
+        setSelectedFeeder: setSelectedFeederPersist,
         feeders,
         setFeeders,
         pins,
@@ -273,7 +261,6 @@ export const DatosProvider = ({ children }) => {
         gaps,
         setGaps,
 
-        ///////////// subestacion
         selectedSed,
         setSelectedSed,
 
@@ -286,7 +273,6 @@ export const DatosProvider = ({ children }) => {
         region,
         setRegion,
 
-        ////////////////////////////// proyecto
         selectedProject,
         setSelectedProject
       }}

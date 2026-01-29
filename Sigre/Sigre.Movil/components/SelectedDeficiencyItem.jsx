@@ -6,8 +6,10 @@ export default function SelectedDeficiencyItem({
   item,
   onDelete,
   onPhotos,
-  onDeficiency
+  onDeficiency,
+  canDelete = true, // ✅ NUEVO
 }) {
+
   const [infoVisible, setInfoVisible] = useState(false);
 
   const code = String(item?.data?.typificationCode ?? "").trim();
@@ -73,12 +75,22 @@ export default function SelectedDeficiencyItem({
       {/* 🔹 BOTONES */}
       <View style={styles.actions}>
         <Pressable
-          style={[styles.button, styles.delete]}
-          onPress={() => onDelete(item)}
+          style={[
+            styles.button,
+            styles.delete,
+            !canDelete && styles.disabledBtn
+          ]}
+          onPress={() => {
+            if (!canDelete) return;
+            onDelete(item);
+          }}
         >
-          <MaterialIcons name="delete" size={18} color="#d32f2f" />
-          <Text style={styles.deleteText}>Eliminar</Text>
+          <MaterialIcons name="delete" size={18} color={canDelete ? "#d32f2f" : "#999"} />
+          <Text style={[styles.deleteText, !canDelete && styles.disabledText]}>
+            Eliminar
+          </Text>
         </Pressable>
+
 
         <Pressable style={styles.button} onPress={() => onPhotos(item)}>
           <MaterialIcons name="photo-camera" size={18} color="#1976d2" />
@@ -285,5 +297,12 @@ const styles = StyleSheet.create({
     paddingLeft: 34,   // ✅ deja espacio para el badge
     paddingRight: 26   // ✅ deja espacio para el botón info
   },
+  disabledBtn: {
+    opacity: 0.35
+  },
+  disabledText: {
+    color: "#999"
+  },
+
 
 });

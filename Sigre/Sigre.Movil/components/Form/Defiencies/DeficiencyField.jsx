@@ -1,7 +1,46 @@
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function DeficiencyField({ field, value, onChange, onPress }) {
-  const displayValue = field.valueMap && value in field.valueMap ? field.valueMap[value] : value ?? "";
+  const rawValue = value ?? "";
+
+  const displayValue =
+    field.valueMap && rawValue in field.valueMap
+      ? field.valueMap[rawValue]
+      : rawValue;
+
+  const isTextarea = field.type === "textarea";
+  const isNumberField = field.type === "number";
+
+  // ✅ Hard limit (recorta / maxLength real)
+  const hardMaxLength = field.maxLengthHard ?? undefined;
+
+  // ✅ Soft limit (solo pinta rojo + alerta)
+  const maxChars = field.maxChars ?? undefined;
+  const showMaxError = field.showMaxError ?? true;
+
+  const noSpaces = !!field.noSpaces;
+  const onlyDigits = !!field.onlyDigits;
+
+  const keyboardType =
+    field.keyboardType ??
+    (isNumberField ? "numeric" : "default");
+
+  const currentLen = String(rawValue ?? "").length;
+  const exceeded =
+    typeof maxChars === "number" && currentLen > maxChars;
+
+  const handleChangeText = (txt) => {
+    let v = txt ?? "";
+
+    // ✅ hard maxLength (si aplica)
+    if (typeof hardMaxLength === "number") v = v.slice(0, hardMaxLength);
+
+    // ✅ filtros opcionales
+    if (noSpaces) v = v.replace(/\s+/g, "");
+    if (onlyDigits) v = v.replace(/[^\d]/g, "");
+
+    onChange?.(v);
+  };
 
   return (
     <View style={{ marginBottom: 12 }}>
@@ -11,32 +50,62 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
       </Text>
 
       {onPress ? (
-        <TouchableOpacity onPress={onPress} style={{
-          borderWidth: 1,
-          borderColor: "#ccc",
-          borderRadius: 4,
-          padding: 8,
-          backgroundColor: "#fff"
-        }}>
-          <Text>{displayValue || "Seleccione..."}</Text>
-        </TouchableOpacity>
-      ) : (
-        <TextInput
-          value={String(displayValue)}
-          onChangeText={onChange}
-          editable={!field.readonly}
-          keyboardType={field.type === "number" ? "numeric" : "default"}
-          multiline={field.type === "textarea"}
-          numberOfLines={field.type === "textarea" ? 4 : 1}
+        <TouchableOpacity
+          onPress={onPress}
           style={{
             borderWidth: 1,
             borderColor: "#ccc",
             borderRadius: 4,
             padding: 8,
-            minHeight: field.type === "textarea" ? 80 : 40,
-            backgroundColor: field.readonly ? "#eee" : "#fff"
+            backgroundColor: "#fff"
           }}
-        />
+        >
+          <Text>{String(displayValue || "Seleccione...")}</Text>
+        </TouchableOpacity>
+      ) : (
+        <>
+          <TextInput
+            value={String(displayValue)}
+            onChangeText={handleChangeText}
+            editable={!field.readonly}
+            keyboardType={keyboardType}
+            multiline={isTextarea}
+            numberOfLines={isTextarea ? 4 : 1}
+            // ✅ SOLO hard limit usa maxLength
+            maxLength={hardMaxLength}
+            placeholder={field.placeholder}
+            placeholderTextColor="#9CA3AF"
+            style={{
+              borderWidth: 1,
+              borderColor: exceeded ? "#DC2626" : "#ccc",
+              borderRadius: 4,
+              padding: 8,
+              minHeight: isTextarea ? 80 : 40,
+              backgroundColor: field.readonly
+                ? "#eee"
+                : exceeded
+                  ? "rgba(220,38,38,0.06)"
+                  : "#fff",
+              textAlign: "left",
+              textAlignVertical: isTextarea ? "top" : "center", // Android
+              paddingTop: isTextarea ? 10 : 8, // opcional
+            }}
+          />
+
+          {/* ✅ Mensaje debajo cuando se pasa del máximo */}
+          {showMaxError && exceeded && (
+            <Text style={{ marginTop: 4, color: "#DC2626" }}>
+              Máximo {maxChars} caracteres.
+            </Text>
+          )}
+
+          {/* (Opcional) contador si quieres verlo siempre */}
+          {field.showCounter && typeof maxChars === "number" && (
+            <Text style={{ alignSelf: "flex-end", marginTop: 4, color: exceeded ? "#DC2626" : "#666" }}>
+              {currentLen}/{maxChars}
+            </Text>
+          )}
+        </>
       )}
     </View>
   );

@@ -262,6 +262,13 @@ export const deleteFileById = async (archInterno) => {
   }
 };
 
+// Alias explícito para el caso “falta archivo en carpeta pública”
+// (solo baja ArchActivo a 0; NO mueve nada a Eliminados)
+export const markArchivoInactiveLocal = async (archInterno) => {
+  return await deleteFileById(archInterno);
+};
+
+
 export const saveOrUpdateArchivoLocal = async (arch) => {
   try {
     const allFields = [

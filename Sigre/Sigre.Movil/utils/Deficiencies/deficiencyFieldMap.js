@@ -69,6 +69,9 @@ const COMMON_DEFICIENCY_FIELDS = [
     label: "Número de suministro",
     type: "text",
     required: true,
+    keyboardType: "numeric",
+    noSpaces: true,
+    onlyDigits: true, // ✅ así en vivo solo deja números
     validation: {
       custom: (value) => {
         const s = String(value ?? "").trim();
@@ -78,18 +81,37 @@ const COMMON_DEFICIENCY_FIELDS = [
       }
     }
   },
+
+
   {
     key: "DefiObservacion",
     label: "Observación",
     type: "text",
     required: true,
-    validation: { message: "La observación es obligatoria" }
+
+    // ✅ soft limit (NO bloquea escritura)
+    maxChars: 20,
+    showMaxError: true,
+    showCounter: true, // opcional
+
+    // ✅ BLOQUEA GUARDADO si pasa de 20
+    validation: {
+      custom: (value) => {
+        const s = String(value ?? "");
+        if (!s.trim()) return "La observación es obligatoria.";
+        if (s.length > 20) return "La observación no puede exceder 20 caracteres.";
+        return null;
+      }
+    }
   },
+
+
   {
     key: "DefiComentario",
     label: "Comentario",
     type: "textarea",
-    required: false
+    required: false,
+    placeholder: "Comentarios o notas..."
   }
 ];
 

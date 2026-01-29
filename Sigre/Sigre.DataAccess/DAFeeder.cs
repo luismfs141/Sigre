@@ -155,7 +155,11 @@ namespace Sigre.DataAccess
                     var switches = dASwitch.DAEQUI_GetByListFeeder(x_ids);
                     var tipificaciones = dATypification.DATIPI_GetByUser(x_usuario);
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
-                    var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
+                    //var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
+                    var perfiles = ctx.Perfiles.ToList();
+
+                    var perfilesUsuario = ctx.PerfilesUsuarios.Where(pu => pu.PfusUsuario == x_usuario).ToList();
+
                     var archivos = dAFile.DAARCH_GetByFeeders(x_ids);//Filtrar por subestacion falta
                     var alimentadores = dAFeeder.DAFeeder_GetFeederById(x_ids);//Filtrar por subestacion falta
 
@@ -178,7 +182,10 @@ namespace Sigre.DataAccess
                     sqliteCtx.Alimentadores.AddRange(alimentadores);
 
                     if (usuario != null) sqliteCtx.Usuarios.Add(usuario);
-                    if (perfil != null) sqliteCtx.Perfiles.Add(perfil);
+                    //if (perfil != null) sqliteCtx.Perfiles.Add(perfil);
+                    sqliteCtx.Perfiles.AddRange(perfiles);
+
+
 
                     sqliteCtx.ArmadoMaterials.AddRange(armadoMaterial);
                     sqliteCtx.ArmadoTipos.AddRange(armadoTipo);
@@ -280,7 +287,11 @@ namespace Sigre.DataAccess
                     var seds = dASed.DASed_GetByListSeds(x_ids);
                     var tipificaciones = dATypification.DATIPI_GetByBT();
                     var usuario = dAUser.DAUS_GetUser(x_usuario);
-                    var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
+                    //var perfil = dAUser.DAUS_GetPerfilByUser(x_usuario);
+                    var perfiles = ctx.Perfiles.ToList();
+
+                    var perfilesUsuario = ctx.PerfilesUsuarios.Where(pu => pu.PfusUsuario == x_usuario).ToList();
+
                     var archivos = dAFile.DAARCH_GetBySeds(x_ids);
                     var alimentadores = dAFeeder.DAFeeder_GetFeederBySed(x_ids);
 
@@ -302,7 +313,11 @@ namespace Sigre.DataAccess
                     sqliteCtx.Alimentadores.AddRange(alimentadores);
 
                     if (usuario != null) sqliteCtx.Usuarios.Add(usuario);
-                    if (perfil != null) sqliteCtx.Perfiles.Add(perfil);
+                    //if (perfil != null) sqliteCtx.Perfiles.Add(perfil);
+                    sqliteCtx.Perfiles.AddRange(perfiles);
+
+                    sqliteCtx.PerfilesUsuarios.AddRange(perfilesUsuario);
+
 
                     sqliteCtx.ArmadoMaterials.AddRange(armadoMaterial);
                     sqliteCtx.ArmadoTipos.AddRange(armadoTipo);
