@@ -57,6 +57,28 @@ export const updateDefiInspeccionadoLocal = async (
 };
 
 
+
+
+// export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
+//   const val = Number(inspeccionado) === 1 ? 1 : 0;
+
+//   await runQuery(
+//     `
+//     UPDATE Deficiencias
+//     SET DefiInspeccionado = ?
+//     WHERE DefiInterno = ?
+//     `,
+//     [val, defiInterno]
+//   );
+
+//   return true;
+// };
+
+
+
+
+
+
 export const getDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
   try {
     const deficiency = await runQuery(
@@ -357,21 +379,6 @@ export const getDeficienciesPendientesReanudables = async () => {
     WHERE EstadoOffLine IN (1, 2, 3, 4)
     ORDER BY DefiInterno
   `);
-};
-
-export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
-  const val = Number(inspeccionado) === 1 ? 1 : 0;
-
-  await runQuery(
-    `
-    UPDATE Deficiencias
-    SET DefiInspeccionado = ?
-    WHERE DefiInterno = ?
-    `,
-    [val, defiInterno]
-  );
-
-  return true;
 };
 
 export const setServerIdToDeficiency = async (localId, serverId) => {
