@@ -1,122 +1,115 @@
-import { useState, useEffect, useCallback } from "react";
-import api from "../api/apiConfig"
+import { useState, useEffect } from 'react';
+import api from '../api/apiConfig';
 
-export function useFeeder(userId = null, options = { autoFetch: true }) {
-  const [feeders, setFeeders] = useState([]);
-  const [seds, setSeds] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+// ---------------------------------------------
+// HOOK 1: Obtener lista de Alimentadores
+// ---------------------------------------------
+export const useFeeder = () => {
+    const [feeders, setFeeders] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-  // 1. FUNCIÓN DE CARGA PRINCIPAL
-  const fetchFeeders = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    useEffect(() => {
+        const loadFeeders = async () => {
+            setLoading(true);
+            try {
+                const response = await api.get('/Feeder/GetFeeder');
+                let rawData = response.data;
+                
+                if (response.data && response.data.result) rawData = response.data.result;
 
-    // Cancelación de peticiones (Axios también soporta AbortController)
-    const controller = new AbortController();
+                // 🔍 DEBUG: Mira esto en la consola (F12)
+                console.log("📡 RAW DATA BACKEND:", rawData); 
 
-    try {
-      // Definimos el endpoint relativo (Axios ya tiene la baseURL '.../api/')
-      let endpoint = 'Feeder/GetFeeder'; 
-      
-      // Si hay userId, usamos el endpoint filtrado con parámetros
-      // Nota: Axios permite pasar params como objeto para que sea más limpio
-      const config = {
-        signal: controller.signal,
-        params: userId ? { idUser: userId } : {} 
-      };
+                if (!Array.isArray(rawData)) return;
 
-      // Si userId existe, cambiamos la ruta
-      if (userId) {
-        endpoint = 'Feeder/GetFeedersByUser';
-      }
+                const lista = rawData.map((item) => {
+                    // Intenta encontrar la propiedad correcta
+                    // Agregamos más variantes comunes por si acaso
+                    const etiqueta = item.alimEtiqueta || item.AlimEtiqueta || item.Nombre || item.Descripcion || "Sin Etiqueta";
+                    const codigo = item.alimCodigo || item.AlimCodigo || item.Codigo || "S/C";
+                    const id = item.alimInterno || item.AlimInterno || item.Id || item.ID;
+                    const activo = (item.alimActivo !== undefined) ? item.alimActivo : 1;
 
-      // 👉 LLAMADA AXIOS
-      const response = await api.get(endpoint, config);
+                    return {
+                        ...item,
+                        alimInterno: id,
+                        label: `${etiqueta} - ${codigo}`, 
+                        value: id
+                    };
+                });
+                
+                setFeeders(lista);
+            } catch (error) {
+                console.error("Error cargando alimentadores:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadFeeders();
+    }, []);
 
-      // Axios devuelve los datos directamente en .data
-      setFeeders(response.data || []);
+    return { feeders, loading };
+};
 
-    } catch (err) {
-      // Verificamos si el error fue por cancelación (navegación rápida)
-      if (err.name === 'CanceledError' || err.code === "ERR_CANCELED") {
-        console.log('Petición cancelada correctamente');
-      } else {
-        console.error("Error en useFeeder:", err);
-        // Axios guarda el mensaje del backend en err.response.data
-        setError(err.response?.data?.message || err.message);
-        setFeeders([]);
-      }
-    } finally {
-      // Importante: No apagar loading si el componente se desmontó (cancelado)
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
-    }
+// ---------------------------------------------
+// HOOK 2: Obtener SEDs por Alimentador
+// ---------------------------------------------
+export const useSedsByFeeder = (selectedFeeder) => {
+    const [seds, setSeds] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-    return () => controller.abort();
-  }, [userId]);
+    useEffect(() => {
+        // 🛡️ GUARDIA DE SEGURIDAD
+        // Si no hay alimentador seleccionado, o si está vacío, NO hacemos la petición.
+        if (!selectedFeeder) {
+            setSeds([]);
+            return;
+        }
 
-  // 2. EFECTO DE CARGA AUTOMÁTICA
-  useEffect(() => {
-    let cancelRequest;
-    if (options.autoFetch) {
-      const promise = fetchFeeders();
-      promise.then(cleanup => { cancelRequest = cleanup; });
-    }
-    return () => {
-      if (cancelRequest) cancelRequest();
-    };
-  }, [fetchFeeders, options.autoFetch]);
+        const fetchSeds = async () => {
+            // Obtenemos el ID. Si selectedFeeder es solo el ID, úsalo directo.
+            // Si es un objeto, busca la propiedad.
+            const idFeeder = selectedFeeder.alimInterno || selectedFeeder.value || selectedFeeder;
 
-  // 3. FUNCIONES AUXILIARES (Usando Axios)
+            // 🛡️ VALIDACIÓN CRÍTICA:
+            // Si el ID es undefined o null, DETENEMOS TODO para evitar el Error 400
+            if (!idFeeder) {
+                console.warn("⚠️ Intentando cargar SEDs con ID inválido:", selectedFeeder);
+                return;
+            }
 
-  const fetchSedsByFeeder = useCallback(async (idFeeder) => {
-    if (!idFeeder) return [];
-    setLoading(true);
-    try {
-      // Pasamos parámetros limpios usando 'params'
-      const response = await api.get('Feeder/GetSedsByFeeder', {
-        params: { x_feeder: idFeeder }
-      });
-      
-      setSeds(response.data);
-      return response.data;
-    } catch (err) {
-      console.error(err);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+            setLoading(true);
+            try {
+                // Ahora la petición solo sale si tenemos un ID real
+                console.log(`📡 Buscando SEDs para Feeder ID: ${idFeeder}`);
+                const response = await api.get(`/Feeder/GetSedsByFeeder?x_feeder=${idFeeder}`);
+                
+                const data = response.data || [];
+                const listaReal = (data.result) ? data.result : data;
 
-  const drawMap = useCallback(async (idFeeder) => {
-    try {
-      // POST con Axios
-      // Nota: Tu backend parece recibir el ID por query param incluso en POST
-      const response = await api.post(`Feeder/drawMap?idFeeder=${idFeeder}`);
-      return response.data;
-    } catch (err) {
-      console.error("Error dibujando mapa:", err);
-      throw err;
-    }
-  }, []);
+                if (Array.isArray(listaReal)) {
+                    const sedsProcesadas = listaReal.map(s => ({
+                        ...s,
+                        sedCodigo: s.sedCodigo || s.SedCodigo,
+                        sedEtiqueta: s.sedEtiqueta || s.SedEtiqueta,
+                        label: `${s.sedCodigo || ''} - ${s.sedEtiqueta || ''}`
+                    }));
+                    setSeds(sedsProcesadas);
+                } else {
+                    setSeds([]);
+                }
 
-  // 4. BÚSQUEDA LOCAL (Sigue igual, busca en memoria)
-  const getFeederByIdLocal = useCallback((id) => {
-    return feeders.find(f => 
-      String(f.id || f.AlimInterno) === String(id)
-    );
-  }, [feeders]);
+            } catch (error) {
+                console.error("Error cargando SEDs:", error);
+                setSeds([]);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-  return {
-    feeders,
-    seds,
-    loading,
-    error,
-    reload: fetchFeeders,
-    fetchSedsByFeeder,
-    drawMap,
-    getFeederByIdLocal
-  };
-}
+        fetchSeds();
+
+    }, [selectedFeeder]); 
+
+    return { seds, loading };
+};

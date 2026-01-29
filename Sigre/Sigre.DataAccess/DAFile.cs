@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
 
 namespace Sigre.DataAccess
 {
@@ -290,35 +291,72 @@ namespace Sigre.DataAccess
                 ArchActivo = arch_offline.ArchActivo,
             };
         }
-        public void DADEFI_UpdateCodTablaByDeficiency(int defiInterno)
+        public void DADEFI_UpdateCodTablaByDeficiency(
+            SigreContext ctx,
+            Deficiencia deficiencia
+        )
         {
+            if (deficiencia == null)
+                return;
+
+            var archivos = ctx.Archivos
+                .Where(a =>
+                    a.ArchTabla == "Deficiencias" &&
+                    a.ArchIdElemento == deficiencia.DefiIdElemento &&
+                    a.ArchTipoElemento == deficiencia.DefiTipoElemento &&
+                    a.TipiInterno == deficiencia.TipiInterno &&
+                    a.ArchCodTabla != deficiencia.DefiInterno
+                )
+                .ToList();
+
+            foreach (var archivo in archivos)
+            {
+                archivo.ArchCodTabla = deficiencia.DefiInterno;
+            }
+        }
+        public void DADEFI_UpdateCodTablaBySed(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+                return;
+
+            var dASed = new DASed();
+            var sed = dASed.DASed_GetByCodigo(codigo);
+            if (sed == null)
+                return;
+
             using var ctx = new SigreContext();
+
+            var idPostes = ctx.Postes
+                .Where(p => p.PostSubestacion == sed.SedInterno)
+                .Select(p => p.PostInterno)
+                .ToList();
+
+            var idVanos = ctx.Vanos
+                .Where(v => v.VanoSubestacion == sed.SedInterno)
+                .Select(v => v.VanoInterno)
+                .ToList();
+
+            var deficiencias = ctx.Deficiencias
+                .Where(d =>
+                    (d.DefiTipoElemento == "POST" &&
+                     d.DefiIdElemento != null &&
+                     idPostes.Contains((int)d.DefiIdElemento)) ||
+                    (d.DefiTipoElemento == "VANO" &&
+                     d.DefiIdElemento != null &&
+                     idVanos.Contains((int)d.DefiIdElemento))
+                )
+                .ToList();
+
+            if (!deficiencias.Any())
+                return;
+
             using var tx = ctx.Database.BeginTransaction();
 
             try
             {
-                var deficiencia = ctx.Deficiencias
-                    .SingleOrDefault(d => d.DefiInterno == defiInterno);
-
-                if (deficiencia == null)
-                    throw new Exception($"Deficiencia {defiInterno} no encontrada");
-
-                var archivos = ctx.Archivos.Where(a =>
-                    a.ArchTabla == "Deficiencias"
-                    && a.ArchIdElemento == deficiencia.DefiIdElemento
-                    && a.ArchTipoElemento == deficiencia.DefiTipoElemento
-                    && a.TipiInterno == deficiencia.TipiInterno
-                    && a.ArchCodTabla != deficiencia.DefiInterno
-                ).ToList();
-
-                if (!archivos.Any())
+                foreach (var def in deficiencias)
                 {
-                    tx.Commit();
-                    return;
-                }
-                foreach (var archivo in archivos)
-                {
-                    archivo.ArchCodTabla = deficiencia.DefiInterno;
+                    DADEFI_UpdateCodTablaByDeficiency(ctx, def);
                 }
 
                 ctx.SaveChanges();

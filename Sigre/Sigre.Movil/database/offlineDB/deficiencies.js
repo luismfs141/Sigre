@@ -358,3 +358,40 @@ export const getDeficienciesPendientesReanudables = async () => {
     ORDER BY DefiInterno
   `);
 };
+
+export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
+  const val = Number(inspeccionado) === 1 ? 1 : 0;
+
+  await runQuery(
+    `
+    UPDATE Deficiencias
+    SET DefiInspeccionado = ?
+    WHERE DefiInterno = ?
+    `,
+    [val, defiInterno]
+  );
+
+  return true;
+};
+
+export const setServerIdToDeficiency = async (localId, serverId) => {
+  try {
+    await runQuery(
+      `
+      UPDATE Deficiencias
+      SET DefiServerId = ?,
+          EstadoOffLine = NULL
+      WHERE DefiInterno = ?
+      `,
+      [serverId, localId]
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "❌ Error asignando DefiServerId a la deficiencia:",
+      error
+    );
+    return false;
+  }
+};

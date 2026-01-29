@@ -23,6 +23,8 @@ export const DatosProvider = ({ children }) => {
   const [pins, setPins] = useState([]);      // Postes
   const [gaps, setGaps] = useState([]);      // Vanos
   const [sedsData, setSedsData] = useState([]); // Subestación (Icono)
+  const [deficiencies, setDeficiencies] = useState([]); // 🔥 NUEVO: Deficiencias puras
+  
   const [loadingData, setLoadingData] = useState(false);
 
   // --- Otros ---
@@ -50,8 +52,8 @@ export const DatosProvider = ({ children }) => {
   useEffect(() => {
     if (!selectedFeeder) return;
 
-    // A. OBTENER EL ID CORRECTO (Basado en tus logs: alimInterno)
-    const idParaBuscar = selectedFeeder.alimInterno || selectedFeeder.AlimInterno || selectedFeeder.id;
+    // A. OBTENER EL ID CORRECTO
+    const idParaBuscar = selectedFeeder.alimInterno || selectedFeeder.AlimInterno || selectedFeeder.id || selectedFeeder.value;
 
     if (!idParaBuscar) {
         console.warn("⚠️ [Contexto] ID de alimentador inválido:", selectedFeeder);
@@ -60,33 +62,47 @@ export const DatosProvider = ({ children }) => {
 
     const cargarRedElectrica = async () => {
         setLoadingData(true);
-        console.group("📡 [Contexto] Cargando Red Eléctrica");
-        console.log("🔹 Alimentador:", selectedFeeder.label || selectedFeeder.alimEtiqueta);
-        console.log("🔹 ID:", idParaBuscar);
+        console.group("📡 [Contexto] Cargando Red Eléctrica Completa");
+        console.log("🔹 Alimentador ID:", idParaBuscar);
 
         try {
             const params = { idFeeder: idParaBuscar };
 
-            // B. PETICIONES PARALELAS A TU API
-            const [resPosts, resGaps, resSeds] = await Promise.all([
+            // B. PETICIONES PARALELAS (Ahora incluimos Deficiencias)
+            const [resPosts, resGaps, resSeds, resDefs] = await Promise.all([
                 api.get('/Post/GetStructByFeeder', { params }),
                 api.get('/Gap/GetByFeeder', { params }),
-                api.get('/Sed/GetStructByFeeder', { params })
+                api.get('/Sed/GetStructByFeeder', { params }),
+                api.get('/Deficiency/GetByFeeder', { params }) // 🔥 NUEVA LLAMADA
             ]);
 
-            // C. MAPEO DE DATOS PARA LEAFLET
+            // C. PROCESAR DEFICIENCIAS PRIMERO (Para cruzar datos)
+            const rawDefs = resDefs.data || [];
+            // Creamos un Set de IDs de elementos que tienen deficiencia para búsqueda rápida O(1)
+            const elementosConDeficiencia = new Set(rawDefs.map(d => d.DefiIdElemento));
+            
+            setDeficiencies(rawDefs);
 
-            // 1. Postes (Pins)
+            // D. MAPEO DE DATOS PARA LEAFLET
+
+            // 1. Postes (Pins) - Cruzamos con deficiencias
             const rawPosts = resPosts.data || [];
-            const cleanPins = rawPosts.map(p => ({
-                id: p.IdPoste || p.id,
-                elementCode: p.PostCodigo || p.codigo, 
-                // Convertimos Lat/Lng a Number y a nombres estándar
-                latitude: Number(p.Latitud || p.latitude),
-                longitude: Number(p.Longitud || p.longitude),
-                status: p.Estado || 'pending', 
-                elementType: 'Poste'
-            }));
+            const cleanPins = rawPosts.map(p => {
+                const idPoste = p.IdPoste || p.id;
+                // Si el ID del poste está en la lista de deficiencias, marcamos status
+                const tieneDeficiencia = elementosConDeficiencia.has(idPoste);
+
+                return {
+                    id: idPoste,
+                    elementCode: p.PostCodigo || p.codigo, 
+                    latitude: Number(p.Latitud || p.latitude),
+                    longitude: Number(p.Longitud || p.longitude),
+                    // 🔥 Lógica de Estado: Si tiene deficiencia, gana prioridad
+                    status: tieneDeficiencia ? 'deficient' : (p.Estado || 'pending'), 
+                    elementType: 'Poste',
+                    hasDeficiency: tieneDeficiencia // Flag extra útil
+                };
+            });
 
             // 2. Vanos (Gaps)
             const rawGaps = resGaps.data || [];
@@ -96,7 +112,8 @@ export const DatosProvider = ({ children }) => {
                 lon1: Number(g.VanoLongitudIni),
                 lat2: Number(g.VanoLatitudFin),
                 lon2: Number(g.VanoLongitudFin),
-                color: '#3b82f6'
+                // Podrías aplicar la misma lógica de color rojo si cruzas con deficiencias de vanos
+                color: '#3b82f6' 
             }));
 
             // 3. Seds (Ubicación)
@@ -112,14 +129,14 @@ export const DatosProvider = ({ children }) => {
             setGaps(cleanGaps);
             setSedsData(cleanSeds);
 
-            console.log(`✅ ÉXITO: ${cleanPins.length} Postes, ${cleanGaps.length} Vanos.`);
+            console.log(`✅ ÉXITO: ${cleanPins.length} Postes, ${rawDefs.length} Deficiencias cargadas.`);
 
         } catch (error) {
             console.error("❌ Error API:", error);
-            // Limpiar mapa si falla
             setPins([]);
             setGaps([]);
             setSedsData([]);
+            setDeficiencies([]);
         } finally {
             setLoadingData(false);
             console.groupEnd();
@@ -137,8 +154,8 @@ export const DatosProvider = ({ children }) => {
     if (!criterio) return;
     setLoadingData(true);
     
-    // Limpiamos mapa y desmarcamos feeder
-    setPins([]); setGaps([]); setSedsData([]);
+    // Limpiamos mapa y desmarcamos feeder para modo "búsqueda aislada"
+    setPins([]); setGaps([]); setSedsData([]); setDeficiencies([]);
     _setSelectedFeeder(null); 
 
     try {
@@ -155,7 +172,7 @@ export const DatosProvider = ({ children }) => {
             elementCode: p.PostCodigo,
             latitude: Number(p.Latitud),
             longitude: Number(p.Longitud),
-            status: 'deficient',
+            status: 'deficient', // En búsqueda por deficiencia, siempre es deficiente
             elementType: 'Resultado Búsqueda'
         }));
 
@@ -165,7 +182,7 @@ export const DatosProvider = ({ children }) => {
             lon1: Number(g.VanoLongitudIni),
             lat2: Number(g.VanoLatitudFin),
             lon2: Number(g.VanoLongitudFin),
-            color: '#ef4444'
+            color: '#ef4444' // Rojo
         }));
 
         setPins(cleanPins);
@@ -187,7 +204,7 @@ export const DatosProvider = ({ children }) => {
   // =========================================================
   const setSelectedFeeder = (feeder) => {
     _setSelectedFeeder(feeder);
-    setPins([]); setGaps([]); setSedsData([]);
+    setPins([]); setGaps([]); setSedsData([]); setDeficiencies([]);
     if (feeder) localStorage.setItem(SELECTED_FEEDER_KEY, JSON.stringify(feeder));
     else localStorage.removeItem(SELECTED_FEEDER_KEY);
   };
@@ -205,11 +222,19 @@ export const DatosProvider = ({ children }) => {
         feeders, setFeeders,
         selectedFeeder, setSelectedFeeder,
         selectedSed, setSelectedSed,
+        
+        // Datos Mapa
         pins, setPins,
         gaps, setGaps,
         sedsData, setSedsData,
+        deficiencies, setDeficiencies, // 🔥 Exponemos las deficiencias al resto de la app
+        
         loadingData, setLoadingData,
+        
+        // Acciones
         buscarPorDeficiencia,
+        
+        // Selecciones
         selectedTypification, setSelectedTypification,
         selectedDeficiency, setSelectedDeficiency,
       }}
