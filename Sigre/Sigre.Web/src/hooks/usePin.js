@@ -1,73 +1,48 @@
-import { useState, useCallback } from "react";
-import api from "../api/apiConfig";
+import { useState, useCallback } from 'react';
+import api from '../api/apiConfig';
 
-export const usePin = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+export const usePinsBySed = () => {
+    const [pins, setPins] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-  // ------------------- PINES (POSTES) POR ALIMENTADOR -------------------
-  const fetchPinsByFeeder = useCallback(async (feederId) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Endpoint según tu Swagger: /Post/GetStructByFeeder?idFeeder=...
-      const response = await api.get('/Post/GetStructByFeeder', { 
-        params: { idFeeder: feederId } 
-      });
+    const fetchPinsBySed = useCallback(async (sedId) => {
+        if (!sedId) return [];
+        setLoading(true);
+        console.group(`📡 Buscando Pines SED: ${sedId}`);
 
-      const data = response.data || [];
+        try {
+            const response = await api.get('/Pin/GetPinsBySubestacion', { params: { idSed: sedId } });
+            const rawData = response.data || [];
 
-      // Mapeo para Leaflet (latitude, longitude)
-      return data.map(p => ({
-        id: p.IdPoste || p.id,
-        elementCode: p.PostCodigo || p.codigo,
-        Latitude: Number(p.Latitud || p.latitude),
-        Longitude: Number(p.Longitud || p.longitude),
-        status: p.Estado || 'pending',
-        elementType: 'Poste',
-        ...p
-      }));
+            console.log("📥 Raw Data:", rawData[0]); // Debug
 
-    } catch (err) {
-      console.error("❌ Error cargando pines por feeder:", err);
-      setError(err.message);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+            const cleanData = rawData.map(p => ({
+                id: p.Id || p.IdPoste || p.PostInterno,
+                elementCode: p.ElementCode || p.PostCodigo,
+                label: p.Label || p.PostEtiqueta,
+                
+                // 🔥 MAPEO ROBUSTO (Cualquier nombre de variable funciona)
+                Latitude: Number(p.Latitude ?? p.Latitud ?? p.latitude ?? p.PostLatitud ?? 0),
+                Longitude: Number(p.Longitude ?? p.Longitud ?? p.longitude ?? p.PostLongitud ?? 0),
+                
+                status: p.status || 'pending',
+                elementType: 'Poste',
+                type: 5
+            }))
+            .filter(p => p.Latitude !== 0 && !isNaN(p.Latitude)); // Filtra invalidos
 
-  // ------------------- PINES POR SED -------------------
-  const fetchPinsBySed = useCallback(async (sedId) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Ajusta endpoint si existe /Post/GetBySed o similar
-      const response = await api.get('/Post/GetStructBySed', { 
-        params: { idSed: sedId } 
-      });
+            console.log(`✅ Pines válidos: ${cleanData.length}`);
+            setPins(cleanData);
+            return cleanData;
 
-      const data = response.data || [];
+        } catch (err) {
+            console.error("❌ Error:", err);
+            return [];
+        } finally {
+            setLoading(false);
+            console.groupEnd();
+        }
+    }, []);
 
-      return data.map(p => ({
-        id: p.IdPoste,
-        Latitude: Number(p.Latitud),
-        Longitude: Number(p.Longitud),
-        ...p
-      }));
-    } catch (err) {
-      console.error("❌ Error cargando pines por SED:", err);
-      setError(err.message);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return {
-    loading,
-    error,
-    fetchPinsByFeeder,
-    fetchPinsBySed
-  };
+    return { pins, loading, fetchPinsBySed };
 };

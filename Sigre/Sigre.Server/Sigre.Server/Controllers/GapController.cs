@@ -3,6 +3,7 @@ using Sigre.DataAccess;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Entities.SyncData;
+using Sigre.Entities.Structs;
 
 namespace Sigre.Server.Controllers
 {
@@ -45,6 +46,23 @@ namespace Sigre.Server.Controllers
                 localId = r.localId,
                 serverId = r.serverId
             }));
+        }
+        [HttpGet("GetGapsBySubestacion")]
+        public IActionResult GetGapsBySubestacion(int idSed)
+        {
+            try
+            {
+                DAGap da = new DAGap();
+
+
+                var result = da.DAGAP_GetGapsBySubestacion(idSed);
+
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                return StatusCode(500, new { message = "Error: " + ex.Message });
+            }
         }
     }
 }

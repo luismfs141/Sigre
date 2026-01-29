@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
 // --- TUS HOOKS ---
-import { useDeficiencyByGis } from '../hooks/useDeficiency';
+import { useDeficiencyByGis } from '../hooks/useDeficiency'; // Asegúrate de la ruta correcta
 import { useFiles } from '../hooks/useFiles';
 import { useTypification } from '../hooks/useTypification';
 
@@ -83,7 +83,6 @@ const latLonToUTM = (lat, lon) => {
 
 /**
  * 1. PROCESAMIENTO DE IMAGEN (WATERMARK)
- * ✅ CAMBIO: Se eliminó la línea de GIS/DEF. Solo quedan 3 líneas.
  */
 const processImageWithWatermark = (file, meta) => {
     return new Promise((resolve) => {
@@ -101,7 +100,6 @@ const processImageWithWatermark = (file, meta) => {
 
                 ctx.drawImage(img, 0, 0);
 
-                // Configuración de Fuente
                 const fontSize = Math.floor(img.height * 0.018);
                 const lineHeight = fontSize * 1.4;
 
@@ -119,7 +117,6 @@ const processImageWithWatermark = (file, meta) => {
 
                 const padding = fontSize;
 
-                // --- 1. PREPARAR DATOS ---
                 console.log(`🚨 [Watermark] Fecha RAW recibida para ${file.name}:`, meta.dateStr);
 
                 let dateFormatted = "SIN FECHA";
@@ -129,8 +126,6 @@ const processImageWithWatermark = (file, meta) => {
                         const day = String(d.getDate()).padStart(2, '0');
                         const month = String(d.getMonth() + 1).padStart(2, '0');
                         const year = d.getFullYear();
-
-                        // ✅ Solo fecha, sin hora
                         dateFormatted = `${day}/${month}/${year}`;
                     } else {
                         console.error(`🚨 [Watermark] Error: La fecha no es válida:`, meta.dateStr);
@@ -142,16 +137,8 @@ const processImageWithWatermark = (file, meta) => {
                 const utmText = `${utm.zone}${utm.letter} ${utm.easting}E ${utm.northing}N`;
                 const gpsText = `Lat: ${meta.lat} | Long: ${meta.long}`;
 
-                // --- 2. DIBUJAR (APILADO ABAJO IZQUIERDA) ---
-                // ✅ Solo 3 líneas ahora. Ajustamos las alturas.
-
-                // Línea 3 (Fondo): GPS Decimal
                 drawText(gpsText, padding, img.height - padding);
-
-                // Línea 2: UTM
                 drawText(`UTM: ${utmText}`, padding, img.height - padding - lineHeight);
-
-                // Línea 1 (Tope): Fecha Completa
                 drawText(` ${dateFormatted}`, padding, img.height - padding - (lineHeight * 2));
 
                 canvas.toBlob((blob) => {
@@ -166,6 +153,7 @@ const processImageWithWatermark = (file, meta) => {
     });
 };
 
+// 🔴🔴 MODIFICACIÓN 1: RESOLUCIÓN AÚN MÁS BAJA 🔴🔴
 const compressImageForLite = (blob) => {
     return new Promise((resolve) => {
         const url = URL.createObjectURL(blob);
@@ -175,11 +163,16 @@ const compressImageForLite = (blob) => {
             URL.revokeObjectURL(url);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const scale = 0.7;
+            
+            // ✅ CAMBIO: Escala de 0.7 a 0.5 (Mitad del tamaño original)
+            const scale = 0.5; 
+            
             canvas.width = img.width * scale;
             canvas.height = img.height * scale;
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(resolve, 'image/jpeg', 0.5);
+            
+            // ✅ CAMBIO: Calidad JPEG a 0.5 para reducir peso drásticamente
+            canvas.toBlob(resolve, 'image/jpeg', 0.5); 
         };
     });
 };
@@ -280,7 +273,6 @@ export default function ImportacionMasivaFotos() {
                                 if (rawDate) {
                                     dbDateStr = rawDate;
                                     dbFound = true;
-                                } else {
                                 }
                             }
                         } else {
@@ -365,6 +357,7 @@ export default function ImportacionMasivaFotos() {
         toast.current.show({ severity: 'success', summary: 'Subida Finalizada', detail: `${successCount} registros guardados.` });
     };
 
+    // 🔴🔴 MODIFICACIÓN 2: CORRECCIÓN DE ZONA HORARIA EN EL ZIP 🔴🔴
     const handleGenerateZip = async (isLite = false) => {
         if (localItems.length === 0) return;
         if (isLite) setZipLiteLoading(true); else setZipLoading(true);
@@ -384,10 +377,17 @@ export default function ImportacionMasivaFotos() {
                 const content = await blobToArrayBuffer(blobToZip);
 
                 const originalDate = item.dbDateStr ? new Date(item.dbDateStr) : new Date();
-                console.log(`🚨 [ZIP] Agregando ${fileName} con fecha:`, originalDate);
+                
+                // ✅ CÁLCULO CLAVE PARA ARREGLAR LA HORA:
+                // Restamos el offset de minutos (ej. 300 min para Perú) para "engañar" al ZIP
+                // y que al sumarle UTC internamente, quede en la hora visual correcta.
+                const offsetMs = originalDate.getTimezoneOffset() * 60000;
+                const visualDate = new Date(originalDate.getTime() - offsetMs);
+
+                console.log(`🚨 [ZIP] Ajuste hora para ${fileName}: Original=${originalDate.toLocaleTimeString()} | VisualZIP=${visualDate.toLocaleTimeString()}`);
 
                 zip.folder(folderPath).file(fileName, content, {
-                    date: originalDate
+                    date: visualDate // Usamos la fecha con el offset restado
                 });
 
             } catch (e) { console.error(e); }
