@@ -6,9 +6,6 @@ import { runQuery } from "./db";
 // const emptyToNull = (v) =>
 //   typeof v === "string" && v.trim() === "" ? null : v;
 
-
-
-
 export const getDeficiencyByIdLocal = async (defiInterno) => {
   try {
     const rows = await runQuery(
@@ -26,6 +23,39 @@ export const getDeficiencyByIdLocal = async (defiInterno) => {
     return null;
   }
 };
+
+// ✅ Actualiza solo el flag DefiInspeccionado (usado en validaciones post-guardar/finalizar)
+export const updateDefiInspeccionadoLocal = async (
+  defiInterno,
+  inspeccionado,
+  usuarioId = null,
+  nowIso = null
+) => {
+  try {
+    const now = nowIso ?? new Date().toISOString();
+
+    await runQuery(
+      `UPDATE Deficiencias
+       SET DefiInspeccionado = ?,
+           DefiUsuarioMod = COALESCE(?, DefiUsuarioMod),
+           DefiFecModificacion = ?,
+           EstadoOffLine = CASE WHEN EstadoOffLine = 2 THEN 2 ELSE 1 END
+       WHERE DefiInterno = ?`,
+      [
+        Number(inspeccionado) ? 1 : 0,
+        usuarioId != null ? String(usuarioId) : null,
+        now,
+        defiInterno,
+      ]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error actualizando DefiInspeccionado:", error);
+    return false;
+  }
+};
+
 
 export const getDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
   try {
@@ -104,7 +134,6 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiEstadoCriticidad",
       "DefiInspeccionado",
       "DefiCol1",
-      "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
       "EstadoOffLine"
@@ -275,6 +304,9 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         d.DefiTipoElemento,
         d.DefiNumSuministro,
 
+        -- ✅ NUEVO (dueño / creador)
+        d.DefiUsuarioInic,
+
         -- ✅ NUEVO: campos que quieres mostrar en la lista
         d.DefiObservacion,
         d.DefiComentario,
@@ -325,42 +357,4 @@ export const getDeficienciesPendientesReanudables = async () => {
     WHERE EstadoOffLine IN (1, 2, 3, 4)
     ORDER BY DefiInterno
   `);
-};
-
-export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
-  const val = Number(inspeccionado) === 1 ? 1 : 0;
-
-  await runQuery(
-    `
-    UPDATE Deficiencias
-    SET DefiInspeccionado = ?
-    WHERE DefiInterno = ?
-    `,
-    [val, defiInterno]
-  );
-
-  return true;
-};
-
-
-export const setServerIdToDeficiency = async (localId, serverId) => {
-  try {
-    await runQuery(
-      `
-      UPDATE Deficiencias
-      SET DefiServerId = ?,
-          EstadoOffLine = NULL
-      WHERE DefiInterno = ?
-      `,
-      [serverId, localId]
-    );
-
-    return true;
-  } catch (error) {
-    console.error(
-      "❌ Error asignando DefiServerId a la deficiencia:",
-      error
-    );
-    return false;
-  }
 };

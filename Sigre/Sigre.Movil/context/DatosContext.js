@@ -3,8 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   closeDatabase,
   isDatabaseAvailable,
-  openDatabase,
-  runQuery
+  openDatabase
 } from "../database/offlineDB/db";
 import { AuthContext } from "./AuthContext";
 
@@ -13,8 +12,6 @@ const DatosContext = createContext();
 // 🔴 CLAVE PARA GUARDAR EL ALIMENTADOR EN STORAGE
 const SELECTED_FEEDER_KEY = "SIGRE_SELECTED_FEEDER";
 
-// 🔐 PERFIL (cache global)
-const PROFILE_CACHE_KEY = "SIGRE_PROFILE_CACHE_V1";
 
 export const DatosProvider = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -24,25 +21,27 @@ export const DatosProvider = ({ children }) => {
   const [dbReady, setDbReady] = useState(false);
   const [loadingDB, setLoadingDB] = useState(true);
 
-  // ------------------ PERFIL GLOBAL ---------------------
-  const [profileId, setProfileId] = useState(null); // 1=Admin, 4=Inspector
-  const [profileName, setProfileName] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isInspector, setIsInspector] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(false);
+  // ------------------ PERFIL GLOBAL (desde login del servidor) ------------------
+  const profileId = user?.perfilId ?? null;
+  const profileName = user?.perfilNombre ?? null;
 
-  const resetProfile = async () => {
-    setProfileId(null);
-    setProfileName(null);
-    setIsAdmin(false);
-    setIsInspector(false);
-    setLoadingProfile(false);
-    try {
-      await AsyncStorage.removeItem(PROFILE_CACHE_KEY);
-    } catch {
-      /* noop */
-    }
-  };
+  const role = String(profileName ?? "").trim().toUpperCase();
+
+  // ✅ Control por NOMBRE, no por ID (así escalas rápido cuando agregues perfiles)
+  const isAdmin = role === "ADMINISTRADOR" || role === "ADMIN";
+  const isInspector = role === "INSPECTOR";
+  const isSupervisor = role === "SUPERVISOR";
+
+  // Ya no depende de DB
+  const loadingProfile = false;
+
+  // si algún componente llama refreshProfile, que no rompa
+  const refreshProfile = async () => true;
+
+  // útil para comparar dueño
+  const currentUserId = user?.id ?? null;
+
+
 
   // -------------------------------------------------------
   // Cargar última base al iniciar APP
@@ -67,12 +66,16 @@ export const DatosProvider = ({ children }) => {
   const openLocalDB = async () => {
     setLoadingDB(true);
 
+    // 🔥 importantísimo: obliga el cambio false->true al abrir
+    setDbReady(false);
+
     if (!dbName) {
       console.log("⚠ No hay dbName asignado todavía.");
       setDbReady(false);
       setLoadingDB(false);
       return;
     }
+
 
     const exists = await isDatabaseAvailable(dbName);
     if (!exists) {
@@ -125,17 +128,18 @@ export const DatosProvider = ({ children }) => {
   const setNewDatabase = async (newName) => {
     console.log("🔄 setNewDatabase ejecutado:", newName);
 
-    await closeLocalDatabase(); // cerrar actual
-    await AsyncStorage.setItem("db_name", newName); // guardar nombre
-    setDbName(newName); // disparar openLocalDB automáticamente
+    // 🔥 fuerza "flip" de estado (evita que el perfil se cargue antes de abrir DB)
+    setDbReady(false);
 
-    // (opcional) si cambias de base, puedes limpiar el alimentador guardado:
+    await closeLocalDatabase();               // cerrar actual
+    await AsyncStorage.setItem("db_name", newName);
+    setDbName(newName);                      // disparará openLocalDB()
+
     await AsyncStorage.removeItem(SELECTED_FEEDER_KEY);
     _setSelectedFeeder(null);
 
-    // 🔐 Reset perfil (se recalculará cuando la DB esté lista)
-    await resetProfile();
   };
+
 
   // Cuando cambia dbName → abrir base
   useEffect(() => {
@@ -148,122 +152,8 @@ export const DatosProvider = ({ children }) => {
     loadLastDatabaseName();
   }, []);
 
-  // -------------------------------------------------------
-  // PERFIL: detectar (Admin/Inspector) desde SQLite
-  // -------------------------------------------------------
-  const resolveProfileTableName = async () => {
-    // Última versión: "PerfilesUsuarios" (plural). Compatibilidad: "PerfilesUsuario" (singular)
-    const rows = await runQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('PerfilesUsuarios','PerfilesUsuario')"
-    );
-    const names = new Set((rows || []).map((r) => r.name));
-    if (names.has("PerfilesUsuarios")) return "PerfilesUsuarios";
-    if (names.has("PerfilesUsuario")) return "PerfilesUsuario";
-    return null;
-  };
-
-  const loadProfileFromDB = async () => {
-    if (!dbReady) return;
-    const usuarioId = user?.id;
-    if (!usuarioId) return;
 
 
-
-    setLoadingProfile(true);
-
-    try {
-      // 1) Cache local (por si recargas UI)
-      const cachedRaw = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
-      if (cachedRaw) {
-        const cached = JSON.parse(cachedRaw);
-        if (cached?.dbName === dbName && cached?.usuarioId === usuarioId) {
-          setProfileId(cached.profileId ?? null);
-          setProfileName(cached.profileName ?? null);
-          setIsAdmin(cached.profileId === 1);
-          setIsInspector(cached.profileId === 4);
-          setLoadingProfile(false);
-          return;
-        }
-      }
-
-      // 2) Tabla PerfilesUsuarios / PerfilesUsuario
-      const table = await resolveProfileTableName();
-      if (!table) {
-        console.warn("⚠ No existe tabla PerfilesUsuarios/PerfilesUsuario en esta DB");
-        await resetProfile();
-        return;
-      }
-
-      const perfilRows = await runQuery(
-        `SELECT PfusPerfil
-         FROM "${table}"
-         WHERE PfusUsuario = ?
-         LIMIT 1`,
-        [usuarioId]
-      );
-
-      const pid = perfilRows?.[0]?.PfusPerfil ?? null;
-
-      let pname = null;
-      if (pid != null) {
-        // 3) (Opcional) resolver nombre del perfil desde "Perfiles"
-        try {
-          const perRows = await runQuery(
-            `SELECT PerfNombre FROM "Perfiles" WHERE PerfInterno = ? LIMIT 1`,
-            [pid]
-          );
-          pname = perRows?.[0]?.PerfNombre ?? null;
-        } catch {
-          pname = null;
-        }
-      }
-
-      setProfileId(pid);
-      setProfileName(pname);
-      setIsAdmin(pid === 1);
-      setIsInspector(pid === 4);
-
-
-      await AsyncStorage.setItem(
-        PROFILE_CACHE_KEY,
-        JSON.stringify({
-          dbName,
-          usuarioId,
-          profileId: pid,
-          profileName: pname
-        })
-      );
-
-
-    } catch (err) {
-      console.error("❌ Error cargando perfil desde SQLite:", err);
-      setProfileId(null);
-      setProfileName(null);
-      setIsAdmin(false);
-      setIsInspector(false);
-    } finally {
-      setLoadingProfile(false);
-
-
- //console.log("🏁 [PROFILE] end loadingProfile=false");
-
-
-    }
-  };
-
-  // Cargar perfil cuando DB está lista + usuario logueado
-  useEffect(() => {
-    loadProfileFromDB();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbReady, dbName, user?.id]);
-
-  // Si se hace logout, limpiar perfil cacheado
-  useEffect(() => {
-    if (!user?.id) {
-      resetProfile();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
 
   // -------------------- ESTADOS DE DATOS ------------------------
 
@@ -347,8 +237,13 @@ export const DatosProvider = ({ children }) => {
         profileName,
         isAdmin,
         isInspector,
+        isSupervisor,
         loadingProfile,
-        refreshProfile: loadProfileFromDB,
+        refreshProfile,
+
+        // Usuario actual
+        currentUserId,
+
 
         setSelectedTypification,
         selectedTypification,

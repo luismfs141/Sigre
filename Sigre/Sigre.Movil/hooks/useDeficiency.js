@@ -1,7 +1,6 @@
 
 
 import { useState } from "react";
-import uuid from "react-native-uuid";
 import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import {
@@ -12,17 +11,23 @@ import {
   getDeficienciesPendientes,
   getDeficiencyByIdLocal,
   getDeficiencyByTypificationElement,
+  markDeficiencyAsSynced,
   saveOrUpdateDeficiency,
-  setServerIdToDeficiency,
+  updateDeficiencyIdAfterSync,
   updateDefiInspeccionadoLocal
 } from "../database/offlineDB/deficiencies";
+import {
+  getPinInspeccionadoByIdOriginalLocal,
+  updatePinInspeccionadoByIdOriginalLocal,
+} from "../database/offlineDB/pins";
 import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";
 
 export const useDeficiency = () => {
-  const { checkDatabase } = useDatos();
+  const { checkDatabase, isAdmin, isSupervisor, isInspector, currentUserId } = useDatos();
   const { isOnline } = useConnectivity();
   const client = api();
+
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -44,7 +49,7 @@ export const useDeficiency = () => {
       );
       return null;
     }
-  };
+  }
 
   // ------------------- FETCH -------------------
   const fetchDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
@@ -88,7 +93,6 @@ export const useDeficiency = () => {
       ...deficiency,
 
       // ✅ defaults para las nuevas columnas
-      DefiCol3: deficiency.DefiCol3 ?? generateUUID(),
       DefiAccesibilidad: deficiency.DefiAccesibilidad ?? "",
       DefiTipoCruce: deficiency.DefiTipoCruce ?? "",
 
@@ -100,53 +104,10 @@ export const useDeficiency = () => {
         DefiLatitud: deficiency.DefiLatitud ?? 0,
         DefiLongitud: deficiency.DefiLongitud ?? 0,
         DefiInspeccionado: deficiency.DefiInspeccionado ?? 0,
-        //DefiInspeccionado: 0,
       }),
       DefiUsuarioMod: userId,
       DefiFecModificacion: now
     };
-  };
-
-  // ------------------- SET INSPECCIONADO (LOCAL + SYNC) -------------------
-  // const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
-  //   const dbOk = await checkDatabase();
-  //   if (!dbOk) return false;
-
-  //   try {
-  //     await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
-
-  //     // opcional: si ya estaba pendiente por tu lógica normal,
-  //     // esto intentará sincronizar sin tocar EstadoOffLine
-  //     await autoSyncDeficiency(defiInterno);
-
-  //     return true;
-  //   } catch (err) {
-  //     console.error("❌ Error actualizando DefiInspeccionado:", err);
-  //     return false;
-  //   }
-  // };
-
-  const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
-    const dbOk = await checkDatabase();
-    if (!dbOk) return false;
-
-    try {
-      await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
-
-      // ✅ IMPORTANTE: autoSync debe recibir el OBJETO completo, no solo el ID
-      const defActual = await getDeficiencyByIdLocal(defiInterno);
-      if (!defActual) {
-        console.warn("⚠ No se pudo leer la deficiencia tras actualizar inspeccionado:", defiInterno);
-        return true; // local quedó ok
-      }
-
-      await autoSyncDeficiency(defActual, defActual.DefiInterno);
-
-      return true;
-    } catch (err) {
-      console.error("❌ Error actualizando DefiInspeccionado:", err);
-      return false;
-    }
   };
 
 
@@ -164,7 +125,7 @@ export const useDeficiency = () => {
       // Iniciar auto-sync
       if (localId) {
         console.log("🔄 Iniciando auto-sync para ID:", localId);
-        await autoSyncDeficiency(normalized, localId);
+        await autoSyncDeficiency(localId);
       }
 
       return localId;
@@ -176,6 +137,34 @@ export const useDeficiency = () => {
 
   // ------------------- DELETE -------------------
 
+  // const deleteDeficiency = async (defiInterno) => {
+  //   const dbOk = await checkDatabase();
+  //   if (!dbOk) return false;
+
+  //   try {
+  //     const def = await getDeficiencyByIdLocal(defiInterno);
+  //     //console.log(def);
+  //     if (!def) return false;
+
+  //     // 🔴 BORRADO LÓGICO SIEMPRE
+  //     await deleteDeficiencyById(defiInterno);
+
+  //     // 🔴 SOLO SI EXISTE EN SERVIDOR → SYNC
+  //     if (def.DefiServerId) {
+  //       console.log("🌐 Deficiencia existe en servidor, sincronizando eliminación...");
+  //       await autoSyncDeficiency(defiInterno);
+  //     } else {
+  //       console.log("📱 Deficiencia solo local, no se sincroniza");
+  //     }
+
+  //     return true;
+
+  //   } catch (err) {
+  //     console.error("❌ Error eliminando deficiencia:", err);
+  //     return false;
+  //   }
+  // };
+
   const deleteDeficiency = async (defiInterno) => {
     const dbOk = await checkDatabase();
     if (!dbOk) return false;
@@ -184,17 +173,39 @@ export const useDeficiency = () => {
       const def = await getDeficiencyByIdLocal(defiInterno);
       if (!def) return false;
 
-      // 🔴 BORRADO LÓGICO LOCAL SIEMPRE
+      // ✅ PERMISOS
+      const privileged = isAdmin || isSupervisor;
+
+      if (!privileged) {
+        // inspector (u otros) solo si es dueño
+        const owner = def.DefiUsuarioInic;
+        const me = currentUserId;
+
+        const isOwner =
+          owner != null &&
+          me != null &&
+          String(owner).trim() === String(me).trim();
+
+        if (!isOwner) {
+          console.log("⛔ No permitido: inspector intentando eliminar deficiencia de otro usuario");
+          return false;
+        }
+      }
+
+      // 🔴 BORRADO LÓGICO LOCAL
       await deleteDeficiencyById(defiInterno);
 
-      def.DefiActivo = false;
+      // 🌐 VALIDAR EN SERVIDOR (descargados + creados)
+      const existeEnServidor = await checkDeficiencyOnServer(def);
 
-      console.log(def);
-
-      await autoSyncDeficiency(def);
+      if (existeEnServidor) {
+        console.log("🌐 Deficiencia existe en servidor, sincronizando eliminación...");
+        await autoSyncDeficiency(defiInterno);
+      } else {
+        console.log("📱 Deficiencia no existe o no coincide en servidor, no se sincroniza");
+      }
 
       return true;
-
     } catch (err) {
       console.error("❌ Error eliminando deficiencia:", err);
       return false;
@@ -202,166 +213,56 @@ export const useDeficiency = () => {
   };
 
 
+
+
+  // ------------------- NORMALIZE PARA SYNC -------------------
   // const normalizeDeficiencyForSync = (def) => ({
   //   ...def,
 
-  //   // 🔹 STRINGS (OBLIGATORIO)
-  //   DefiUsuarioInic: def.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
-  //   DefiUsuarioMod: def.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
-  //   DefiUsuCre: def.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
-  //   DefiUsuNpc: def.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
-
-  //   DefiObservacion: def.DefiObservacion ?? "",
-  //   DefiComentario: def.DefiComentario ?? "",
-
-  //   // 🔹 BOOLEANS
-  //   DefiActivo: Boolean(def.DefiActivo),
+  //   EstadoOffLine: Number(def.EstadoOffLine),
   //   DefiInspeccionado: Boolean(def.DefiInspeccionado),
-  //   DefiResponsable: Boolean(def.DefiResponsable),
-
-  //   // 🔹 FECHAS
-  //   DefiFecRegistro: normalizeDate(def.DefiFecRegistro),
-  //   DefiFecModificacion: normalizeDate(def.DefiFecModificacion),
-  //   DefiFechaCreacion: normalizeDate(def.DefiFechaCreacion),
-  //   DefiFechaDenuncia: normalizeDate(def.DefiFechaDenuncia),
-  //   DefiFechaInspeccion: normalizeDate(def.DefiFechaInspeccion),
-  //   DefiFechaSubsanacion: normalizeDate(def.DefiFechaSubsanacion),
-
-  //   // 🔹 IDENTIFICADOR ÚNICO
-  //   DefiCol3: def.DefiCol3
+  //   DefiActivo: def.DefiActivo !== null ? Boolean(def.DefiActivo) : true,
+  //   DefiResponsable: def.DefiResponsable !== null ? Boolean(def.DefiResponsable) : false,
+  //   DefiServerId: def.DefiServerId ?? null
   // });
-  const normalizeDeficiencyForSync = (def) => {
-    const nowIso = new Date().toISOString();
 
-    // ⚠ DefiFecRegistro suele ser requerido en servidor (si es DateTime no-nullable)
-    const fecRegistro =
-      normalizeDate(def?.DefiFecRegistro) ||
-      normalizeDate(def?.DefiFechaCreacion) ||
-      nowIso;
+  const normalizeDeficiencyForSync = (def) => ({
+    ...def,
 
-    const fecMod =
-      normalizeDate(def?.DefiFecModificacion) ||
-      nowIso;
+    DefiActivo: Boolean(def.DefiActivo),
+    DefiInspeccionado: Boolean(def.DefiInspeccionado),
+    DefiResponsable: Boolean(def.DefiResponsable),
 
-    return {
-      ...def,
+    // 🔥 Fechas corregidas
+    DefiFecRegistro: normalizeDate(def.DefiFecRegistro),
+    DefiFecModificacion: normalizeDate(def.DefiFecModificacion),
+    DefiFechaCreacion: normalizeDate(def.DefiFechaCreacion),
+    DefiFechaDenuncia: normalizeDate(def.DefiFechaDenuncia),
+    DefiFechaInspeccion: normalizeDate(def.DefiFechaInspeccion),
+    DefiFechaSubsanacion: normalizeDate(def.DefiFechaSubsanacion),
+  });
 
-      // 🔹 STRINGS (OBLIGATORIO)
-      DefiUsuarioInic: def?.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
-      DefiUsuarioMod: def?.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
-      DefiUsuCre: def?.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
-      DefiUsuNpc: def?.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
-
-      DefiObservacion: def?.DefiObservacion ?? "",
-      DefiComentario: def?.DefiComentario ?? "",
-
-      // 🔹 BOOLEANS
-      DefiActivo: Boolean(def?.DefiActivo),
-      DefiInspeccionado: Boolean(def?.DefiInspeccionado),
-      DefiResponsable: Boolean(def?.DefiResponsable),
-
-      // 🔹 FECHAS (ISO)
-      DefiFecRegistro: fecRegistro,
-      DefiFecModificacion: fecMod,
-      DefiFechaCreacion: normalizeDate(def?.DefiFechaCreacion) || nowIso,
-      DefiFechaDenuncia: normalizeDate(def?.DefiFechaDenuncia),
-      DefiFechaInspeccion: normalizeDate(def?.DefiFechaInspeccion),
-      DefiFechaSubsanacion: normalizeDate(def?.DefiFechaSubsanacion),
-
-      // 🔹 IDENTIFICADOR ÚNICO
-      DefiCol3: def?.DefiCol3
-    };
-  };
 
   // ------------------- AUTO SYNC -------------------
 
 
-  // const normalizeDate = (value) => {
-  //   if (!value) return null;
-
-  //   // Si ya tiene formato ISO con T, no tocar
-  //   if (typeof value === "string" && value.includes("T")) return value;
-
-  //   // Convierte "2026-01-15 09:31:31" -> "2026-01-15T09:31:31"
-  //   if (typeof value === "string") {
-  //     return value.replace(" ", "T");
-  //   }
-
-  //   return value;
-  // };
   const normalizeDate = (value) => {
-    // Backend (System.Text.Json) suele exigir ISO 8601 válido
-    if (value === null || value === undefined || value === "") return null;
+    if (!value) return null;
 
-    // Si viene como número (timestamp)
-    if (typeof value === "number") {
-      const ms = value > 1e12 ? value : value * 1000; // heurística ms/seg
-      const d = new Date(ms);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    // Si ya tiene formato ISO con T, no tocar
+    if (typeof value === "string" && value.includes("T")) return value;
+
+    // Convierte "2026-01-15 09:31:31" -> "2026-01-15T09:31:31"
+    if (typeof value === "string") {
+      return value.replace(" ", "T");
     }
 
-    if (typeof value !== "string") return null;
-
-    let s = value.trim();
-    if (!s) return null;
-
-    // "YYYY-MM-DD HH:mm:ss" -> "YYYY-MM-DDTHH:mm:ss"
-    if (s.includes(" ") && !s.includes("T")) s = s.replace(" ", "T");
-
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return null;
-
-    // ✅ enviar ISO completo (más compatible)
-    return d.toISOString();
+    return value;
   };
 
+  const autoSyncDeficiency = async (defiInternoLocal) => {
+    console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", defiInternoLocal);
 
-
-
-  // const autoSyncDeficiency = async (deficiencia, localId) => {
-  //   console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", deficiencia);
-
-  //   if (syncing) return;
-  //   syncing = true;
-
-  //   try {
-  //     const online = await isOnline();
-  //     if (!online) {
-  //       console.log("📴 Sin conexión, no se sincroniza");
-  //       return;
-  //     }
-
-  //     const normalized = normalizeDeficiencyForSync(deficiencia);
-  //     const payload = [normalized];
-  //     console.log(payload);
-
-  //     const response = await client.post(
-  //       "/Deficiency/SyncFromSQLite",
-  //       payload,
-  //       { timeout: 15000 }
-  //     );
-
-  //     console.log("📥 Respuesta del servidor:", response.data);
-
-  //     const map = response.data?.[0];
-  //     if (!map) {
-  //       console.log("⚠ Respuesta vacía del servidor");
-  //       return;
-  //     }
-
-  //     await setServerIdToDeficiency(localId, map.serverId);
-      
-  //   } catch (err) {
-  //     console.error(
-  //       "❌ [autoSyncDeficiency] Falló:",
-  //       err?.response?.data || err.message
-  //     );
-  //   } finally {
-  //     syncing = false;
-  //   }
-  // };
-
-  const autoSyncDeficiency = async (defOrObj, localIdParam) => {
     if (syncing) return;
     syncing = true;
 
@@ -372,32 +273,28 @@ export const useDeficiency = () => {
         return;
       }
 
-      // ✅ Aceptar ID o objeto
-      let def = defOrObj;
-      if (typeof defOrObj === "number" || typeof defOrObj === "string") {
-        const id = Number(defOrObj);
-        def = await getDeficiencyByIdLocal(id);
-      }
+      const pendientes = await getDeficienciesPendientes();
+      console.log("📋 Pendientes:", pendientes);
+
+      const def = pendientes.find(d =>
+        (d.DefiInterno === defiInternoLocal || d.DefiServerId === defiInternoLocal) &&
+        [1, 2, 3].includes(Number(d.EstadoOffLine))
+      );
 
       if (!def) {
-        console.warn("⚠ autoSyncDeficiency: no hay deficiencia para sincronizar");
+        console.log("⚠ No se encontró deficiencia pendiente para:", defiInternoLocal);
         return;
       }
 
-      const localId = localIdParam ?? def.DefiInterno;
+      console.log("🧾 Deficiencia seleccionada para sync:", def);
 
-      // ✅ Asegurar que el payload lleve DefiInterno (útil para el servidor)
-      const defToSend = {
-        ...def,
-        DefiInterno: def.DefiInterno ?? localId
-      };
+      const normalized = normalizeDeficiencyForSync(def);
+      console.log("📦 Payload normalizado:", normalized);
 
-      const normalized = normalizeDeficiencyForSync(defToSend);
-
-      // ✅ IMPORTANTE: el backend espera LISTA COMO ROOT (NO WRAPPER)
       const payload = [normalized];
 
-      console.log("🔄 [autoSyncDeficiency] Enviando (LISTA):", payload);
+      console.log("📤 Enviando payload a /Deficiency/SyncFromSQLite:");
+      console.log(JSON.stringify(payload, null, 2));
 
       const response = await client.post(
         "/Deficiency/SyncFromSQLite",
@@ -407,13 +304,24 @@ export const useDeficiency = () => {
 
       console.log("📥 Respuesta del servidor:", response.data);
 
-      const map = response.data?.[0] ?? null;
-      if (!map?.serverId) {
-        console.log("⚠ Respuesta sin serverId:", response.data);
+      const map = response.data?.[0];
+      const ok = map?.ok !== false; // por compatibilidad: si no viene ok, asumimos true
+      if (!ok) {
+        console.log("⛔ Sync rechazado por servidor:", map?.error || "Sin detalle");
         return;
       }
 
-      await setServerIdToDeficiency(localId, map.serverId);
+
+      if (!map) {
+        console.log("⚠ Respuesta vacía del servidor");
+        return;
+      }
+
+      if (map.localId !== map.serverId) {
+        await updateDeficiencyIdAfterSync(map.localId, map.serverId);
+      } else {
+        await markDeficiencyAsSynced(map.serverId);
+      }
 
     } catch (err) {
       console.error(
@@ -425,128 +333,53 @@ export const useDeficiency = () => {
     }
   };
 
+
+
+
+
+
+
+
+
   // ------------------- SYNC MASIVO -------------------
-  // const syncAllDeficiencies = async () => {
-  //   const online = await isOnline();
-  //   if (!online) return { ok: false };
-
-  //   try {
-  //     const pendientes = await getDeficienciesPendientes();
-  //     if (!pendientes.length) {
-  //       return { ok: true, synced: 0 };
-  //     }
-
-  //     let syncedCount = 0;
-
-  //     for (const localDef of pendientes) {
-  //       // Solo estados sincronizables
-  //       if (![1, 2, 3, 4].includes(Number(localDef.EstadoOffLine))) {
-  //         continue;
-  //       }
-
-  //       const normalized = normalizeDeficiencyForSync(localDef);
-
-  //       try {
-  //         const response = await client.post(
-  //           "/Deficiency/SyncFromSQLite",
-  //           [normalized],
-  //           { timeout: 15000 }
-  //         );
-
-  //         const map = response.data?.[0];
-  //         if (!map?.serverId) {
-  //           console.warn("⚠ ServerId inválido:", map);
-  //           continue;
-  //         }
-
-  //         // ✅ localId VIENE DE SQLITE
-  //         await setServerIdToDeficiency(
-  //           localDef.DefiInterno,
-  //           map.serverId
-  //         );
-
-  //         syncedCount++;
-
-  //       } catch (err) {
-  //         console.error(
-  //           `❌ Error sincronizando DefiInterno ${localDef.DefiInterno}:`,
-  //           err?.response?.data || err.message
-  //         );
-  //         // continúa con el siguiente
-  //       }
-  //     }
-
-  //     return { ok: true, synced: syncedCount };
-
-  //   } catch (err) {
-  //     console.error(
-  //       "❌ Sync masivo deficiencias falló:",
-  //       err?.response?.data || err.message
-  //     );
-  //     return { ok: false };
-  //   }
-  // };
   const syncAllDeficiencies = async () => {
     const online = await isOnline();
     if (!online) return { ok: false };
 
     try {
       const pendientes = await getDeficienciesPendientes();
-      if (!pendientes.length) {
-        return { ok: true, synced: 0 };
-      }
+      if (!pendientes.length) return { ok: true, synced: 0 };
 
-      let syncedCount = 0;
+      const payload = pendientes
+        .filter(d => [1, 2, 3].includes(Number(d.EstadoOffLine)))
+        .map(normalizeDeficiencyForSync);
+      if (!payload.length) return { ok: true, synced: 0 };
 
-      for (const localDef of pendientes) {
-        if (![1, 2, 3, 4].includes(Number(localDef.EstadoOffLine))) continue;
+      const response = await client.post("/Deficiency/SyncFromSQLite", payload, { timeout: 15000 });
 
-        // ✅ asegurar DefiInterno
-        const defToSend = {
-          ...localDef,
-          DefiInterno: localDef.DefiInterno
-        };
+      for (const map of response.data) {
+        const ok = map?.ok !== false;
+        if (!ok) {
+          console.log("⛔ Sync rechazado:", map?.error || "Sin detalle", map);
+          continue;
+        }
 
-        const normalized = normalizeDeficiencyForSync(defToSend);
-
-        try {
-          // ✅ LISTA COMO ROOT
-          const response = await client.post(
-            "/Deficiency/SyncFromSQLite",
-            [normalized],
-            { timeout: 15000 }
-          );
-
-          const map = response.data?.[0] ?? null;
-          if (!map?.serverId) {
-            console.warn("⚠ ServerId inválido:", response.data);
-            continue;
-          }
-
-          await setServerIdToDeficiency(localDef.DefiInterno, map.serverId);
-          syncedCount++;
-
-        } catch (err) {
-          console.error(
-            `❌ Error sincronizando DefiInterno ${localDef.DefiInterno}:`,
-            err?.response?.data || err.message
-          );
+        if (map.localId !== map.serverId) {
+          await updateDeficiencyIdAfterSync(map.localId, map.serverId);
+        } else {
+          await markDeficiencyAsSynced(map.serverId);
         }
       }
 
-      return { ok: true, synced: syncedCount };
+
+      return { ok: true, synced: response.data.length };
 
     } catch (err) {
-      console.error(
-        "❌ Sync masivo deficiencias falló:",
-        err?.response?.data || err.message
-      );
+      console.log("❌ Sync masivo deficiencias falló:", err?.response?.data || err.message);
       return { ok: false };
     }
+
   };
-
-
-
 
   const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
     const dbOk = await checkDatabase();
@@ -631,7 +464,11 @@ export const useDeficiency = () => {
             infoTipificacion: def.Code ?? "0000",
             infoDeficiencia: def.Deficiency ?? "",
             infoDescripcion: (def.Typification ?? def.Component) ?? "",
+
+            // ✅ NUEVO
+            ownerUserId: def.DefiUsuarioInic ?? null,
           },
+
 
           photos: [],
           audio: null
@@ -715,14 +552,46 @@ export const useDeficiency = () => {
   };
 
 
-  const generateUUID = () => {
-    return uuid.v4();
-  };
+
+
+  // ✅ Setea DefiInspeccionado (validaciones post-guardar/finalizar)
+  async function setDefiInspeccionadoLocal(defiInterno, inspeccionado) {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return false;
+
+    return await updateDefiInspeccionadoLocal(defiInterno, inspeccionado);
+  }
+
+  // ✅ Recalcula Pines.Inspeccionado para POSTE según el estado de TODAS sus deficiencias activas
+  async function recalcularPinInspeccionadoParaPoste(postId) {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return { ok: false };
+
+    const previo = await getPinInspeccionadoByIdOriginalLocal(postId);
+
+    const defs = await getDeficienciesByElement(postId, "POST");
+    const todasInspeccionadas =
+      defs?.length > 0 &&
+      defs.every((d) => Number(d?.DefiInspeccionado) === 1);
+
+    const nuevo = todasInspeccionadas ? 1 : 0;
+    const ok = await updatePinInspeccionadoByIdOriginalLocal(postId, nuevo);
+
+    return {
+      ok,
+      previo,
+      nuevo,
+      totalDeficiencias: defs?.length ?? 0,
+    }
+
+  }
 
   return {
     loading,
     error,
     fetchDeficiencyByTypificationElement,
+    setDefiInspeccionadoLocal,
+    recalcularPinInspeccionadoParaPoste,
     saveDeficiency,
     deleteDeficiency,
     syncAllDeficiencies,
@@ -730,8 +599,7 @@ export const useDeficiency = () => {
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
     deficienciesForFlatList,
-    fetchDeficiencyByIdLocal,
-    setDefiInspeccionadoLocal
+    fetchDeficiencyByIdLocal
+  }
 
-  };
 };

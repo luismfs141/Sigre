@@ -153,14 +153,17 @@ namespace Sigre.DataAccess
 
         public Perfile DAUS_GetPerfilByUser(int x_usuario)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
             return (
                 from pu in ctx.PerfilesUsuarios
                 join p in ctx.Perfiles on pu.PfusPerfil equals p.PerfInterno
-                where pu.PfusInterno == x_usuario
+                where pu.PfusUsuario == x_usuario      // ✅ CORRECTO
+                      && pu.PfusActivo == true
+                      && p.PerfActivo == true
                 select p
             ).FirstOrDefault();
         }
+
     }
 }

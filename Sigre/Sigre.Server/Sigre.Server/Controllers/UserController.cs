@@ -31,13 +31,15 @@ namespace Sigre.Server.Controllers
             if (usuario == null)
                 return Unauthorized(new { message = "Credenciales inválidas" });
 
-            // Crear token JWT
+            // ✅ Perfil desde servidor (fuente de verdad)
+            var perfil = _daUser.DAUS_GetPerfilByUser(usuario.UsuaInterno);
+
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, usuario.UsuaCorreo),
-                new Claim("usuarioId", usuario.UsuaInterno.ToString()),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
+        new Claim(JwtRegisteredClaimNames.Sub, usuario.UsuaCorreo),
+        new Claim("usuarioId", usuario.UsuaInterno.ToString()),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+    };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("esta_es_una_clave_super_segura_123456!"));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -54,9 +56,15 @@ namespace Sigre.Server.Controllers
                 token = new JwtSecurityTokenHandler().WriteToken(token),
                 usuario.UsuaInterno,
                 usuario.UsuaNombres,
-                usuario.UsuaApellidos
+                usuario.UsuaApellidos,
+                usuario.UsuaCorreo,
+
+                // ✅ Nuevo
+                perfilId = perfil?.PerfInterno,
+                perfilNombre = perfil?.PerfNombre
             });
         }
+
 
         // 👥 OBTENER LISTA DE USUARIOS
         [HttpGet("users")]
