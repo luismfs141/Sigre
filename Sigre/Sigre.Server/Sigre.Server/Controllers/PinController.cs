@@ -6,26 +6,45 @@ namespace Sigre.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PinController
+    public class PinController:Controller
      {
-        //[HttpGet("GetByFeeder")]
-        //public List<PinStruct> GetByFeeder(int x_feeder_id)
-        //{
-        //    List<PinStruct> pins = new List<PinStruct>();
+        [HttpGet("GetStructByFeeder")]
+        public IActionResult GetStructByFeeder(int idFeeder)
+        {
+            try
+            {
+                DAPin da = new DAPin();
 
-        //    DASed dASed = new DASed();
-        //    pins.AddRange(dASed.DASed_PinByFeeder(x_feeder_id));
+                // Tu DA pide una lista, así que envolvemos el ID único en una lista
+                List<int> listaIds = new List<int> { idFeeder };
 
-        //    DAPost dAPoste = new DAPost();
-        //    pins.AddRange(dAPoste.DAPOST_PinByFeeder(x_feeder_id));
+                var result = da.DAPOST_PinsByFeeders(listaIds);
 
-        //    DASwitch dAEquipment = new DASwitch();
-        //    pins.AddRange(dAEquipment.DAEQUI_PinByFeeder(x_feeder_id));
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                return StatusCode(500, new { message = "Error interno: " + ex.Message });
+            }
+        }
+        [HttpGet("GetPinsBySubestacion")]
+        public IActionResult GetPinsBySubestacion(int idSed)
+        {
+            try
+            {
+                if (idSed <= 0) return BadRequest("ID inválido");
 
-        //    DADeficiency dADeficiency = new DADeficiency();
-        //    pins.AddRange(dADeficiency.DADEFI_GetPinsByFeeder(x_feeder_id));
+                DAPin da = new DAPin();
 
-        //    return pins;
-        // }
+                // Llamada directa, sin crear listas
+                var result = da.DAPOST_PinsBySubestacion(idSed);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
     }
 }
