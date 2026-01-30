@@ -873,5 +873,60 @@ namespace Sigre.DataAccess
                 }
             }
         }
+        // DADeficiency.cs
+
+        public object DADEFI_ObtenerReportePorSED(int sedInterno)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // -----------------------------------------------------------------------------
+                // PARTE A: POSTES
+                // -----------------------------------------------------------------------------
+                var dataPostes = (from d in ctx.Deficiencias
+                                  join p in ctx.Postes on d.DefiCodigoElemento equals p.PostCodigoNodo
+                                  where p.PostSubestacion == sedInterno
+                                        && d.DefiActivo == true
+                                  select new
+                                  {
+                                      Id = p.PostCodigoNodo,
+                                      Sector = p.PostSubestacion, // Esto es un INT (ej: 8143)
+                                      CodDef = d.TipiInterno
+                                  })
+                                  .ToList()
+                                  .GroupBy(x => x.Id)
+                                  .Select(g => new
+                                  {
+                                      id = g.Key,
+                                      // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
+                                      sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
+                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+                                  }).ToList();
+
+                // -----------------------------------------------------------------------------
+                // PARTE B: VANOS
+                // -----------------------------------------------------------------------------
+                var dataVanos = (from d in ctx.Deficiencias
+                                 join v in ctx.Vanos on d.DefiCodigoElemento equals v.VanoCodigo
+                                 where v.VanoSubestacion == sedInterno
+                                       && d.DefiActivo == true
+                                 select new
+                                 {
+                                     Id = v.VanoCodigo,
+                                     Sector = v.VanoSubestacion, // Esto es un INT
+                                     CodDef = d.TipiInterno
+                                 })
+                                 .ToList()
+                                 .GroupBy(x => x.Id)
+                                 .Select(g => new
+                                 {
+                                     id = g.Key,
+                                     // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
+                                     sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
+                                     deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+                                 }).ToList();
+
+                return new { postes = dataPostes, vanos = dataVanos };
+            }
+        }
     }
 }

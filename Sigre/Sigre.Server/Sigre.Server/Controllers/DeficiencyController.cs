@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Sigre.DataAccess;
+using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
@@ -254,6 +255,41 @@ namespace Sigre.Server.Controllers
                     return BadRequest($"Error al guardar: {ex.Message}");
                 }
             }
-        
+        [HttpGet("reporte-sed/{sedInterno}")]
+        public IActionResult ObtenerReportePorSubestacion(int sedInterno)
+        {
+            try
+            {
+                // 1. Validación de seguridad básica
+                if (sedInterno <= 0)
+                {
+                    return BadRequest(new { mensaje = "El ID de la Subestación (sed_interno) no es válido." });
+                }
+
+                // 2. Instancia de la Capa de Datos
+                // (Mantenemos tu patrón de instanciación directa)
+                DADeficiency da = new DADeficiency();
+
+                // 3. Llamada al método corregido
+                // Esto devolverá: { postes: [...], vanos: [...] }
+                var resultado = da.DADEFI_ObtenerReportePorSED(sedInterno);
+
+                // 4. Retorno de la respuesta
+                // ASP.NET Core serializará automáticamente el objeto anónimo a JSON
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                // Log de error (importante para producción)
+                Console.WriteLine($"[ERROR] Controller Reporte SED {sedInterno}: {ex.Message}");
+
+                // Devolvemos 500 pero con un mensaje controlado
+                return StatusCode(500, new
+                {
+                    mensaje = "Ocurrió un error interno al generar el reporte.",
+                    error = ex.Message
+                });
+            }
+        }
     }
 }

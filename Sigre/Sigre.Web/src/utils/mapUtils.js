@@ -45,7 +45,7 @@ export const getIconFromType = (pin) => {
 
     // 3. Generar el DivIcon de Leaflet
     return L.divIcon({
-        className: 'custom-svg-pin', // Clase vacía para quitar estilos feos de Leaflet
+        className: 'custom-svg-pin', 
         html: getSvgMarker(color, scale),
         iconSize: [30 * scale, 42 * scale], // Espacio que ocupa
         iconAnchor: [15 * scale, 42 * scale], // La "punta" del pin está abajo al centro
