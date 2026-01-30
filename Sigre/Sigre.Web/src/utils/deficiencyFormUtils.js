@@ -46,7 +46,7 @@ const COMMON_DEFICIENCY_FIELDS = [
     required: true,
     valueMap: {
       1: "Leve",
-      //2: "Moderado",
+      2: "Moderado",
       3: "Crítico"
     },
     validation: { message: "Seleccione una criticidad" }
@@ -69,9 +69,6 @@ const COMMON_DEFICIENCY_FIELDS = [
     label: "Número de suministro",
     type: "text",
     required: true,
-    keyboardType: "numeric",
-    noSpaces: true,
-    onlyDigits: true, // ✅ así en vivo solo deja números
     validation: {
       custom: (value) => {
         const s = String(value ?? "").trim();
@@ -81,37 +78,18 @@ const COMMON_DEFICIENCY_FIELDS = [
       }
     }
   },
-
-
   {
     key: "DefiObservacion",
     label: "Observación",
     type: "text",
     required: true,
-
-    // ✅ soft limit (NO bloquea escritura)
-    maxChars: 20,
-    showMaxError: true,
-    showCounter: true, // opcional
-
-    // ✅ BLOQUEA GUARDADO si pasa de 20
-    validation: {
-      custom: (value) => {
-        const s = String(value ?? "");
-        if (!s.trim()) return "La observación es obligatoria.";
-        if (s.length > 20) return "La observación no puede exceder 20 caracteres.";
-        return null;
-      }
-    }
+    validation: { message: "La observación es obligatoria" }
   },
-
-
   {
     key: "DefiComentario",
     label: "Comentario",
     type: "textarea",
-    required: false,
-    placeholder: "Comentarios o notas..."
+    required: false
   }
 ];
 
@@ -352,3 +330,4 @@ export const DEFICIENCY_FIELD_MAP = {
 };
 
 
+export default DEFICIENCY_FIELD_MAP

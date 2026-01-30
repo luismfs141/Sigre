@@ -18,6 +18,7 @@ namespace Sigre.DataAccess.Context
         public DbSet<TypificationStruct> Tipificaciones { get; set; }
         public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Perfile> Perfiles { get; set; }
+        public DbSet<PerfilesUsuario> PerfilesUsuarios { get; set; }
         public DbSet<Archivo> Archivos { get; set;}
         public DbSet<ArmadoMaterial> ArmadoMaterials { get; set; }
         public DbSet<ArmadoTipo> ArmadoTipos { get; set; }
@@ -27,6 +28,8 @@ namespace Sigre.DataAccess.Context
         public DbSet<SedMaterial> SedMaterials { get; set; }
         public DbSet<PinStruct> Pines { get; set; }
         public DbSet<Alimentadore> Alimentadores { get; set; }
+        
+
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

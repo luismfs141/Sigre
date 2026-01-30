@@ -26,7 +26,7 @@ function Navbar({ onLogout }) {
       if (usuarioData) {
         setUsuario(usuarioData);
         // Ajusta 'username' según cómo se llame la propiedad en tu BD (ej: 'nombre', 'email', etc.)
-        setNombreUsuario(usuarioData.username || usuarioData.nombre || "Usuario");
+        setNombreUsuario(usuarioData.username || usuarioData.nombre || "Adminsistrador");
       }
       setIsInitialized(true); 
     }

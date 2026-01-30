@@ -4,6 +4,7 @@ import { useDatos } from "../context/DatosContext";
 import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";
 
+
 import {
   deleteFileById,
   getArchivosByBasePathLocal,
@@ -13,6 +14,7 @@ import {
   getNextArchCodTablaLocal,
   markArchivoAsSynced,
   markArchivoDeletedLocal,
+  markArchivoInactiveLocal,
   saveOrUpdateArchivoLocal,
   updateArchivoIdAfterSync
 } from "../database/offlineDB/files";
@@ -205,6 +207,21 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
     return true;
   }, [checkDatabase, autoSyncArchivo]);
 
+  // ✅ Baja ArchActivo a 0 sin mover archivos (caso: “falta foto en carpeta pública”)
+  const markArchivoAsInactive = useCallback(
+    async (archInterno) => {
+      const dbOk = await checkDatabase();
+      if (!dbOk) return false;
+
+      const ok = await markArchivoInactiveLocal(archInterno);
+      if (ok) await autoSyncArchivo(archInterno);
+
+      return ok;
+    },
+    [checkDatabase, autoSyncArchivo]
+  );
+
+
   const deletedFile = useCallback(async (archInterno) => {
     const dbOk = await checkDatabase();
     if (!dbOk) return false;
@@ -246,6 +263,7 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
     markArchivoAsDeleted,
     fetchFilesByElementAndTypi,
     fetchMediosByDeficienciaId,
-    deletedFile
+    deletedFile,
+    markArchivoAsInactive
   };
 }

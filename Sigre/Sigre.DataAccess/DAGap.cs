@@ -185,7 +185,31 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+        // En DataAccess/DAGap.cs
 
+        public object DAGAP_GetGapsBySubestacion(int idSed)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var query = ctx.Vanos
+                    .Where(v => v.VanoSubestacion == idSed && v.VanoTerceros == false)
+                    .Select(v => new
+                    {
+                        Id = v.VanoInterno,
+                        Code = v.VanoCodigo,
+
+                        Lat1 = v.VanoLatitudIni,
+                        Lon1 = v.VanoLongitudIni,
+                        Lat2 = v.VanoLatitudFin,
+                        Lon2 = v.VanoLongitudFin,
+
+                        Type = "Gap",
+                        Inspeccionado = v.VanoInspeccionado
+                    });
+
+                return query.ToList();
+            }
+        }
 
     }
 }

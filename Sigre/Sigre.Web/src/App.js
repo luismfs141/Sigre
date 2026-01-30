@@ -13,7 +13,7 @@ import DashboardHome from './pages/DashboardHome';
 import Mapas from './pages/Mapas';
 import Reportes from './pages/Reportes';
 import AuditFileElectrical from './pages/WebInspectionManager';
-import AuditElectrical from './pages/AuditElectrical';
+import AuditElectrical from './pages/ModificacionMultimedia';
 import ImportData from './pages/ImportData';
 import Subestaciones from './pages/Subestaciones';
 import ImportacionMasivaFotos from './pages/ImportacionMasivaFotos';

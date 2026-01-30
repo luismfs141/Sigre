@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
   const signIn = async (correo, password, proyecto) => {
     try {
       const deviceId = await getDeviceId();
-      const url = `${baseURL}User/login`;  // 👈 corregido (antes decía Auth/login)
+      const url = `${baseURL}User/login`; 
 
       console.log("Intentando login en:", url);
       console.log("Datos enviados:", { correo, password, imei: deviceId });
@@ -54,14 +54,22 @@ export function AuthProvider({ children }) {
       console.log("Respuesta del servidor:", data);
 
       const loggedUser = {
-        id: data.usuaInterno,
-        nombre: data.usuaNombres,
-        apellido: data.usuaApellidos,
-        correo: data.usuaCorreo,
-        proyecto,
-        token: data.token,
-        deviceId,
-      };
+  id: data.usuaInterno,
+  nombre: data.usuaNombres,
+  apellido: data.usuaApellidos,
+
+  // antes te quedaba undefined porque servidor no lo devolvía
+  correo: data.usuaCorreo ?? correo,
+
+  proyecto,
+  token: data.token,
+  deviceId,
+
+  // ✅ NUEVO: perfil viene del servidor
+  perfilId: data.perfilId ?? null,
+  perfilNombre: data.perfilNombre ?? null,
+};
+
 
       console.log("✅ [LOGIN] loggedUser:", loggedUser);
 

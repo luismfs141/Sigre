@@ -51,3 +51,40 @@ export const getPinsBySedLocal = async (sedId) => {
     return [];
   }
 };
+
+
+// ✅ Obtiene el estado de inspección de un pin por IdOriginal
+export const getPinInspeccionadoByIdOriginalLocal = async (idOriginal) => {
+  try {
+    const rows = await runQuery(
+      `SELECT Inspeccionado
+       FROM Pines
+       WHERE IdOriginal = ?
+       LIMIT 1`,
+      [idOriginal]
+    );
+
+    if (!rows?.length) return null;
+    return Number(rows[0].Inspeccionado) ? 1 : 0;
+  } catch (error) {
+    console.error("❌ Error obteniendo pin por IdOriginal:", error);
+    return null;
+  }
+};
+
+// ✅ Actualiza Pines.Inspeccionado por IdOriginal
+export const updatePinInspeccionadoByIdOriginalLocal = async (idOriginal, inspeccionado) => {
+  try {
+    await runQuery(
+      `UPDATE Pines
+       SET Inspeccionado = ?
+       WHERE IdOriginal = ?`,
+      [Number(inspeccionado) ? 1 : 0, idOriginal]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error actualizando Pines.Inspeccionado:", error);
+    return false;
+  }
+};

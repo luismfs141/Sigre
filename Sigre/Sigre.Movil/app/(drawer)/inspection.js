@@ -27,7 +27,8 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Inspection() {
-  const { selectedItem, setSelectedDeficiency } = useDatos();
+  const { selectedItem, setSelectedDeficiency, isAdmin, isSupervisor, isInspector, currentUserId } = useDatos();
+
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useContext(AuthContext);
@@ -58,6 +59,22 @@ export default function Inspection() {
         String(it.data?.typificationCode).trim() !== "0000"
     );
 
+
+  /* =======================
+        HELPERS PARA PERMISO
+       ======================= */
+
+  const canDeleteItem = (it) => {
+    if (isAdmin || isSupervisor) return true;
+
+    if (!isInspector) return false;
+
+    const owner = it?.data?.ownerUserId ?? null;
+    if (owner == null || currentUserId == null) return false;
+
+    return String(owner).trim() === String(currentUserId).trim();
+  };
+
   /* =======================
       CARGA INICIAL
      ======================= */
@@ -73,8 +90,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const loadDefs = async () => {
       try {
@@ -119,8 +136,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
@@ -166,7 +183,7 @@ export default function Inspection() {
 
     setModalDeficiencyVisible(true);
   };
-  
+
   /* =======================
       LIMPIEZA FÍSICA
      ======================= */
@@ -193,7 +210,14 @@ export default function Inspection() {
      ======================= */
   const handleLocalDelete = async (itemToDelete) => {
     if (!itemToDelete) return;
-
+    // ✅ PERMISOS: bloquear ANTES del alert y antes de borrar fotos
+    if (!canDeleteItem(itemToDelete)) {
+      Alert.alert(
+        "No permitido",
+        "Como inspector solo puedes eliminar tus propias deficiencias."
+      );
+      return;
+    }
     Alert.alert(
       "Eliminar tipificación",
       "⚠️ Está a punto de eliminar esta tipificación y todos los archivos asociados. ¿Desea continuar?",
@@ -263,8 +287,8 @@ export default function Inspection() {
     const typeElement = selectedItem.PostInterno
       ? "POST"
       : selectedItem.VanoInterno
-      ? "VANO"
-      : "SED";
+        ? "VANO"
+        : "SED";
 
     const currentDef = {
       detail: def.detail ?? "",
@@ -299,6 +323,7 @@ export default function Inspection() {
     return (
       <SelectedDeficiencyItem
         item={item}
+        canDelete={canDeleteItem(item)}
         onDelete={() => handleLocalDelete(item)}
         onPhotos={() => {
           setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
@@ -307,6 +332,7 @@ export default function Inspection() {
         onDeficiency={openFormModal}
       />
     );
+
   };
 
   return (

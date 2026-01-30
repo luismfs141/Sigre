@@ -1,65 +1,66 @@
-import { useState, useCallback } from "react";
-import api from "../api/apiConfig"; // Tu Axios configurado
+import { useState, useCallback } from 'react';
+import api from '../api/apiConfig';
 
-export const useGap = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+export const useGapsBySed = () => {
+    const [gaps, setGaps] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-  // ------------------- GAPS POR ALIMENTADOR -------------------
-  const fetchGapsByFeeder = useCallback(async (feederId) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Endpoint según tu Swagger: /Gap/GetByFeeder?idFeeder=...
-      const response = await api.get('/Gap/GetByFeeder', { 
-        params: { idFeeder: feederId } 
-      });
-      
-      const data = response.data || [];
-      
-      // Normalizamos datos para que el mapa los entienda fácil
-      return data.map(g => ({
-        id: g.IdVano || g.id,
-        lat1: Number(g.VanoLatitudIni),
-        lon1: Number(g.VanoLongitudIni),
-        lat2: Number(g.VanoLatitudFin),
-        lon2: Number(g.VanoLongitudFin),
-        color: '#3b82f6', // Azul por defecto
-        ...g // Guardamos el resto de propiedades
-      }));
+    const fetchGapsBySed = useCallback(async (sedId) => {
+        if (!sedId) return [];
+        setLoading(true);
 
-    } catch (err) {
-      console.error("❌ Error cargando gaps por feeder:", err);
-      setError(err.message);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        console.group(`📏 [DEBUG GAPS] Buscando para SED: ${sedId}`);
 
-  // ------------------- GAPS POR SED (Opcional) -------------------
-  const fetchGapsBySed = useCallback(async (sedId) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Ajusta si tu API tiene este endpoint específico
-      const response = await api.get('/Gap/GetBySed', { 
-        params: { idSed: sedId } 
-      });
-      return response.data || [];
-    } catch (err) {
-      console.error("❌ Error cargando gaps por SED:", err);
-      setError(err.message);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        try {
+            // Asegúrate de que la URL coincida con tu GapController
+            const response = await api.get('/Gap/GetGapsBySubestacion', { 
+                params: { idSed: sedId } 
+            });
+            
+            const rawData = response.data || [];
+            console.log("📥 RESPUESTA RAW DEL BACKEND:", rawData);
 
-  return {
-    loading,
-    error,
-    fetchGapsByFeeder,
-    fetchGapsBySed
-  };
+            if (rawData.length > 0) {
+                // Chequeo de diagnóstico
+                const sample = rawData[0];
+                console.log("🧐 Analizando primer vano:");
+                console.log(`   - Lat1: ${sample.Lat1} (Esperado: coordenada)`);
+                console.log(`   - Lat2: ${sample.Lat2} (Esperado: coordenada)`);
+                console.log(`   - latitude: ${sample.latitude} (Si esto es 0, ignorar)`);
+            }
+
+            const cleanGaps = rawData.map(g => ({
+                id: g.Id || g.id,
+                code: g.Code || g.code,
+                
+                // 🔥 Leemos las nuevas propiedades que creamos en el C#
+                // Usamos mayúsculas o minúsculas por seguridad
+                lat1: Number(g.Lat1 ?? g.lat1 ?? 0),
+                lon1: Number(g.Lon1 ?? g.lon1 ?? 0),
+                lat2: Number(g.Lat2 ?? g.lat2 ?? 0),
+                lon2: Number(g.Lon2 ?? g.lon2 ?? 0),
+                
+                color: (g.Inspeccionado === true) ? '#10b981' : '#3b82f6',
+            }))
+            // Filtramos solo si tienen coordenadas válidas
+            .filter(g => {
+                const valido = g.lat1 !== 0 && g.lat2 !== 0;
+                if (!valido) console.warn("⚠️ Vano descartado (coords = 0):", g.code);
+                return valido;
+            });
+
+            console.log(`✅ VANOS VÁLIDOS PARA DIBUJAR: ${cleanGaps.length}`);
+            setGaps(cleanGaps);
+            return cleanGaps;
+
+        } catch (err) {
+            console.error("❌ ERROR GAPS:", err);
+            return [];
+        } finally {
+            setLoading(false);
+            console.groupEnd();
+        }
+    }, []);
+
+    return { gaps, loading, fetchGapsBySed };
 };

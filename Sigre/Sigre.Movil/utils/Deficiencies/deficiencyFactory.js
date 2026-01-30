@@ -51,7 +51,7 @@ export const createEmptyDeficiency = ({
     // Estados base (sistema)
     DefiEstado: "N",
     DefiActivo: 1,
-    DefiInspeccionado: 1,
+    DefiInspeccionado: 0,
     EstadoOffLine: 2,
 
     // Criticidad por defecto
