@@ -317,50 +317,9 @@ export const useDeficiency = () => {
 
 
 
-  // const autoSyncDeficiency = async (deficiencia, localId) => {
-  //   console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", deficiencia);
+  const autoSyncDeficiency = async (deficiencia, localId) => {
+    console.log("🔄 [autoSyncDeficiency] Iniciado para ID:", deficiencia);
 
-  //   if (syncing) return;
-  //   syncing = true;
-
-  //   try {
-  //     const online = await isOnline();
-  //     if (!online) {
-  //       console.log("📴 Sin conexión, no se sincroniza");
-  //       return;
-  //     }
-
-  //     const normalized = normalizeDeficiencyForSync(deficiencia);
-  //     const payload = [normalized];
-  //     console.log(payload);
-
-  //     const response = await client.post(
-  //       "/Deficiency/SyncFromSQLite",
-  //       payload,
-  //       { timeout: 15000 }
-  //     );
-
-  //     console.log("📥 Respuesta del servidor:", response.data);
-
-  //     const map = response.data?.[0];
-  //     if (!map) {
-  //       console.log("⚠ Respuesta vacía del servidor");
-  //       return;
-  //     }
-
-  //     await setServerIdToDeficiency(localId, map.serverId);
-      
-  //   } catch (err) {
-  //     console.error(
-  //       "❌ [autoSyncDeficiency] Falló:",
-  //       err?.response?.data || err.message
-  //     );
-  //   } finally {
-  //     syncing = false;
-  //   }
-  // };
-
-  const autoSyncDeficiency = async (defOrObj, localIdParam) => {
     if (syncing) return;
     syncing = true;
 
@@ -371,32 +330,9 @@ export const useDeficiency = () => {
         return;
       }
 
-      // ✅ Aceptar ID o objeto
-      let def = defOrObj;
-      if (typeof defOrObj === "number" || typeof defOrObj === "string") {
-        const id = Number(defOrObj);
-        def = await getDeficiencyByIdLocal(id);
-      }
-
-      if (!def) {
-        console.warn("⚠ autoSyncDeficiency: no hay deficiencia para sincronizar");
-        return;
-      }
-
-      const localId = localIdParam ?? def.DefiInterno;
-
-      // ✅ Asegurar que el payload lleve DefiInterno (útil para el servidor)
-      const defToSend = {
-        ...def,
-        DefiInterno: def.DefiInterno ?? localId
-      };
-
-      const normalized = normalizeDeficiencyForSync(defToSend);
-
-      // ✅ IMPORTANTE: el backend espera LISTA COMO ROOT (NO WRAPPER)
+      const normalized = normalizeDeficiencyForSync(deficiencia);
       const payload = [normalized];
-
-      console.log("🔄 [autoSyncDeficiency] Enviando (LISTA):", payload);
+      console.log(payload);
 
       const response = await client.post(
         "/Deficiency/SyncFromSQLite",
@@ -406,14 +342,14 @@ export const useDeficiency = () => {
 
       console.log("📥 Respuesta del servidor:", response.data);
 
-      const map = response.data?.[0] ?? null;
-      if (!map?.serverId) {
-        console.log("⚠ Respuesta sin serverId:", response.data);
+      const map = response.data?.[0];
+      if (!map) {
+        console.log("⚠ Respuesta vacía del servidor");
         return;
       }
 
       await setServerIdToDeficiency(localId, map.serverId);
-
+      
     } catch (err) {
       console.error(
         "❌ [autoSyncDeficiency] Falló:",
@@ -423,6 +359,70 @@ export const useDeficiency = () => {
       syncing = false;
     }
   };
+
+  // const autoSyncDeficiency = async (defOrObj, localIdParam) => {
+  //   if (syncing) return;
+  //   syncing = true;
+
+  //   try {
+  //     const online = await isOnline();
+  //     if (!online) {
+  //       console.log("📴 Sin conexión, no se sincroniza");
+  //       return;
+  //     }
+
+  //     // ✅ Aceptar ID o objeto
+  //     let def = defOrObj;
+  //     if (typeof defOrObj === "number" || typeof defOrObj === "string") {
+  //       const id = Number(defOrObj);
+  //       def = await getDeficiencyByIdLocal(id);
+  //     }
+
+  //     if (!def) {
+  //       console.warn("⚠ autoSyncDeficiency: no hay deficiencia para sincronizar");
+  //       return;
+  //     }
+
+  //     const localId = localIdParam ?? def.DefiInterno;
+
+  //     // ✅ Asegurar que el payload lleve DefiInterno (útil para el servidor)
+  //     const defToSend = {
+  //       ...def,
+  //       DefiInterno: def.DefiInterno ?? localId
+  //     };
+
+  //     const normalized = normalizeDeficiencyForSync(defToSend);
+
+  //     // ✅ IMPORTANTE: el backend espera LISTA COMO ROOT (NO WRAPPER)
+  //     const payload = [normalized];
+
+  //     console.log("🔄 [autoSyncDeficiency] Enviando (LISTA):", payload);
+
+  //     const response = await client.post(
+  //       "/Deficiency/SyncFromSQLite",
+  //       payload,
+  //       { timeout: 15000 }
+  //     );
+
+  //     console.log("📥 Respuesta del servidor:", response.data);
+
+  //     const map = response.data?.[0] ?? null;
+  //     if (!map?.serverId) {
+  //       console.log("⚠ Respuesta sin serverId:", response.data);
+  //       return;
+  //     }
+
+  //     await setServerIdToDeficiency(localId, map.serverId);
+
+  //   } catch (err) {
+  //     console.error(
+  //       "❌ [autoSyncDeficiency] Falló:",
+  //       err?.response?.data || err.message
+  //     );
+  //   } finally {
+  //     syncing = false;
+  //   }
+  // };
 
   // ------------------- SYNC MASIVO -------------------
   // const syncAllDeficiencies = async () => {

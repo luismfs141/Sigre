@@ -741,32 +741,51 @@ namespace Sigre.DataAccess
                 DefiNroOrden = def_offline.DefiNroOrden
             };
         }
-        //public int DADEFI_ExistDeficiency(string codElemento, string tipoElemento, int tipiInterno)
-        //{
-        //    SigreContext ctx = new SigreContext();
-
-        //    Deficiencia deficiencia = ctx.Deficiencias.SingleOrDefault(d => d.DefiCodigoElemento == codElemento && d.DefiTipoElemento == tipoElemento && d.TipiInterno == tipiInterno);
-
-        //    if (deficiencia is not null)
-        //    {
-        //        return deficiencia.DefiInterno;
-        //    }
-        //    else
-        //    {
-        //        return 0;
-        //    }
-        //}
-        public Deficiencia DADEFI_ExistDeficiency(string codigoUnico)
+        public int DADEFI_ExistDeficiency(Deficiencia def)
         {
-            if (string.IsNullOrWhiteSpace(codigoUnico))
-                return null;
-
             using var ctx = new SigreContext();
 
-            return ctx.Deficiencias
-                      .AsNoTracking()
-                      .FirstOrDefault(d => d.DefiCol3 == codigoUnico);
+            IQueryable<Deficiencia> query = ctx.Deficiencias
+                .Where(d => d.DefiActivo == true);
+
+            if (def.TipiInterno != 60)
+            {
+                // 🔹 Validación normal
+                query = query.Where(d =>
+                    d.DefiCodigoElemento == def.DefiCodigoElemento &&
+                    d.TipiInterno == def.TipiInterno
+                );
+            }
+            else
+            {
+                // 🔹 Tipificación 60 → comparación completa
+                query = query.Where(d =>
+                    d.TipiInterno == 60 &&
+                    d.DefiCodigoElemento == def.DefiCodigoElemento &&
+                    d.DefiNumSuministro == def.DefiNumSuministro &&
+                    d.DefiTipoElemento == def.DefiTipoElemento &&
+                    d.DefiLatitud == def.DefiLatitud &&
+                    d.DefiLongitud == def.DefiLongitud &&
+                    d.DefiDistHorizontal == def.DefiDistHorizontal &&
+                    d.DefiDistVertical == def.DefiDistVertical &&
+                    d.DefiDistTransversal == def.DefiDistTransversal &&
+                    d.DefiObservacion == def.DefiObservacion
+                );
+            }
+
+            return query
+                .OrderByDescending(d => d.DefiInterno)
+                .Select(d => d.DefiInterno)
+                .FirstOrDefault();
         }
 
+        public int DADEFI_GetLastInsertedId()
+        {
+            using var ctx = new SigreContext();
+            return ctx.Deficiencias
+                      .OrderByDescending(d => d.DefiInterno)
+                      .Select(d => d.DefiInterno)
+                      .First();
+        }
     }
 }
