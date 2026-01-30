@@ -86,4 +86,13 @@ export const userStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
+  userProfile: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: "#666",
+    marginBottom: 4,
+  },
+
 });

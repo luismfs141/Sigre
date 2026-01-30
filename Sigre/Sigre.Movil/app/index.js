@@ -56,10 +56,12 @@ export default function Index() {
       return;
     }
 
-    const ok = await signIn(username, password, selectedProject);
-    if (!ok) {
-      alert("Usuario o contraseña incorrectos");
+    const res = await signIn(username, password, selectedProject);
+    if (!res?.ok) {
+      alert(res?.reason || "Usuario o contraseña incorrectos");
     }
+
+
   };
 
   // Mientras AsyncStorage carga sesión guardada

@@ -48,33 +48,64 @@ export function useUser() {
       setSaving(true);
       setError(null);
 
+      // ✅ Construir request como lo espera el backend (UsuarioRequest)
+      const perfilIdNum = Number(usuario?.perfilId);
+
+      const requestBody = {
+        UsuaInterno: Number(usuario?.usuaInterno ?? 0),
+        UsuaNombres: String(usuario?.usuaNombres ?? ""),
+        UsuaApellidos: String(usuario?.usuaApellidos ?? ""),
+        UsuaCorreo: String(usuario?.usuaCorreo ?? ""),
+        UsuaActivo: usuario?.usuaActivo !== false,
+
+        // 👇 Backend espera List<int>
+        Perfiles: Number.isFinite(perfilIdNum) && perfilIdNum > 0 ? [perfilIdNum] : [],
+      };
+
+      // ✅ Solo enviar password si el usuario escribió algo
+      const pwd = String(usuario?.usuaPassword ?? "").trim();
+      if (pwd.length > 0) {
+        requestBody.UsuaPassword = pwd;
+      }
+
       const response = await fetch(`${API_BASE}User/save`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
-        body: JSON.stringify(usuario),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error al guardar usuario");
+        let msg = "Error al guardar usuario";
+        try {
+          const errorData = await response.json();
+          msg = errorData?.message || msg;
+        } catch { }
+
+        setError(msg);
+        return { ok: false, status: response.status, message: msg };
       }
 
       const data = await response.json();
-
-      // ✅ Recargar lista de usuarios
       await fetchData();
+      return { ok: true, data };
 
-      return data;
+
+
     } catch (err) {
-      console.error("Error al guardar usuario:", err);
-      setError(err.message);
-      throw err;
-    } finally {
+      // ✅ Esto es un error controlado (mensaje para el usuario), no queremos LogBox en dev
+      if (__DEV__) console.log("saveUser (controlado):", err?.message);
+
+      setError(err?.message || "Error al guardar usuario");
+      throw err; // ✅ lo sigues lanzando para que tu UI muestre el Alert
+    }
+    finally {
       setSaving(false);
     }
   }, [API_BASE, fetchData]);
+
 
 
   const saveUserFeeders = useCallback(async (userId, feeders) => {
@@ -110,6 +141,49 @@ export function useUser() {
     }
   }, [API_BASE]);
 
+
+  const setUserActive = useCallback(async (usuarioId, activo) => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}User/setactive`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ usuarioId, activo }),
+      });
+
+      if (!response.ok) {
+        let msg = "Error al actualizar estado";
+        try {
+          const err = await response.json();
+          msg = err?.message || msg;
+        } catch { }
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+
+      // ✅ refresca lista (y si el server ya ordena activos primero, lo verás tal cual)
+      await fetchData();
+
+      return data;
+    } catch (err) {
+      console.error("useUser.setUserActive:", err);
+      setError(err?.message || "Error al actualizar estado");
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }, [API_BASE, fetchData]);
+
+
+
+
+
   return {
     usuarios,
     perfiles,
@@ -119,5 +193,6 @@ export function useUser() {
     reload: fetchData,
     saveUser,
     saveUserFeeders,
+    setUserActive,
   };
 }

@@ -6,6 +6,8 @@ using Sigre.Entities.Entities.Structs;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Http;
+
 
 namespace Sigre.Server.Controllers
 {
@@ -15,6 +17,21 @@ namespace Sigre.Server.Controllers
     {
         private readonly DAUser _daUser;
         private readonly IConfiguration _config;
+        private static bool IsDuplicateCorreo(string msg)
+        {
+            if (string.IsNullOrWhiteSpace(msg)) return false;
+
+            // Detecta los textos típicos de SQL Server cuando rompe UNIQUE index
+            // y además valida que sea el índice de correo.
+            var hasIndex = msg.Contains("UX_Usuarios_Correo", StringComparison.OrdinalIgnoreCase);
+            var looksDuplicate =
+                msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("Violation", StringComparison.OrdinalIgnoreCase);
+
+            return hasIndex && looksDuplicate;
+        }
+
 
         public UserController(DAUser daUser, IConfiguration config)
         {
@@ -26,10 +43,23 @@ namespace Sigre.Server.Controllers
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginRequest request)
         {
+            if (request == null)
+                return BadRequest(new { message = "Body vacío" });
+
+            request.Correo = request.Correo?.Trim();
+            request.Password = request.Password?.Trim();
+
+            if (string.IsNullOrWhiteSpace(request.Correo) || string.IsNullOrWhiteSpace(request.Password))
+                return BadRequest(new { message = "Correo y password son obligatorios" });
+
             var usuario = _daUser.DAUS_LoginUser(request.Correo, request.Password, request.Imei);
 
             if (usuario == null)
                 return Unauthorized(new { message = "Credenciales inválidas" });
+
+            // ✅ BLOQUEO: desactivado NO puede iniciar sesión
+            if (usuario.UsuaActivo == false)
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Usuario desactivado" });
 
             // ✅ Perfil desde servidor (fuente de verdad)
             var perfil = _daUser.DAUS_GetPerfilByUser(usuario.UsuaInterno);
@@ -59,20 +89,20 @@ namespace Sigre.Server.Controllers
                 usuario.UsuaApellidos,
                 usuario.UsuaCorreo,
 
-                // ✅ Nuevo
                 perfilId = perfil?.PerfInterno,
                 perfilNombre = perfil?.PerfNombre
             });
         }
 
 
+
         // 👥 OBTENER LISTA DE USUARIOS
         [HttpGet("users")]
-        public ActionResult<List<Usuario>> GetUsuarios()
+        public ActionResult<List<UsuarioListDto>> GetUsuarios()
         {
             try
             {
-                var usuarios = _daUser.DAUS_GetUsers();
+                var usuarios = _daUser.DAUS_GetUsersWithProfile();
                 if (usuarios == null || !usuarios.Any())
                     return NotFound(new { message = "No hay usuarios registrados." });
 
@@ -83,6 +113,27 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { message = "Error al obtener los usuarios.", error = ex.Message });
             }
         }
+
+        [HttpPost("setactive")]
+        public IActionResult SetActive([FromBody] UserActiveRequest request)
+        {
+            try
+            {
+                _daUser.DAUS_SetUserActive(request.UsuarioId, request.Activo);
+                return Ok(new { message = "Estado de usuario actualizado correctamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        public class UserActiveRequest
+        {
+            public int UsuarioId { get; set; }
+            public bool Activo { get; set; }
+        }
+
 
         // 🧩 OBTENER LISTA DE PERFILES
         [HttpGet("profiles")]
@@ -107,6 +158,16 @@ namespace Sigre.Server.Controllers
         {
             try
             {
+                var perfiles =
+                    (request.Perfiles != null && request.Perfiles.Count > 0)
+                        ? request.Perfiles
+                        : (request.PerfilId.HasValue && request.PerfilId.Value > 0
+                            ? new List<int> { request.PerfilId.Value }
+                            : new List<int>());
+
+                if (perfiles.Count == 0)
+                    return BadRequest(new { message = "Seleccione un perfil." });
+
                 var usuario = new Usuario
                 {
                     UsuaInterno = request.UsuaInterno,
@@ -117,15 +178,37 @@ namespace Sigre.Server.Controllers
                     UsuaActivo = request.UsuaActivo
                 };
 
-                _daUser.DAUS_SaveUser(usuario, request.Perfiles);
+                _daUser.DAUS_SaveUser(usuario, perfiles);
 
                 return Ok(new { message = "Usuario guardado correctamente" });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // ✅ Mensaje real del motor (SQL) pero solo para detectar el caso
+                var baseMsg = ex.GetBaseException()?.Message ?? ex.Message;
+
+                // ✅ DUPLICADO DE CORREO (indice único UX_Usuarios_Correo)
+                if (IsDuplicateCorreo(baseMsg))
+                {
+                    // 409 = conflicto (dato ya existe)
+                    return Conflict(new
+                    {
+                        message = "El correo ya está registrado. Use otro correo para continuar.",
+                        code = "DUPLICATE_EMAIL"
+                    });
+                }
+
+                // ✅ Cualquier otro error: mensaje profesional (sin filtrar info interna)
+                return BadRequest(new
+                {
+                    message = "No se pudo guardar el usuario. Verifique los datos e intente nuevamente.",
+                    code = "SAVE_USER_ERROR"
+                });
             }
+
         }
+
+
 
         [HttpPost("savefeeders")]
         public IActionResult SaveUserFeeders([FromBody] UserFeedersRequest request)
@@ -156,4 +239,6 @@ namespace Sigre.Server.Controllers
         public int UsuarioId { get; set; }
         public List<int> Alimentadores { get; set; } = new();
     }
+
+
 }

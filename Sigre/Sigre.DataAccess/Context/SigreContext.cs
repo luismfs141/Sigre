@@ -601,8 +601,10 @@ public partial class SigreContext : DbContext
             entity.HasKey(e => e.PfusInterno);
 
             entity.Property(e => e.PfusInterno)
-                .ValueGeneratedNever()
+                .ValueGeneratedOnAdd()
+                .UseIdentityColumn()
                 .HasColumnName("PFUS_Interno");
+
             entity.Property(e => e.PfusActivo).HasColumnName("PFUS_Activo");
             entity.Property(e => e.PfusPerfil).HasColumnName("PFUS_Perfil");
             entity.Property(e => e.PfusUsuario).HasColumnName("PFUS_Usuario");
