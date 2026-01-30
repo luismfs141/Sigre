@@ -46,17 +46,19 @@ namespace Sigre.DataAccess
 
             try
             {
-                // 🔐 Hash de contraseña solo si se especifica
-                if (!string.IsNullOrEmpty(us.UsuaPassword))
-                {
-                    us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword);
-                }
+                bool hasNewPassword = !string.IsNullOrWhiteSpace(us.UsuaPassword);
 
-                // 🧩 Si es nuevo usuario
+                // 🧩 Si es nuevo usuario => contraseña obligatoria
                 if (us.UsuaInterno == 0)
                 {
+                    if (!hasNewPassword)
+                        throw new Exception("La contraseña es obligatoria para un usuario nuevo.");
+
+                    // 🔐 Hash password (nuevo)
+                    us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword.Trim());
+
                     ctx.Usuarios.Add(us);
-                    ctx.SaveChanges();
+                    ctx.SaveChanges(); // aquí ya se genera UsuaInterno
                 }
                 else
                 {
@@ -65,25 +67,47 @@ namespace Sigre.DataAccess
                     if (usOriginal == null)
                         throw new Exception("Usuario no encontrado.");
 
+                    // ✅ Si NO viene password => mantener el actual (NO tocar)
+                    if (!hasNewPassword)
+                    {
+                        us.UsuaPassword = usOriginal.UsuaPassword; // preserva
+                    }
+                    else
+                    {
+                        // ✅ Si viene password => hashear y actualizar
+                        us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword.Trim());
+                    }
+
+                    // Actualiza campos
                     ctx.Entry(usOriginal).CurrentValues.SetValues(us);
+
+                    // ✅ EXTRA SEGURIDAD: si no hay password nuevo, EF no debe marcarlo modificado
+                    if (!hasNewPassword)
+                    {
+                        ctx.Entry(usOriginal).Property(x => x.UsuaPassword).IsModified = false;
+                    }
+
                     ctx.SaveChanges();
                 }
 
                 int usuarioId = us.UsuaInterno;
 
                 // 🧾 Eliminar perfiles previos
-                var perfilesPrevios = ctx.PerfilesUsuarios.Where(p => p.PfusUsuario == usuarioId);
+                var perfilesPrevios = ctx.PerfilesUsuarios.Where(p => p.PfusUsuario == usuarioId).ToList();
                 ctx.PerfilesUsuarios.RemoveRange(perfilesPrevios);
 
                 // 🧾 Insertar nuevos perfiles
-                foreach (var idPerfil in perfiles)
+                if (perfiles != null)
                 {
-                    ctx.PerfilesUsuarios.Add(new PerfilesUsuario
+                    foreach (var idPerfil in perfiles)
                     {
-                        PfusUsuario = usuarioId,
-                        PfusPerfil = idPerfil,
-                        PfusActivo = true
-                    });
+                        ctx.PerfilesUsuarios.Add(new PerfilesUsuario
+                        {
+                            PfusUsuario = usuarioId,
+                            PfusPerfil = idPerfil,
+                            PfusActivo = true
+                        });
+                    }
                 }
 
                 ctx.SaveChanges();
@@ -92,9 +116,13 @@ namespace Sigre.DataAccess
             catch (Exception ex)
             {
                 trans.Rollback();
-                throw new Exception("Error al guardar usuario: " + ex.Message);
+
+                // ✅ devuelve mensaje real (inner) para que NO te salga el genérico
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception("Error al guardar usuario: " + msg);
             }
         }
+
 
         public void DAUS_SaveUserFeeders(int usuario, List<int> alimentadores)
         {

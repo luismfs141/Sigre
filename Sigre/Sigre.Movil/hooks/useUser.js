@@ -48,17 +48,42 @@ export function useUser() {
       setSaving(true);
       setError(null);
 
+      // ✅ Construir request como lo espera el backend (UsuarioRequest)
+      const perfilIdNum = Number(usuario?.perfilId);
+
+      const requestBody = {
+        UsuaInterno: Number(usuario?.usuaInterno ?? 0),
+        UsuaNombres: String(usuario?.usuaNombres ?? ""),
+        UsuaApellidos: String(usuario?.usuaApellidos ?? ""),
+        UsuaCorreo: String(usuario?.usuaCorreo ?? ""),
+        UsuaActivo: usuario?.usuaActivo !== false,
+
+        // 👇 Backend espera List<int>
+        Perfiles: Number.isFinite(perfilIdNum) && perfilIdNum > 0 ? [perfilIdNum] : [],
+      };
+
+      // ✅ Solo enviar password si el usuario escribió algo
+      const pwd = String(usuario?.usuaPassword ?? "").trim();
+      if (pwd.length > 0) {
+        requestBody.UsuaPassword = pwd;
+      }
+
       const response = await fetch(`${API_BASE}User/save`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
-        body: JSON.stringify(usuario),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error al guardar usuario");
+        let msg = "Error al guardar usuario";
+        try {
+          const errorData = await response.json();
+          msg = errorData?.message || msg;
+        } catch { }
+        throw new Error(msg);
       }
 
       const data = await response.json();
@@ -75,6 +100,7 @@ export function useUser() {
       setSaving(false);
     }
   }, [API_BASE, fetchData]);
+
 
 
   const saveUserFeeders = useCallback(async (userId, feeders) => {
