@@ -113,8 +113,7 @@ namespace Sigre.DataAccess
                 return DAPOST_PinsByFeeders(x_ids);
         }
 
-        public List<(int localId, int serverId)> DAPOST_SyncFromSQLite(
-    List<PosteSyncDto> postesOffline)
+        public List<(int localId, int serverId)> DAPOST_SyncFromSQLite(List<PosteSyncDto> postesOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int localId, int serverId)>();
@@ -140,7 +139,9 @@ namespace Sigre.DataAccess
                         PostTerceros = dto.PostTerceros,
                         PostInspeccionado = dto.PostInspeccionado,
                         PostEsBt = dto.PostEsBt,
-                        PostEsMt = dto.PostEsMt
+                        PostEsMt = dto.PostEsMt,
+                        PostAltura = dto.PostAltura
+
                     };
 
                     ctx.Postes.Add(nuevo);
@@ -173,6 +174,8 @@ namespace Sigre.DataAccess
                     existente.PostInspeccionado = dto.PostInspeccionado;
                     existente.PostEsBt = dto.PostEsBt;
                     existente.PostEsMt = dto.PostEsMt;
+                    existente.PostAltura = dto.PostAltura;
+
 
                     ctx.SaveChanges();
 

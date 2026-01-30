@@ -1,141 +1,59 @@
-// import { useRef } from "react";
-// import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-// import PosteForm from "./PosteForm";
-// import SedForm from "./SedForm";
-// import VanoForm from "./VanoForm";
-
-// export default function DataGeneralModal({ visible, item, onClose, onSave }) {
-//   if (!item?.data) return null;
-
-//   const data = item.data;
-//   const formRef = useRef(null);
-
-//   const handleSave = async () => {
-//     if (formRef.current?.save) {
-//       try {
-//         const savedData = await formRef.current.save();
-//         onSave?.(savedData);
-//       } catch (err) {
-//         console.warn("⚠ Error guardando datos del formulario:", err);
-//         onSave?.(data); // fallback seguro
-//       }
-//     } else {
-//       onSave?.(data); // fallback
-//     }
-//   };
-
-//   const isPoste = Object.prototype.hasOwnProperty.call(data, "PostInterno");
-//   const isVano  = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
-//   const isSed   = Object.prototype.hasOwnProperty.call(data, "SedInterno");
-
-//   return (
-//     <Modal visible={visible} animationType="slide" transparent>
-//       <View style={styles.overlay}>
-//         <View style={styles.container}>
-//           {/* HEADER */}
-//           <View style={styles.header}>
-//             <Text style={styles.title}>Datos Generales</Text>
-//             <TouchableOpacity onPress={onClose}>
-//               <Text style={styles.close}>✕</Text>
-//             </TouchableOpacity>
-//           </View>
-
-//           <ScrollView style={{ flexGrow: 0 }}>
-//             {isPoste && <PosteForm data={data} visible={visible} ref={formRef} />}
-//             {isVano && <VanoForm data={data} visible={visible} ref={formRef} />}
-//             {isSed && <SedForm data={data} visible={visible} ref={formRef} />}
-//           </ScrollView>
-
-//           {/* BOTÓN GUARDAR */}
-//           <View style={styles.buttons}>
-//             <TouchableOpacity style={styles.btnSaveCentered} onPress={handleSave}>
-//               <Text style={styles.btnText}>Guardar</Text>
-//             </TouchableOpacity>
-//           </View>
-//         </View>
-//       </View>
-//     </Modal>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   overlay: {
-//     flex: 1,
-//     backgroundColor: "#0008",
-//     justifyContent: "center",
-//     padding: 12
-//   },
-//   container: {
-//     backgroundColor: "#fff",
-//     borderRadius: 12,
-//     padding: 12,
-//     maxHeight: "90%"
-//   },
-//   header: {
-//     flexDirection: "row",
-//     justifyContent: "space-between",
-//     alignItems: "center",
-//     marginBottom: 10
-//   },
-//   title: { fontSize: 20, fontWeight: "700" },
-//   close: { fontSize: 22, fontWeight: "700", color: "#555" },
-//   buttons: {
-//     flexDirection: "row",
-//     justifyContent: "center",
-//     marginTop: 12
-//   },
-//   btnSaveCentered: {
-//     backgroundColor: "#27ae60",
-//     padding: 12,
-//     borderRadius: 8,
-//     width: "60%", // ancho ajustable
-//     alignItems: "center"
-//   },
-//   btnText: {
-//     color: "#fff",
-//     fontWeight: "600"
-//   }
-// });
-
 
 
 // Form/GeneralData/DataGeneralModal.jsx
-import { useRef } from "react";
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+
 import PosteForm from "./PosteForm";
 import SedForm from "./SedForm";
 import VanoForm from "./VanoForm";
 
 export default function DataGeneralModal({ visible, item, onClose, onSave }) {
-  if (!visible || !item?.data) return null;
-
-  const data = item.data;
+  // ✅ HOOKS SIEMPRE ARRIBA
   const formRef = useRef(null);
+  const [dirty, setDirty] = useState(false);
+
+  const data = item?.data ?? null;
+
+  // ✅ cada vez que abres o cambias de item → no hay cambios
+  useEffect(() => {
+    if (visible) setDirty(false);
+  }, [visible, data]); // (si quieres más fino: data?.PostInterno / VanoInterno / SedInterno)
+
+  // ✅ RECIÉN AQUÍ puedes cortar render
+  if (!visible || !data) return null;
 
   const handleSave = async () => {
+    if (!dirty) return;
+
     if (formRef.current?.save) {
       try {
         const savedData = await formRef.current.save();
-        onSave?.(savedData);
+        onSave?.(savedData ?? data);
       } catch (err) {
         console.warn("⚠ Error guardando datos del formulario:", err);
-        onSave?.(data); // fallback seguro
+        onSave?.(data);
       }
     } else {
-      onSave?.(data); // fallback
+      onSave?.(data);
     }
-
-    // si quieres que cierre al guardar, descomenta:
-    // onClose?.();
   };
 
   const isPoste = Object.prototype.hasOwnProperty.call(data, "PostInterno");
-  const isVano  = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
-  const isSed   = Object.prototype.hasOwnProperty.call(data, "SedInterno");
+  const isVano = Object.prototype.hasOwnProperty.call(data, "VanoInterno");
+  const isSed = Object.prototype.hasOwnProperty.call(data, "SedInterno");
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/* ✅ MISMO PATRÓN QUE DEFICIENCYMODAL */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -143,28 +61,59 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
       >
         <View style={styles.overlay}>
           <View style={styles.container}>
-            {/* ✅ TODO dentro del ScrollView (incluye botón) */}
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
               {/* HEADER */}
               <View style={styles.header}>
                 <Text style={styles.title}>Datos Generales</Text>
-                <TouchableOpacity onPress={onClose}>
-                  <Text style={styles.close}>✕</Text>
-                </TouchableOpacity>
               </View>
 
               {/* FORM */}
-              {isPoste && <PosteForm data={data} visible={visible} ref={formRef} />}
-              {isVano && <VanoForm data={data} visible={visible} ref={formRef} />}
-              {isSed && <SedForm data={data} visible={visible} ref={formRef} />}
+              {isPoste && (
+                <PosteForm
+                  data={data}
+                  visible={visible}
+                  ref={formRef}
+                  onClose={onClose}
+                  onDirtyChange={setDirty}
+                />
+              )}
 
-              {/* BOTÓN GUARDAR */}
-              <View style={styles.buttons}>
-                <TouchableOpacity style={styles.btnSaveCentered} onPress={handleSave}>
+              {isVano && (
+                <VanoForm
+                  data={data}
+                  visible={visible}
+                  ref={formRef}
+                  onClose={onClose}
+                  onDirtyChange={setDirty}
+                />
+
+              )}
+
+              {isSed && (
+                <SedForm
+                  data={data}
+                  visible={visible}
+                  ref={formRef}
+                  onClose={onClose}
+                  onDirtyChange={setDirty}
+                />
+              )}
+
+              {/* FOOTER BOTONES */}
+              <View style={styles.footerRow}>
+                <TouchableOpacity style={styles.btnClose} onPress={onClose}>
+                  <Text style={styles.btnText}>Cerrar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btnSave, !dirty && styles.btnDisabled]}
+                  onPress={handleSave}
+                  disabled={!dirty}
+                >
                   <Text style={styles.btnText}>Guardar</Text>
                 </TouchableOpacity>
               </View>
@@ -190,28 +139,39 @@ const styles = StyleSheet.create({
     maxHeight: "90%"
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 10
   },
   title: { fontSize: 20, fontWeight: "700" },
-  close: { fontSize: 22, fontWeight: "700", color: "#555" },
 
-  buttons: {
+  footerRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 12
+    justifyContent: "space-between",
+    marginTop: 14,
+    gap: 10
   },
-  btnSaveCentered: {
-    backgroundColor: "#27ae60",
-    padding: 12,
-    borderRadius: 8,
-    width: "60%",
+
+  btnClose: {
+    flex: 1,
+    backgroundColor: "#e74c3c",
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center"
   },
+
+  btnSave: {
+    flex: 1,
+    backgroundColor: "#27ae60",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+
+  btnDisabled: {
+    backgroundColor: "#9e9e9e"
+  },
+
   btnText: {
     color: "#fff",
-    fontWeight: "600"
+    fontWeight: "800"
   }
 });
