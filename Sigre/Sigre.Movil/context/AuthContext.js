@@ -33,63 +33,75 @@ export function AuthProvider({ children }) {
   const signIn = async (correo, password, proyecto) => {
     try {
       const deviceId = await getDeviceId();
-      const url = `${baseURL}User/login`; 
+      const url = `${baseURL}User/login`;
+
+      const email = String(correo ?? "").trim();
+      const pwd = String(password ?? "");
 
       console.log("Intentando login en:", url);
-      console.log("Datos enviados:", { correo, password, imei: deviceId });
+      console.log("Datos enviados:", {
+        Correo: email,
+        Password: pwd,
+        Imei: deviceId ?? "",
+      });
 
 
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ correo, password, imei: "" }),
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        // ✅ OJO: PASCAL CASE para que matchee 1:1 con LoginRequest
+        body: JSON.stringify({
+          Correo: email,
+          Password: pwd,
+          Imei: "", // ✅ igual que antes
+        }),
+
       });
 
+      if (response.status === 403) {
+        // ✅ usuario desactivado (lo haremos en server)
+        const err = await response.json().catch(() => null);
+        console.log("Login 403:", err);
+        return { ok: false, reason: err?.message || "Usuario desactivado" };
+      }
+
       if (!response.ok) {
-        console.log("Error HTTP:", response.status);
-        return false;
+        const err = await response.json().catch(() => null);
+        console.log("Error HTTP:", response.status, err);
+        return { ok: false, reason: err?.message || "Credenciales inválidas" };
       }
 
       const data = await response.json();
       console.log("Respuesta del servidor:", data);
 
       const loggedUser = {
-  id: data.usuaInterno,
-  nombre: data.usuaNombres,
-  apellido: data.usuaApellidos,
+        id: data.usuaInterno,
+        nombre: data.usuaNombres,
+        apellido: data.usuaApellidos,
+        correo: data.usuaCorreo ?? email,
+        proyecto,
+        token: data.token,
+        deviceId,
 
-  // antes te quedaba undefined porque servidor no lo devolvía
-  correo: data.usuaCorreo ?? correo,
-
-  proyecto,
-  token: data.token,
-  deviceId,
-
-  // ✅ NUEVO: perfil viene del servidor
-  perfilId: data.perfilId ?? null,
-  perfilNombre: data.perfilNombre ?? null,
-};
-
-
-      console.log("✅ [LOGIN] loggedUser:", loggedUser);
-
-
+        // ✅ perfil desde servidor
+        perfilId: data.perfilId ?? null,
+        perfilNombre: data.perfilNombre ?? null,
+      };
 
       setUser(loggedUser);
       await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
 
-
-      const saved = await AsyncStorage.getItem("user");
-      console.log("💾 [LOGIN] AsyncStorage user:", saved ? JSON.parse(saved) : null);
-
-
-
-      return true;
+      return { ok: true };
     } catch (error) {
       console.error("Error login:", error);
-      return false;
+      return { ok: false, reason: "Error de red o servidor" };
     }
   };
+
+
 
 
   const signOut = async () => {

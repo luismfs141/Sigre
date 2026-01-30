@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 
 import { AuthContext } from "../../context/AuthContext";
@@ -29,24 +30,29 @@ export default function User() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
 
+  const insets = useSafeAreaInsets();
+
   // ✅ role desde login (user.perfilNombre)
   const role = String(user?.perfilNombre ?? "").trim().toUpperCase();
   const isAdmin = role === "ADMINISTRADOR" || role === "ADMIN";
+  const authReady = !!user; // ✅ evita que el primer render te deje isAdmin=false por user=null
 
-  // ✅ GUARD: si no es admin, fuera
+  // ✅ GUARD: SOLO cuando ya existe sesión (evita hook mismatch)
   useEffect(() => {
+    if (!authReady) return;
+
     if (!isAdmin) {
       Alert.alert("Acceso restringido", "Solo el administrador puede ver este módulo.");
       router.replace("/(drawer)/map");
     }
-  }, [isAdmin]);
+  }, [authReady, isAdmin, router]);
 
-  if (!isAdmin) return null;
 
   // =========================
   // DATA
   // =========================
-  const { usuarios, perfiles, loading, saving, saveUser, saveUserFeeders } = useUser();
+  const { usuarios, perfiles, loading, saving, saveUser, saveUserFeeders, setUserActive } = useUser();
+
   const { feeders, getFeedersByUser } = useFeeder();
 
   // =========================
@@ -169,11 +175,31 @@ export default function User() {
     perfilId: "",
   });
 
+
+  // ✅ Helpers: soporta camelCase / PascalCase
+  const getPerfId = (p) => p?.perfInterno ?? p?.PerfInterno ?? null;
+  const getPerfName = (p) => p?.perfNombre ?? p?.PerfNombre ?? "";
+
+  // ✅ perfilId que trae cada usuario (puede venir como perfilId o PerfilId)
+  const getUserPerfilId = (u) => u?.perfilId ?? u?.PerfilId ?? null;
+
+  // ✅ label del perfil para mostrar encima del usuario
+  const getPerfilLabel = (u) => {
+    const id = getUserPerfilId(u);
+    if (!id) return "SIN PERFIL";
+
+    const p = (perfiles ?? []).find((x) => String(getPerfId(x)) === String(id));
+    const name = String(getPerfName(p) ?? "").trim();
+    return name || "SIN PERFIL";
+  };
+
+
   const perfilSeleccionadoNombre = useMemo(() => {
     if (!form.perfilId) return "";
-    const p = perfiles?.find((x) => String(x.perfInterno) === String(form.perfilId));
-    return p?.perfNombre ?? "";
+    const p = (perfiles ?? []).find((x) => String(getPerfId(x)) === String(form.perfilId));
+    return getPerfName(p) || "";
   }, [form.perfilId, perfiles]);
+
 
 
   // ✅ Snapshot del form al abrir (para saber si hubo cambios)
@@ -228,7 +254,8 @@ export default function User() {
         usuaCorreo: userRow.usuaCorreo ?? "",
         usuaPassword: "", // ✅ siempre vacío al editar (mantener actual si no se llena)
         usuaActivo: userRow.usuaActivo ?? true,
-        perfilId: userRow.perfilId || "",
+        perfilId: getUserPerfilId(userRow) || "",
+
       }
       : {
         usuaInterno: 0,
@@ -251,7 +278,6 @@ export default function User() {
 
   const handleSave = async () => {
     try {
-      // ✅ Si estás editando y no hay cambios, no hace nada (por si acaso)
       if (isEditing && !isDirty) return;
 
       if (!form.usuaNombres || !form.usuaCorreo) {
@@ -264,18 +290,15 @@ export default function User() {
         return;
       }
 
-      // ✅ NUEVO: exige contraseña
       if (!isEditing && !norm(form.usuaPassword)) {
         Alert.alert("Error", "La contraseña es obligatoria para un usuario nuevo.");
         return;
       }
 
-      // ✅ ARMAR PAYLOAD
       const payload = { ...form };
 
-      // ✅ EDICIÓN + contraseña vacía => NO actualizar password (y pedir confirmación)
+      // ✅ EDICIÓN + contraseña vacía => NO actualizar password (confirmación)
       if (isEditing && !norm(payload.usuaPassword)) {
-        // Importantísimo: NO mandar la propiedad password
         delete payload.usuaPassword;
 
         Alert.alert(
@@ -287,7 +310,13 @@ export default function User() {
               text: "Continuar",
               onPress: async () => {
                 try {
-                  await saveUser(payload);
+                  const res = await saveUser(payload);
+
+                  if (!res?.ok) {
+                    Alert.alert("Error", res?.message || "No se pudo guardar el usuario");
+                    return;
+                  }
+
                   setModalVisible(false);
                   Alert.alert("Éxito", "Usuario guardado correctamente");
                 } catch (e) {
@@ -301,16 +330,22 @@ export default function User() {
         return;
       }
 
-      // ✅ Si llegó aquí:
-      // - Nuevo usuario con password
-      // - Editando con password nuevo (sí actualiza)
-      await saveUser(payload);
+      // ✅ Ruta normal
+      const res = await saveUser(payload);
+
+      if (!res?.ok) {
+        Alert.alert("Error", res?.message || "No se pudo guardar el usuario");
+        return;
+      }
+
       setModalVisible(false);
       Alert.alert("Éxito", "Usuario guardado correctamente");
     } catch (error) {
-      Alert.alert("Error", error.message);
+      // Solo errores “raros” (red, crash, etc.)
+      Alert.alert("Error", error?.message || "Error inesperado");
     }
   };
+
 
 
   const openFeedersModal = async (userRow) => {
@@ -344,14 +379,19 @@ export default function User() {
   // =========================
   // UI
   // =========================
-  if (loading) {
+  // ✅ Mientras no hay sesión cargada, no renderices el módulo
+  if (!authReady) {
     return (
       <View style={userStyles.center}>
         <ActivityIndicator size="large" />
-        <Text>Cargando usuarios...</Text>
+        <Text>Cargando sesión...</Text>
       </View>
     );
   }
+
+  // ✅ Si ya hay sesión y no es admin, no renderizar (el useEffect ya redirige)
+  if (!isAdmin) return null;
+
 
   const sanitizeEmail = (t = "") => {
     // 1) fuera espacios (incluye pegados con espacios)
@@ -364,10 +404,56 @@ export default function User() {
   };
 
 
+  const usuariosOrdenados = useMemo(() => {
+    return [...(usuarios ?? [])].sort((a, b) => {
+      const aAct = a?.usuaActivo !== false;
+      const bAct = b?.usuaActivo !== false;
+
+      if (aAct !== bAct) return aAct ? -1 : 1;
+
+      const aNom = String(a?.usuaNombres ?? "");
+      const bNom = String(b?.usuaNombres ?? "");
+      const c1 = aNom.localeCompare(bNom, "es", { sensitivity: "base" });
+      if (c1 !== 0) return c1;
+
+      const aApe = String(a?.usuaApellidos ?? "");
+      const bApe = String(b?.usuaApellidos ?? "");
+      return aApe.localeCompare(bApe, "es", { sensitivity: "base" });
+    });
+  }, [usuarios]);
+
+
+  const handleToggleActiveUser = (userRow) => {
+    const isActive = userRow?.usuaActivo !== false;
+    const next = !isActive;
+
+    Alert.alert(
+      next ? "Activar cuenta" : "Dar de baja",
+      `${next ? "¿Activar" : "¿Dar de baja"} la cuenta de:\n${userRow.usuaNombres} ${userRow.usuaApellidos}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sí",
+          style: next ? "default" : "destructive",
+          onPress: async () => {
+            try {
+              await setUserActive(userRow.usuaInterno, next);
+              Alert.alert("Éxito", next ? "Cuenta activada" : "Cuenta dada de baja");
+            } catch (e) {
+              Alert.alert("Error", e?.message || "No se pudo actualizar el estado");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+
+
 
 
   return (
-    <View style={userStyles.container}>
+    <SafeAreaView style={[userStyles.container, { paddingBottom: 0 }]} edges={["top", "left", "right"]}>
       <Text style={userStyles.title}>Gestión de Usuarios</Text>
 
       <TouchableOpacity style={userStyles.addButton} onPress={() => openModal()}>
@@ -375,27 +461,60 @@ export default function User() {
       </TouchableOpacity>
 
       <FlatList
-        data={usuarios}
+        data={usuariosOrdenados}
         keyExtractor={(item) => item.usuaInterno.toString()}
-        renderItem={({ item }) => (
-          <View style={userStyles.userCard}>
-            <Text style={userStyles.userName}>
-              {item.usuaNombres} {item.usuaApellidos}
-            </Text>
-            <Text style={userStyles.userEmail}>{item.usuaCorreo}</Text>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        renderItem={({ item }) => {
+          const isActive = item?.usuaActivo !== false;
 
-            <View style={userStyles.actions}>
-              <TouchableOpacity style={userStyles.btnEdit} onPress={() => openModal(item)}>
-                <Text style={userStyles.btnText}>Editar</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity style={userStyles.btnFeeder} onPress={() => openFeedersModal(item)}>
-                <Text style={userStyles.btnText}>Alimentadores</Text>
-              </TouchableOpacity>
+
+          return (
+            <View
+              style={[
+                userStyles.userCard,
+                !isActive && {
+                  borderWidth: 1,
+                  borderColor: "#d32f2f",
+                  backgroundColor: "#ffebee",
+                },
+              ]}
+            >
+              {/* ✅ PERFIL ARRIBA */}
+              <Text style={userStyles.userProfile}>{getPerfilLabel(item)}</Text>
+
+
+              <Text style={userStyles.userName}>
+                {item.usuaNombres} {item.usuaApellidos}
+              </Text>
+              <Text style={userStyles.userEmail}>{item.usuaCorreo}</Text>
+
+              <View style={userStyles.actions}>
+                <TouchableOpacity style={userStyles.btnEdit} onPress={() => openModal(item)}>
+                  <Text style={userStyles.btnText}>Editar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={userStyles.btnFeeder} onPress={() => openFeedersModal(item)}>
+                  <Text style={userStyles.btnText}>Alimentadores</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    { padding: 6, borderRadius: 6 },
+                    isActive ? { backgroundColor: "#b71c1c" } : { backgroundColor: "#2e7d32" },
+                  ]}
+                  onPress={() => handleToggleActiveUser(item)}
+                >
+                  <Text style={userStyles.btnText}>{isActive ? "Dar de baja" : "Activar"}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
+
+
+
 
       {/* ========================= MODAL USUARIO ========================= */}
       <Modal
@@ -613,7 +732,7 @@ export default function User() {
                     {/* Lista */}
                     <FlatList
                       data={perfiles}
-                      keyExtractor={(p) => String(p.perfInterno)}
+                      keyExtractor={(p) => String(getPerfId(p))}
                       showsVerticalScrollIndicator={false}
                       keyboardShouldPersistTaps="handled"
                       ItemSeparatorComponent={() => (
@@ -622,7 +741,7 @@ export default function User() {
                       ListHeaderComponent={() => (
                         <TouchableOpacity
                           onPress={() => {
-                            setForm({ ...form, perfilId: "" });
+                            setForm((prev) => ({ ...prev, perfilId: "" }));
                             setPerfilModalVisible(false);
                           }}
                           style={{
@@ -642,15 +761,14 @@ export default function User() {
                         </TouchableOpacity>
                       )}
                       renderItem={({ item }) => {
-                        const selected = String(form.perfilId) === String(item.perfInterno);
-
-
-
+                        const id = getPerfId(item);
+                        const name = getPerfName(item) || "SIN PERFIL";
+                        const selected = String(form.perfilId) === String(id);
 
                         return (
                           <TouchableOpacity
                             onPress={() => {
-                              setForm({ ...form, perfilId: item.perfInterno });
+                              setForm((prev) => ({ ...prev, perfilId: id }));
                               setPerfilModalVisible(false);
                             }}
                             style={{
@@ -664,9 +782,7 @@ export default function User() {
                               justifyContent: "space-between",
                             }}
                           >
-                            <Text style={{ color: "#000", fontSize: 16 }}>
-                              {item.perfNombre}
-                            </Text>
+                            <Text style={{ color: "#000", fontSize: 16 }}>{name}</Text>
 
                             {selected ? (
                               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
@@ -678,6 +794,7 @@ export default function User() {
                       }}
                       contentContainerStyle={{ paddingBottom: 10 }}
                     />
+
 
                     {/* Footer fijo */}
                     <View style={{ paddingTop: 8, paddingHorizontal: 8 }}>
@@ -794,6 +911,6 @@ export default function User() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }

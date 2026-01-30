@@ -6,20 +6,16 @@ using System.Threading.Tasks;
 
 namespace Sigre.Entities.Entities.Structs
 {
-    public class UsuarioRequest
+    public class UsuarioConPerfilDto
     {
         public int UsuaInterno { get; set; }
         public string UsuaNombres { get; set; } = "";
         public string UsuaApellidos { get; set; } = "";
         public string UsuaCorreo { get; set; } = "";
-        public string? UsuaPassword { get; set; }
-        public bool UsuaActivo { get; set; } = true;
+        public bool? UsuaActivo { get; set; }
 
-        // ✅ lo que usa tu móvil
-        public List<int> Perfiles { get; set; } = new();
-
-        // ✅ compatibilidad (opcional)
         public int? PerfilId { get; set; }
+        public string? PerfilNombre { get; set; }
     }
 }
 

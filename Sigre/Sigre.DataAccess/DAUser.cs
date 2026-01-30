@@ -7,6 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+using Sigre.Entities.Entities.Structs;
+using Microsoft.EntityFrameworkCore;
+
+using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.DataAccess
 {
@@ -92,25 +98,45 @@ namespace Sigre.DataAccess
 
                 int usuarioId = us.UsuaInterno;
 
-                // 🧾 Eliminar perfiles previos
-                var perfilesPrevios = ctx.PerfilesUsuarios.Where(p => p.PfusUsuario == usuarioId).ToList();
-                ctx.PerfilesUsuarios.RemoveRange(perfilesPrevios);
+                // ✅ Si tu regla es 1 usuario = 1 perfil:
+                int? nuevoPerfilId = perfiles?.FirstOrDefault(); // toma el primero
+                if (nuevoPerfilId == null || nuevoPerfilId <= 0)
+                    throw new Exception("Seleccione un perfil válido.");
 
-                // 🧾 Insertar nuevos perfiles
-                if (perfiles != null)
+                // 1) Desactivar cualquier otro perfil activo extra (por si hay basura histórica)
+                var activos = ctx.PerfilesUsuarios
+                    .Where(x => x.PfusUsuario == usuarioId && x.PfusActivo == true)
+                    .ToList();
+
+                foreach (var a in activos)
                 {
-                    foreach (var idPerfil in perfiles)
+                    a.PfusActivo = false;
+                }
+
+                // 2) Buscar el registro “principal” (si ya existe alguno, lo reutilizamos)
+                var rel = ctx.PerfilesUsuarios
+                    .OrderByDescending(x => x.PfusInterno)
+                    .FirstOrDefault(x => x.PfusUsuario == usuarioId);
+
+                // 3) Si existe: UPDATE (no cambia PFUS_Interno)
+                if (rel != null)
+                {
+                    rel.PfusPerfil = nuevoPerfilId.Value;
+                    rel.PfusActivo = true;
+                }
+                else
+                {
+                    // 4) Si no existe: INSERT (solo en el primer registro del usuario)
+                    ctx.PerfilesUsuarios.Add(new PerfilesUsuario
                     {
-                        ctx.PerfilesUsuarios.Add(new PerfilesUsuario
-                        {
-                            PfusUsuario = usuarioId,
-                            PfusPerfil = idPerfil,
-                            PfusActivo = true
-                        });
-                    }
+                        PfusUsuario = usuarioId,
+                        PfusPerfil = nuevoPerfilId.Value,
+                        PfusActivo = true
+                    });
                 }
 
                 ctx.SaveChanges();
+
                 trans.Commit();
             }
             catch (Exception ex)
@@ -193,5 +219,67 @@ namespace Sigre.DataAccess
             ).FirstOrDefault();
         }
 
+        public List<UsuarioListDto> DAUS_GetUsersWithProfile()
+        {
+            using var ctx = new SigreContext();
+
+            var usuarios = ctx.Usuarios.AsNoTracking().ToList();
+            var rels = ctx.PerfilesUsuarios.AsNoTracking().ToList();
+            var perfiles = ctx.Perfiles.AsNoTracking().ToList();
+
+            // ✅ por usuario: elige el perfil "más representativo"
+            // preferimos PFUS_Activo=1, si no hay, usamos el último (por PFUS_Interno)
+            var relByUser = rels
+                .GroupBy(r => r.PfusUsuario)
+                .Select(g => g
+                    .OrderByDescending(x => x.PfusActivo)      // activo primero
+                    .ThenByDescending(x => x.PfusInterno)      // luego el más nuevo
+                    .First())
+                .ToDictionary(x => x.PfusUsuario, x => x);
+
+            var perfMap = perfiles.ToDictionary(p => p.PerfInterno, p => p);
+
+            var list = usuarios.Select(u =>
+            {
+                relByUser.TryGetValue(u.UsuaInterno, out var rel);
+
+                Perfile? p = null;
+                if (rel != null) perfMap.TryGetValue(rel.PfusPerfil, out p);
+
+                return new UsuarioListDto
+                {
+                    UsuaInterno = u.UsuaInterno,
+                    UsuaNombres = u.UsuaNombres ?? "",
+                    UsuaApellidos = u.UsuaApellidos ?? "",
+                    UsuaCorreo = u.UsuaCorreo ?? "",
+                    UsuaActivo = u.UsuaActivo ?? true,
+
+                    PerfilId = rel?.PfusPerfil,
+                    PerfilNombre = p?.PerfNombre
+                };
+            })
+            // ✅ ORDEN: activos primero, luego inactivos; 2do orden alfabético
+            .OrderByDescending(x => x.UsuaActivo)
+            .ThenBy(x => x.UsuaNombres)
+            .ThenBy(x => x.UsuaApellidos)
+            .ToList();
+
+            return list;
+        }
+
+        public void DAUS_SetUserActive(int usuarioId, bool activo)
+        {
+            using var ctx = new SigreContext();
+
+            var u = ctx.Usuarios.SingleOrDefault(x => x.UsuaInterno == usuarioId);
+            if (u == null) throw new Exception("Usuario no encontrado.");
+
+            u.UsuaActivo = activo;
+            ctx.SaveChanges();
+        }
+
+
     }
+
+
 }
