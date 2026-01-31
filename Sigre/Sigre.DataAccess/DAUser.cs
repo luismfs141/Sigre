@@ -7,6 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+using Sigre.Entities.Entities.Structs;
+using Microsoft.EntityFrameworkCore;
+
+using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.DataAccess
 {
@@ -46,17 +52,19 @@ namespace Sigre.DataAccess
 
             try
             {
-                // 🔐 Hash de contraseña solo si se especifica
-                if (!string.IsNullOrEmpty(us.UsuaPassword))
-                {
-                    us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword);
-                }
+                bool hasNewPassword = !string.IsNullOrWhiteSpace(us.UsuaPassword);
 
-                // 🧩 Si es nuevo usuario
+                // 🧩 Si es nuevo usuario => contraseña obligatoria
                 if (us.UsuaInterno == 0)
                 {
+                    if (!hasNewPassword)
+                        throw new Exception("La contraseña es obligatoria para un usuario nuevo.");
+
+                    // 🔐 Hash password (nuevo)
+                    us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword.Trim());
+
                     ctx.Usuarios.Add(us);
-                    ctx.SaveChanges();
+                    ctx.SaveChanges(); // aquí ya se genera UsuaInterno
                 }
                 else
                 {
@@ -65,36 +73,82 @@ namespace Sigre.DataAccess
                     if (usOriginal == null)
                         throw new Exception("Usuario no encontrado.");
 
+                    // ✅ Si NO viene password => mantener el actual (NO tocar)
+                    if (!hasNewPassword)
+                    {
+                        us.UsuaPassword = usOriginal.UsuaPassword; // preserva
+                    }
+                    else
+                    {
+                        // ✅ Si viene password => hashear y actualizar
+                        us.UsuaPassword = BCrypt.Net.BCrypt.HashPassword(us.UsuaPassword.Trim());
+                    }
+
+                    // Actualiza campos
                     ctx.Entry(usOriginal).CurrentValues.SetValues(us);
+
+                    // ✅ EXTRA SEGURIDAD: si no hay password nuevo, EF no debe marcarlo modificado
+                    if (!hasNewPassword)
+                    {
+                        ctx.Entry(usOriginal).Property(x => x.UsuaPassword).IsModified = false;
+                    }
+
                     ctx.SaveChanges();
                 }
 
                 int usuarioId = us.UsuaInterno;
 
-                // 🧾 Eliminar perfiles previos
-                var perfilesPrevios = ctx.PerfilesUsuarios.Where(p => p.PfusUsuario == usuarioId);
-                ctx.PerfilesUsuarios.RemoveRange(perfilesPrevios);
+                // ✅ Si tu regla es 1 usuario = 1 perfil:
+                int? nuevoPerfilId = perfiles?.FirstOrDefault(); // toma el primero
+                if (nuevoPerfilId == null || nuevoPerfilId <= 0)
+                    throw new Exception("Seleccione un perfil válido.");
 
-                // 🧾 Insertar nuevos perfiles
-                foreach (var idPerfil in perfiles)
+                // 1) Desactivar cualquier otro perfil activo extra (por si hay basura histórica)
+                var activos = ctx.PerfilesUsuarios
+                    .Where(x => x.PfusUsuario == usuarioId && x.PfusActivo == true)
+                    .ToList();
+
+                foreach (var a in activos)
                 {
+                    a.PfusActivo = false;
+                }
+
+                // 2) Buscar el registro “principal” (si ya existe alguno, lo reutilizamos)
+                var rel = ctx.PerfilesUsuarios
+                    .OrderByDescending(x => x.PfusInterno)
+                    .FirstOrDefault(x => x.PfusUsuario == usuarioId);
+
+                // 3) Si existe: UPDATE (no cambia PFUS_Interno)
+                if (rel != null)
+                {
+                    rel.PfusPerfil = nuevoPerfilId.Value;
+                    rel.PfusActivo = true;
+                }
+                else
+                {
+                    // 4) Si no existe: INSERT (solo en el primer registro del usuario)
                     ctx.PerfilesUsuarios.Add(new PerfilesUsuario
                     {
                         PfusUsuario = usuarioId,
-                        PfusPerfil = idPerfil,
+                        PfusPerfil = nuevoPerfilId.Value,
                         PfusActivo = true
                     });
                 }
 
                 ctx.SaveChanges();
+
                 trans.Commit();
             }
             catch (Exception ex)
             {
                 trans.Rollback();
-                throw new Exception("Error al guardar usuario: " + ex.Message);
+
+                // ✅ devuelve mensaje real (inner) para que NO te salga el genérico
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception("Error al guardar usuario: " + msg);
             }
         }
+
 
         public void DAUS_SaveUserFeeders(int usuario, List<int> alimentadores)
         {
@@ -165,5 +219,67 @@ namespace Sigre.DataAccess
             ).FirstOrDefault();
         }
 
+        public List<UsuarioListDto> DAUS_GetUsersWithProfile()
+        {
+            using var ctx = new SigreContext();
+
+            var usuarios = ctx.Usuarios.AsNoTracking().ToList();
+            var rels = ctx.PerfilesUsuarios.AsNoTracking().ToList();
+            var perfiles = ctx.Perfiles.AsNoTracking().ToList();
+
+            // ✅ por usuario: elige el perfil "más representativo"
+            // preferimos PFUS_Activo=1, si no hay, usamos el último (por PFUS_Interno)
+            var relByUser = rels
+                .GroupBy(r => r.PfusUsuario)
+                .Select(g => g
+                    .OrderByDescending(x => x.PfusActivo)      // activo primero
+                    .ThenByDescending(x => x.PfusInterno)      // luego el más nuevo
+                    .First())
+                .ToDictionary(x => x.PfusUsuario, x => x);
+
+            var perfMap = perfiles.ToDictionary(p => p.PerfInterno, p => p);
+
+            var list = usuarios.Select(u =>
+            {
+                relByUser.TryGetValue(u.UsuaInterno, out var rel);
+
+                Perfile? p = null;
+                if (rel != null) perfMap.TryGetValue(rel.PfusPerfil, out p);
+
+                return new UsuarioListDto
+                {
+                    UsuaInterno = u.UsuaInterno,
+                    UsuaNombres = u.UsuaNombres ?? "",
+                    UsuaApellidos = u.UsuaApellidos ?? "",
+                    UsuaCorreo = u.UsuaCorreo ?? "",
+                    UsuaActivo = u.UsuaActivo ?? true,
+
+                    PerfilId = rel?.PfusPerfil,
+                    PerfilNombre = p?.PerfNombre
+                };
+            })
+            // ✅ ORDEN: activos primero, luego inactivos; 2do orden alfabético
+            .OrderByDescending(x => x.UsuaActivo)
+            .ThenBy(x => x.UsuaNombres)
+            .ThenBy(x => x.UsuaApellidos)
+            .ToList();
+
+            return list;
+        }
+
+        public void DAUS_SetUserActive(int usuarioId, bool activo)
+        {
+            using var ctx = new SigreContext();
+
+            var u = ctx.Usuarios.SingleOrDefault(x => x.UsuaInterno == usuarioId);
+            if (u == null) throw new Exception("Usuario no encontrado.");
+
+            u.UsuaActivo = activo;
+            ctx.SaveChanges();
+        }
+
+
     }
+
+
 }

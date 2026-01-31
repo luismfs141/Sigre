@@ -26,7 +26,6 @@ export const getPostByIdLocal = async (postInterno) => {
 export const saveOrUpdatePost = async (post) => {
   try {
     if (post.PostInterno) {
-      // UPDATE: si EstadoOffLine es null, ponemos 1
       const estado = post.EstadoOffLine == null ? 1 : post.EstadoOffLine;
 
       const updateQuery = `
@@ -38,7 +37,9 @@ export const saveOrUpdatePost = async (post) => {
           PostArmadoMaterial = ?,
           PostRetenidaTipo = ?,
           PostRetenidaMaterial = ?,
-          EstadoOffLine = ?
+          PostTerceros = ?,        -- ✅ NUEVO
+          EstadoOffLine = ?,
+          PostAltura = ?
         WHERE PostInterno = ?
       `;
 
@@ -49,13 +50,14 @@ export const saveOrUpdatePost = async (post) => {
         post.PostArmadoMaterial ?? "",
         post.PostRetenidaTipo ?? "",
         post.PostRetenidaMaterial ?? "",
+        post.PostTerceros == null ? 0 : Number(post.PostTerceros), // ✅ NUEVO
         estado,
+        post.PostAltura ?? null,
         post.PostInterno
       ]);
 
       return post.PostInterno;
     } else {
-      // INSERT: EstadoOffLine = 2
       const insertQuery = `
         INSERT INTO Postes (
           PostCodigoNodo,
@@ -64,8 +66,10 @@ export const saveOrUpdatePost = async (post) => {
           PostArmadoMaterial,
           PostRetenidaTipo,
           PostRetenidaMaterial,
-          EstadoOffLine
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          PostTerceros,         -- ✅ NUEVO
+          EstadoOffLine,
+          PostAltura
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const result = await runQuery(insertQuery, [
@@ -75,7 +79,9 @@ export const saveOrUpdatePost = async (post) => {
         post.PostArmadoMaterial ?? "",
         post.PostRetenidaTipo ?? "",
         post.PostRetenidaMaterial ?? "",
-        2
+        post.PostTerceros == null ? 0 : Number(post.PostTerceros), // ✅ NUEVO
+        2,
+        post.PostAltura ?? null
       ]);
 
       return result?.insertId ?? null;
@@ -85,6 +91,7 @@ export const saveOrUpdatePost = async (post) => {
     throw error;
   }
 };
+
 
 export const getPostesPendientes = async () => {
   try {

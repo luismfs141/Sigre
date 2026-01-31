@@ -601,8 +601,10 @@ public partial class SigreContext : DbContext
             entity.HasKey(e => e.PfusInterno);
 
             entity.Property(e => e.PfusInterno)
-                .ValueGeneratedNever()
+                .ValueGeneratedOnAdd()
+                .UseIdentityColumn()
                 .HasColumnName("PFUS_Interno");
+
             entity.Property(e => e.PfusActivo).HasColumnName("PFUS_Activo");
             entity.Property(e => e.PfusPerfil).HasColumnName("PFUS_Perfil");
             entity.Property(e => e.PfusUsuario).HasColumnName("PFUS_Usuario");
@@ -687,6 +689,8 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.PostSubestacion).HasColumnName("POST_Subestacion");
             entity.Property(e => e.PostTerceros).HasColumnName("POST_Terceros");
 
+            entity.Property(e => e.PostAltura).HasColumnName("POST_Altura");
+
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostArmadoMaterial)
                 .HasConstraintName("FK_Postes_ArmadoMaterial");
@@ -706,6 +710,9 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.PostRetenidaTipoNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostRetenidaTipo)
                 .HasConstraintName("FK_Postes_RetenidaTipo");
+            
+            
+
         });
 
         modelBuilder.Entity<PosteMaterial>(entity =>

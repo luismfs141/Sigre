@@ -1,14 +1,15 @@
 --------------------------------
 -- POSTES ----------------------
 --------------------------------
-DECLARE @etiqueta varchar(50) = 'VBT000104754';
-DECLARE @alimentador varchar(50) = 'MEJIA';
+DECLARE @codigo varchar(50) = '%0111434%';
+DECLARE @alimentador varchar(50) = 'TECSUP';
 
 SELECT
     a.ALIM_Etiqueta,
     P.POST_Etiqueta,
     pm.POSMT_Nombre,
     rt.RTNTP_Nombre,
+    P.POST_Altura,
     POST_Terceros,
     [***] = '',
     p.*
@@ -19,7 +20,7 @@ LEFT JOIN dbo.PosteMaterial as pm
     on p.POST_Material = pm.POSMT_Interno
 LEFT JOIN dbo.RetenidaTipo as rt
     on p.POST_RetenidaTipo = rt.RTNTP_Interno
-WHERE p.POST_Etiqueta = @etiqueta
+WHERE p.POST_CodigoNodo LIKE @codigo
     AND a.ALIM_Etiqueta = @alimentador
     AND p.POST_EsBT = 1;
 GO
