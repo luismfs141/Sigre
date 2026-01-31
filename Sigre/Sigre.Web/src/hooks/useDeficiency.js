@@ -34,7 +34,7 @@ export const useDeficiencyByGis = () => {
 };
 
 // ====================================================================
-// HOOK 2: useDeficienciesBySed (CON AUTO-RESCATE DE ID POR GIS)
+// HOOK 2: useDeficienciesBySed (CON AUTO-RESCATE DE ID POR GIS Y RESTAURAR)
 // ====================================================================
 export const useDeficienciesBySed = () => {
     const [deficiencies, setDeficiencies] = useState([]);
@@ -51,12 +51,11 @@ export const useDeficienciesBySed = () => {
         setError(null);
         try {
             console.log(`📡 [GET] Buscando SED ID: ${sedId}`);
+            // NOTA: Asegúrate de que tu backend NO filtre por activo=true si quieres ver los eliminados
             const response = await api.get('/Deficiency/GetBySed', { params: { x_sed: sedId } });
             const rawData = response.data || [];
-            const activeData = rawData.filter(d => d.defiActivo === true);
-            console.log(`✅ Registros activos: ${activeData.length}`);
-            setDeficiencies(activeData); 
-            return activeData;
+            setDeficiencies(rawData); 
+            return rawData;
         } catch (err) {
             console.error("❌ Error SED:", err);
             setDeficiencies([]);
@@ -94,7 +93,6 @@ export const useDeficienciesBySed = () => {
             }
 
             // 3. 🔥 ESTRATEGIA DE SALVAVIDAS: BUSCAR POR CÓDIGO GIS SI EL ID SIGUE SIENDO 0
-            // (Esto soluciona el problema de crear elementos nuevos si solo tienes el código)
             const codigoGis = rawData.defiCodigoElemento || rawData.POST_CODIGO || rawData.VAN_CODIGO;
             
             if (finalIdElemento === 0 && codigoGis) {
@@ -189,14 +187,39 @@ export const useDeficienciesBySed = () => {
         }
     };
 
-    // --- C. ELIMINAR ---
+    // --- C. ELIMINAR (SOFT DELETE) ---
     const softDeleteDeficiency = async (defiInterno) => {
         try {
             await api.post('/Deficiency/SoftDelete', null, { params: { id: defiInterno } });
-            setDeficiencies(prev => prev.filter(d => d.defiInterno !== defiInterno));
+            // Actualizamos el estado local marcándolo como inactivo (para no tener que recargar todo)
+            setDeficiencies(prev => prev.map(d => 
+                d.defiInterno === defiInterno ? { ...d, defiActivo: false } : d
+            ));
             return true;
         } catch (err) {
+            console.error("Error al eliminar:", err);
             return false;
+        }
+    };
+
+    // --- D. RESTAURAR (NUEVO) ---
+    const restoreDeficiency = async (defiInterno) => {
+        try {
+            const response = await api.post('/Deficiency/Restaurar', null, { params: { id: defiInterno } });
+            
+            // Actualizamos estado local
+            setDeficiencies(prev => prev.map(d => 
+                d.defiInterno === defiInterno ? { ...d, defiActivo: true } : d
+            ));
+            
+            return { success: true, message: response.data.mensaje || "Restaurado" };
+        } catch (err) {
+            console.error("Error al restaurar:", err);
+            let msg = "Error al restaurar.";
+            if (err.response && err.response.data && err.response.data.mensaje) {
+                msg = err.response.data.mensaje;
+            }
+            return { success: false, message: msg };
         }
     };
 
@@ -204,6 +227,7 @@ export const useDeficienciesBySed = () => {
 
     return { 
         deficiencies, loading, error, fetchBySed, 
-        saveDeficiency, softDeleteDeficiency, clearData, setDeficiencies 
+        saveDeficiency, softDeleteDeficiency, restoreDeficiency, // <--- No olvides exportarlo
+        clearData, setDeficiencies 
     };
 };

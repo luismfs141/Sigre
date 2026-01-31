@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { AutoComplete } from 'primereact/autocomplete';
@@ -9,15 +9,15 @@ import { Tag } from 'primereact/tag';
 import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Skeleton } from 'primereact/skeleton';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { InputText } from 'primereact/inputtext'; // <--- NUEVO IMPORT
-import { FilterMatchMode } from 'primereact/api'; // <--- NUEVO IMPORT
+import { InputText } from 'primereact/inputtext'; 
+import { FilterMatchMode } from 'primereact/api'; 
 
 // --- API ---
 import api from '../api/apiConfig';
 
 // --- CUSTOM HOOKS ---
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
-import { useDeficienciesBySed } from '../hooks/useDeficiency';
+import { useDeficienciesBySed } from '../hooks/useDeficiency'; // Hook actualizado con restoreDeficiency
 import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
 import { useFiles } from '../hooks/useFiles';
@@ -42,13 +42,13 @@ export default function Subestaciones() {
     const [formVisible, setFormVisible] = useState(false);
     const [deficiencyToEdit, setDeficiencyToEdit] = useState(null);
 
-    // --- NUEVO: ESTADOS PARA FILTROS DE TABLA ---
+    // --- ESTADOS PARA FILTROS DE TABLA ---
     const [globalFilterValue, setGlobalFilterValue] = useState('');
     const [filters, setFilters] = useState({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
         defiCodigoElemento: { value: null, matchMode: FilterMatchMode.CONTAINS },
         defiTipoElemento: { value: null, matchMode: FilterMatchMode.CONTAINS },
-        // 🔥 AQUÍ ESTÁ EL TRUCO: Inicializamos defiActivo en true
+        // Inicializamos en true para mostrar solo activos al inicio
         defiActivo: { value: true, matchMode: FilterMatchMode.EQUALS } 
     });
 
@@ -57,13 +57,15 @@ export default function Subestaciones() {
     // -------------------------------------------------------------------
     const { feeders, loading: loadingFeeders } = useFeeder();
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
+    
     const { 
         deficiencies, 
         loading: loadingDef, 
         fetchBySed, 
         clearData, 
         saveDeficiency, 
-        softDeleteDeficiency 
+        softDeleteDeficiency,
+        restoreDeficiency // <--- IMPORTANTE: Función para restaurar
     } = useDeficienciesBySed();
 
     const { getCodeById, loading: loadingTypos } = useTypification();
@@ -91,7 +93,7 @@ export default function Subestaciones() {
         clearData(); 
     };
 
-    // --- NUEVO: Lógica para Buscador Global ---
+    // Buscador Global
     const onGlobalFilterChange = (e) => {
         const value = e.target.value;
         let _filters = { ...filters };
@@ -101,7 +103,7 @@ export default function Subestaciones() {
         setGlobalFilterValue(value);
     };
 
-    // --- NUEVO: Template para filtro de Estado (Activo/Eliminado) ---
+    // Template para filtro de Estado (Activo/Eliminado)
     const statusFilterTemplate = (options) => {
         return (
             <Dropdown 
@@ -164,6 +166,7 @@ export default function Subestaciones() {
         }
     }; 
 
+    // Confirmación para ELIMINAR
     const confirmDeleteDeficiency = (rowData) => {
         confirmDialog({
             message: `¿Desactivar la deficiencia del elemento ${rowData.defiCodigoElemento}?`,
@@ -183,6 +186,30 @@ export default function Subestaciones() {
         });
     };
 
+    // Confirmación para RESTAURAR
+    const confirmRestoreDeficiency = (rowData) => {
+        confirmDialog({
+            message: `¿Deseas restaurar la deficiencia del elemento ${rowData.defiCodigoElemento}?`,
+            header: 'Confirmar Restauración',
+            icon: 'pi pi-refresh',
+            acceptLabel: 'Sí, Restaurar',
+            rejectLabel: 'Cancelar',
+            acceptClassName: 'p-button-success',
+            accept: async () => {
+                // Llamamos a la función del hook
+                const result = await restoreDeficiency(rowData.defiInterno);
+                
+                if (result.success) {
+                    toast.current.show({ severity: 'success', summary: 'Restaurado', detail: 'El registro está activo nuevamente.' });
+                    // Opcional: Recargar si quieres asegurar sincronía total
+                    // if (selectedSed) { ... }
+                } else {
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: result.message });
+                }
+            }
+        });
+    };
+
     // -------------------------------------------------------------------
     // 5. TEMPLATES DE LA TABLA
     // -------------------------------------------------------------------
@@ -192,7 +219,6 @@ export default function Subestaciones() {
     };
 
     const activeTemplate = (rowData) => {
-        // Aseguramos compatibilidad con 1/0 y true/false
         const isActive = rowData.defiActivo === true || rowData.defiActivo === 1;
         return <Tag value={isActive ? 'ACTIVO' : 'ELIMINADO'} severity={isActive ? 'success' : 'danger'} style={{ fontSize: '10px' }} />;
     };
@@ -216,12 +242,32 @@ export default function Subestaciones() {
 
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
 
+    // --- TEMPLATE DE ACCIONES (LÓGICA RESTAURAR VS EDITAR/BORRAR) ---
     const actionBodyTemplate = (rowData) => {
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
+
+        if (isDeleted) {
+            // MOSTRAR SOLO BOTÓN RESTAURAR (VERDE)
+            return (
+                <div className="flex gap-1 justify-center">
+                    <Button 
+                        icon="pi pi-refresh" 
+                        rounded 
+                        text 
+                        severity="success" 
+                        size="small" 
+                        onClick={() => confirmRestoreDeficiency(rowData)} 
+                        tooltip="Restaurar" 
+                    />
+                </div>
+            );
+        }
+
+        // MOSTRAR EDITAR Y ELIMINAR (NORMAL)
         return (
             <div className="flex gap-1 justify-center">
-                <Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} disabled={isDeleted} tooltip="Editar" />
-                <Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} disabled={isDeleted} tooltip="Eliminar" />
+                <Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} tooltip="Editar" />
+                <Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} tooltip="Eliminar" />
             </div>
         );
     };
@@ -234,7 +280,7 @@ export default function Subestaciones() {
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* --- BARRA SUPERIOR (FILTROS Y ACCIONES) --- */}
+            {/* --- BARRA SUPERIOR --- */}
             <div className="bg-white p-2 rounded shadow-sm mb-2 flex items-center justify-between shrink-0">
                 
                 {/* Título y Buscador de SED */}
@@ -272,7 +318,6 @@ export default function Subestaciones() {
 
                 {/* Zona Derecha: Buscador Global y Acciones */}
                 <div className="flex items-end gap-3">
-                    {/* Buscador Global */}
                     <div className="flex flex-col">
                          <label className="text-xs font-bold text-gray-500 ml-1">Buscar en tabla</label>
                          <span className="p-input-icon-left">
@@ -318,26 +363,18 @@ export default function Subestaciones() {
                             dataKey="defiInterno" 
                             rowHover 
                             emptyMessage="No hay deficiencias registradas."
-                            
-                            /* --- NUEVAS PROPIEDADES DE FILTRADO --- */
                             filters={filters}
-                            filterDisplay="row" // Habilita la fila de inputs bajo los headers
-                            globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento']} // Campos donde busca el global
+                            filterDisplay="row" 
+                            globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento']} 
                             onFilter={(e) => setFilters(e.filters)}
                         >
                             <Column field="defiIdElemento" header="ID" sortable filter filterPlaceholder="Buscar ID" style={{ width: '90px' }} />
-                            
                             <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
-                            
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
-                            
                             <Column header="Tipificación" body={typificationTemplate} style={{ textAlign: 'center', width: '100px' }} />
-                            
                             <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="pi pi-eye text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
-                            
                             <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
                             
-                            {/* 🔥 COLUMNA CON FILTRO DE ESTADO ACTIVO/ELIMINADO */}
                             <Column 
                                 field="defiActivo" 
                                 header="Estado" 
@@ -345,12 +382,13 @@ export default function Subestaciones() {
                                 sortable 
                                 style={{ width: '130px', textAlign: 'center' }}
                                 filter 
-                                filterElement={statusFilterTemplate} // Usamos el dropdown personalizado
-                                showFilterMenu={false} // Ocultamos el menú complejo, dejamos solo el dropdown
+                                filterElement={statusFilterTemplate} 
+                                showFilterMenu={false} 
                             />
 
                             <Column field="defiEstadoCriticidad" header="Crit." body={criticidadTemplate} sortable style={{ width: '80px', textAlign: 'center' }} />
                             
+                            {/* COLUMNA ACCIONES DINÁMICA */}
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                         </DataTable>
                     </SplitterPanel>

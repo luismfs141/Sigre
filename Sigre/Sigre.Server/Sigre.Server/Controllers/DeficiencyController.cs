@@ -291,5 +291,30 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+
+        [HttpPost("Restaurar")]
+        public IActionResult Restaurar(int id)
+        {
+            try
+            {
+                if (id <= 0) return BadRequest(new { estado = "Error", mensaje = "ID inválido." });
+
+                DADeficiency da = new DADeficiency();
+                bool exito = da.DADEFI_Restaurar(id);
+
+                if (exito)
+                {
+                    return Ok(new { estado = "OK", mensaje = "Registro restaurado correctamente." });
+                }
+                else
+                {
+                    return BadRequest(new { estado = "Error", mensaje = "No se encontró el registro." });
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new { estado = "Error", mensaje = $"Error interno: {ex.Message}" });
+            }
+        }
     }
 }

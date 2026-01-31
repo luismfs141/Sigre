@@ -928,5 +928,23 @@ namespace Sigre.DataAccess
                 return new { postes = dataPostes, vanos = dataVanos };
             }
         }
+        public bool DADEFI_Restaurar(int x_defiInterno)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // 1. Buscar el registro
+                var registro = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == x_defiInterno);
+
+                if (registro == null) return false;
+
+                // 2. Invertir el estado (De 0 a 1 / false a true)
+                registro.DefiActivo = true;
+                registro.DefiFecModificacion = DateTime.Now;
+
+                // 3. Guardar
+                ctx.SaveChanges();
+                return true;
+            }
+        }
     }
 }
