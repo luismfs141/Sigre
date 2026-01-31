@@ -220,18 +220,24 @@ export const usePost = () => {
   };
 
   const normalizePostForSync = (post) => ({
-    ...post,
-    EstadoOffLine: Number(post.EstadoOffLine ?? 1),
-    AlimInterno: Number(post.AlimInterno),
-    PostTerceros: Boolean(post.PostTerceros),
-    PostInspeccionado: Boolean(post.PostInspeccionado),
-    PostEsMt: Boolean(post.PostEsMt),
-    PostEsBt: Boolean(post.PostEsBt),
-    PostMaterial: post.PostMaterial ? Number(post.PostMaterial) : null,
-    PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
-    PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
-    PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
-  });
+  ...post,
+  EstadoOffLine: Number(post.EstadoOffLine ?? 1),
+  AlimInterno: Number(post.AlimInterno),
+
+  // ✅ este es el correcto para campos 0/1
+  PostTerceros: Number(post.PostTerceros) === 1,
+
+  PostInspeccionado: Boolean(post.PostInspeccionado),
+  PostEsMt: Boolean(post.PostEsMt),
+  PostEsBt: Boolean(post.PostEsBt),
+
+  PostMaterial: post.PostMaterial ? Number(post.PostMaterial) : null,
+  PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
+  PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
+  PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
+
+});
+
 
   return {
     loading,

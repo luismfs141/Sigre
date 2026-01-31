@@ -152,3 +152,12 @@ END CATCH;
 
 
 
+-----------------------------------------------------------------------------------------------------------------------------
+
+
+-- Agrega POST_Altura solo si no existe
+IF COL_LENGTH('dbo.Postes', 'POST_Altura') IS NULL
+BEGIN
+    ALTER TABLE dbo.Postes
+    ADD POST_Altura NUMERIC(10,2) NULL;
+END

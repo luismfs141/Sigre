@@ -38,6 +38,8 @@ public partial class Poste
     public bool? PostEsMt { get; set; }
 
     public bool? PostEsBt { get; set; }
+    public decimal? PostAltura { get; set; }
+
 
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 
