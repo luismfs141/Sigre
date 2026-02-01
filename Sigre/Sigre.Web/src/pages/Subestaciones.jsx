@@ -9,17 +9,15 @@ import { Tag } from 'primereact/tag';
 import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Skeleton } from 'primereact/skeleton';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { InputText } from 'primereact/inputtext'; 
+import { FilterMatchMode } from 'primereact/api'; 
 
 // --- API ---
 import api from '../api/apiConfig';
 
 // --- CUSTOM HOOKS ---
-// 🔥 CORRECCIÓN 1: Importamos desde useFeeders (PLURAL) y extraemos useFeeders
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
-
-// 🔥 CORRECCIÓN 2: Importamos useDeficienciesBySed (que ya incluye saveDeficiency)
-import { useDeficienciesBySed } from '../hooks/useDeficiency';
-
+import { useDeficienciesBySed } from '../hooks/useDeficiency'; // Hook actualizado con restoreDeficiency
 import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
 import { useFiles } from '../hooks/useFiles';
@@ -34,7 +32,7 @@ export default function Subestaciones() {
     // -------------------------------------------------------------------
     const toast = useRef(null);
 
-    // Estados de Filtros (Cascada)
+    // Estados de Filtros de Datos (Cascada)
     const [selectedFeeder, setSelectedFeeder] = useState(null);
     const [selectedSed, setSelectedSed] = useState(null);
     const [filteredSeds, setFilteredSeds] = useState([]);
@@ -44,36 +42,40 @@ export default function Subestaciones() {
     const [formVisible, setFormVisible] = useState(false);
     const [deficiencyToEdit, setDeficiencyToEdit] = useState(null);
 
+    // --- ESTADOS PARA FILTROS DE TABLA ---
+    const [globalFilterValue, setGlobalFilterValue] = useState('');
+    const [filters, setFilters] = useState({
+        global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+        defiCodigoElemento: { value: null, matchMode: FilterMatchMode.CONTAINS },
+        defiTipoElemento: { value: null, matchMode: FilterMatchMode.CONTAINS },
+        // Inicializamos en true para mostrar solo activos al inicio
+        defiActivo: { value: true, matchMode: FilterMatchMode.EQUALS } 
+    });
+
     // -------------------------------------------------------------------
     // 2. USO DE HOOKS
     // -------------------------------------------------------------------
-    
-    // Carga inicial de Alimentadores
     const { feeders, loading: loadingFeeders } = useFeeder();
-
-    // Carga de SEDs dependiente del Alimentador seleccionado
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
-
-    // Gestión de Deficiencias (Tabla principal)
-    // Extraemos saveDeficiency aquí
+    
     const { 
         deficiencies, 
         loading: loadingDef, 
         fetchBySed, 
         clearData, 
         saveDeficiency, 
-        softDeleteDeficiency 
+        softDeleteDeficiency,
+        restoreDeficiency // <--- IMPORTANTE: Función para restaurar
     } = useDeficienciesBySed();
 
-    // Hooks Auxiliares (Tablas Maestras y Usuarios)
     const { getCodeById, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
 
     // -------------------------------------------------------------------
-    // 3. LÓGICA DE FILTROS (AUTOCOMPLETE)
+    // 3. LÓGICA DE FILTROS (AUTOCOMPLETE Y TABLA)
     // -------------------------------------------------------------------
     
-    // Filtra localmente la lista de SEDs que ya trajo el hook useSedsByFeeder
+    // Autocomplete SED
     const searchSeds = (event) => {
         const query = event.query.toLowerCase();
         let _filtered = sedsDelAlimentador.filter((sed) => {
@@ -84,12 +86,43 @@ export default function Subestaciones() {
         setFilteredSeds(_filtered);
     };
 
-    // Al cambiar el alimentador, limpiamos la SED seleccionada y la tabla
     const handleFeederChange = (e) => {
         setSelectedFeeder(e.value);
         setSelectedSed(null); 
         setFilteredSeds([]);
         clearData(); 
+    };
+
+    // Buscador Global
+    const onGlobalFilterChange = (e) => {
+        const value = e.target.value;
+        let _filters = { ...filters };
+        _filters['global'].value = value;
+
+        setFilters(_filters);
+        setGlobalFilterValue(value);
+    };
+
+    // Template para filtro de Estado (Activo/Eliminado)
+    const statusFilterTemplate = (options) => {
+        return (
+            <Dropdown 
+                value={options.value} 
+                options={[
+                    { label: 'Todos', value: null },
+                    { label: 'Activo', value: true },
+                    { label: 'Eliminado', value: false }
+                ]} 
+                onChange={(e) => options.filterApplyCallback(e.value)} 
+                itemTemplate={(option) => {
+                    if (option.value === null) return <span>Todos</span>;
+                    return <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />;
+                }}
+                placeholder="Estado" 
+                className="p-column-filter" 
+                showClear 
+            />
+        );
     };
 
     // -------------------------------------------------------------------
@@ -102,12 +135,8 @@ export default function Subestaciones() {
             return;
         }
         setSelectedDeficiency(null);
-        
-        // Enviamos: selectedSed.sedInterno (1696)
         const idParaBackend = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
-        
         console.log("Enviando ID al backend:", idParaBackend); 
-        
         await fetchBySed(idParaBackend);
     };
 
@@ -122,28 +151,22 @@ export default function Subestaciones() {
         setFormVisible(true);
     };
 
-    // 🔥 CORRECCIÓN 3: Sintaxis arreglada y recarga correcta
     const handleSaveSuccess = async (deficiencyData) => {
-        // Llamamos a la función del hook
         const result = await saveDeficiency(deficiencyData);
-        
         if (result.success) {
-            // ÉXITO
             setFormVisible(false);
             toast.current.show({ severity: 'success', summary: 'Guardado', detail: 'Registro procesado correctamente.' });
-            
-            // Recargar tabla si hay SED seleccionada
             if (selectedSed) {
                 const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
                 await fetchBySed(idSed);
             }
         } else {
-            // ERROR
             console.error("Error al guardar:", result.message);
             toast.current.show({ severity: 'error', summary: 'Error', detail: result.message });
         }
-    }; // <--- Faltaba esta llave de cierre
+    }; 
 
+    // Confirmación para ELIMINAR
     const confirmDeleteDeficiency = (rowData) => {
         confirmDialog({
             message: `¿Desactivar la deficiencia del elemento ${rowData.defiCodigoElemento}?`,
@@ -158,6 +181,30 @@ export default function Subestaciones() {
                     toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Registro desactivado.' });
                 } else {
                     toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar.' });
+                }
+            }
+        });
+    };
+
+    // Confirmación para RESTAURAR
+    const confirmRestoreDeficiency = (rowData) => {
+        confirmDialog({
+            message: `¿Deseas restaurar la deficiencia del elemento ${rowData.defiCodigoElemento}?`,
+            header: 'Confirmar Restauración',
+            icon: 'pi pi-refresh',
+            acceptLabel: 'Sí, Restaurar',
+            rejectLabel: 'Cancelar',
+            acceptClassName: 'p-button-success',
+            accept: async () => {
+                // Llamamos a la función del hook
+                const result = await restoreDeficiency(rowData.defiInterno);
+                
+                if (result.success) {
+                    toast.current.show({ severity: 'success', summary: 'Restaurado', detail: 'El registro está activo nuevamente.' });
+                    // Opcional: Recargar si quieres asegurar sincronía total
+                    // if (selectedSed) { ... }
+                } else {
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: result.message });
                 }
             }
         });
@@ -195,12 +242,32 @@ export default function Subestaciones() {
 
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
 
+    // --- TEMPLATE DE ACCIONES (LÓGICA RESTAURAR VS EDITAR/BORRAR) ---
     const actionBodyTemplate = (rowData) => {
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
+
+        if (isDeleted) {
+            // MOSTRAR SOLO BOTÓN RESTAURAR (VERDE)
+            return (
+                <div className="flex gap-1 justify-center">
+                    <Button 
+                        icon="pi pi-refresh" 
+                        rounded 
+                        text 
+                        severity="success" 
+                        size="small" 
+                        onClick={() => confirmRestoreDeficiency(rowData)} 
+                        tooltip="Restaurar" 
+                    />
+                </div>
+            );
+        }
+
+        // MOSTRAR EDITAR Y ELIMINAR (NORMAL)
         return (
             <div className="flex gap-1 justify-center">
-                <Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} disabled={isDeleted} tooltip="Editar" />
-                <Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} disabled={isDeleted} tooltip="Eliminar" />
+                <Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} tooltip="Editar" />
+                <Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} tooltip="Eliminar" />
             </div>
         );
     };
@@ -213,95 +280,64 @@ export default function Subestaciones() {
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* --- BARRA SUPERIOR (FILTROS Y ACCIONES) --- */}
+            {/* --- BARRA SUPERIOR --- */}
             <div className="bg-white p-2 rounded shadow-sm mb-2 flex items-center justify-between shrink-0">
                 
-                {/* Título */}
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-100 p-2 rounded-full"><i className="pi pi-search text-blue-600 text-lg"></i></div>
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-800 m-0 leading-none">Revisión SED</h2>
-                        <span className="text-xs text-gray-500">Gestión de Deficiencias</span>
-                    </div>
-                </div>
-
-                {/* Zona de Inputs (Cascada) */}
-                <div className="flex gap-3 items-end">
-                    
-                    {/* 1. Selector de Alimentador */}
-                    <div className="flex flex-col">
-                        <label className="text-xs font-bold text-gray-500 ml-1">Alimentador</label>
-                        <Dropdown 
-                            value={selectedFeeder} 
-                            onChange={handleFeederChange} 
-                            options={feeders} 
-                            optionLabel="label" 
-                            filter 
-                            placeholder="Seleccione..." 
-                            className="w-60 p-inputtext-sm"
-                            disabled={loadingFeeders}
-                            emptyMessage="No hay datos"
-                        />
-                    </div>
-
-                    {/* 2. Buscador de SED (AutoComplete) */}
-                    <div className="flex flex-col">
-                        <label className="text-xs font-bold text-gray-500 ml-1">Cód. SED</label>
-                        <div className="p-inputgroup">
-                            <AutoComplete 
-                                value={selectedSed} 
-                                suggestions={filteredSeds} 
-                                completeMethod={searchSeds} 
-                                field="sedCodigo" // IMPORTANTE: Muestra el código (ej. "8155")
-                                dropdown 
-                                onChange={(e) => setSelectedSed(e.value)} 
-                                itemTemplate={(item) => (
-                                    <div className="flex flex-col">
-                                        <span className="font-bold">{item.sedCodigo}</span>
-                                        <span className="text-xs text-gray-500">{item.sedEtiqueta}</span>
-                                    </div>
-                                )}
-                                placeholder={loadingSeds ? "Cargando..." : "Buscar SED..."}
-                                className="w-44 p-inputtext-sm font-bold"
-                                forceSelection
-                                disabled={!selectedFeeder || loadingSeds} // Bloqueado si no hay alimentador
-                            />
-                            <Button 
-                                icon="pi pi-search" 
-                                onClick={handleSearch} 
-                                loading={loadingDef}
-                                disabled={!selectedSed} 
-                                className="p-button-primary" 
-                                tooltip="Buscar Deficiencias"
-                            />
+                {/* Título y Buscador de SED */}
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-100 p-2 rounded-full"><i className="pi pi-search text-blue-600 text-lg"></i></div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-800 m-0 leading-none">Revisión SED</h2>
                         </div>
                     </div>
 
-                    <div className="w-px h-8 bg-gray-300 mx-1 self-center"></div>
-                    
-                    {/* Botones de Acción */}
-                    <Button 
-                        label="Nuevo" 
-                        icon="pi pi-plus" 
-                        severity="success" 
-                        onClick={openNew} 
-                        disabled={!selectedSed} 
-                        className="p-button-sm font-bold h-10" 
-                    />
+                    {/* Zona de Inputs (Cascada) */}
+                    <div className="flex gap-2 items-end ml-4">
+                        <div className="flex flex-col">
+                            <label className="text-xs font-bold text-gray-500 ml-1">Alimentador</label>
+                            <Dropdown 
+                                value={selectedFeeder} onChange={handleFeederChange} options={feeders} optionLabel="label" 
+                                filter placeholder="Seleccione..." className="w-48 p-inputtext-sm" disabled={loadingFeeders}
+                            />
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-xs font-bold text-gray-500 ml-1">Cód. SED</label>
+                            <div className="p-inputgroup">
+                                <AutoComplete 
+                                    value={selectedSed} suggestions={filteredSeds} completeMethod={searchSeds} field="sedCodigo"
+                                    dropdown onChange={(e) => setSelectedSed(e.value)} 
+                                    itemTemplate={(item) => (<div className="flex flex-col"><span className="font-bold">{item.sedCodigo}</span><span className="text-xs text-gray-500">{item.sedEtiqueta}</span></div>)}
+                                    placeholder="Buscar SED..." className="w-40 p-inputtext-sm font-bold" forceSelection disabled={!selectedFeeder}
+                                />
+                                <Button icon="pi pi-search" onClick={handleSearch} loading={loadingDef} disabled={!selectedSed} tooltip="Buscar Deficiencias" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Zona Derecha: Buscador Global y Acciones */}
+                <div className="flex items-end gap-3">
+                    <div className="flex flex-col">
+                         <label className="text-xs font-bold text-gray-500 ml-1">Buscar en tabla</label>
+                         <span className="p-input-icon-left">
+                            <i className="pi pi-search" />
+                            <InputText 
+                                value={globalFilterValue} 
+                                onChange={onGlobalFilterChange} 
+                                placeholder="Filtrar filas..." 
+                                className="p-inputtext-sm w-48"
+                                disabled={!deficiencies.length}
+                            />
+                        </span>
+                    </div>
+
+                    <div className="h-8 w-px bg-gray-300 mx-1"></div>
+
+                    <Button label="Nuevo" icon="pi pi-plus" severity="success" onClick={openNew} disabled={!selectedSed} className="p-button-sm font-bold h-10" />
                     
                     {(deficiencies.length > 0 || selectedFeeder) && (
-                        <Button 
-                            icon="pi pi-filter-slash" 
-                            severity="secondary" 
-                            outlined 
-                            onClick={() => { 
-                                setSelectedFeeder(null); 
-                                setSelectedSed(null); 
-                                clearData(); 
-                            }} 
-                            className="p-button-sm h-10" 
-                            tooltip="Limpiar Todo" 
-                        />
+                        <Button icon="pi pi-filter-slash" severity="secondary" outlined onClick={() => { setSelectedFeeder(null); setSelectedSed(null); clearData(); setGlobalFilterValue(''); setFilters({...filters, global: { value: null, matchMode: FilterMatchMode.CONTAINS }}) }} className="p-button-sm h-10" tooltip="Limpiar Todo" />
                     )}
                 </div>
             </div>
@@ -327,19 +363,32 @@ export default function Subestaciones() {
                             dataKey="defiInterno" 
                             rowHover 
                             emptyMessage="No hay deficiencias registradas."
+                            filters={filters}
+                            filterDisplay="row" 
+                            globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento']} 
+                            onFilter={(e) => setFilters(e.filters)}
                         >
-                            <Column field="defiIdElemento" header="ID" sortable style={{ width: '60px' }} />
-                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable style={{ width: '80px', textAlign: 'center' }} />
-                            <Column field="defiCodigoElemento" header="GIS" sortable style={{ fontWeight: 'bold', color: '#1e40af' }} />
+                            <Column field="defiIdElemento" header="ID" sortable filter filterPlaceholder="Buscar ID" style={{ width: '90px' }} />
+                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
+                            <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column header="Tipificación" body={typificationTemplate} style={{ textAlign: 'center', width: '100px' }} />
-                            
-                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="pi pi-eye text-blue-600 font-bold"></i> : null} style={{ width: '30px' }} />
-                            
+                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="pi pi-eye text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
                             <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
-                            <Column header="Inspector" body={inspectorTemplate} style={{ minWidth: '120px' }} />
-                            <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '90px', textAlign: 'center' }} />
-                            <Column field="defiEstadoCriticidad" header="Crit." body={criticidadTemplate} sortable style={{ width: '70px', textAlign: 'center' }} />
                             
+                            <Column 
+                                field="defiActivo" 
+                                header="Estado" 
+                                body={activeTemplate} 
+                                sortable 
+                                style={{ width: '130px', textAlign: 'center' }}
+                                filter 
+                                filterElement={statusFilterTemplate} 
+                                showFilterMenu={false} 
+                            />
+
+                            <Column field="defiEstadoCriticidad" header="Crit." body={criticidadTemplate} sortable style={{ width: '80px', textAlign: 'center' }} />
+                            
+                            {/* COLUMNA ACCIONES DINÁMICA */}
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                         </DataTable>
                     </SplitterPanel>
