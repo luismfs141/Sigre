@@ -1169,14 +1169,6 @@ export default function Multimedia() {
       report.pinActualizado = res?.ok ?? false;
     }
 
-
-
-
-
-
-
-
-
     // 4) Mensaje final + resumen (mejorado)
     const checks = [];
     const details = [];
@@ -1226,7 +1218,6 @@ export default function Multimedia() {
         notes.push("Inspector: los placeholders son informativos y NO reemplazan la foto real. Si aparece uno, reemplaza la foto.");
       }
     }
-
 
     // DefiInspeccionado
     const inspeccionTxt =
@@ -1278,18 +1269,6 @@ export default function Multimedia() {
 
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
   const finalizar = async () => {
     if (!requireEditPermission()) return;
     if (!selectedItem) return Alert.alert("Error", "No hay elemento seleccionado");
@@ -1298,8 +1277,8 @@ export default function Multimedia() {
       setLoading({ active: true, msg: "Guardando..." });
 
       const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
-      const codTablaParaGuardar = (deficiencyData.DefiServerId && deficiencyData.DefiServerId > 0)
-        ? deficiencyData.DefiServerId : deficiencyData.DefiInterno;
+      const codTablaParaGuardar = deficiencyData.DefiServerId? deficiencyData.DefiServerId : deficiencyData.DefiInterno;
+      const defiCodUnico = deficiencyData.DefiCol3;
       const currentTipiInterno = selectedDeficiency.typificationId || 0;
       const currentElementId = selectedDeficiency.elementId || selectedItem.PostInterno || selectedItem.VanoInterno || 0;
       const { tipo, codigo } = getElementoInfo();
@@ -1308,11 +1287,7 @@ export default function Multimedia() {
       const sAlim = safeSeg(feeder.alimEtiqueta);
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "VANO" : "POSTE";
-
       const sCod = safeSeg(codigo);
-
-
-
       const tipCode = String(selectedDeficiency?.typificationCode ?? "");
       const is7004 = tipCode === "7004";
 
@@ -1325,12 +1300,6 @@ export default function Multimedia() {
       // Base por elemento (sin deficiencia)
       const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/`;
 
-
-
-
-
-
-
       const hasNewPhotos = photos.some(p => p && !p.id);
       const hasNewAudios = audios.some(a => a && !a.id);
       const hasDeletedPhotos = deletedIds.some(d => d.type !== 0);
@@ -1339,27 +1308,6 @@ export default function Multimedia() {
       // Solo crear carpetas SAF si realmente se usarán
       const needPictures = hasNewPhotos || hasDeletedPhotos;
       const needMusic = hasNewAudios || hasDeletedAudios;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
       // 1. DETERMINAR RUTA (SIEMPRE CONFIG ACTUAL - SIN HERENCIA) ✅
       let relativeFolderPath = null;
@@ -1624,7 +1572,8 @@ export default function Multimedia() {
           photoData: photo,
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
-          tipiId: currentTipiInterno
+          tipiId: currentTipiInterno,
+          defiUUID: defiCodUnico,
         });
       }
 
@@ -1667,7 +1616,8 @@ export default function Multimedia() {
           isAudio: true,
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
-          tipiId: currentTipiInterno
+          tipiId: currentTipiInterno,
+          defiUUID: defiCodUnico
         });
       }
 
@@ -1693,13 +1643,13 @@ export default function Multimedia() {
     }
   };
 
-  const saveFileRecord = async ({ filename, slot, isAudio, photoData, codTablaReal, elementId, tipiId }) => {
+  const saveFileRecord = async ({ filename, slot, isAudio, photoData, codTablaReal, elementId, tipiId, defiUUID }) => {
     const { tipo } = getElementoInfo();
     return await saveArchivoLocal({
       ArchInterno: null, ArchTipo: isAudio ? 0 : slot, ArchTabla: "Deficiencias", ArchCodTabla: codTablaReal,
       ArchNombre: filename, ArchLatitud: photoData?.latUtm ?? null, ArchLongitud: photoData?.lonUtm ?? null,
       ArchFecha: photoData?.fechaISO ?? new Date().toISOString(), ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
-      ArchIdElemento: elementId, TipiInterno: tipiId, ArchActivo: 1, EstadoOffLine: 2,
+      ArchIdElemento: elementId, TipiInterno: tipiId, ArchActivo: 1, EstadoOffLine: 2, DefiUUID: defiUUID
     });
   };
 

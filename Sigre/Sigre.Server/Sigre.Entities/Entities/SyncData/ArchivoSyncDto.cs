@@ -30,6 +30,7 @@ namespace Sigre.Entities.Entities.SyncData
         public int EstadoOffLine { get; set; }
 
         public int? DefiServerId { get; set; }
+        public string? DefiUUID { get; set; }
     }
 
 

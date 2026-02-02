@@ -105,96 +105,64 @@ namespace Sigre.DataAccess
             return archivoTabla;
         }
 
-        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(List<ArchivoSyncDto> archivosOffline)
+        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(
+    List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
 
+            DADeficiency daDef = new DADeficiency();
+
             foreach (var dto in archivosOffline)
             {
-                // ===============================
-                // 🔹 INSERT (nuevo desde SQLite)
-                // ===============================
-                if (dto.EstadoOffLine == 2)
+                // 🔹 Resolver Deficiencia padre
+                int idDeficiency;
+
+                if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
                 {
-                    var nuevo = new Archivo
-                    {
-                        ArchInterno = 0, // EF genera
-                        ArchTipo = dto.ArchTipo,
-                        ArchTabla = dto.ArchTabla ?? "Deficiencias",
-
-                        // 🔑 RELACIÓN CORRECTA
-                        ArchCodTabla = (int)dto.ArchCodTabla,
-
-                        ArchNombre = dto.ArchNombre,
-                        ArchLatitud = dto.ArchLatitud,
-                        ArchLongitud = dto.ArchLongitud,
-                        ArchFecha = dto.ArchFecha,
-
-                        ArchTipoElemento = dto.ArchTipoElemento,
-                        ArchIdElemento = dto.ArchIdElemento,
-                        TipiInterno = dto.TipiInterno,
-
-                        ArchActivo = dto.ArchActivo == true
-                    };
-
-                    ctx.Archivos.Add(nuevo);
-                    ctx.SaveChanges();
-
-                    resultado.Add((dto.ArchInterno, nuevo.ArchInterno));
+                    idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
+                }
+                else
+                {
+                    idDeficiency = daDef.DADEFI_GetDeficiencyIDByElementAndType(
+                        dto.ArchIdElemento ?? 0,
+                        dto.ArchTipoElemento ?? string.Empty,
+                        dto.TipiInterno ?? 0
+                    );
                 }
 
-                // ===============================
-                // 🔹 UPDATE
-                // ===============================
-                else if (dto.EstadoOffLine == 1)
+                dto.ArchCodTabla = idDeficiency;
+
+                // 🔍 Buscar archivo existente (UUID recomendado)
+                var existente = ctx.Archivos
+                    .FirstOrDefault(a => a.ArchNombre == dto.ArchNombre);
+
+                if (existente != null)
                 {
-                    var existente = ctx.Archivos
-                        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
-
-                    if (existente == null) continue;
-
-                    existente.ArchTipo = dto.ArchTipo;
-                    existente.ArchNombre = dto.ArchNombre;
-                    existente.ArchLatitud = dto.ArchLatitud;
+                    // 🔁 UPDATE
+       
                     existente.ArchLongitud = dto.ArchLongitud;
+                    existente.ArchLatitud = dto.ArchLatitud;
+                    existente.ArchActivo = dto.ArchActivo;
                     existente.ArchFecha = dto.ArchFecha;
-                    existente.ArchTipoElemento = dto.ArchTipoElemento;
-                    existente.ArchIdElemento = dto.ArchIdElemento;
-                    existente.TipiInterno = dto.TipiInterno;
-                    existente.ArchActivo = dto.ArchActivo == true;
-
-                    ctx.SaveChanges();
 
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
                 }
-
-                // ===============================
-                // 🔹 DELETE LÓGICO
-                // ===============================
-                else if (dto.EstadoOffLine == 3)
+                else
                 {
-                    if (!dto.DefiServerId.HasValue) continue;
+                    // ➕ INSERT
+                    var archivo = DAARCH_ConvertFile(dto);
+                    ctx.Archivos.Add(archivo);
 
-                    var existente = ctx.Archivos
-                        .FirstOrDefault(a => a.ArchInterno == dto.DefiServerId.Value);
+                    ctx.SaveChanges(); // necesario para obtener ID
 
-                    if (existente == null) continue;
-
-                    // ✅ IMPORTANTE: actualizar la ruta también
-                    if (!string.IsNullOrWhiteSpace(dto.ArchNombre))
-                        existente.ArchNombre = dto.ArchNombre;
-
-                    existente.ArchActivo = false;
-
-                    ctx.SaveChanges();
-
-                    resultado.Add((dto.ArchInterno, existente.ArchInterno));
+                    resultado.Add((dto.ArchInterno, archivo.ArchInterno));
                 }
             }
 
             return resultado;
         }
+
         // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
         public bool DAFILE_SoftDelete(int idArchivo)
         {
@@ -367,6 +335,29 @@ namespace Sigre.DataAccess
                 tx.Rollback();
                 throw;
             }
+        }
+
+        public Archivo DAARCH_ConvertFile(ArchivoSyncDto arch_offline)
+        {
+            return new Archivo
+            {
+                // 📁 Información del archivo
+                ArchTipo = arch_offline.ArchTipo,
+                ArchTabla = arch_offline.ArchTabla,
+                ArchCodTabla = (int)arch_offline.ArchCodTabla,
+                ArchNombre = arch_offline.ArchNombre,
+                // 📍 Ubicación
+                ArchLatitud = arch_offline.ArchLatitud,
+                ArchLongitud = arch_offline.ArchLongitud,
+                // 📅 Fecha
+                ArchFecha = arch_offline.ArchFecha,
+                // 🔗 Relación con elemento
+                ArchTipoElemento = arch_offline.ArchTipoElemento,
+                ArchIdElemento = arch_offline.ArchIdElemento,
+                TipiInterno = arch_offline.TipiInterno,
+                // ⚙️ Estado
+                ArchActivo = arch_offline.ArchActivo,
+            };
         }
     }
 }

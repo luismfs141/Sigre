@@ -7,12 +7,12 @@ import { useConnectivity } from "./useConnectivity";
 
 import {
   deleteFileById,
+  getArchivoByIdLocal,
   getArchivosByBasePathLocal,
   getArchivosPendientes,
   getFilesByElementAndTypi,
   getMediosByDeficienciaIdLocal,
   getNextArchCodTablaLocal,
-  markArchivoAsSynced,
   markArchivoDeletedLocal,
   markArchivoInactiveLocal,
   saveOrUpdateArchivoLocal,
@@ -92,7 +92,7 @@ export function useFiles() {
       DefiServerId: arch.DefiServerId ?? null,
 
       // ✅ boolean REAL (no Boolean("0"))
-      ArchActivo: activoNum === 1,
+      ArchActivo: Boolean(arch.ArchActivo),
 
       EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
     };
@@ -108,25 +108,17 @@ export function useFiles() {
     syncingRef.current = true;
 
     try {
+      // 🔐 CLAVE: garantizar DB
+      const dbOk = await checkDatabase();
+      if (!dbOk) return;
+
       const online = await isOnline();
       if (!online) return;
 
-      const pendientes = await getArchivosPendientes();
-
-      const arch = pendientes.find(a =>
-        a.ArchInterno === archInternoLocal &&
-        [1, 2, 3].includes(toNum(a.EstadoOffLine))
-      );
-
+      const arch = await getArchivoByIdLocal(archInternoLocal);
       if (!arch) return;
 
       const payload = [normalizeArchivoForSync(arch)];
-      //console.log("📤 Payload:", payload);
-
-console.log("🧾 ArchNombre a sincronizar:", arch.ArchNombre);
-console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
-
-
 
       const response = await client.post(
         "/File/SyncFromSQLite",
@@ -139,19 +131,17 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
 
       if (map.localId !== map.serverId) {
         await updateArchivoIdAfterSync(map.localId, map.serverId);
-      } else {
-        await markArchivoAsSynced(map.serverId);
-      }
-
+      } 
+      
       console.log("✅ Archivo sincronizado");
-
     } catch (err) {
       console.error("❌ [autoSyncArchivo]", err?.response?.data || err.message);
     } finally {
       syncingRef.current = false;
       console.log("🔓 [autoSyncArchivo] END");
     }
-  }, [isOnline, client]);
+  }, [checkDatabase, isOnline, client]);
+
 
   // ===============================
   // 💾 SAVE / UPDATE (SQLite)
@@ -160,6 +150,7 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
+    console.log("💾 saveArchivoLocal - data:", data);
     const normalized = normalizeArchivoBeforeSave(data);
 
     const archivoForDB = {
@@ -174,6 +165,7 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
       ArchTipoElemento: normalized.archTipoElemento,
       ArchIdElemento: normalized.archIdElemento,
       TipiInterno: normalized.tipiInterno,
+      DefiUUID: data.DefiUUID ?? null,
 
       // ✅ 0/1 numérico en SQLite (tu Multimedia manda "0")
       ArchActivo: normalized.archActiv,
@@ -256,6 +248,56 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
     }
   }, [checkDatabase]);
 
+  const syncAllArchivos = useCallback(async () => {
+    const online = await isOnline();
+    if (!online) return { ok: false };
+
+    try {
+      const dbOk = await checkDatabase();
+      if (!dbOk) return { ok: false };
+
+      const pendientes = await getArchivosPendientes();
+      if (!pendientes.length) return { ok: true, synced: 0 };
+
+      const aSincronizar = pendientes.filter((a) =>
+        [1, 2, 3].includes(Number(a.EstadoOffLine))
+      );
+
+      if (!aSincronizar.length) return { ok: true, synced: 0 };
+
+      const payload = aSincronizar.map(normalizeArchivoForSync);
+
+      const response = await client.post(
+        "/File/SyncFromSQLite",
+        payload,
+        { timeout: 20000 }
+      );
+
+      const respList = Array.isArray(response.data) ? response.data : [];
+      let syncedCount = 0;
+
+      for (const r of respList) {
+        if (!r?.localId || !r?.serverId) {
+          console.warn("⚠ Respuesta inválida:", r);
+          continue;
+        }
+
+        await updateArchivoIdAfterSync(r.localId, r.serverId);
+        syncedCount++;
+      }
+
+      return { ok: true, synced: syncedCount };
+
+    } catch (err) {
+      console.error(
+        "❌ Sync masivo archivos falló:",
+        err?.response?.data || err?.message || err
+      );
+      return { ok: false };
+    }
+  }, [checkDatabase, isOnline, client]);
+
+
   return {
     getNextArchCodTabla: useCallback(() => getNextArchCodTablaLocal(), []),
     saveArchivoLocal,
@@ -264,6 +306,7 @@ console.log("🧾 EstadoOffLine a sincronizar:", arch.EstadoOffLine);
     fetchFilesByElementAndTypi,
     fetchMediosByDeficienciaId,
     deletedFile,
-    markArchivoAsInactive
+    markArchivoAsInactive,
+    syncAllArchivos
   };
 }

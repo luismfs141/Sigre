@@ -4,20 +4,12 @@ import { useState } from "react";
 import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import { useConnectivity } from "./useConnectivity";
+import { useDeficiency } from "./useDeficiency";
+import { useFiles } from "./useFiles";
 
 // ======================= DEFICIENCIAS =======================
-import {
-  getDeficienciesPendientesReanudables,
-  markDeficiencyAsSynced,
-  updateDeficiencyIdAfterSync
-} from "../database/offlineDB/deficiencies";
 
 // ======================= ARCHIVOS ===========================
-import {
-  getArchivosPendientes,
-  markArchivoAsSynced,
-  updateArchivoIdAfterSync
-} from "../database/offlineDB/files";
 
 /* ==========================================================
    🧠 NORMALIZADORES
@@ -78,6 +70,9 @@ export const useOffline = () => {
   const [downloading, setDownloading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const client = api();
+  const { syncAllDeficiencies } = useDeficiency();
+  const { syncAllArchivos } = useFiles();
+
 
   const ensureOnline = () => {
     if (!isOnline) {
@@ -134,93 +129,18 @@ export const useOffline = () => {
     try {
       ensureOnline();
 
-      /* ==========================================================
-         1️⃣ PRECARGA GLOBAL
-      ========================================================== */
-      const deficiencias = await getDeficienciesPendientesReanudables();
-      const archivos = await getArchivosPendientes();
+      const syncedDef = await syncAllDeficiencies();
+      const syncedArch = await syncAllArchivos();
 
-      console.log("📦 Deficiencias pendientes:", deficiencias.length);
-      console.log("📁 Archivos pendientes:", archivos.length);
-
-      let totalSynced = 0;
-
-      /* ==========================================================
-         2️⃣ ITERACIÓN POR DEFICIENCIA
-      ========================================================== */
-      for (const def of deficiencias) {
-        try {
-          ensureOnline();
-
-          console.log("🔄 Sync deficiencia:", def.DefiInterno);
-
-          /* ------------------------------------------------------
-             2.1 Archivos de esta deficiencia
-          ------------------------------------------------------ */
-          const archivosDef = archivos.filter(
-            a => a.ArchCodTabla === def.DefiInterno
-          );
-
-          /* ------------------------------------------------------
-             2.2 Subir DEFICIENCIA
-          ------------------------------------------------------ */
-          const response = await client.post(
-            "/Deficiency/SyncFromSQLite",
-            [normalizeDeficiencyForSync(def)],
-            { timeout: 15000 }
-          );
-
-          let serverDefiId = def.DefiInterno;
-
-          if (Array.isArray(response.data) && response.data.length > 0) {
-            const map = response.data[0];
-
-            if (map.localId && map.serverId && map.localId !== map.serverId) {
-              await updateDeficiencyIdAfterSync(map.localId, map.serverId);
-              serverDefiId = map.serverId;
-            }
-          }
-
-          /* ------------------------------------------------------
-             2.3 Subir ARCHIVOS
-          ------------------------------------------------------ */
-          if (archivosDef.length > 0) {
-            const archivosPayload = archivosDef.map(a =>
-              normalizeArchivoForSync(a, serverDefiId)
-            );
-
-            await client.post(
-              "/File/SyncFromSQLite",
-              archivosPayload,
-              { timeout: 30000 }
-            );
-
-            for (const a of archivosDef) {
-              await updateArchivoIdAfterSync(a.ArchInterno, serverDefiId);
-              await markArchivoAsSynced(a.ArchInterno);
-            }
-          }
-
-          /* ------------------------------------------------------
-             2.4 CIERRE TRANSACCIONAL
-          ------------------------------------------------------ */
-          await markDeficiencyAsSynced(serverDefiId);
-          totalSynced++;
-
-        } catch (err) {
-          console.log(
-            `❌ Error en deficiencia ${def.DefiInterno}`,
-            err?.response?.data || err.message
-          );
-          break; // ⛔ reanudable
-        }
-      }
-
-      return { ok: true, synced: totalSynced };
+      return {
+        ok: true,
+        synced: syncedDef + syncedArch
+      };
 
     } catch (err) {
       console.log("❌ Sync general falló:", err.message);
       return { ok: false };
+
     } finally {
       setSyncing(false);
     }

@@ -202,7 +202,7 @@ export const updateArchivoIdAfterSync = async (localId, serverId) => {
     WHERE ArchInterno = ? 
     
     `,
-    [serverId, localId, localId]
+    [serverId, localId]
   );
 };
 
@@ -285,7 +285,8 @@ export const saveOrUpdateArchivoLocal = async (arch) => {
       "TipiInterno",
       "ArchActivo",
       "EstadoOffLine",
-      "DefiServerId"
+      "DefiServerId",
+      "DefiUUID"
     ];
 
     // ---------------- UPDATE ----------------
@@ -357,5 +358,26 @@ export const getMediosByDeficienciaIdLocal = async (deficienciaId) => {
       error
     );
     return [];
+  }
+};
+
+export const getArchivoByIdLocal = async (archInterno) => {
+  if (!archInterno) return null;
+
+  try {
+    const rows = await runQuery(
+      `
+      SELECT *
+      FROM Archivos
+      WHERE ArchInterno = ?
+      LIMIT 1;
+      `,
+      [archInterno]
+    );
+
+    return rows && rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+    console.error("❌ Error en getArchivoByIdLocal:", error);
+    return null;
   }
 };

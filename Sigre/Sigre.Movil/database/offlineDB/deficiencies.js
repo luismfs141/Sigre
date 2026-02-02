@@ -156,6 +156,7 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiEstadoCriticidad",
       "DefiInspeccionado",
       "DefiCol1",
+      "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
       "EstadoOffLine"
@@ -256,10 +257,11 @@ export const markDeficiencyAsSynced = async (defiInterno) => {
 export const updateDeficiencyIdAfterSync = async (localId, serverId) => {
   const query = `
     UPDATE Deficiencias
-    SET DefiServerId = ?, EstadoOffLine = NULL
-    WHERE DefiInterno = ? OR DefiServerId = ?
+    SET DefiServerId = ?, 
+        EstadoOffLine = NULL
+    WHERE DefiInterno = ? 
   `;
-  await runQuery(query, [serverId, localId, localId]);
+  await runQuery(query, [serverId, localId]);
 };
 
 export const getDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {

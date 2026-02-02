@@ -76,7 +76,8 @@ namespace Sigre.DataAccess
             var deficiencies =
                 (from d in ctx.Deficiencias
                  where d.DefiTipoElemento == type && d.DefiIdElemento == x_ElementId
-                 select new Deficiencia() {
+                 select new Deficiencia()
+                 {
                      DefiActivo = d.DefiActivo,
                      DefiInterno = d.DefiInterno,
                      DefiArmadoMaterial = d.DefiArmadoMaterial,
@@ -139,7 +140,7 @@ namespace Sigre.DataAccess
             return deficiencies;
         }
 
-        public List<PinStruct> DADEFI_GetPinsByFeeders(List<int> x_feeders )
+        public List<PinStruct> DADEFI_GetPinsByFeeders(List<int> x_feeders)
         {
             SigreContext ctx = new SigreContext();
 
@@ -151,7 +152,7 @@ namespace Sigre.DataAccess
                 {
                     Id = d.DefiInterno,
                     IdAlimentador = a.AlimInterno,
-                    Label =  "",
+                    Label = "",
                     Type = ElectricElement.Deficiency,
                     Latitude = d.DefiLatitud,
                     Longitude = d.DefiLongitud,
@@ -274,7 +275,7 @@ namespace Sigre.DataAccess
                  TablInterno = d.TablInterno,
                  TipiInterno = d.TipiInterno,//
                  DefiInspeccionado = d.DefiInspeccionado,
-                 DefiKeyWords = d.DefiKeyWords == null? "":d.DefiKeyWords,
+                 DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                  DefiAccesibilidad = d.DefiAccesibilidad,
                  DefiTipoCruce = d.DefiTipoCruce,
                  EstadoOffLine = 0,
@@ -964,6 +965,28 @@ namespace Sigre.DataAccess
                 // 3. Guardar
                 ctx.SaveChanges();
                 return true;
+            }
+        }
+
+        public int DADEFI_GetDeficiencyIDByUUID(string x_defiCol3)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var deficiency = ctx.Deficiencias
+                                    .FirstOrDefault(d => d.DefiCol3 == x_defiCol3);
+                return deficiency != null ? deficiency.DefiInterno : 0;
+            }
+        }
+
+        public int DADEFI_GetDeficiencyIDByElementAndType(int x_idElemento, string x_tipoElemento, int x_tipiInterno)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var deficiency = ctx.Deficiencias
+                                    .FirstOrDefault(d => d.DefiIdElemento == x_idElemento
+                                                      && d.DefiTipoElemento == x_tipoElemento
+                                                      && d.TipiInterno == x_tipiInterno);
+                return deficiency != null ? deficiency.DefiInterno : 0;
             }
         }
     }
