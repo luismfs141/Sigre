@@ -856,7 +856,10 @@ namespace Sigre.DataAccess
                     // Fechas
                     var now = DateTime.Now;
                     input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
-                    input.DefiFechaCreacion = now;
+                    if (input.DefiInterno == 0)
+                    {
+                        input.DefiFechaCreacion = input.DefiFecRegistro;
+                    }
                     input.DefiFecModificacion = now;
 
                     // Usuarios (Evitar NULLs)

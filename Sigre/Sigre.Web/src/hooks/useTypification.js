@@ -12,6 +12,7 @@ export const useTypification = () => {
       try {
         const data = await getAllTypifications();
         if(data) setMasterTypifications(data);
+        
       } catch (error) {
         console.error("Error cargando maestro de tipificaciones:", error);
       } finally {
@@ -22,17 +23,21 @@ export const useTypification = () => {
   }, []);
 
   // 2. Función para buscar el Código (ej: "6002") dado un ID Interno (ej: 52)
-  const getCodeById = useCallback((internalId) => {
+const getCodeById = useCallback((internalId) => {
+    console.log("1. Buscando ID:", internalId);
+    console.log("2. Total tipificaciones en maestro:", masterTypifications.length);
+
     if (!masterTypifications.length || !internalId) return "";
-    
-    // Buscamos en el array maestro
-    // Nota: Revisa si tu API devuelve 'typificationId' o 'TypificationId' (Mayúsculas importan)
+
     const match = masterTypifications.find(t => 
-        t.typificationId === internalId || t.TypificationId === internalId
+        String(t.tipiInterno) === String(internalId) || 
+        String(t.typificationId) === String(internalId)
     );
-    
-    return match ? match.code : ""; // Retorna "6002" o vacío si no encuentra
-  }, [masterTypifications]);
+
+    console.log("3. Resultado encontrado:", match?.code);
+    return match ? match.code : "";
+}, [masterTypifications]);
+
 
   // 3. Función para filtrar por Tabla (Poste/Vano) para el Dropdown manual
   const fetchTypificationsByTypeElement = useCallback((tableId) => {
@@ -44,28 +49,48 @@ export const useTypification = () => {
         }));
   }, [masterTypifications]);
 
-  const getTypificationsByElement = useCallback((elementType) => {
-    if (!masterTypifications.length) return [];
+// --- DENTRO DE useTypification.js ---
 
-    // A. FILTRADO
-    const filtered = elementType 
-        ? masterTypifications.filter(t => 
-            // Asegúrate de que tu BD usa 'POST', 'VANO', etc. en esta columna
-            t.tipiTipoElemento === elementType || t.defiTipoElemento === elementType
-          )
-        : masterTypifications;
+const getTypificationsByElement = useCallback((elementType) => {
+    // 1. Verificamos si hay datos maestros
+    if (!masterTypifications.length) {
+        console.warn("⚠️ [useTypification] Maestro vacío. Esperando carga...");
+        return [];
+    }
 
-    // B. MAPEO
-    return filtered.map(t => ({
-        // Label: Lo que ve el humano ("6002 - Poste Roto")
-        label: `${t.tipiCodigo || t.code} - ${t.tipiDescripcion || t.typification}`,
+    console.group("🔍 DEPURANDO FILTRO DROPDOWN");
+    console.log("1. Buscando opciones para Tipo:", elementType);
+    
+    // 2. FILTRADO
+    const filtered = masterTypifications.filter(t => {
+        const tipoDb = (t.tipiTipoElemento || t.defiTipoElemento || "").toUpperCase();
+        const tipoForm = (elementType || "").toUpperCase();
+        return tipoDb === 'BOTH' || tipoDb === tipoForm;
+    });
+
+    console.log(`2. Encontrados ${filtered.length} registros raw.`);
+
+    // 3. MAPEO (Aquí vemos el ID real)
+    const mapped = filtered.map(t => {
+        // Obtenemos el ID real
+        const realId = Number(t.tipiInterno || t.typificationId);
+        const code = t.code || t.tipiCodigo;
         
-        // Value: Lo que guarda la BD (EL ID INTERNO)
-        // ❌ INCORRECTO: value: t.code 
-        // ✅ CORRECTO: 
-        value: Number(t.tipiInterno || t.typificationId) 
-    }));
-  }, [masterTypifications]);
+        // Logueamos solo los sospechosos (ej: la 6026)
+        if (code === '6026' || code === '7004') {
+            console.log(`   👉 OJO: El código ${code} tiene ID REAL: ${realId} y Tipo: ${t.tipiTipoElemento}`);
+        }
+
+        return {
+            label: `${code} - ${t.typification || t.tipiDescripcion}`,
+            value: realId // <--- ESTE ES EL VALOR QUE SE ENVÍA AL FORMULARIO
+        };
+    });
+
+    console.groupEnd();
+    return mapped;
+
+}, [masterTypifications]);
 
   return {
     masterTypifications,
