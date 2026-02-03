@@ -93,7 +93,15 @@ export const COMMON_DEFICIENCY_FIELDS = [
     type: "textarea",
     required: false,
     placeholder: "Comentarios o notas..."
-  }
+  },
+  {
+    key: "defiInspeccionado",
+    label: "Inspeccionado",
+    type: "number",
+    required: false,
+    readonly: true,
+    hidden: true 
+  },
 ];
 
 // =============================================================================
@@ -133,7 +141,7 @@ export const DEFICIENCY_FIELD_MAP = {
   // --- VANOS ---
   "7002": { label: "VANO - Hebras Rotas", fields: [...COMMON_DEFICIENCY_FIELDS] },
   
-  "7004": {
+ "7004": {
     label: "VANO - Dist. Seguridad (Edificación)",
     fields: [
       ...COMMON_BEFORE_OBSERVACION,
@@ -142,6 +150,8 @@ export const DEFICIENCY_FIELD_MAP = {
         label: "Distancia Horizontal (m)",
         type: "number",
         required: true,
+        // AGREGADO: Texto de ayuda visual
+        helperText: "(Máx: 2.50m)", 
         validation: {
           max: 2.5,
           message: "Valores mayores a 2.5m no suelen ser deficiencia horizontal."
@@ -164,10 +174,11 @@ export const DEFICIENCY_FIELD_MAP = {
         label: "Distancia Vertical (m)",
         type: "number",
         required: true,
+        // AGREGADO: Resumen de la regla de negocio
+        helperText: "(Accesible < 3.0m | No Acc. < 1.8m)",
         validation: {
           custom: (value, formData) => {
             const v = Number(value);
-            // IMPORTANTE: Ahora accedemos con camelCase
             const acc = Number(formData?.defiAccesibilidad); 
 
             if (!Number.isFinite(v)) return "Ingrese una distancia válida.";
@@ -175,7 +186,6 @@ export const DEFICIENCY_FIELD_MAP = {
 
             if (acc === 1 && v >= 3.0) return "Si es Accesible, la distancia debe ser < 3.00 m.";
             if (acc === 2 && v >= 1.8) return "Si es No accesible, la distancia debe ser < 1.80 m.";
-            
             return null;
           }
         }
@@ -188,7 +198,6 @@ export const DEFICIENCY_FIELD_MAP = {
     label: "VANO - Dist. Seguridad (Vías/Cruce)",
     fields: [
       ...COMMON_BEFOREOBS_UNTIL_SUMINISTRO,
-      
       {
         key: "defiTipoCruce",
         label: "Tipo de cruce*",
@@ -204,32 +213,28 @@ export const DEFICIENCY_FIELD_MAP = {
         },
         validation: { message: "Seleccione el tipo de cruce" }
       },
-      
       ...COMMON_BEFOREOBS_AFTER_SUMINISTRO,
-
       {
         key: "defiDistVertical",
         label: "Altura medida (m)*",
         type: "number",
         required: true,
+        // AGREGADO: Tabla resumida de límites
+        helperText: "(Calle <5.5 | Av <6.5 | Tren <7.5)", 
         validation: {
           custom: (value, formData) => {
             const v = Number(value);
             const tipo = Number(formData?.defiTipoCruce);
-
             if (!Number.isFinite(v)) return "Ingrese la altura medida.";
             
-            const limitesSeguridad = {
-              1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5
-            };
+            const limitesSeguridad = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
 
             if (!limitesSeguridad[tipo]) return "Seleccione primero el tipo de cruce.";
 
             if (v >= limitesSeguridad[tipo]) {
-                const labelMap = { 
-                    1: "Calle", 2: "Avenida", 3: "Vía Férrea", 4: "Longitudinal", 5: "Longitudinal Cochera" 
-                };
-                return `Para ${labelMap[tipo]}, la altura debe ser MENOR a ${limitesSeguridad[tipo].toFixed(2)}m.`;
+               // ... tu lógica de retorno de mensaje ...
+               const labelMap = { 1: "Calle", 2: "Avenida", 3: "Vía Férrea", 4: "Longitudinal", 5: "Longitudinal Cochera" };
+               return `Para ${labelMap[tipo]}, la altura debe ser MENOR a ${limitesSeguridad[tipo].toFixed(2)}m.`;
             }
             return null;
           }
@@ -248,6 +253,8 @@ export const DEFICIENCY_FIELD_MAP = {
         label: "Distancia Horizontal (m)",
         type: "number",
         required: true,
+        // AGREGADO: Restricción visual
+        helperText: "(Debe ser < 7.50m)",
         validation: {
           custom: (value) => {
              const v = Number(value);
@@ -260,7 +267,6 @@ export const DEFICIENCY_FIELD_MAP = {
     ]
   }
 };
-
 export const ALL_DEFICIENCY_OPTIONS = [
     { code: "0", name: "SIN DEFICIENCIA", type: "BOTH" },
     { code: "6002", name: "6002 - Mal Estado / Inapropiado", type: "POST" },

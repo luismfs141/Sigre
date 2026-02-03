@@ -48,14 +48,14 @@ export const useDeficienciesBySed = () => {
             console.warn("⚠️ ID de SED inválido para búsqueda");
             return;
         }
-        
+
         setLoading(true);
         setError(null);
         try {
             console.log(`📡 [GET] Buscando Deficiencias de la SED: ${sedId}`);
             const response = await api.get('/Deficiency/GetBySed', { params: { x_sed: sedId } });
             const rawData = response.data || [];
-            setDeficiencies(rawData); 
+            setDeficiencies(rawData);
             return rawData;
         } catch (err) {
             console.error("❌ Error fetchBySed:", err);
@@ -97,7 +97,7 @@ export const useDeficienciesBySed = () => {
 
             // 3. BUSCAR ID EXISTENTE (Si es edición)
             let finalIdElemento = rawData.defiIdElemento ? Number(rawData.defiIdElemento) : 0;
-            
+
             // Estrategia de rescate de ID si viene en 0
             if (finalIdElemento === 0) {
                 if (rawData.defiTipoElemento === 'POST') {
@@ -127,28 +127,31 @@ export const useDeficienciesBySed = () => {
             // 6. CONSTRUCCIÓN DEL PAYLOAD FINAL
             const payload = {
                 ...rawData,
-                
+
                 // --- CAMPOS CRÍTICOS ---
-                inspInterno: null,          
-                tablInterno: autoTablInterno, 
+                inspInterno: null,
+                tablInterno: autoTablInterno,
                 defiIdElemento: finalIdElemento,
-                sedCodigo: rawData.sedCodigo, 
-                
+                sedCodigo: rawData.sedCodigo,
+
                 // --- AUDITORÍA DE USUARIOS (CORREGIDA) ---
                 // Si es nuevo: Creador = Usuario Actual. Si es edición: Mantener original.
                 defiUsuarioInic: isNew ? currentUserId : (rawData.defiUsuarioInic ? String(rawData.defiUsuarioInic) : currentUserId),
                 // Modificador: SIEMPRE es el usuario actual.
-                defiUsuarioMod: currentUserId, 
+                defiUsuarioMod: currentUserId,
 
                 // Datos Básicos
                 defiFecRegistro: rawData.defiFecRegistro || new Date().toISOString(),
-                defiActivo: true, 
+                defiActivo: true,
                 defiInterno: rawData.defiInterno ? Number(rawData.defiInterno) : 0,
-                
+                defiInspeccionado: (rawData.defiInspeccionado !== undefined && rawData.defiInspeccionado !== null)
+                    ? Number(rawData.defiInspeccionado)
+                    : true,
+
                 // Conversiones Numéricas Seguras
                 tipiInterno: rawData.tipiInterno ? Number(rawData.tipiInterno) : 0,
                 defiEstadoCriticidad: toNumOrNull(rawData.defiEstadoCriticidad),
-                
+
                 // Coordenadas
                 defiLatitud: rawData.defiLatitud ? parseFloat(rawData.defiLatitud) : 0,
                 defiLongitud: rawData.defiLongitud ? parseFloat(rawData.defiLongitud) : 0,
@@ -162,26 +165,26 @@ export const useDeficienciesBySed = () => {
                 // Textos
                 defiAccesibilidad: toStrOrNull(rawData.defiAccesibilidad),
                 defiTipoCruce: toStrOrNull(rawData.defiTipoCruce),
-                defiObservacion: rawData.defiObservacion || "", 
+                defiObservacion: rawData.defiObservacion || "",
                 defiComentario: toStrOrNull(rawData.defiComentario),
                 defiNumSuministro: toStrOrNull(rawData.defiNumSuministro),
 
                 // Limpieza de basura (propiedades que no deben ir al backend)
-                label: undefined, 
+                label: undefined,
                 value: undefined,
-                estadoOffLine: undefined, 
+                estadoOffLine: undefined,
                 inspInternoNavigation: undefined,
-                POST_Interno: undefined, PostInterno: undefined, 
+                POST_Interno: undefined, PostInterno: undefined,
                 VAN_Interno: undefined, VanInterno: undefined,
                 POST_CODIGO: undefined, VAN_CODIGO: undefined,
                 id: undefined
             };
 
             console.log("💾 Guardando Deficiencia (Usuario " + currentUserId + "):", payload);
-            
+
             // 7. PETICIÓN POST
             const response = await api.post('/Deficiency/saveOrUpdateWeb', payload);
-            
+
             return { success: true, data: response.data };
 
         } catch (err) {
@@ -201,7 +204,7 @@ export const useDeficienciesBySed = () => {
     const softDeleteDeficiency = async (defiInterno) => {
         try {
             await api.post('/Deficiency/SoftDelete', null, { params: { id: defiInterno } });
-            setDeficiencies(prev => prev.map(d => 
+            setDeficiencies(prev => prev.map(d =>
                 d.defiInterno === defiInterno ? { ...d, defiActivo: false } : d
             ));
             return true;
@@ -215,7 +218,7 @@ export const useDeficienciesBySed = () => {
     const restoreDeficiency = async (defiInterno) => {
         try {
             const response = await api.post('/Deficiency/Restaurar', null, { params: { id: defiInterno } });
-            setDeficiencies(prev => prev.map(d => 
+            setDeficiencies(prev => prev.map(d =>
                 d.defiInterno === defiInterno ? { ...d, defiActivo: true } : d
             ));
             return { success: true, message: response.data.mensaje || "Restaurado" };
@@ -227,12 +230,12 @@ export const useDeficienciesBySed = () => {
 
     const clearData = () => { setDeficiencies([]); setError(null); };
 
-    return { 
-        deficiencies, loading, error, 
-        fetchBySed, 
-        saveDeficiency, 
-        softDeleteDeficiency, 
+    return {
+        deficiencies, loading, error,
+        fetchBySed,
+        saveDeficiency,
+        softDeleteDeficiency,
         restoreDeficiency,
-        clearData, setDeficiencies 
+        clearData, setDeficiencies
     };
 };

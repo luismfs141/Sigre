@@ -35,8 +35,10 @@ export default function DeficiencyForm({
 }) {
     const [formData, setFormData] = useState({});
     const [submitted, setSubmitted] = useState(false);
+    // NUEVO: Estado para errores de validación en tiempo real
+    const [fieldErrors, setFieldErrors] = useState({});
     
-    const { getCodeById,masterTypifications, loading: loadingTipos } = useTypification(); 
+    const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification(); 
 
     // =========================================================================
     // 1. REGLA DE NEGOCIO: DETECTAR "SIN DEFICIENCIA" (S/D)
@@ -60,73 +62,72 @@ export default function DeficiencyForm({
     }, [formData.defiCodigoElemento, existingDeficiencies]);
 
     // =========================================================================
-    // 2. CONFIGURACIÓN DINÁMICA
+    // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
     // =========================================================================
     const currentConfig = useMemo(() => {
         if (!formData.tipiInterno) return null;
         const code = getCodeById(formData.tipiInterno);
         return DEFICIENCY_FIELD_MAP[code] || null;
     }, [formData.tipiInterno, getCodeById]);
-// =========================================================================
-// 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados)
-// =========================================================================
-const typificationOptions = useMemo(() => {
-    // Si no hay datos maestros, no mostramos nada
-    if (!masterTypifications || masterTypifications.length === 0) return [];
 
-    // --- PASO A: IDENTIFICAR QUÉ CÓDIGOS YA ESTÁN USADOS ---
-    const currentGis = formData.defiCodigoElemento?.trim().toUpperCase();
-    
-    const usedCodes = existingDeficiencies
-        .filter(d => {
-            // 1. Que pertenezca al mismo elemento (código GIS)
-            const sameGis = d.defiCodigoElemento?.trim().toUpperCase() === currentGis;
-            // 2. Que esté activo (no borrado lógico)
-            const isActive = d.defiActivo;
-            // 3. Que NO sea el registro que estamos editando ahora mismo
-            // (Si editas la 6002, tienes que poder seguir viendo la 6002 en la lista)
-            const notSelf = !deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno;
+    // =========================================================================
+    // 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados + Mapeo ID)
+    // =========================================================================
+    const typificationOptions = useMemo(() => {
+        // Si no hay datos maestros, no mostramos nada
+        if (!masterTypifications || masterTypifications.length === 0) return [];
 
-            return sameGis && isActive && notSelf;
-        })
-        .map(d => getCodeById(d.tipiInterno)); // Convertimos ID (57) a Código ("6026") para comparar fácil
+        // --- PASO A: IDENTIFICAR QUÉ CÓDIGOS YA ESTÁN USADOS ---
+        const currentGis = formData.defiCodigoElemento?.trim().toUpperCase();
+        
+        const usedCodes = existingDeficiencies
+            .filter(d => {
+                // 1. Que pertenezca al mismo elemento (código GIS)
+                const sameGis = d.defiCodigoElemento?.trim().toUpperCase() === currentGis;
+                // 2. Que esté activo (no borrado lógico)
+                const isActive = d.defiActivo;
+                // 3. Que NO sea el registro que estamos editando ahora mismo
+                const notSelf = !deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno;
 
-    // --- PASO B: FILTRAR LA LISTA ESTÁTICA ---
-    const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
-        // 1. Filtro Básico: ¿Es POSTE o VANO?
-        if (opt.type !== 'BOTH' && opt.type !== formData.defiTipoElemento) return false;
+                return sameGis && isActive && notSelf;
+            })
+            .map(d => getCodeById(d.tipiInterno)); // Convertimos ID a Código para comparar fácil
 
-        // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
-        // Si el código ya está usado Y NO ES la 7004, lo ocultamos.
-        if (usedCodes.includes(opt.code) && opt.code !== '7004') {
-            return false; 
-        }
+        // --- PASO B: FILTRAR LA LISTA ESTÁTICA ---
+        const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
+            // 1. Filtro Básico: ¿Es POSTE o VANO?
+            if (opt.type !== 'BOTH' && opt.type !== formData.defiTipoElemento) return false;
 
-        return true;
-    });
+            // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
+            if (usedCodes.includes(opt.code) && opt.code !== '7004') {
+                return false; 
+            }
 
-    // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
-    return validOptions.map(staticOpt => {
-        const matchInDb = masterTypifications.find(t => 
-            String(t.code || t.tipiCodigo) === String(staticOpt.code)
-        );
+            return true;
+        });
 
-        if (!matchInDb) return null;
+        // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
+        return validOptions.map(staticOpt => {
+            const matchInDb = masterTypifications.find(t => 
+                String(t.code || t.tipiCodigo) === String(staticOpt.code)
+            );
 
-        return {
-            label: staticOpt.name,
-            value: Number(matchInDb.tipiInterno || matchInDb.typificationId) 
-        };
-    }).filter(opt => opt !== null);
+            if (!matchInDb) return null;
 
-}, [
-    formData.defiTipoElemento, 
-    formData.defiCodigoElemento, 
-    masterTypifications, 
-    existingDeficiencies, 
-    deficiencyToEdit, 
-    getCodeById 
-]);
+            return {
+                label: staticOpt.name,
+                value: Number(matchInDb.tipiInterno || matchInDb.typificationId) 
+            };
+        }).filter(opt => opt !== null);
+
+    }, [
+        formData.defiTipoElemento, 
+        formData.defiCodigoElemento, 
+        masterTypifications, 
+        existingDeficiencies, 
+        deficiencyToEdit, 
+        getCodeById 
+    ]);
 
     const criticidadOptions = useMemo(() => {
         if (deficiencyToEdit) return ALL_CRITICIDAD_OPTIONS;
@@ -134,10 +135,13 @@ const typificationOptions = useMemo(() => {
     }, [deficiencyToEdit]);
 
     // =========================================================================
-    // 3. INICIALIZACIÓN (CARGA DE DATOS)
+    // 4. INICIALIZACIÓN (CARGA DE DATOS)
     // =========================================================================
     useEffect(() => {
         if (visible) {
+            // Reseteamos errores al abrir
+            setFieldErrors({}); 
+            
             if (deficiencyToEdit) {
                 // --- MODO EDICIÓN ---
                 const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
@@ -146,7 +150,10 @@ const typificationOptions = useMemo(() => {
 
                 setFormData({
                     defiInterno: Number(getValue('Interno')),
-                    defiEstado: getValue('Estado') || 'N',
+                    
+                    // 🔥 FORZADO: Estado a 'N' al editar para que aparezca "Nueva"
+                    defiEstado: 'N', 
+                    
                     defiCodigoElemento: getValue('CodigoElemento') || '',
                     defiTipoElemento: getValue('TipoElemento') || 'POST',
                     tipiInterno: Number(deficiencyToEdit.tipiInterno ?? deficiencyToEdit.TipiInterno),
@@ -161,6 +168,7 @@ const typificationOptions = useMemo(() => {
                     defiDistVertical: getValue('DistVertical'),
                     defiAccesibilidad: getValue('Accesibilidad'),
                     defiTipoCruce: getValue('TipoCruce'),
+                    defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
                     defiUsuarioInic: getValue('UsuarioInic') 
                 });
             } else {
@@ -199,34 +207,62 @@ const typificationOptions = useMemo(() => {
         }
     }, [visible, deficiencyToEdit, sedId, referenceSelection]);
 
+    // =========================================================================
+    // 5. MANEJO DE CAMBIOS Y VALIDACIÓN INDIVIDUAL
+    // =========================================================================
+    
+    // Función auxiliar para validar un campo específico
+    const validateField = (fieldKey, value) => {
+        if (!currentConfig) return null;
+        const field = currentConfig.fields.find(f => f.key === fieldKey);
+        if (!field || !field.validation) return null;
+
+        // Validación de máximo
+        if (field.type === 'number' && field.validation.max !== undefined && Number(value) > field.validation.max) {
+            return field.validation.message || `${field.label} excede el máximo permitido.`;
+        }
+        // Validación personalizada
+        if (field.validation.custom) {
+            const tempFormData = { ...formData, [fieldKey]: value };
+            return field.validation.custom(value, tempFormData);
+        }
+        return null;
+    };
+
     const updateField = (key, value) => {
         setFormData(prev => {
             const newData = { ...prev, [key]: value };
             if (key === 'defiTipoElemento') newData.tipiInterno = null; 
             return newData;
         });
+
+        // Validamos en tiempo real y guardamos el error si existe
+        const error = validateField(key, value);
+        setFieldErrors(prev => ({ ...prev, [key]: error }));
     };
 
-    // --- VALIDACIÓN ---
+    // Validación Total antes de guardar
     const validateDynamicForm = () => {
         if (!currentConfig) return true; 
         const errors = [];
+        
         currentConfig.fields.forEach(field => {
             if (field.readonly || field.hidden) return;
             const value = formData[field.key];
+            
+            // Requeridos
             if (field.required && (value === null || value === undefined || value === '')) {
-                errors.push(`El campo "${field.label}" es obligatorio.`); return;
+                errors.push(`El campo "${field.label}" es obligatorio.`); 
+                return;
             }
-            if (field.validation) {
-                if (field.type === 'number' && field.validation.max !== undefined && Number(value) > field.validation.max) {
-                    errors.push(field.validation.message || `${field.label} excede el máximo permitido.`);
-                }
-                if (field.validation.custom) {
-                    const errorMsg = field.validation.custom(value, formData);
-                    if (errorMsg) errors.push(errorMsg);
-                }
+            
+            // Validaciones específicas
+            const fieldError = validateField(field.key, value);
+            if (fieldError) {
+                errors.push(fieldError);
             }
         });
+
         if (errors.length > 0) {
             alert("Por favor corrija:\n\n" + errors.map(e => "• " + e).join("\n"));
             return false;
@@ -234,13 +270,14 @@ const typificationOptions = useMemo(() => {
         return true;
     };
 
-    // --- GUARDADO ---
+    // =========================================================================
+    // 6. GUARDADO
+    // =========================================================================
     const handleSubmit = () => {
         setSubmitted(true);
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
         if (!formData.tipiInterno) { alert("Falta Tipificación."); return; }
         
-        // Bloqueo final por si el usuario habilitó el botón con hacks
         if (hasCleanRecord && (!deficiencyToEdit || Number(formData.tipiInterno) !== 0)) {
             alert("No se puede guardar: El elemento tiene registro 'SIN DEFICIENCIA'.");
             return;
@@ -276,25 +313,59 @@ const typificationOptions = useMemo(() => {
         onSave(cleanPayload);
     };
 
+    // =========================================================================
+    // 7. RENDERIZADO DE CAMPOS (Con HelperText y Validaciones Visuales)
+    // =========================================================================
     const renderDynamicField = (field) => {
         if (field.hidden) return null;
-        const fieldKey = field.key; 
+        const fieldKey = field.key;
+        
+        // Verificamos si hay error en este campo
+        const hasError = !!fieldErrors[fieldKey];
+
         const commonProps = {
             id: fieldKey, value: formData[fieldKey], 
-            className: classNames('w-full', { 'p-invalid': submitted && field.required && !formData[fieldKey] }),
+            // Clase condicional: Error de validación O Submit vacío requerido
+            className: classNames('w-full', { 'p-invalid': hasError || (submitted && field.required && !formData[fieldKey]) }),
             placeholder: field.label, disabled: field.readonly
         };
+
+        // --- Lógica del Texto de Ayuda ---
+        let dynamicHelper = field.helperText;
+        // Caso especial 7006: Mostrar límite según cruce
+        if (fieldKey === 'defiDistVertical' && formData.tipiInterno && getCodeById(formData.tipiInterno) === '7006' && formData.defiTipoCruce) {
+             const limites = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
+             const limiteExacto = limites[Number(formData.defiTipoCruce)];
+             if (limiteExacto) {
+                 dynamicHelper = `(Límite: < ${limiteExacto}m)`;
+             }
+        }
 
         if (fieldKey === 'defiEstadoCriticidad') {
              return (<div className="field mb-3 w-full" key={fieldKey}><label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label><Dropdown {...commonProps} options={criticidadOptions} optionLabel="label" optionValue="value" onChange={(e) => updateField(fieldKey, e.value)} /></div>);
         }
+
         return (
             <div className="field mb-3 w-full" key={fieldKey}> 
-                <label htmlFor={fieldKey} className="font-bold text-sm block mb-1 text-gray-700">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
+                <label htmlFor={fieldKey} className="font-bold text-sm block mb-1 text-gray-700">
+                    {field.label} 
+                    {field.required && <span className="text-red-500">*</span>}
+                    
+                    {/* Renderizamos el Texto de Ayuda Naranja */}
+                    {dynamicHelper && (
+                        <span className="ml-2 text-xs text-orange-600 font-normal">
+                            {dynamicHelper}
+                        </span>
+                    )}
+                </label>
+
                 {field.type === 'number' && <InputNumber {...commonProps} value={formData[fieldKey] != null ? Number(formData[fieldKey]) : null} onValueChange={(e) => updateField(fieldKey, e.value)} mode="decimal" minFractionDigits={2} maxFractionDigits={2} showButtons />}
                 {field.type === 'textarea' && <InputTextarea {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} rows={5} autoResize style={{ minHeight: '100px' }} />}
                 {field.selectable && field.valueMap && fieldKey !== 'defiEstadoCriticidad' && <Dropdown {...commonProps} options={Object.entries(field.valueMap).map(([k, v]) => ({ label: v, value: isNaN(k) ? k : Number(k) }))} onChange={(e) => updateField(fieldKey, e.value)} />}
                 {field.type === 'text' && !field.selectable && (<InputText {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} maxLength={fieldKey === 'defiObservacion' ? 20 : undefined} />)}
+                
+                {/* Mensaje de error debajo del input (Opcional, pero recomendado) */}
+                {hasError && <small className="p-error block">{fieldErrors[fieldKey]}</small>}
             </div>
         );
     };
@@ -314,7 +385,6 @@ const typificationOptions = useMemo(() => {
                         </div>
                     </div>
                     
-                    {/* --- AVISO DE BLOQUEO S/D --- */}
                     {hasCleanRecord && (
                         <Message 
                             severity="warn" 
@@ -333,7 +403,6 @@ const typificationOptions = useMemo(() => {
                             filter 
                             showClear 
                             placeholder={hasCleanRecord ? "BLOQUEADO (ELEMENTO S/D)" : "Seleccione defecto..."} 
-                            // AQUÍ ESTÁ EL BLOQUEO DEL DROPDOWN
                             disabled={!formData.defiCodigoElemento || hasCleanRecord} 
                             itemTemplate={(op) => <div className="whitespace-normal py-1 text-sm">{op.label}</div>} 
                         />
@@ -341,7 +410,30 @@ const typificationOptions = useMemo(() => {
                 </div>
                 
                 <div className="flex flex-col md:flex-row gap-8 min-h-[300px]">
-                    {currentConfig ? (<><div className="flex-1 flex flex-col h-full"><Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider><div className="flex flex-col gap-1 w-full">{currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}</div></div><Divider layout="vertical" className="hidden md:flex" /><div className="flex-1 flex flex-col h-full"><Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider><div className="flex flex-col gap-1 w-full h-full">{currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}</div></div></>) : (<div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400"><div className="text-center"><i className="pi pi-info-circle text-2xl mb-2 block"></i>{hasCleanRecord ? "Acción no permitida." : "Seleccione una tipificación."}</div></div>)}
+                    {currentConfig ? (
+                        <>
+                            <div className="flex-1 flex flex-col h-full">
+                                <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
+                                <div className="flex flex-col gap-1 w-full">
+                                    {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
+                                </div>
+                            </div>
+                            <Divider layout="vertical" className="hidden md:flex" />
+                            <div className="flex-1 flex flex-col h-full">
+                                <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider>
+                                <div className="flex flex-col gap-1 w-full h-full">
+                                    {currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
+                            <div className="text-center">
+                                <i className="pi pi-info-circle text-2xl mb-2 block"></i>
+                                {hasCleanRecord ? "Acción no permitida." : "Seleccione una tipificación."}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">

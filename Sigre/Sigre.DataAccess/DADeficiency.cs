@@ -837,7 +837,7 @@ namespace Sigre.DataAccess
                     existente.DefiFecModificacion = DateTime.Now;
                     // Usamos el usuario que viene o un default
                     existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
-
+                    existente.DefiInspeccionado = input.DefiInspeccionado;
                     ctx.SaveChanges();
                     return existente.DefiInterno; // Retornamos ID existente
                 }
@@ -861,7 +861,7 @@ namespace Sigre.DataAccess
                         input.DefiFechaCreacion = input.DefiFecRegistro;
                     }
                     input.DefiFecModificacion = now;
-
+                    input.DefiInspeccionado = true;
                     // Usuarios (Evitar NULLs)
                     if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
                     if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
