@@ -7,8 +7,9 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -60,16 +61,14 @@ const getLabelOffsetByType = (type) => {
   return size / 2 + LABEL_GAP;
 };
 
+
 const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
   // 🔥 NUEVO: Referencia para guardar los pines "frescos"
   const pinsRef = useRef([]);
 
-  // Actualizamos la referencia cada vez que cambian los pines
-  useEffect(() => {
-    pinsRef.current = pins;
-  }, [pins]);
+
 
   const { user } = useContext(AuthContext);
   const {
@@ -116,80 +115,136 @@ const Map = () => {
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
-  // ------------------- CARGA DE PINS Y GAPS -------------------
-  // ------------------- CARGA DE PINS Y GAPS (CON RADIOGRAFÍA) -------------------
+    // ===========================
+  // ✅ REFRESH SIN MOVER LA CÁMARA (vista actual)
+  // ===========================
+  const regionRef = useRef(region);
   useEffect(() => {
-    // 1. Validaciones de seguridad (Si no hay selección, limpia y sal)
+    regionRef.current = region;
+  }, [region]);
+
+  const getPinsVisibleInRegion = (pinsArray, reg) => {
+    if (!Array.isArray(pinsArray)) return [];
+    if (!reg) return pinsArray;
+
+    // misma regla que useMap.getPinsByRegion
+    if (reg.latitudeDelta > 0.008) return [];
+
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = reg;
+
+    const minLat = latitude - latitudeDelta * 0.6;
+    const maxLat = latitude + latitudeDelta * 0.6;
+    const minLng = longitude - longitudeDelta * 0.6;
+    const maxLng = longitude + longitudeDelta * 0.6;
+
+    return pinsArray.filter(
+      (p) =>
+        Number(p.Latitude) >= minLat &&
+        Number(p.Latitude) <= maxLat &&
+        Number(p.Longitude) >= minLng &&
+        Number(p.Longitude) <= maxLng,
+    );
+  };
+
+  const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
+    // Validación de selección
     if (user?.proyecto === 1 && !selectedFeeder) {
+      pinsRef.current = [];
       setPins([]);
       setGaps([]);
       return;
     }
+
     if (user?.proyecto === 0 && !selectedSed) {
+      pinsRef.current = [];
       setPins([]);
       setGaps([]);
       return;
     }
 
-    const loadData = async () => {
-      setLoadingPins(true);
-      setLoadingGaps(true);
+    setLoadingPins(true);
+    setLoadingGaps(true);
 
-      try {
-        let pinsLoaded = [];
-        let gapsLoaded = [];
+    try {
+      let pinsLoaded = [];
 
-        // 2. Carga de datos según proyecto
-        if (user?.proyecto === 1) {
-          const feederId = selectedFeeder.AlimInterno;
-          [pinsLoaded, gapsLoaded] = await Promise.all([
-            getPinsByFeeder(feederId),
-            getGapsByFeeder(feederId),
-          ]);
-        } else {
-          const sedId = selectedSed.SedInterno;
-          [pinsLoaded, gapsLoaded] = await Promise.all([
-            getPinsBySed(sedId),
-            getGapsBySed(sedId),
-          ]);
-        }
+      if (user?.proyecto === 1) {
+        const feederId = selectedFeeder.AlimInterno;
 
-        if (pinsLoaded.length > 0) {
-          // Contamos cuántos son SED (Tipo 1 o 2) y cuántos son Postes (Tipo 5)
-          const countSeds = pinsLoaded.filter(
-            (p) => Number(p.Type) === 1 || Number(p.Type) === 2,
-          ).length;
-          const countPostes = pinsLoaded.filter(
-            (p) => Number(p.Type) === 5,
-          ).length;
-        }
-        // ------------------------------------------------------------------
-        pinsRef.current = pinsLoaded;
-        // 3. Guardar en el estado
-        setPins(pinsLoaded);
-        setGaps(gapsLoaded);
+        const result = await Promise.all([
+          getPinsByFeeder(feederId),
+          getGapsByFeeder(feederId),
+        ]);
 
-        // 4. Mover la cámara (Region)
-        if (pinsLoaded.length > 0) {
-          if (user?.proyecto === 1) {
-            setRegionByFeeder(pinsLoaded);
-          } else {
-            // Nota: Aquí quitamos el console.warn falso que tenías antes
-            setRegionBySed(pinsLoaded, selectedSed);
-          }
-        } else {
-          console.warn("⚠️ La consulta a BD devolvió 0 resultados.");
-        }
-      } catch (error) {
-        console.error("❌ Error al cargar datos:", error);
-      } finally {
-        setLoadingPins(false);
-        setLoadingGaps(false);
+        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
+      } else {
+        const sedId = selectedSed.SedInterno;
+
+        const result = await Promise.all([
+          getPinsBySed(sedId),
+          getGapsBySed(sedId),
+        ]);
+
+        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
       }
-    };
 
-    loadData();
-  }, [selectedFeeder, selectedSed, user?.proyecto]);
+      // ✅ pinsRef = universo completo (para búsqueda)
+      pinsRef.current = pinsLoaded;
+
+      // ✅ si es refresh: mantener vista y pintar solo visibles en la región actual
+      if (keepView) {
+        const visible = getPinsVisibleInRegion(pinsLoaded, regionRef.current);
+        setPins(visible);
+      } else {
+        // carga normal
+        setPins(pinsLoaded);
+      }
+
+      // ✅ recentrar solo cuando corresponde
+      if (recenter && pinsLoaded.length > 0) {
+        if (user?.proyecto === 1) setRegionByFeeder(pinsLoaded);
+        else setRegionBySed(pinsLoaded, selectedSed);
+      }
+    } catch (error) {
+      console.error("❌ Error al cargar/refresh datos del mapa:", error);
+    } finally {
+      setLoadingPins(false);
+      setLoadingGaps(false);
+    }
+  };
+
+  const handleRefreshMap = async () => {
+    await loadMapData({ recenter: false, keepView: true });
+  };
+
+
+
+    // ------------------- CARGA DE PINS Y GAPS -------------------
+  useEffect(() => {
+    if (user?.proyecto === 1 && !selectedFeeder) {
+      pinsRef.current = [];
+      setPins([]);
+      setGaps([]);
+      return;
+    }
+
+    if (user?.proyecto === 0 && !selectedSed) {
+      pinsRef.current = [];
+      setPins([]);
+      setGaps([]);
+      return;
+    }
+
+    // cambio de selección => carga normal con recenter
+    loadMapData({ recenter: true, keepView: false });
+  }, [
+    user?.proyecto,
+    selectedFeeder?.AlimInterno,
+    selectedSed?.SedInterno,
+  ]);
+
+
+
 
   // ------------------- GPS -------------------
   useEffect(() => {
@@ -685,24 +740,35 @@ const Map = () => {
         <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
       </TouchableOpacity>
 
-      {/* 🔽 BOTÓN LUPA FLOTANTE (Top Right) */}
-      <View style={{ position: "absolute", top: 70, right: 20, zIndex: 10 }}>
+      {/* 🔽 BOTONES TOP RIGHT: BUSCAR + REFRESCAR */}
+      <View style={styles.topRightButtons}>
+        {/* 🔎 Buscar */}
         <TouchableOpacity
           onPress={() => setShowSearchModal(true)}
-          style={{
-            backgroundColor: "white",
-            padding: 10,
-            borderRadius: 30,
-            elevation: 5,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-          }}
+          disabled={loadingPins || loadingGaps || loadingLocation}
+          style={[
+            styles.circleBtn,
+            (loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
+          ]}
         >
           <Ionicons name="search" size={24} color="#333" />
         </TouchableOpacity>
+
+        {/* 🔄 Refresh */}
+        <TouchableOpacity
+          onPress={handleRefreshMap}
+          disabled={loadingPins || loadingGaps || loadingLocation}
+          style={[
+            styles.circleBtn,
+            { marginTop: 10 },
+            (loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
+          ]}
+        >
+          <Ionicons name="refresh" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
+
+
 
       {/* 🔽 MODAL DE BÚSQUEDA (Estilo unificado) */}
       {showSearchModal && (
@@ -919,6 +985,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+ 
+
+  circleBtn: {
+    backgroundColor: "white",
+    padding: 10,
+    borderRadius: 30,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  topRightButtons: {
+    position: "absolute",
+    top: 70,
+    right: 20,
+    zIndex: 10,
+    alignItems: "center",
+  },
+
+ 
+
+
 });
 
 export default Map;
