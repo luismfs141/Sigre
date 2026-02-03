@@ -691,6 +691,11 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PostAltura).HasColumnName("POST_Altura");
 
+            entity.Property(e => e.PostTramo)
+    .HasMaxLength(20)
+    .IsUnicode(false)
+    .HasColumnName("POST_Tramo");
+
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostArmadoMaterial)
                 .HasConstraintName("FK_Postes_ArmadoMaterial");
@@ -948,6 +953,11 @@ public partial class SigreContext : DbContext
                 .HasColumnName("VANO_NodoInicial");
             entity.Property(e => e.VanoSubestacion).HasColumnName("VANO_Subestacion");
             entity.Property(e => e.VanoTerceros).HasColumnName("VANO_Terceros");
+
+            entity.Property(e => e.VanoTramo)
+    .HasMaxLength(50)
+    .IsUnicode(false)
+    .HasColumnName("VANO_Tramo");
 
             entity.HasOne(d => d.AlimInternoNavigation).WithMany(p => p.Vanos)
                 .HasForeignKey(d => d.AlimInterno)

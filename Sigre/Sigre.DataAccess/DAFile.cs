@@ -105,17 +105,76 @@ namespace Sigre.DataAccess
             return archivoTabla;
         }
 
-        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(
-    List<ArchivoSyncDto> archivosOffline)
+        //    public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(
+        //List<ArchivoSyncDto> archivosOffline)
+        //    {
+        //        using var ctx = new SigreContext();
+        //        var resultado = new List<(int, int)>();
+
+        //        DADeficiency daDef = new DADeficiency();
+
+        //        foreach (var dto in archivosOffline)
+        //        {
+        //            // 🔹 Resolver Deficiencia padre
+        //            int idDeficiency;
+
+        //            if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+        //            {
+        //                idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
+        //            }
+        //            else
+        //            {
+        //                idDeficiency = daDef.DADEFI_GetDeficiencyIDByElementAndType(
+        //                    dto.ArchIdElemento ?? 0,
+        //                    dto.ArchTipoElemento ?? string.Empty,
+        //                    dto.TipiInterno ?? 0
+        //                );
+        //            }
+
+        //            dto.ArchCodTabla = idDeficiency;
+
+        //            // 🔍 Buscar archivo existente (UUID recomendado)
+        //            var existente = ctx.Archivos
+        //                .FirstOrDefault(a => a.ArchNombre == dto.ArchNombre);
+
+        //            if (existente != null)
+        //            {
+        //                // 🔁 UPDATE
+
+        //                existente.ArchLongitud = dto.ArchLongitud;
+        //                existente.ArchLatitud = dto.ArchLatitud;
+        //                existente.ArchActivo = dto.ArchActivo;
+        //                existente.ArchFecha = dto.ArchFecha;
+
+        //                resultado.Add((dto.ArchInterno, existente.ArchInterno));
+        //            }
+        //            else
+        //            {
+        //                // ➕ INSERT
+        //                var archivo = DAARCH_ConvertFile(dto);
+        //                ctx.Archivos.Add(archivo);
+
+        //                ctx.SaveChanges(); // necesario para obtener ID
+
+        //                resultado.Add((dto.ArchInterno, archivo.ArchInterno));
+        //            }
+        //        }
+
+        //        return resultado;
+        //    }
+
+        public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
 
-            DADeficiency daDef = new DADeficiency();
+            var daDef = new DADeficiency();
 
             foreach (var dto in archivosOffline)
             {
-                // 🔹 Resolver Deficiencia padre
+                // =========================
+                // 1) Resolver Deficiencia padre (ID SERVER)
+                // =========================
                 int idDeficiency;
 
                 if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
@@ -131,30 +190,62 @@ namespace Sigre.DataAccess
                     );
                 }
 
+                // Si no se pudo resolver la deficiencia, no sincronizamos este archivo
+                if (idDeficiency <= 0)
+                    continue;
+
+                // Guardamos en el DTO si quieres mantener consistencia (aunque sea int? en el dto)
                 dto.ArchCodTabla = idDeficiency;
 
-                // 🔍 Buscar archivo existente (UUID recomendado)
+                // =========================
+                // 2) Normalizar ruta para comparar sin raíz (SIGRE.MOVIL / ELIMINADOS)
+                // =========================
+                var key = NormalizarRutaSinRaiz(dto.ArchNombre);
+
+                // =========================
+                // 3) Buscar existente:
+                //    - SIEMPRE dentro de la misma deficiencia (idDeficiency)
+                //    - Match por nombre exacto O por EndsWith(key)
+                // =========================
                 var existente = ctx.Archivos
-                    .FirstOrDefault(a => a.ArchNombre == dto.ArchNombre);
+                    .Where(a => a.ArchCodTabla == idDeficiency && a.ArchNombre != null)
+                    .Where(a =>
+                        a.ArchNombre == dto.ArchNombre
+                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith(key))
+                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("/" + key))
+                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("\\" + key))
+                    )
+                    .OrderByDescending(a => a.ArchInterno) // por si hay duplicados antiguos, toma el último
+                    .FirstOrDefault();
 
                 if (existente != null)
                 {
-                    // 🔁 UPDATE
-       
+                    // =========================
+                    // 4) UPDATE (no duplica aunque cambie raíz)
+                    // =========================
+                    existente.ArchCodTabla = idDeficiency;      // ✅ int -> int (evita CS0266)
+                    existente.ArchNombre = dto.ArchNombre;    // ✅ guarda la ruta NUEVA (SIGRE.MOVIL / ELIMINADOS / etc.)
                     existente.ArchLongitud = dto.ArchLongitud;
                     existente.ArchLatitud = dto.ArchLatitud;
-                    existente.ArchActivo = dto.ArchActivo;
+                    existente.ArchActivo = dto.ArchActivo;    // ✅ aquí cae tu ArchActivo=0
                     existente.ArchFecha = dto.ArchFecha;
+
+                    ctx.SaveChanges();
 
                     resultado.Add((dto.ArchInterno, existente.ArchInterno));
                 }
                 else
                 {
-                    // ➕ INSERT
+                    // =========================
+                    // 5) INSERT
+                    // =========================
+                    // Asegura que el convert use el idDeficiency ya resuelto
+                    dto.ArchCodTabla = idDeficiency;
+
                     var archivo = DAARCH_ConvertFile(dto);
                     ctx.Archivos.Add(archivo);
 
-                    ctx.SaveChanges(); // necesario para obtener ID
+                    ctx.SaveChanges(); // para obtener ID
 
                     resultado.Add((dto.ArchInterno, archivo.ArchInterno));
                 }
@@ -162,6 +253,41 @@ namespace Sigre.DataAccess
 
             return resultado;
         }
+
+        /// <summary>
+        /// Quita prefijos variables (SIGRE.MOVIL/, ELIMINADOS/) y deja solo el "subpath" estable.
+        /// Ej:
+        ///   "SIGRE.MOVIL/sub/elem/foto.jpg" => "sub/elem/foto.jpg"
+        ///   "ELIMINADOS/sub/elem/foto.jpg"  => "sub/elem/foto.jpg"
+        /// </summary>
+        private static string NormalizarRutaSinRaiz(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            path = path.Replace("\\", "/").Trim();
+
+            while (path.StartsWith("/"))
+                path = path.Substring(1);
+
+            const string p1 = "SIGRE.MOVIL/";
+            const string p2 = "ELIMINADOS/";
+
+            if (path.StartsWith(p1, StringComparison.OrdinalIgnoreCase))
+                return path.Substring(p1.Length);
+
+            if (path.StartsWith(p2, StringComparison.OrdinalIgnoreCase))
+                return path.Substring(p2.Length);
+
+            // fallback: quita primer segmento "RAIZ/"
+            int idx = path.IndexOf('/');
+            if (idx >= 0 && idx < path.Length - 1)
+                return path.Substring(idx + 1);
+
+            return path;
+        }
+
+
 
         // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
         public bool DAFILE_SoftDelete(int idArchivo)

@@ -27,6 +27,7 @@ namespace Sigre.Entities.Entities.SyncData
         public bool PostEsBt { get; set; }
         public bool PostEsMt { get; set; }
         public decimal? PostAltura { get; set; }
+        public string? PostTramo { get; set; }
 
     }
 

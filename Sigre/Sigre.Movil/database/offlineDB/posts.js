@@ -37,7 +37,8 @@ export const saveOrUpdatePost = async (post) => {
           PostArmadoMaterial = ?,
           PostRetenidaTipo = ?,
           PostRetenidaMaterial = ?,
-          PostTerceros = ?,        -- ✅ NUEVO
+          PostTerceros = ?,
+          PostTramo = ?,
           EstadoOffLine = ?,
           PostAltura = ?
         WHERE PostInterno = ?
@@ -50,7 +51,8 @@ export const saveOrUpdatePost = async (post) => {
         post.PostArmadoMaterial ?? "",
         post.PostRetenidaTipo ?? "",
         post.PostRetenidaMaterial ?? "",
-        post.PostTerceros == null ? 0 : Number(post.PostTerceros), // ✅ NUEVO
+        post.PostTerceros == null ? 0 : Number(post.PostTerceros), 
+         post.PostTramo ?? null, 
         estado,
         post.PostAltura ?? null,
         post.PostInterno
@@ -66,10 +68,11 @@ export const saveOrUpdatePost = async (post) => {
           PostArmadoMaterial,
           PostRetenidaTipo,
           PostRetenidaMaterial,
-          PostTerceros,         -- ✅ NUEVO
+          PostTerceros,    
+          PostTramo,  
           EstadoOffLine,
           PostAltura
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const result = await runQuery(insertQuery, [
@@ -79,7 +82,8 @@ export const saveOrUpdatePost = async (post) => {
         post.PostArmadoMaterial ?? "",
         post.PostRetenidaTipo ?? "",
         post.PostRetenidaMaterial ?? "",
-        post.PostTerceros == null ? 0 : Number(post.PostTerceros), // ✅ NUEVO
+        post.PostTerceros == null ? 0 : Number(post.PostTerceros), 
+         post.PostTramo ?? null,
         2,
         post.PostAltura ?? null
       ]);

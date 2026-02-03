@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-//const baseURL = 'http://192.168.1.12/SigreHost/api/'; // local Roy
-const baseURL = 'http://192.168.0.208/SigreHost/api/'; // local Luis
+const baseURL = 'http://192.168.1.74/SigreHost/api/'; // local Roy
+//const baseURL = 'http://192.168.0.208/SigreHost/api/'; // local Luis
 //const baseURL = 'http://192.168.1.18/SigreHost/api/'; // local Roy
 //const baseURL = 'http://192.168.18.78/SigreHost/api/'; //local Cami 
 //const baseURL = 'http://192.168.1.41/SisgreHost/api/'; // OFICINA SIGRE

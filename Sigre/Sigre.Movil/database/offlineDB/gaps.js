@@ -55,6 +55,7 @@ export const saveOrUpdateVano = async (vano) => {
           VanoNodoInicial = ?,
           VanoNodoFinal = ?,
           VanoTerceros = ?,
+          VanoTramo = COALESCE(?, VanoTramo),
           EstadoOffLine = ?,
           VanoInspeccionado = ?
         WHERE VanoInterno = ?
@@ -66,6 +67,7 @@ export const saveOrUpdateVano = async (vano) => {
         vano.VanoNodoInicial,
         vano.VanoNodoFinal,
         vano.VanoTerceros,
+         vano.VanoTramo,
         estado,
         vano.VanoInspeccionado ?? "",
         vano.VanoInterno
@@ -81,11 +83,12 @@ export const saveOrUpdateVano = async (vano) => {
           VanoNodoInicial,
           VanoNodoFinal,
           VanoTerceros,
+          VanoTramo, 
           EstadoOffLine,
           VanoInspeccionado,
           AlimInterno,
           VanoSubestacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
       `;
 
       const result = await runQuery(insertQuery, [
@@ -94,7 +97,8 @@ export const saveOrUpdateVano = async (vano) => {
         vano.VanoNodoInicial,
         vano.VanoNodoFinal,
         vano.VanoTerceros ?? "",
-        2, // Nuevo dato
+         vano.VanoTramo ?? null,
+        2, 
         vano.VanoInspeccionado ?? "",
         vano.AlimInterno ?? null,
         vano.VanoSubestacion ?? null

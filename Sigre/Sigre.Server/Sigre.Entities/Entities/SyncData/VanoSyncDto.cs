@@ -27,5 +27,6 @@ namespace Sigre.Entities.Entities.SyncData
         public int? VanoSubestacion { get; set; }
         public bool? VanoEsMt { get; set; }
         public bool? VanoEsBt { get; set; }
+        public string? VanoTramo { get; set; }
     }
 }

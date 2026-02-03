@@ -38,6 +38,7 @@ public partial class Vano
     public bool? VanoEsMt { get; set; }
 
     public bool? VanoEsBt { get; set; }
+    public string? VanoTramo { get; set; }
 
     public virtual Alimentadore AlimInternoNavigation { get; set; } = null!;
 }
