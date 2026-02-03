@@ -5,8 +5,7 @@ import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, Text
 // ✅ Importación para FileSystem (Legacy/Expo)
 import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
-import * as Sharing from "expo-sharing";
-import JSZip from "jszip";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -412,6 +411,43 @@ const getNext7004Correlativo = async (elementBaseRel) => {
   return max + 1;
 };
 
+// ==============================================================================
+// SAF: Helpers READ-ONLY (NO crean carpetas) ✅
+// ==============================================================================
+
+const findSafSubdir = async (parentUri, dirNameRaw) => {
+  const dirName = safeSeg(dirNameRaw);
+  try {
+    const children = await SAF.readDirectoryAsync(parentUri);
+    const existing = children.find((u) => safDisplayName(u) === dirName);
+    return existing ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const findSafPath = async (rootUri, segments) => {
+  let current = rootUri;
+  for (const seg of segments) {
+    const next = await findSafSubdir(current, seg);
+    if (!next) return null;
+    current = next;
+  }
+  return current;
+};
+
+// Devuelve el dirUri donde vive el archivo (sin filename). NO crea nada.
+const safDirForRelativeFileReadOnly = async (rootUri, relativePath) => {
+  const segs = String(relativePath || "")
+    .split("?")[0]
+    .split("/")
+    .filter(Boolean);
+
+  segs.pop(); // quita filename
+  if (!segs.length) return null;
+
+  return await findSafPath(rootUri, segs);
+};
 
 // ==============================================================================
 // COMPONENTE PRINCIPAL
@@ -505,6 +541,7 @@ export default function Multimedia() {
   // ==============================================================================
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;
+
     setLoading({ active: true, msg: "Cargando..." });
     setDeletedIds([]);
 
@@ -521,113 +558,152 @@ export default function Multimedia() {
 
       // ✅ Admin/Supervisor: todo | Inspector: solo si es dueño
       const _canEdit = isElevated || (isInspector && isOwner);
-
       setCanEdit(_canEdit);
 
-
-      const idBusqueda = (deficiencia.DefiServerId && deficiencia.DefiServerId > 0)
-        ? deficiencia.DefiServerId
-        : deficiencia.DefiInterno;
+      const idBusqueda =
+        deficiencia.DefiServerId && deficiencia.DefiServerId > 0
+          ? deficiencia.DefiServerId
+          : deficiencia.DefiInterno;
 
       const medios = await fetchMediosByDeficienciaId(idBusqueda);
-      const activos = medios.filter(m => Number(m.ArchActivo) === 1);
+      const activos = (medios ?? []).filter((m) => Number(m.ArchActivo) === 1);
+
+      // -----------------------------
+      // ✅ MODO SOLO PÚBLICA: leer desde SAF (Pictures/Music)
+      // -----------------------------
+      const hasAnyPhoto = activos.some((m) => isPhotoArchTipo(m?.ArchTipo));
+      const hasAnyAudio = activos.some((m) => Number(m?.ArchTipo) === 0);
+
+      let picturesRoot = null;
+      let musicRoot = null;
+
+      if (Platform.OS === "android") {
+        if (hasAnyPhoto) picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+        if (hasAnyAudio) musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
+      }
 
       const photosTmp = Array(6).fill(null);
       const audiosTmp = [];
-      const placeholderJobs = []; // solo admin
+      const placeholderJobs = [];
+
+      // cache de lectura por carpeta SAF (evita leer 20 veces la misma dir)
+      const dirCache = new Map(); // dirUri -> children[]
+
+      const listDirCached = async (dirUri) => {
+        if (!dirUri) return [];
+        if (dirCache.has(dirUri)) return dirCache.get(dirUri);
+        try {
+          const children = (await SAF.readDirectoryAsync(dirUri)) ?? [];
+          dirCache.set(dirUri, children);
+          return children;
+        } catch {
+          dirCache.set(dirUri, []);
+          return [];
+        }
+      };
+
+      const resolvePublicUri = async (rootUri, archNombre) => {
+        if (Platform.OS !== "android" || !rootUri) return null;
+
+        const rel = normalizeRelativePath(archNombre);
+        const fileName = basenameFromAnyPath(rel);
+        if (!fileName) return null;
+
+        const dirUri = await safDirForRelativeFileReadOnly(rootUri, rel);
+        if (!dirUri) return null;
+
+        const children = await listDirCached(dirUri);
+        return children.find((u) => safNameMatches(u, fileName)) ?? null;
+      };
 
       for (const m of activos) {
         const tipo = Number(m.ArchTipo);
         const isPhotoSlot = tipo > 0 && tipo <= 6;
 
         // -----------------------------
-        // Resolver ruta local (privada) si aplica
-        // -----------------------------
-        let finalUri = null;
-
-        if (m.ArchNombre && !m.ArchNombre.startsWith("file://")) {
-          finalUri = FileSystem.documentDirectory + m.ArchNombre;
-        }
-        else if (m.ArchNombre && m.ArchNombre.includes("SIGRE.MOVIL")) {
-          const parts = m.ArchNombre.split("SIGRE.MOVIL");
-          if (parts.length > 1) finalUri = FileSystem.documentDirectory + "SIGRE.MOVIL" + parts[1];
-        }
-
-        let localExists = false;
-        if (finalUri) {
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(finalUri);
-            localExists = !!fileInfo.exists;
-          } catch { /* ignore */ }
-        }
-
-        // -----------------------------
-        // AUDIO (tipo 0): solo si existe local
+        // AUDIO (tipo 0): cargar desde SAF Music
         // -----------------------------
         if (tipo === 0) {
-          if (finalUri && localExists) {
-            audiosTmp.push({ uri: finalUri, title: "Audio", id: m.ArchInterno, type: 0, originalPath: m.ArchNombre });
+          const publicUri = await resolvePublicUri(musicRoot, m.ArchNombre);
+
+          if (publicUri) {
+            audiosTmp.push({
+              uri: publicUri, // content://...
+              title: "Audio",
+              id: m.ArchInterno,
+              type: 0,
+              originalPath: m.ArchNombre,
+            });
+          } else if (canGeneratePlaceholders) {
+            // “placeholder” audio: no imagen, solo tarjeta informativa
+            audiosTmp.push({
+              uri: null,
+              title: "🎙️ AUDIO NO DISPONIBLE EN ESTE DISPOSITIVO",
+              id: m.ArchInterno,
+              type: 0,
+              originalPath: m.ArchNombre,
+              isPlaceholder: true,
+            });
           }
           continue;
         }
 
         // -----------------------------
-        // FOTOS (1..6): existe local -> normal
+        // FOTOS (1..6): cargar desde SAF Pictures
         // -----------------------------
-        if (isPhotoSlot && finalUri && localExists) {
-          const cacheBuster = `?t=${Date.now()}`;
-          photosTmp[tipo - 1] = {
-            uri: finalUri + cacheBuster,
-            latUtm: m.ArchLatitud,
-            lonUtm: m.ArchLongitud,
-            fechaISO: m.ArchFecha,
-            id: m.ArchInterno,
-            originalPath: m.ArchNombre,
-            type: tipo
-          };
-          continue;
-        }
+        if (isPhotoSlot) {
+          const publicUri = await resolvePublicUri(picturesRoot, m.ArchNombre);
 
-        // -----------------------------
-        // ADMIN + INSPECTOR: si NO existe el archivo real local, crear/usar PLACEHOLDER informativo
-        // - Solo aplica a fotos (1..6)
-        // - Identificable por nombre que empieza con __PLACEHOLDER__
-        // -----------------------------
-        if (canGeneratePlaceholders && isPhotoSlot) {
+          if (publicUri) {
+            photosTmp[tipo - 1] = {
+              uri: publicUri, // content://...
+              latUtm: m.ArchLatitud,
+              lonUtm: m.ArchLongitud,
+              fechaISO: m.ArchFecha,
+              id: m.ArchInterno,
+              originalPath: m.ArchNombre,
+              type: tipo,
+            };
+            continue;
+          }
 
-          const targetUri = buildPlaceholderTargetUri(m);
-          const cacheBuster = `?t=${Date.now()}`;
+          // -----------------------------
+          // Si NO está en pública PERO la BD dice que sí -> placeholder
+          // -----------------------------
+          if (canGeneratePlaceholders) {
+            const targetUri = buildPlaceholderTargetUri(m);
+            const cacheBuster = `?t=${Date.now()}`;
 
-          photosTmp[tipo - 1] = {
-            uri: targetUri + cacheBuster,        // se verá cuando el placeholder exista
-            id: m.ArchInterno,                   // mantiene vínculo al registro SQLite
-            originalPath: m.ArchNombre,          // path original del registro (para eliminar/reemplazar)
-            type: tipo,
-            isPlaceholder: true,
-            placeholderUri: targetUri,
-            latUtm: m.ArchLatitud,
-            lonUtm: m.ArchLongitud,
-            fechaISO: m.ArchFecha
-          };
+            photosTmp[tipo - 1] = {
+              uri: targetUri + cacheBuster,
+              id: m.ArchInterno,
+              originalPath: m.ArchNombre,
+              type: tipo,
+              isPlaceholder: true,
+              placeholderUri: targetUri,
+              latUtm: m.ArchLatitud,
+              lonUtm: m.ArchLongitud,
+              fechaISO: m.ArchFecha,
+            };
 
-          try {
-            const pInfo = await FileSystem.getInfoAsync(targetUri);
-            if (!pInfo.exists) {
+            try {
+              const pInfo = await FileSystem.getInfoAsync(targetUri);
+              if (!pInfo.exists) {
+                placeholderJobs.push({
+                  key: String(m.ArchInterno),
+                  index: tipo - 1,
+                  arch: m,
+                  targetUri,
+                });
+              }
+            } catch {
               placeholderJobs.push({
                 key: String(m.ArchInterno),
                 index: tipo - 1,
                 arch: m,
-                targetUri
+                targetUri,
               });
             }
-          } catch {
-            // si falla getInfo, igual intentamos generarlo
-            placeholderJobs.push({
-              key: String(m.ArchInterno),
-              index: tipo - 1,
-              arch: m,
-              targetUri
-            });
           }
         }
       }
@@ -636,57 +712,32 @@ export default function Multimedia() {
       setAudios(audiosTmp);
 
       // snapshot original (para cancelar)
-      // (si hay placeholders pendientes, se re-snapshotea al terminar la cola)
       setOriginalPhotos(photosTmp);
       setOriginalAudios(audiosTmp);
 
       setDeletedIds([]);
       setIsDirty(false);
 
-
-
-
-
-
-
-
-
-
-
-      console.log("[PH]", {
+      console.log("[PUBLIC LOAD]", {
         isElevated,
         isInspector,
         canGeneratePlaceholders,
         ownerId,
         currentUserId,
         placeholderJobs: placeholderJobs.length,
+        hasPicturesRoot: !!picturesRoot,
+        hasMusicRoot: !!musicRoot,
       });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
       setPlaceholderQueue(placeholderJobs);
       setPendingOriginalSnapshot(placeholderJobs.length > 0);
-
     } catch (err) {
       console.error(err);
     } finally {
       setLoading({ active: false, msg: "" });
     }
   };
+
 
 
   // ============================================================================
@@ -809,11 +860,13 @@ export default function Multimedia() {
     if (!requireEditPermission()) return;
 
     if (audio?.id) {
-      const relativePath = audio.uri.replace(FileSystem.documentDirectory, "");
-      const cleanPath = relativePath.split("?")[0];
-      setDeletedIds(prev => [...prev, { id: audio.id, path: cleanPath, type: 0 }]);
+      // ✅ ahora usamos SIEMPRE la ruta BD (originalPath), porque uri puede ser content://
+      setDeletedIds((prev) => [
+        ...prev,
+        { id: audio.id, path: audio.originalPath, type: 0 },
+      ]);
     } else {
-      // temporal nuevo
+      // temporal nuevo (file://)
       try {
         const u = cleanUri(audio.uri);
         const info = await FileSystem.getInfoAsync(u);
@@ -821,9 +874,10 @@ export default function Multimedia() {
       } catch { }
     }
 
-    setAudios(prev => prev.filter((_, i) => i !== index));
+    setAudios((prev) => prev.filter((_, i) => i !== index));
     setIsDirty(true);
   };
+
 
 
   const getElementoInfo = () => {
@@ -1277,7 +1331,7 @@ export default function Multimedia() {
       setLoading({ active: true, msg: "Guardando..." });
 
       const deficiencyData = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
-      const codTablaParaGuardar = deficiencyData.DefiServerId? deficiencyData.DefiServerId : deficiencyData.DefiInterno;
+      const codTablaParaGuardar = deficiencyData.DefiServerId ? deficiencyData.DefiServerId : deficiencyData.DefiInterno;
       const defiCodUnico = deficiencyData.DefiCol3;
       const currentTipiInterno = selectedDeficiency.typificationId || 0;
       const currentElementId = selectedDeficiency.elementId || selectedItem.PostInterno || selectedItem.VanoInterno || 0;
@@ -1364,8 +1418,7 @@ export default function Multimedia() {
 
 
 
-
-      // 2. SAF PÚBLICO
+      // 2. SAF PÚBLICO (MODO SOLO PÚBLICA) ✅
       let picturesTargetDir = null;
       let musicTargetDir = null;
       let picturesTrashDir = null;
@@ -1377,32 +1430,33 @@ export default function Multimedia() {
       let musicRoot = null;
 
       try {
-
-        // ✅ Solo creamos target/trash si realmente se usarán para copiar/mover en esta operación
         if (Platform.OS === "android") {
+
+          // ✅ Pictures: siempre lo pedimos para poder validar y para operar si hay cambios
           picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
 
-          // ✅ Siempre para validar
           if (picturesRoot) {
+            // target actual (SIGRE.MOVIL/...)
             picturesTargetDir = await ensureSafPath(picturesRoot, pathSegments);
 
-            // Solo si vas a mover eliminados
+            // solo si vas a mover eliminados
             if (hasDeletedPhotos) {
               const trashSegments = ["ELIMINADOS", ...pathSegments.slice(1)];
               picturesTrashDir = await ensureSafPath(picturesRoot, trashSegments);
             }
           }
-        }
 
+          // ✅ Music: solo si realmente lo necesitas (audios nuevos o borrados)
+          if (needMusic) {
+            musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
 
-        if (needMusic) {
-          musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
-          if (musicRoot) {
-            musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
+            if (musicRoot) {
+              musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
 
-            if (hasDeletedAudios) {
-              const trashSegments = ["ELIMINADOS", ...pathSegments.slice(1)];
-              musicTrashDir = await ensureSafPath(musicRoot, trashSegments);
+              if (hasDeletedAudios) {
+                const trashSegments = ["ELIMINADOS", ...pathSegments.slice(1)];
+                musicTrashDir = await ensureSafPath(musicRoot, trashSegments);
+              }
             }
           }
         }
@@ -1410,6 +1464,24 @@ export default function Multimedia() {
         console.warn("SAF Error:", e.message);
       }
 
+      // ✅ GUARD (MODO SOLO PÚBLICA): si vas a crear/mover algo y no hay SAF, te detienes aquí.
+      if (Platform.OS === "android") {
+        if (needPictures && !picturesTargetDir) {
+          setLoading({ active: false, msg: "" });
+          return Alert.alert(
+            "Permiso requerido",
+            "Para trabajar solo con carpeta pública, debes seleccionar una carpeta en Pictures (SAF). Acepta el permiso e intenta nuevamente."
+          );
+        }
+
+        if (needMusic && !musicTargetDir) {
+          setLoading({ active: false, msg: "" });
+          return Alert.alert(
+            "Permiso requerido",
+            "Para trabajar solo con carpeta pública, debes seleccionar una carpeta en Music (SAF). Acepta el permiso e intenta nuevamente."
+          );
+        }
+      }
 
 
 
@@ -1527,7 +1599,7 @@ export default function Multimedia() {
         }
       }
 
-      // ✅ 4. FOTOS NUEVAS (FUERA del IF)
+      // ✅ 4. FOTOS NUEVAS (solo pública + borrar privada al final) ✅
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         if (!photo || photo.id) continue;
@@ -1535,7 +1607,6 @@ export default function Multimedia() {
 
         const baseName = basenameFromAnyPath(photo.uri);
         if (baseName.startsWith(PLACEHOLDER_PREFIX)) continue;
-
 
         const cleanSrcUri = photo.uri.split("?")[0];
 
@@ -1553,18 +1624,19 @@ export default function Multimedia() {
 
         const destUri = carpetaBase + fname;
 
+        // staging (privado) SOLO para copiar a pública
         await FileSystem.copyAsync({ from: cleanSrcUri, to: destUri });
 
-        if (picturesTargetDir) {
-          await writeFileIntoSafDir({
-            dirUri: picturesTargetDir,
-            fileName: fname,
-            mimeType: "image/jpeg",
-            sourceFileUri: destUri
-          });
-        }
+        // ✅ en modo solo pública: SIEMPRE se escribe a SAF
+        await writeFileIntoSafDir({
+          dirUri: picturesTargetDir,
+          fileName: fname,
+          mimeType: "image/jpeg",
+          sourceFileUri: destUri
+        });
 
         const pathParaBD = relativeFolderPath + fname;
+
         await saveFileRecord({
           filename: pathParaBD,
           slot: i + 1,
@@ -1575,16 +1647,21 @@ export default function Multimedia() {
           tipiId: currentTipiInterno,
           defiUUID: defiCodUnico,
         });
+
+        // ✅ liberar memoria: borrar staging + temporal cámara
+        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
+        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
       }
 
-      // ✅ 5. AUDIOS NUEVOS (FUERA del IF)
+
+      // ✅ 5. AUDIOS NUEVOS (solo pública + borrar privada al final) ✅
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
         if (!audio || audio.id) continue;
 
         const cleanSrcUri = audio.uri.split("?")[0];
-        const { date, time } = getUniqueStampParts(1000 + i * 11);
 
+        const { date, time } = getUniqueStampParts(1000 + i * 11);
         const fname = buildMediaName({
           prefix: "AUD",
           sed: selectedSed?.SedCodigo,
@@ -1598,18 +1675,19 @@ export default function Multimedia() {
 
         const destUri = carpetaBase + fname;
 
+        // staging (privado) SOLO para copiar a pública
         await FileSystem.copyAsync({ from: cleanSrcUri, to: destUri });
 
-        if (musicTargetDir) {
-          await writeFileIntoSafDir({
-            dirUri: musicTargetDir,
-            fileName: fname,
-            mimeType: "audio/mp4",
-            sourceFileUri: destUri
-          });
-        }
+        // ✅ en modo solo pública: SIEMPRE se escribe a SAF
+        await writeFileIntoSafDir({
+          dirUri: musicTargetDir,
+          fileName: fname,
+          mimeType: "audio/mp4",
+          sourceFileUri: destUri
+        });
 
         const pathParaBD = relativeFolderPath + fname;
+
         await saveFileRecord({
           filename: pathParaBD,
           slot: 0,
@@ -1619,7 +1697,12 @@ export default function Multimedia() {
           tipiId: currentTipiInterno,
           defiUUID: defiCodUnico
         });
+
+        // ✅ liberar memoria: borrar staging + temporal grabación
+        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
+        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
       }
+
 
       // ✅ 6. VALIDACIONES + ALERT (FUERA del IF)
       setLoading({ active: false, msg: "" });
@@ -1859,13 +1942,8 @@ export default function Multimedia() {
         <View style={styles.section}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>📸 Registro de Fotos</Text>
-            {photos.some(p => p && !p.isPlaceholder) && (
-              <TouchableOpacity style={styles.zipButton} onPress={exportarFotosZip}>
-                <Text style={styles.zipText}>📦 Exportar ZIP</Text>
-              </TouchableOpacity>
-            )}
-
           </View>
+
           <View style={styles.grid}>
             {PHOTO_SLOTS.map((title, index) => (
               <PhotoCard
@@ -1914,8 +1992,18 @@ export default function Multimedia() {
               <AudioCard
                 title={audio.title}
                 uri={audio.uri}
+                onPress={
+                  !audio?.uri
+                    ? () =>
+                      Alert.alert(
+                        "Audio no disponible",
+                        "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
+                      )
+                    : undefined
+                }
                 onDelete={() => handleDeleteAudio(index)}
               />
+
             </View>
           ))}
           {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
