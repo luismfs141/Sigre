@@ -229,7 +229,12 @@ export default function Inspection() {
           onPress: async () => {
             try {
               await cleanPhysicalFiles(itemToDelete.defId);
-              await deleteDeficiency(itemToDelete.defId);
+              const delRes = await deleteDeficiency(itemToDelete.defId);
+
+              if (delRes?.pinMsg) {
+                Alert.alert("Estado del pin actualizado", delRes.pinMsg);
+              }
+
               setModalDeficiencyVisible(false);
               refreshList();
 
