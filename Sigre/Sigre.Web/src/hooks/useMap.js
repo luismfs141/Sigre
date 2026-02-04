@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useDatos } from "../context/DatosContext";
-import api from "../api/apiConfig"; // Tu instancia de Axios
+import api from "../api/apiConfig"; 
 import { adaptPin, adaptGap } from "../utils/mapAdapters"; // Importamos los adaptadores
 
 export const useMap = () => {

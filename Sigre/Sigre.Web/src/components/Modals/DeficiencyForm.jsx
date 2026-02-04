@@ -7,17 +7,17 @@ import { Dropdown } from 'primereact/dropdown';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Divider } from 'primereact/divider';
 import { classNames } from 'primereact/utils';
+import { Message } from 'primereact/message';
 import { Calendar } from 'primereact/calendar';
 
 import { useTypification } from '../../hooks/useTypification';
-import { DEFICIENCY_FIELD_MAP } from '../../utils/deficiencyFormUtils';
+import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
     { label: 'POSTE', value: 'POST' },
     { label: 'VANO', value: 'VANO' },
 ];
 
-// Opciones base de criticidad
 const ALL_CRITICIDAD_OPTIONS = [
     { label: 'LEVE', value: 1 },
     { label: 'MEDIO', value: 2 },
@@ -25,64 +25,179 @@ const ALL_CRITICIDAD_OPTIONS = [
 ];
 
 export default function DeficiencyForm({ 
-    visible, onHide, onSave, deficiencyToEdit, sedId, existingDeficiencies = [] 
+    visible, 
+    onHide, 
+    onSave, 
+    deficiencyToEdit, 
+    sedId, 
+    existingDeficiencies = [],
+    referenceSelection 
 }) {
     const [formData, setFormData] = useState({});
     const [submitted, setSubmitted] = useState(false);
+    // NUEVO: Estado para errores de validación en tiempo real
+    const [fieldErrors, setFieldErrors] = useState({});
     
-    const { getTypificationsByElement, getCodeById, loading: loadingTipos } = useTypification(); 
+    const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification(); 
 
-    // --- 1. LÓGICA DE CRITICIDAD DINÁMICA ---
+    // =========================================================================
+    // 1. REGLA DE NEGOCIO: DETECTAR "SIN DEFICIENCIA" (S/D)
+    // =========================================================================
+    const hasCleanRecord = useMemo(() => {
+        if (!formData.defiCodigoElemento) return false;
+        
+        const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
+
+        // Buscamos si existe ALGÚN registro activo para este código que sea S/D (tipiInterno 0)
+        const foundSD = existingDeficiencies.find(d => 
+            d.defiActivo && 
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) === 0 // ID 0 es "Sin Deficiencia"
+        );
+
+        // Si estamos EDITANDO el propio registro S/D, también devolvemos true
+        // para mantener el bloqueo y obligar al usuario a borrarlo si quiere cambiarlo.
+        return !!foundSD;
+
+    }, [formData.defiCodigoElemento, existingDeficiencies]);
+
+    // =========================================================================
+    // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
+    // =========================================================================
+    const currentConfig = useMemo(() => {
+        if (!formData.tipiInterno) return null;
+        const code = getCodeById(formData.tipiInterno);
+        return DEFICIENCY_FIELD_MAP[code] || null;
+    }, [formData.tipiInterno, getCodeById]);
+
+    // =========================================================================
+    // 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados + Mapeo ID)
+    // =========================================================================
+    const typificationOptions = useMemo(() => {
+        // Si no hay datos maestros, no mostramos nada
+        if (!masterTypifications || masterTypifications.length === 0) return [];
+
+        // --- PASO A: IDENTIFICAR QUÉ CÓDIGOS YA ESTÁN USADOS ---
+        const currentGis = formData.defiCodigoElemento?.trim().toUpperCase();
+        
+        const usedCodes = existingDeficiencies
+            .filter(d => {
+                // 1. Que pertenezca al mismo elemento (código GIS)
+                const sameGis = d.defiCodigoElemento?.trim().toUpperCase() === currentGis;
+                // 2. Que esté activo (no borrado lógico)
+                const isActive = d.defiActivo;
+                // 3. Que NO sea el registro que estamos editando ahora mismo
+                const notSelf = !deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno;
+
+                return sameGis && isActive && notSelf;
+            })
+            .map(d => getCodeById(d.tipiInterno)); // Convertimos ID a Código para comparar fácil
+
+        // --- PASO B: FILTRAR LA LISTA ESTÁTICA ---
+        const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
+            // 1. Filtro Básico: ¿Es POSTE o VANO?
+            if (opt.type !== 'BOTH' && opt.type !== formData.defiTipoElemento) return false;
+
+            // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
+            if (usedCodes.includes(opt.code) && opt.code !== '7004') {
+                return false; 
+            }
+
+            return true;
+        });
+
+        // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
+        return validOptions.map(staticOpt => {
+            const matchInDb = masterTypifications.find(t => 
+                String(t.code || t.tipiCodigo) === String(staticOpt.code)
+            );
+
+            if (!matchInDb) return null;
+
+            return {
+                label: staticOpt.name,
+                value: Number(matchInDb.tipiInterno || matchInDb.typificationId) 
+            };
+        }).filter(opt => opt !== null);
+
+    }, [
+        formData.defiTipoElemento, 
+        formData.defiCodigoElemento, 
+        masterTypifications, 
+        existingDeficiencies, 
+        deficiencyToEdit, 
+        getCodeById 
+    ]);
+
     const criticidadOptions = useMemo(() => {
-        // Regla: Para EDICIÓN existen las 3 opciones. Para NUEVO, no existe MEDIO.
-        if (deficiencyToEdit) {
-            return ALL_CRITICIDAD_OPTIONS;
-        }
-        // Filtramos "MEDIO" (valor 2) para nuevos registros
+        if (deficiencyToEdit) return ALL_CRITICIDAD_OPTIONS;
         return ALL_CRITICIDAD_OPTIONS.filter(opt => opt.value !== 2);
     }, [deficiencyToEdit]);
 
-    // --- 2. INICIALIZACIÓN ---
+    // =========================================================================
+    // 4. INICIALIZACIÓN (CARGA DE DATOS)
+    // =========================================================================
     useEffect(() => {
         if (visible) {
+            // Reseteamos errores al abrir
+            setFieldErrors({}); 
+            
             if (deficiencyToEdit) {
-                // MODO EDICIÓN
+                // --- MODO EDICIÓN ---
+                const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
+                const _fechaRaw = getValue('FecRegistro');
+                const _fecha = _fechaRaw ? new Date(_fechaRaw) : new Date();
+
                 setFormData({
-                    ...deficiencyToEdit,
-                    DefiCodigoElemento: deficiencyToEdit.defiCodigoElemento,
-                    DefiTipoElemento: deficiencyToEdit.defiTipoElemento,
-                    tipiInterno: Number(deficiencyToEdit.tipiInterno),
-                    DefiFecRegistro: deficiencyToEdit.defiFecRegistro ? new Date(deficiencyToEdit.defiFecRegistro) : new Date(),
+                    defiInterno: Number(getValue('Interno')),
                     
-                    DefiDistHorizontal: deficiencyToEdit.defiDistHorizontal,
-                    DefiDistVertical: deficiencyToEdit.defiDistVertical,
-                    DefiAccesibilidad: deficiencyToEdit.defiAccesibilidad,
-                    DefiNumSuministro: deficiencyToEdit.defiNumSuministro,
-                    DefiObservacion: deficiencyToEdit.defiObservacion || '',
-                    DefiComentario: deficiencyToEdit.defiComentario || '',
-                    DefiEstadoCriticidad: deficiencyToEdit.defiEstadoCriticidad,
-                    DefiLatitud: deficiencyToEdit.defiLatitud,
-                    DefiLongitud: deficiencyToEdit.defiLongitud,
-                    DefiTipoCruce: deficiencyToEdit.defiTipoCruce
+                    // 🔥 FORZADO: Estado a 'N' al editar para que aparezca "Nueva"
+                    defiEstado: 'N', 
+                    
+                    defiCodigoElemento: getValue('CodigoElemento') || '',
+                    defiTipoElemento: getValue('TipoElemento') || 'POST',
+                    tipiInterno: Number(deficiencyToEdit.tipiInterno ?? deficiencyToEdit.TipiInterno),
+                    defiLatitud: Number(getValue('Latitud')) || 0,
+                    defiLongitud: Number(getValue('Longitud')) || 0,
+                    defiFecRegistro: _fecha,
+                    defiObservacion: getValue('Observacion') || '',
+                    defiComentario: getValue('Comentario') || '',
+                    defiEstadoCriticidad: Number(getValue('EstadoCriticidad')),
+                    defiNumSuministro: getValue('NumSuministro') || '',
+                    defiDistHorizontal: getValue('DistHorizontal'),
+                    defiDistVertical: getValue('DistVertical'),
+                    defiAccesibilidad: getValue('Accesibilidad'),
+                    defiTipoCruce: getValue('TipoCruce'),
+                    defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
+                    defiUsuarioInic: getValue('UsuarioInic') 
                 });
             } else {
-                // MODO NUEVO
+                // --- MODO NUEVO ---
+                const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`]) : null;
+                const initialCode = getRefValue('CodigoElemento') || '';
+                const initialType = getRefValue('TipoElemento') || 'POST';
+                const latRaw = getRefValue('Latitud') || 0;
+                const lngRaw = getRefValue('Longitud') || 0;
+                let initialDate = new Date();
+                const dateRef = getRefValue('FecRegistro');
+                if (dateRef) initialDate = new Date(dateRef);
+
                 setFormData({
-                    DefiCodigoElemento: '',
-                    DefiTipoElemento: 'POST', 
-                    DefiEstado: 'N',
+                    defiCodigoElemento: initialCode,
+                    defiTipoElemento: initialType,
+                    defiEstado: 'N',
                     sedCodigo: sedId,
-                    DefiFecRegistro: new Date(),
-                    DefiLatitud: 0,
-                    DefiLongitud: 0,
-                    DefiObservacion: '',
-                    // Default a LEVE (1) porque MEDIO (2) ya no existe en nuevos
-                    DefiEstadoCriticidad: 1 
+                    defiFecRegistro: initialDate,
+                    defiLatitud: Number(latRaw),
+                    defiLongitud: Number(lngRaw),
+                    defiObservacion: '',
+                    defiComentario: '',
+                    defiEstadoCriticidad: 1 
                 });
                 
-                if (navigator.geolocation) {
+                if (Number(latRaw) === 0 && navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
-                        (p) => setFormData(prev => ({ ...prev, DefiLatitud: p.coords.latitude, DefiLongitud: p.coords.longitude })),
+                        (p) => setFormData(prev => ({ ...prev, defiLatitud: p.coords.latitude, defiLongitud: p.coords.longitude })),
                         (e) => console.warn("GPS Error", e),
                         { enableHighAccuracy: true }
                     );
@@ -90,312 +205,241 @@ export default function DeficiencyForm({
             }
             setSubmitted(false);
         }
-    }, [visible, deficiencyToEdit, sedId]);
+    }, [visible, deficiencyToEdit, sedId, referenceSelection]);
 
-    const currentConfig = useMemo(() => {
-        if (!formData.tipiInterno) return null;
-        const code = getCodeById(formData.tipiInterno);
-        return DEFICIENCY_FIELD_MAP[code] || null;
-    }, [formData.tipiInterno, getCodeById]);
+    // =========================================================================
+    // 5. MANEJO DE CAMBIOS Y VALIDACIÓN INDIVIDUAL
+    // =========================================================================
+    
+    // Función auxiliar para validar un campo específico
+    const validateField = (fieldKey, value) => {
+        if (!currentConfig) return null;
+        const field = currentConfig.fields.find(f => f.key === fieldKey);
+        if (!field || !field.validation) return null;
 
-    const typificationOptions = useMemo(() => {
-        return getTypificationsByElement(null);
-    }, [getTypificationsByElement]);
-
-    // --- MANEJADORES ---
-    const updateField = (key, value) => {
-        setFormData(prev => ({ ...prev, [key]: value }));
+        // Validación de máximo
+        if (field.type === 'number' && field.validation.max !== undefined && Number(value) > field.validation.max) {
+            return field.validation.message || `${field.label} excede el máximo permitido.`;
+        }
+        // Validación personalizada
+        if (field.validation.custom) {
+            const tempFormData = { ...formData, [fieldKey]: value };
+            return field.validation.custom(value, tempFormData);
+        }
+        return null;
     };
 
-    // --- VALIDACIÓN ---
+    const updateField = (key, value) => {
+        setFormData(prev => {
+            const newData = { ...prev, [key]: value };
+            if (key === 'defiTipoElemento') newData.tipiInterno = null; 
+            return newData;
+        });
+
+        // Validamos en tiempo real y guardamos el error si existe
+        const error = validateField(key, value);
+        setFieldErrors(prev => ({ ...prev, [key]: error }));
+    };
+
+    // Validación Total antes de guardar
     const validateDynamicForm = () => {
         if (!currentConfig) return true; 
         const errors = [];
         
         currentConfig.fields.forEach(field => {
-            if (field.readonly) return;
+            if (field.readonly || field.hidden) return;
             const value = formData[field.key];
-
+            
+            // Requeridos
             if (field.required && (value === null || value === undefined || value === '')) {
-                errors.push(`El campo "${field.label}" es obligatorio.`);
+                errors.push(`El campo "${field.label}" es obligatorio.`); 
                 return;
             }
-
-            if (field.validation) {
-                if (field.type === 'number') {
-                    if (field.validation.max !== undefined && Number(value) > field.validation.max) {
-                        errors.push(field.validation.message || `${field.label} excede el máximo permitido.`);
-                    }
-                }
-                if (field.validation.custom) {
-                    const errorMsg = field.validation.custom(value, formData);
-                    if (errorMsg) errors.push(errorMsg);
-                }
+            
+            // Validaciones específicas
+            const fieldError = validateField(field.key, value);
+            if (fieldError) {
+                errors.push(fieldError);
             }
         });
 
         if (errors.length > 0) {
-            alert("Errores:\n" + errors.map(e => "• " + e).join("\n"));
+            alert("Por favor corrija:\n\n" + errors.map(e => "• " + e).join("\n"));
             return false;
         }
         return true;
     };
 
+    // =========================================================================
+    // 6. GUARDADO
+    // =========================================================================
     const handleSubmit = () => {
         setSubmitted(true);
+        if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
+        if (!formData.tipiInterno) { alert("Falta Tipificación."); return; }
         
-        if (!formData.DefiCodigoElemento?.trim() || !formData.tipiInterno) return;
-
-        if (!deficiencyToEdit && formData.tipiInterno !== 7004) {
-            const isDup = existingDeficiencies.some(d => 
-                (d.defiActivo) && 
-                d.defiCodigoElemento === formData.DefiCodigoElemento && 
-                d.tipiInterno === formData.tipiInterno
-            );
-            if (isDup) { alert("Ya existe este defecto activo."); return; }
+        if (hasCleanRecord && (!deficiencyToEdit || Number(formData.tipiInterno) !== 0)) {
+            alert("No se puede guardar: El elemento tiene registro 'SIN DEFICIENCIA'.");
+            return;
         }
 
         if (!validateDynamicForm()) return;
 
         const now = new Date();
-        const payload = {
-            defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
-            defiCodigoElemento: formData.DefiCodigoElemento,
-            defiTipoElemento: formData.DefiTipoElemento,
-            tipiInterno: formData.tipiInterno,
-            defiEstado: deficiencyToEdit ? deficiencyToEdit.defiEstado : 'N',
-            sedCodigo: sedId,
-            
-            defiDistHorizontal: Number(formData.DefiDistHorizontal) || 0,
-            defiDistVertical: Number(formData.DefiDistVertical) || 0,
-            defiAccesibilidad: formData.DefiAccesibilidad,
-            defiNumSuministro: formData.DefiNumSuministro,
-            defiObservacion: formData.DefiObservacion,
-            defiComentario: formData.DefiComentario,
-            defiEstadoCriticidad: formData.DefiEstadoCriticidad,
-            defiTipoCruce: formData.DefiTipoCruce,
+        const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
+        const isPoste = formData.defiTipoElemento === 'POST' || formData.defiTipoElemento === 'POSTE';
 
-            defiLatitud: formData.DefiLatitud,
-            defiLongitud: formData.DefiLongitud,
-            defiFecRegistro: formData.DefiFecRegistro instanceof Date ? formData.DefiFecRegistro.toISOString() : now.toISOString(),
-            defiFecModificacion: now.toISOString(),
+        const cleanPayload = {
+            defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
+            sedCodigo: sedId,
+            defiUsuarioInic: formData.defiUsuarioInic, 
+            defiCodigoElemento: formData.defiCodigoElemento.trim(),
+            defiTipoElemento: formData.defiTipoElemento,
+            tipiInterno: Number(formData.tipiInterno),
+            defiLatitud: Number(formData.defiLatitud) || 0,
+            defiLongitud: Number(formData.defiLongitud) || 0,
+            defiFecRegistro: registroDate.toISOString(),
+            defiDistHorizontal: isPoste ? null : (Number(formData.defiDistHorizontal) || 0),
+            defiDistVertical:   isPoste ? null : (Number(formData.defiDistVertical)   || 0),
+            defiAccesibilidad:  isPoste ? null : (formData.defiAccesibilidad ? String(formData.defiAccesibilidad) : null),
+            defiTipoCruce:      isPoste ? null : (formData.defiTipoCruce ? String(formData.defiTipoCruce) : null),
+            defiNumSuministro: formData.defiNumSuministro ? String(formData.defiNumSuministro).trim() : null,
+            defiObservacion: formData.defiObservacion ? String(formData.defiObservacion).trim() : '',
+            defiComentario: formData.defiComentario ? String(formData.defiComentario).trim() : '',
+            defiEstadoCriticidad: Number(formData.defiEstadoCriticidad),
             defiActivo: true
         };
         
-        onSave(payload);
+        onSave(cleanPayload);
     };
 
-    // --- RENDERIZADOR DE CAMPOS ---
+    // =========================================================================
+    // 7. RENDERIZADO DE CAMPOS (Con HelperText y Validaciones Visuales)
+    // =========================================================================
     const renderDynamicField = (field) => {
         if (field.hidden) return null;
+        const fieldKey = field.key;
+        
+        // Verificamos si hay error en este campo
+        const hasError = !!fieldErrors[fieldKey];
 
         const commonProps = {
-            id: field.key,
-            value: formData[field.key], 
-            className: classNames('w-full', { 'p-invalid': submitted && field.required && !formData[field.key] }),
-            placeholder: field.label,
-            disabled: field.readonly
+            id: fieldKey, value: formData[fieldKey], 
+            // Clase condicional: Error de validación O Submit vacío requerido
+            className: classNames('w-full', { 'p-invalid': hasError || (submitted && field.required && !formData[fieldKey]) }),
+            placeholder: field.label, disabled: field.readonly
         };
 
-        if (field.key === 'DefiEstado') {
-            return (
-                <div className="field mb-3 w-full" key={field.key}>
-                    <label className="text-sm font-bold text-gray-700 block mb-1">Estado</label>
-                    <InputText value="NUEVA DEFICIENCIA" readOnly className="font-bold text-green-700 bg-green-50 text-center text-sm w-full" />
-                </div>
-            );
+        // --- Lógica del Texto de Ayuda ---
+        let dynamicHelper = field.helperText;
+        // Caso especial 7006: Mostrar límite según cruce
+        if (fieldKey === 'defiDistVertical' && formData.tipiInterno && getCodeById(formData.tipiInterno) === '7006' && formData.defiTipoCruce) {
+             const limites = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
+             const limiteExacto = limites[Number(formData.defiTipoCruce)];
+             if (limiteExacto) {
+                 dynamicHelper = `(Límite: < ${limiteExacto}m)`;
+             }
         }
 
-        // Renderizado especial de Criticidad con opciones dinámicas
-        if (field.key === 'DefiEstadoCriticidad') {
-             return (
-                <div className="field mb-3 w-full" key={field.key}>
-                    <label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label>
-                    <Dropdown 
-                        {...commonProps}
-                        options={criticidadOptions} // 🔥 OPCIONES FILTRADAS
-                        onChange={(e) => updateField(field.key, e.value)}
-                        className="w-full"
-                    />
-                </div>
-            );
+        if (fieldKey === 'defiEstadoCriticidad') {
+             return (<div className="field mb-3 w-full" key={fieldKey}><label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label><Dropdown {...commonProps} options={criticidadOptions} optionLabel="label" optionValue="value" onChange={(e) => updateField(fieldKey, e.value)} /></div>);
         }
 
         return (
-            <div className="field mb-3 w-full" key={field.key}> 
-                <label htmlFor={field.key} className="font-bold text-sm block mb-1 text-gray-700">
-                    {field.label} {field.required && <span className="text-red-500">*</span>}
+            <div className="field mb-3 w-full" key={fieldKey}> 
+                <label htmlFor={fieldKey} className="font-bold text-sm block mb-1 text-gray-700">
+                    {field.label} 
+                    {field.required && <span className="text-red-500">*</span>}
+                    
+                    {/* Renderizamos el Texto de Ayuda Naranja */}
+                    {dynamicHelper && (
+                        <span className="ml-2 text-xs text-orange-600 font-normal">
+                            {dynamicHelper}
+                        </span>
+                    )}
                 </label>
 
-                {field.type === 'number' && (
-                    <InputNumber 
-                        {...commonProps} 
-                        value={formData[field.key] != null ? Number(formData[field.key]) : null}
-                        onValueChange={(e) => updateField(field.key, e.value)}
-                        mode="decimal" minFractionDigits={2} maxFractionDigits={2} showButtons 
-                        className="w-full"
-                    />
-                )}
-
-                {field.type === 'textarea' && (
-                    <InputTextarea 
-                        {...commonProps}
-                        onChange={(e) => updateField(field.key, e.target.value)}
-                        rows={5} 
-                        autoResize 
-                        className="w-full" 
-                        style={{ minHeight: '120px' }} 
-                    />
-                )}
-
-                {field.selectable && field.valueMap && (
-                    <Dropdown 
-                        {...commonProps}
-                        value={formData[field.key]} 
-                        options={Object.entries(field.valueMap).map(([k, v]) => ({ label: v, value: isNaN(k) ? k : Number(k) }))} 
-                        onChange={(e) => updateField(field.key, e.value)}
-                        className="w-full"
-                    />
-                )}
-
-                {field.type === 'text' && !field.selectable && (
-                    <div className="relative w-full">
-                        <InputText 
-                            {...commonProps} 
-                            onChange={(e) => updateField(field.key, e.target.value)}
-                            maxLength={field.key === 'DefiObservacion' ? 20 : undefined}
-                            className="w-full"
-                        />
-                        {field.key === 'DefiObservacion' && (
-                            <small className={`absolute right-0 -top-5 text-xs ${(formData[field.key]?.length || 0) === 20 ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
-                                {(formData[field.key]?.length || 0)}/20
-                            </small>
-                        )}
-                    </div>
-                )}
+                {field.type === 'number' && <InputNumber {...commonProps} value={formData[fieldKey] != null ? Number(formData[fieldKey]) : null} onValueChange={(e) => updateField(fieldKey, e.value)} mode="decimal" minFractionDigits={2} maxFractionDigits={2} showButtons />}
+                {field.type === 'textarea' && <InputTextarea {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} rows={5} autoResize style={{ minHeight: '100px' }} />}
+                {field.selectable && field.valueMap && fieldKey !== 'defiEstadoCriticidad' && <Dropdown {...commonProps} options={Object.entries(field.valueMap).map(([k, v]) => ({ label: v, value: isNaN(k) ? k : Number(k) }))} onChange={(e) => updateField(fieldKey, e.value)} />}
+                {field.type === 'text' && !field.selectable && (<InputText {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} maxLength={fieldKey === 'defiObservacion' ? 20 : undefined} />)}
+                
+                {/* Mensaje de error debajo del input (Opcional, pero recomendado) */}
+                {hasError && <small className="p-error block">{fieldErrors[fieldKey]}</small>}
             </div>
         );
     };
 
     return (
-        <Dialog 
-            visible={visible} 
-            style={{ width: '950px', maxWidth: '95vw' }} 
-            header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`}
-            modal className="p-fluid" onHide={onHide}
-            footer={
-                <div className="flex justify-end gap-2 pt-3 border-t">
-                    <Button label="Cancelar" icon="pi pi-times" onClick={onHide} severity="danger" />
-                    <Button label="Guardar" icon="pi pi-check" onClick={handleSubmit} severity="success" />
-                </div>
-            }
-        >
+        <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t"><Button label="Cancelar" icon="pi pi-times" onClick={onHide} severity="danger" /><Button label="Guardar" icon="pi pi-check" onClick={handleSubmit} severity="success" disabled={hasCleanRecord} /></div>}>
             <div className="flex flex-col gap-4 mt-2">
-                {/* 1. CABECERA */}
                 <div className="p-4 border rounded bg-blue-50 border-blue-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                         <div className="field">
                             <label className="font-bold text-xs uppercase text-gray-500">Tipo Elemento</label>
-                            <Dropdown 
-                                value={formData.DefiTipoElemento} 
-                                options={TIPO_ELEMENTO_OPTIONS} 
-                                onChange={(e) => updateField('DefiTipoElemento', e.value)} 
-                                disabled={!!deficiencyToEdit}
-                            />
+                            <Dropdown value={formData.defiTipoElemento} options={TIPO_ELEMENTO_OPTIONS} onChange={(e) => updateField('defiTipoElemento', e.value)} disabled={!!deficiencyToEdit} />
                         </div>
                         <div className="field">
                             <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
-                            <div className="p-inputgroup">
-                                <span className="p-inputgroup-addon"><i className="pi pi-map-marker"></i></span>
-                                <InputText 
-                                    value={formData.DefiCodigoElemento} 
-                                    onChange={(e) => updateField('DefiCodigoElemento', e.target.value)} 
-                                    required className={classNames({ 'p-invalid': submitted && !formData.DefiCodigoElemento })}
-                                />
-                            </div>
+                            <InputText value={formData.defiCodigoElemento} onChange={(e) => updateField('defiCodigoElemento', e.target.value)} required placeholder="Ingrese código" disabled={!!deficiencyToEdit} />
                         </div>
                     </div>
                     
+                    {hasCleanRecord && (
+                        <Message 
+                            severity="warn" 
+                            text="Este elemento está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente." 
+                            className="w-full mb-3 shadow-sm" 
+                            style={{ borderLeft: '5px solid #f59e0b' }}
+                        />
+                    )}
+
                     <div className="field">
                         <label className="font-bold text-blue-800 block mb-1">Tipificación (Defecto)</label>
                         <Dropdown 
                             value={formData.tipiInterno} 
                             options={typificationOptions} 
                             onChange={(e) => updateField('tipiInterno', e.value)} 
-                            filter showClear placeholder={loadingTipos ? "Cargando..." : "Seleccione defecto..."}
-                            itemTemplate={(op) => <div className="whitespace-normal py-1">{op.label}</div>}
-                            className={classNames({ 'p-invalid': submitted && !formData.tipiInterno })}
+                            filter 
+                            showClear 
+                            placeholder={hasCleanRecord ? "BLOQUEADO (ELEMENTO S/D)" : "Seleccione defecto..."} 
+                            disabled={!formData.defiCodigoElemento || hasCleanRecord} 
+                            itemTemplate={(op) => <div className="whitespace-normal py-1 text-sm">{op.label}</div>} 
                         />
                     </div>
                 </div>
-
-                {/* 2. CUERPO DINÁMICO DIVIDIDO */}
-                <div className="flex flex-col md:flex-row gap-8">
+                
+                <div className="flex flex-col md:flex-row gap-8 min-h-[300px]">
                     {currentConfig ? (
                         <>
-                            {/* IZQUIERDA: Datos Técnicos */}
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
                                 <div className="flex flex-col gap-1 w-full">
-                                    {currentConfig.fields
-                                        .filter(f => f.key !== 'DefiObservacion' && f.key !== 'DefiComentario')
-                                        .map(renderDynamicField)}
+                                    {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
-                            
-                            {/* ✅ LÍNEA VERTICAL CENTRAL (Visible en desktop) */}
                             <Divider layout="vertical" className="hidden md:flex" />
-
-                            {/* DERECHA: Observaciones */}
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider>
                                 <div className="flex flex-col gap-1 w-full h-full">
-                                     {currentConfig.fields
-                                        .filter(f => f.key === 'DefiObservacion' || f.key === 'DefiComentario')
-                                        .map(renderDynamicField)}
+                                    {currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
                         </>
                     ) : (
-                        <div className="w-full text-center p-8 bg-gray-50 rounded border border-dashed text-gray-400">
-                            <i className="pi pi-arrow-up text-2xl mb-2 block"></i>
-                            Seleccione una tipificación para cargar el formulario.
+                        <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
+                            <div className="text-center">
+                                <i className="pi pi-info-circle text-2xl mb-2 block"></i>
+                                {hasCleanRecord ? "Acción no permitida." : "Seleccione una tipificación."}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* 3. FOOTER METADATOS */}
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">
-                    <div className="field mb-0 text-center">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Fecha Registro</label>
-                        <Calendar 
-                            value={formData.DefiFecRegistro} 
-                            onChange={(e) => updateField('DefiFecRegistro', e.value)} 
-                            showTime 
-                            className="p-inputtext-sm w-full" 
-                            inputClassName="text-center" 
-                        />
-                    </div>
-                    <div className="field mb-0 text-center">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Latitud</label>
-                        <InputNumber 
-                            value={formData.DefiLatitud} 
-                            onValueChange={(e) => updateField('DefiLatitud', e.value)} 
-                            mode="decimal" minFractionDigits={6} 
-                            className="p-inputtext-sm w-full" 
-                            inputClassName="text-center" 
-                        />
-                    </div>
-                    <div className="field mb-0 text-center">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Longitud</label>
-                        <InputNumber 
-                            value={formData.DefiLongitud} 
-                            onValueChange={(e) => updateField('DefiLongitud', e.value)} 
-                            mode="decimal" minFractionDigits={6} 
-                            className="p-inputtext-sm w-full" 
-                            inputClassName="text-center" 
-                        />
-                    </div>
+                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
+                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
+                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">FECHA REGISTRO</label><Calendar value={formData.defiFecRegistro} onChange={(e) => updateField('defiFecRegistro', e.value)} showTime hourFormat="24" className="w-full p-inputtext-sm" inputClassName="text-center" /></div>
                 </div>
             </div>
         </Dialog>

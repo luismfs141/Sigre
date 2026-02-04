@@ -165,14 +165,14 @@ const compressImageForLite = (blob) => {
             const ctx = canvas.getContext('2d');
             
             // ✅ CAMBIO: Escala de 0.7 a 0.5 (Mitad del tamaño original)
-            const scale = 0.5; 
+            const scale = 0.7; 
             
             canvas.width = img.width * scale;
             canvas.height = img.height * scale;
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             
             // ✅ CAMBIO: Calidad JPEG a 0.5 para reducir peso drásticamente
-            canvas.toBlob(resolve, 'image/jpeg', 0.5); 
+            canvas.toBlob(resolve, 'image/jpeg', 0.7); 
         };
     });
 };
