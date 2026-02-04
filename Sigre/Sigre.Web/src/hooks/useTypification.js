@@ -24,8 +24,7 @@ export const useTypification = () => {
 
   // 2. Función para buscar el Código (ej: "6002") dado un ID Interno (ej: 52)
 const getCodeById = useCallback((internalId) => {
-    console.log("1. Buscando ID:", internalId);
-    console.log("2. Total tipificaciones en maestro:", masterTypifications.length);
+
 
     if (!masterTypifications.length || !internalId) return "";
 
@@ -34,7 +33,7 @@ const getCodeById = useCallback((internalId) => {
         String(t.typificationId) === String(internalId)
     );
 
-    console.log("3. Resultado encontrado:", match?.code);
+    
     return match ? match.code : "";
 }, [masterTypifications]);
 
@@ -58,8 +57,6 @@ const getTypificationsByElement = useCallback((elementType) => {
         return [];
     }
 
-    console.group("🔍 DEPURANDO FILTRO DROPDOWN");
-    console.log("1. Buscando opciones para Tipo:", elementType);
     
     // 2. FILTRADO
     const filtered = masterTypifications.filter(t => {
@@ -68,7 +65,6 @@ const getTypificationsByElement = useCallback((elementType) => {
         return tipoDb === 'BOTH' || tipoDb === tipoForm;
     });
 
-    console.log(`2. Encontrados ${filtered.length} registros raw.`);
 
     // 3. MAPEO (Aquí vemos el ID real)
     const mapped = filtered.map(t => {
@@ -78,7 +74,7 @@ const getTypificationsByElement = useCallback((elementType) => {
         
         // Logueamos solo los sospechosos (ej: la 6026)
         if (code === '6026' || code === '7004') {
-            console.log(`   👉 OJO: El código ${code} tiene ID REAL: ${realId} y Tipo: ${t.tipiTipoElemento}`);
+
         }
 
         return {

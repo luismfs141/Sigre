@@ -130,19 +130,19 @@ export const DEFICIENCY_FIELD_MAP = {
   },
 
   // --- POSTES ---
-  "6002": { label: "POSTE - Mal Estado", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6004": { label: "POSTE - Inclinado > 5°", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6006": { label: "POSTE - Cimentación", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6008": { label: "POSTE - Roto/Rajado", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6024": { label: "POSTE - Dif. Nivel", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6026": { label: "POSTE - Impactado", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  "6028": { label: "POSTE - Corrosión", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6002": { label: "POSTE - POSTE EN MAL ESTADO DE CONSERVACIÓN O INAPROPIADO PARA LA FUNCIÓN DE APOYO ", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6004": { label: "POSTE - POSTE INCLINADO MÁS DE 5° O CON DEFICIENCIAS EN LA CIMENTACIÓN.", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6006": { label: "POSTE - CAJA PORTAFUSIBLE DE POSTE CON PARTES ENERGIZADAS EXPUESTAS Y ACCESIBLES.", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6008": { label: "POSTE - PROTECCIÓN MECÁNICA DE CABLE ROTA, INEXISTENTE, INSUFICIENTE O MATERIAL INAPROPIADO.", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6024": { label: "POSTE - RETENIDA EN MAL ESTADO.", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6026": { label: "POSTE - PASTORAL DE AP EN MAL ESTADO O POR DESPRENDERSE.", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "6028": { label: "POSTE - ARTEFACTO DE AP DESPRENDIDO O POR DESPRENDERSE.", fields: [...COMMON_DEFICIENCY_FIELDS] },
 
   // --- VANOS ---
-  "7002": { label: "VANO - Hebras Rotas", fields: [...COMMON_DEFICIENCY_FIELDS] },
+  "7002": { label: "VANO - CONDUCTOR DESNUDO, FORRADO O AISLADO CON AISLAMIENTO DETERIORADO O INADECUADO.", fields: [...COMMON_DEFICIENCY_FIELDS] },
   
  "7004": {
-    label: "VANO - Dist. Seguridad (Edificación)",
+    label: "VANO - CONDUCTOR DE BAJA TENSIÓN SOBRE EDIFICACIÓN O EN CONTACTO CON TECHO O SOPORTE METÁLICO.",
     fields: [
       ...COMMON_BEFORE_OBSERVACION,
       {
@@ -195,7 +195,7 @@ export const DEFICIENCY_FIELD_MAP = {
   },
 
   "7006": {
-    label: "VANO - Dist. Seguridad (Vías/Cruce)",
+    label: "VANO - CONDUCTOR INCUMPLE DS RESPECTO AL NIVEL DE TERRENO.",
     fields: [
       ...COMMON_BEFOREOBS_UNTIL_SUMINISTRO,
       {
@@ -245,7 +245,7 @@ export const DEFICIENCY_FIELD_MAP = {
   },
 
   "7008": {
-    label: "VANO - Dist. Horizontal < 7.5m",
+    label: "VANO - CONDUCTOR INCUMPLE DS RESPECTO A GRIFO.",
     fields: [
       ...COMMON_BEFORE_OBSERVACION,
       {

@@ -61,6 +61,7 @@ export default function Subestaciones() {
     // Estado para exportación WYSIWYG
     const [filteredData, setFilteredData] = useState(null);
     const [globalFilterValue, setGlobalFilterValue] = useState('');
+    const [evidenceCount, setEvidenceCount] = useState(0);
     
     // --- FILTROS INICIALES ---
     const initialFilters = {
@@ -407,21 +408,34 @@ export default function Subestaciones() {
                         </DataTable>
                     </SplitterPanel>
 
-                    {/* PANEL DERECHO: GALERÍA */}
-                    <SplitterPanel size={30} minSize={15} className="bg-slate-50 flex flex-col">
-                        <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0">
-                            <span className="text-xs font-bold text-gray-500 uppercase">
-                                Evidencias {selectedDeficiency ? `de ${selectedDeficiency.defiCodigoElemento}` : ''}
+{/* PANEL DERECHO: GALERÍA */}
+                    {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
+                    <SplitterPanel size={30} minSize={15} className="bg-white flex flex-col overflow-hidden">
+                        
+                        {/* CABECERA DEL PANEL (Con el contador) */}
+                        <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0 z-10">
+                            <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                <i className="pi pi-images text-blue-600"></i>
+                                Evidencias
+                                {/* CONTEO DINÁMICO */}
+                                {selectedDeficiency && evidenceCount > 0 && (
+                                   <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1 shadow-sm">
+                                       {evidenceCount}
+                                   </span>
+                                )}
                             </span>
                         </div>
-                        <div className="flex-grow overflow-x-auto overflow-y-hidden p-2">
-                            <div className="h-full flex flex-row gap-4">
-                                <EvidenceGallery 
-                                    deficiency={selectedDeficiency} 
-                                    feeder={selectedFeeder} 
-                                    sed={selectedSed} 
-                                />
-                            </div>
+
+                        {/* CUERPO DEL PANEL (Sin padding p-2, Sin gap, Sin flex-row extra) */}
+                        <div className="flex-grow w-full h-full overflow-hidden relative">
+                            {/* Renderizamos el componente DIRECTAMENTE para que llene el 100% */}
+                            <EvidenceGallery 
+                                deficiency={selectedDeficiency} 
+                                feeder={selectedFeeder} 
+                                sed={selectedSed} 
+                                // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
+                                onCountUpdate={setEvidenceCount} 
+                            />
                         </div>
                     </SplitterPanel>
 
