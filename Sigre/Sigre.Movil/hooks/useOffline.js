@@ -54,6 +54,8 @@ const normalizeArchivoForSync = (a, serverDefiId) => ({
   ArchCodTabla: serverDefiId,
   ArchTabla: "DEFICIENCIA",
 
+  DefiUUID: (a.DefiUUID ?? a.DefiUUID ?? null)?.toString().slice(0, 50) ?? null,
+
   // 🧠 normalización backend .NET
   ArchActivo: toBooleanOrNull(a.ArchActivo),
   ArchPrincipal: toBooleanOrNull(a.ArchPrincipal),

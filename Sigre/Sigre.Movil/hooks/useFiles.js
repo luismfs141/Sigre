@@ -59,44 +59,45 @@ export function useFiles() {
   }, []);
 
   // ===============================
-  // 🔹 NORMALIZAR PARA SYNC (API)
-  // ===============================
-  const normalizeArchivoForSync = (arch) => {
-    const activoNum = toNum(arch.ArchActivo ?? 1, 1);
+// 🔹 NORMALIZAR PARA SYNC (API)
+// ===============================
+const normalizeArchivoForSync = (arch) => {
+  const activoNum = toNum(arch.ArchActivo ?? 1, 1);
 
-    return {
-      ArchInterno: arch.ArchInterno,
-      ArchServerId: arch.ArchServerId ?? null,
+  return {
+    ArchInterno: arch.ArchInterno,
+    ArchServerId: arch.ArchServerId ?? null,
 
-      ArchTabla: arch.ArchTabla ?? "Deficiencias",
-      ArchCodTabla: arch.ArchCodTabla ?? null,
+    ArchTabla: arch.ArchTabla ?? "Deficiencias",
+    ArchCodTabla: arch.ArchCodTabla ?? null,
 
-      // ✅ OBLIGATORIO: el backend lo espera como STRING
-      ArchTipo: String(arch.ArchTipo),
+    ArchTipo: String(arch.ArchTipo),
+    ArchNombre: arch.ArchNombre ?? arch.ARCH_NOMBRE ?? arch.archNombre ?? null,
 
-      //ArchNombre: arch.ArchNombre,------------------------------------------------------------------------------------------------- modi
-      ArchNombre: arch.ArchNombre ?? arch.ARCH_NOMBRE ?? arch.archNombre ?? null,
+    ArchLatitud: arch.ArchLatitud ?? null,
+    ArchLongitud: arch.ArchLongitud ?? null,
 
-      ArchLatitud: arch.ArchLatitud ?? null,
-      ArchLongitud: arch.ArchLongitud ?? null,
+    ArchFecha: arch.ArchFecha
+      ? String(arch.ArchFecha).replace(" ", "T")
+      : nowPeruISO(),
 
-      // ✅ robusto
-      ArchFecha: arch.ArchFecha
-        ? String(arch.ArchFecha).replace(" ", "T")
-        : nowPeruISO(),
+    ArchTipoElemento: arch.ArchTipoElemento ?? null,
+    ArchIdElemento: arch.ArchIdElemento ?? null,
+    TipiInterno: arch.TipiInterno ?? null,
 
-      ArchTipoElemento: arch.ArchTipoElemento ?? null,
-      ArchIdElemento: arch.ArchIdElemento ?? null,
-      TipiInterno: arch.TipiInterno ?? null,
+    DefiServerId: arch.DefiServerId ?? null,
 
-      DefiServerId: arch.DefiServerId ?? null,
+    // ✅ ÚNICO NOMBRE
+    DefiUUID: arch.DefiUUID ?? null,
 
-      // ✅ boolean REAL (no Boolean("0"))
-      ArchActivo: Boolean(arch.ArchActivo),
-
-      EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
-    };
+    ArchActivo: activoNum === 1,
+    EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
   };
+};
+
+
+
+
 
   // ===============================
   // 🔄 AUTO SYNC
@@ -118,7 +119,16 @@ export function useFiles() {
       const arch = await getArchivoByIdLocal(archInternoLocal);
       if (!arch) return;
 
+
+
       const payload = [normalizeArchivoForSync(arch)];
+
+
+
+      console.log("🌐 baseURL:", client?.defaults?.baseURL);
+console.log("📤 payload[0].DefiUuid:", payload?.[0]?.DefiUuid);
+console.log("📤 payload[0].DefiUUID:", payload?.[0]?.DefiUUID);
+console.log("📤 payload[0] completo:", payload?.[0]);
 
       const response = await client.post(
         "/File/SyncFromSQLite",
@@ -266,6 +276,70 @@ export function useFiles() {
       if (!aSincronizar.length) return { ok: true, synced: 0 };
 
       const payload = aSincronizar.map(normalizeArchivoForSync);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+
+      console.log("🌐 baseURL:", client?.defaults?.baseURL);
+console.log("📤 payload[0].DefiUuid:", payload?.[0]?.DefiUuid);
+console.log("📤 payload[0].DefiUUID:", payload?.[0]?.DefiUUID);
+console.log("📤 payload[0] completo:", payload?.[0]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       const response = await client.post(
         "/File/SyncFromSQLite",

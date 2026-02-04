@@ -31,6 +31,7 @@ namespace Sigre.Entities.Entities.SyncData
 
         public int? DefiServerId { get; set; }
         public string? DefiUUID { get; set; }
+
     }
 
 

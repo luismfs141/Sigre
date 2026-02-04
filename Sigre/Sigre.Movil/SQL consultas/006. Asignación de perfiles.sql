@@ -180,3 +180,14 @@ BEGIN
   ADD VANO_Tramo NVARCHAR(20) NULL;
 END
 GO
+
+
+----------------------------------------------------------------------------------------------
+
+
+IF COL_LENGTH('dbo.Archivos', 'DEFI_UUID') IS NULL
+BEGIN
+    ALTER TABLE dbo.Archivos
+    ADD DEFI_UUID VARCHAR(50) NULL;
+END
+

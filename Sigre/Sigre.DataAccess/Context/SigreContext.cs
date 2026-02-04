@@ -137,6 +137,12 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .HasColumnName("ARCH_TipoElemento");
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
+
+
+            entity.Property(e => e.DefiUUID)
+            .HasMaxLength(50)
+       .IsUnicode(false)
+       .HasColumnName("DEFI_UUID");
         });
 
         modelBuilder.Entity<ArmadoMaterial>(entity =>

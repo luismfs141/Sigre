@@ -465,25 +465,35 @@ namespace Sigre.DataAccess
 
         public Archivo DAARCH_ConvertFile(ArchivoSyncDto arch_offline)
         {
+            string defiUuid = null;
+            if (!string.IsNullOrWhiteSpace(arch_offline.DefiUUID))
+            {
+                defiUuid = arch_offline.DefiUUID.Trim();
+                if (defiUuid.Length > 50) defiUuid = defiUuid.Substring(0, 50);
+            }
+
             return new Archivo
             {
-                // 📁 Información del archivo
                 ArchTipo = arch_offline.ArchTipo,
                 ArchTabla = arch_offline.ArchTabla,
                 ArchCodTabla = (int)arch_offline.ArchCodTabla,
                 ArchNombre = arch_offline.ArchNombre,
-                // 📍 Ubicación
+
                 ArchLatitud = arch_offline.ArchLatitud,
                 ArchLongitud = arch_offline.ArchLongitud,
-                // 📅 Fecha
+
                 ArchFecha = arch_offline.ArchFecha,
-                // 🔗 Relación con elemento
+
                 ArchTipoElemento = arch_offline.ArchTipoElemento,
                 ArchIdElemento = arch_offline.ArchIdElemento,
                 TipiInterno = arch_offline.TipiInterno,
-                // ⚙️ Estado
+
                 ArchActivo = arch_offline.ArchActivo,
+
+                // ✅ INSERT también guarda DEFI_UUID
+                DefiUUID = defiUuid
             };
         }
+
     }
 }
