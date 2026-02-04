@@ -164,3 +164,46 @@ export const updateVanoIdAfterSync = async (localId, serverId) => {
   await runQuery(query, [serverId, localId]);
 };
 
+// ======================= INSPECCIONADO (VANOS) =======================
+
+export const getVanoInspeccionadoByIdOriginalLocal = async (vanoInterno) => {
+  try {
+    const id = Number(vanoInterno);
+    if (!Number.isFinite(id)) return null;
+
+    const rows = await runQuery(
+      "SELECT VanoInspeccionado FROM Vanos WHERE VanoInterno = ? LIMIT 1",
+      [id]
+    );
+
+    if (!rows || rows.length === 0) return null;
+    return rows[0]?.VanoInspeccionado ?? null;
+  } catch (error) {
+    console.error("❌ Error getVanoInspeccionadoByIdOriginalLocal:", error);
+    return null;
+  }
+};
+
+export const updateVanoInspeccionadoByIdOriginalLocal = async (vanoInterno, inspeccionado) => {
+  try {
+    const id = Number(vanoInterno);
+    if (!Number.isFinite(id)) return false;
+
+    const val = Number(inspeccionado) === 1 ? 1 : 0;
+
+    await runQuery(
+      "UPDATE Vanos SET VanoInspeccionado = ? WHERE VanoInterno = ?",
+      [val, id]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error updateVanoInspeccionadoByIdOriginalLocal:", error);
+    return false;
+  }
+};
+
+
+
+
+

@@ -1,12 +1,50 @@
 // Form/GeneralData/VanoForm.jsx
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useGap } from "../../../hooks/useGap";
+import SelectModal from "../../SelectModal";
 
 const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => {
   const { saveVano, fetchVanoById } = useGap();
 
-  const [form, setForm] = useState(data ? { ...data } : {});
+  // =========================
+  // HELPERS
+  // =========================
+  const pickCodigo = (src) =>
+    src?.VanoCodigo ?? src?.Vano_Codigo ?? src?.VANO_Codigo ?? "";
+
+  const ensureEtiqueta = (src) => {
+    const etiqueta = (src?.VanoEtiqueta ?? src?.VANO_Etiqueta ?? "").toString().trim();
+    if (etiqueta) return etiqueta;
+
+    const codigo = String(pickCodigo(src) ?? "").trim();
+    if (codigo) return codigo; // ✅ fallback seguro
+
+    return "SIN ETIQUETA"; // ✅ último fallback
+  };
+
+  // =========================
+  // SHAPE CONSISTENTE
+  // =========================
+  const toFormShape = (src) => ({
+    VanoInterno: src?.VanoInterno ?? "",
+    EstadoOffLine: src?.EstadoOffLine ?? "",
+
+    VanoCodigo: pickCodigo(src),
+
+    // ✅ OJO: NOT NULL en BD
+    VanoEtiqueta: ensureEtiqueta(src),
+
+    VanoNodoInicial: src?.VanoNodoInicial ?? "",
+    VanoNodoFinal: src?.VanoNodoFinal ?? "",
+
+    // UI: "0"/"1"
+    VanoTerceros:
+      src?.VanoTerceros == null ? "" : String(Number(src.VanoTerceros)),
+  });
+
+  const [form, setForm] = useState(toFormShape(data ?? {}));
+  const update = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
 
   // =========================
   // DIRTY TRACKING
@@ -14,16 +52,11 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
   const baseRef = useRef(null);
   const lastDirtyRef = useRef(false);
 
-  // OJO: aquí defines qué campos cuentan como "editables"
   const normalize = (obj) => ({
     VanoNodoInicial: obj?.VanoNodoInicial ?? "",
     VanoNodoFinal: obj?.VanoNodoFinal ?? "",
-    // Si habilitas más campos editables, agrégalos aquí:
-    // VanoEtiqueta: obj?.VanoEtiqueta ?? "",
-    // VanoTerceros: obj?.VanoTerceros ?? "",
+    VanoTerceros: obj?.VanoTerceros ?? "",
   });
-
-  const update = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
 
   // =========================
   // CARGA FRESH DESDE SQLITE
@@ -43,10 +76,10 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
 
       if (!alive) return;
 
-      setForm(merged);
+      const initial = toFormShape(merged);
+      setForm(initial);
 
-      // ✅ base para comparar cambios
-      baseRef.current = normalize(merged);
+      baseRef.current = normalize(initial);
       lastDirtyRef.current = false;
       onDirtyChange?.(false);
     };
@@ -58,7 +91,6 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
     };
   }, [data, visible]);
 
-  // ✅ detecta cambios y avisa al modal
   useEffect(() => {
     if (!baseRef.current) return;
 
@@ -72,36 +104,76 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
   }, [form]);
 
   // =========================
+  // SELECT CONFIG (Terceros)
+  // =========================
+  const [selectConfig, setSelectConfig] = useState(null);
+
+  const tercerosOptions = [
+    { label: "No", value: 0 },
+    { label: "Sí", value: 1 },
+  ];
+
+  const handleSelectValue = (field, value) => {
+    if (field === "VanoTerceros" && Number(value) === 1 && Number(form.VanoTerceros) !== 1) {
+      Alert.alert(
+        "Aviso",
+        "Si marcas Terceros = Sí, este vano desaparecerá del mapa y solo el ADMINISTRADOR podrá volverlo a habilitar.\n\n¿Deseas continuar?",
+        [
+          { text: "Cancelar", style: "cancel", onPress: () => setSelectConfig(null) },
+          {
+            text: "Continuar",
+            style: "destructive",
+            onPress: () => {
+              update(field, String(value));
+              setSelectConfig(null);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    update(field, String(value));
+    setSelectConfig(null);
+  };
+
+  // =========================
   // EXPOSE SAVE
   // =========================
   useImperativeHandle(ref, () => ({
     save: async () => {
       try {
-        const id = await saveVano(form);
+        // ✅ SIEMPRE etiqueta válida (NOT NULL)
+        const etiquetaFinal = ensureEtiqueta({
+          ...form,
+          VanoCodigo: form.VanoCodigo,
+          VanoEtiqueta: form.VanoEtiqueta,
+        });
+
+        const payload = {
+          ...form,
+          VanoEtiqueta: etiquetaFinal, // ✅ nunca null
+          VanoTerceros: form.VanoTerceros === "" ? null : Number(form.VanoTerceros),
+        };
+
+        const id = await saveVano(payload);
+
         if (!id) {
           Alert.alert("Error", "No se pudo guardar el vano.");
           return null;
         }
 
-        // ✅ opcional: recargar fresh
         const fresh = await fetchVanoById(id);
-        const updated = fresh ? { ...form, ...fresh, VanoInterno: id } : { ...form, VanoInterno: id };
+        const updated = toFormShape(fresh ?? { ...payload, VanoInterno: id });
 
         setForm(updated);
 
-        // ✅ resetea dirty
         baseRef.current = normalize(updated);
         lastDirtyRef.current = false;
         onDirtyChange?.(false);
 
         Alert.alert("Guardado exitoso", "El vano se guardó correctamente.", [
-          {
-            text: "OK",
-            onPress: () => {
-              // si quieres cerrar igual que Poste:
-              onClose?.();
-            },
-          },
+          { text: "OK", onPress: () => onClose?.() },
         ]);
 
         return updated;
@@ -121,9 +193,9 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
     "VanoCodigo",
     "VanoNodoInicial",
     "VanoNodoFinal",
-    // Si quieres mostrar más, descomenta:
+    "VanoTerceros",
+    // Si quieres mostrar etiqueta, descomenta:
     // "VanoEtiqueta",
-    // "VanoTerceros",
   ];
 
   const LABELS = {
@@ -132,27 +204,84 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
     VanoNodoInicial: "Nodo Inicial",
     VanoNodoFinal: "Nodo Final",
     VanoInterno: "Interno",
+    VanoTerceros: "Terceros",
+  };
+
+  const dimmedFields = ["VanoTerceros"];
+
+  const SelectInput = ({ label, value, placeholder, locked, dimmed, onPress }) => (
+    <View style={styles.row}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity
+        style={[
+          styles.select,
+          locked && styles.lockedInput,
+          dimmed && styles.dimmed,
+        ]}
+        disabled={locked}
+        onPress={onPress}
+      >
+        <Text style={{ color: value ? "#000" : "#999" }}>
+          {value || placeholder}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderField = (key) => {
+    const locked = lockedFields.includes(key);
+
+    if (key === "VanoTerceros") {
+      return (
+        <SelectInput
+          key={key}
+          label={LABELS[key] ?? key}
+          dimmed={dimmedFields.includes(key)}
+          value={tercerosOptions.find((i) => String(i.value) === String(form.VanoTerceros))?.label}
+          placeholder="Seleccione opción"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: LABELS[key] ?? key,
+              items: tercerosOptions,
+              labelKey: "label",
+              valueKey: "value",
+            })
+          }
+        />
+      );
+    }
+
+    return (
+      <View key={key} style={styles.row}>
+        <Text style={styles.label}>{LABELS[key] ?? key}</Text>
+        <TextInput
+          style={[styles.input, locked && styles.lockedInput]}
+          value={form?.[key] != null ? String(form[key]) : ""}
+          onChangeText={(v) => update(key, v)}
+          editable={!locked}
+        />
+      </View>
+    );
   };
 
   return (
     <View>
       <Text style={styles.sectionTitle}>Vano</Text>
 
-      {orderedFields.map((key) => {
-        const isLocked = lockedFields.includes(key);
+      {orderedFields.map((key) => renderField(key))}
 
-        return (
-          <View key={key} style={styles.row}>
-            <Text style={styles.label}>{LABELS[key] ?? key}</Text>
-            <TextInput
-              style={[styles.input, isLocked && styles.lockedInput]}
-              value={form?.[key] != null ? String(form[key]) : ""}
-              onChangeText={(v) => update(key, v)}
-              editable={!isLocked}
-            />
-          </View>
-        );
-      })}
+      <SelectModal
+        visible={!!selectConfig}
+        title={selectConfig?.title}
+        items={selectConfig?.items}
+        labelKey={selectConfig?.labelKey}
+        valueKey={selectConfig?.valueKey}
+        selectedValue={form?.[selectConfig?.field]}
+        onSelect={(v) => handleSelectValue(selectConfig.field, v)}
+        onClose={() => setSelectConfig(null)}
+      />
     </View>
   );
 });
@@ -163,6 +292,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: "700", fontSize: 18, marginBottom: 8 },
   row: { marginBottom: 10 },
   label: { fontWeight: "600" },
+
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -171,5 +301,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
     backgroundColor: "#fff",
   },
-  lockedInput: { backgroundColor: "#ececec", color: "#777" },
+
+  select: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 4,
+    backgroundColor: "#fff",
+  },
+
+  dimmed: { backgroundColor: "#ececec" },
+
+  lockedInput: {
+    backgroundColor: "#e0e0e0",
+    opacity: 0.6,
+    color: "#777",
+  },
 });

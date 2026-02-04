@@ -483,7 +483,9 @@ export default function Multimedia() {
   const { findFeederById } = useFeeder();
   const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted, markArchivoAsInactive } = useFiles();
 
-  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, recalcularPinInspeccionadoParaPoste } = useDeficiency();
+  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, recalcularPinInspeccionadoParaElemento } = useDeficiency();
+
+
 
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
@@ -1050,278 +1052,279 @@ export default function Multimedia() {
   // ==============================================================================
 
   // =================== VALIDACIONES POST-GUARDAR/FINALIZAR (1 → 2 → 3) ===================
-  async function runPostSaveValidations({
-    picturesRoot,
-    picturesTargetDir,
-    pathSegments,
-    deficiencyData,
-    photosSnapshot,
-  }) {
-    const report = {
-      desactivadosPorFaltaPublica: 0,
-      orfanasMovidasEliminados: 0,
-      placeholdersOmitidos: 0,
-      placeholdersEnPantalla: 0,
-      defiInspeccionadoPrevio: Number(deficiencyData?.DefiInspeccionado) ? 1 : 0,
-      defiInspeccionadoNuevo: Number(deficiencyData?.DefiInspeccionado) ? 1 : 0,
-      pinPrevio: null,
-      pinNuevo: null,
-      pinActualizado: false,
-      pudoVerificarCarpetaPublica: false,
-    };
+async function runPostSaveValidations({
+  picturesRoot,
+  picturesTargetDir,
+  pathSegments,
+  deficiencyData,
+  photosSnapshot,
+}) {
+  const report = {
+    desactivadosPorFaltaPublica: 0,
+    orfanasMovidasEliminados: 0,
+    placeholdersOmitidos: 0,
+    placeholdersEnPantalla: 0,
+    defiInspeccionadoPrevio: Number(deficiencyData?.DefiInspeccionado) ? 1 : 0,
+    defiInspeccionadoNuevo: Number(deficiencyData?.DefiInspeccionado) ? 1 : 0,
+    pinPrevio: null,
+    pinNuevo: null,
+    pinActualizado: false,
+    tablaActualizada: null,
+    pudoVerificarCarpetaPublica: false,
+  };
 
-    report.placeholdersEnPantalla =
-      canGeneratePlaceholders ? (photosSnapshot?.filter((p) => p?.isPlaceholder)?.length ?? 0) : 0;
+  report.placeholdersEnPantalla =
+    canGeneratePlaceholders ? (photosSnapshot?.filter((p) => p?.isPlaceholder)?.length ?? 0) : 0;
 
-    // ✅  ADMIN O SUPERVISOR 
-    const placeholderIds = new Set(
-      isElevated
-        ? (photosSnapshot ?? [])
-          .filter((p) => p?.isPlaceholder && p?.id)
-          .map((p) => p.id)
-        : []
-    );
+  // ✅  ADMIN O SUPERVISOR
+  const placeholderIds = new Set(
+    isElevated
+      ? (photosSnapshot ?? [])
+        .filter((p) => p?.isPlaceholder && p?.id)
+        .map((p) => p.id)
+      : []
+  );
 
+  // 1) Validación BD ↔ carpeta pública
+  const idBusquedaValidacion =
+    (deficiencyData?.DefiServerId && deficiencyData.DefiServerId > 0)
+      ? deficiencyData.DefiServerId
+      : deficiencyData?.DefiInterno ?? selectedDeficiency.id;
 
+  const activos = (await fetchMediosByDeficienciaId(idBusquedaValidacion)) ?? [];
 
+  const fotosActivas = activos.filter((a) => isPhotoArchTipo(a?.ArchTipo));
 
-    // 1) Validación BD ↔ carpeta pública
-    const idBusquedaValidacion =
-      (deficiencyData?.DefiServerId && deficiencyData.DefiServerId > 0)
-        ? deficiencyData.DefiServerId
-        : deficiencyData?.DefiInterno ?? selectedDeficiency.id;
+  // Lee carpeta pública (si existe)
+  let publicUris = [];
+  let publicNames = new Set();
 
-    const activos = (await fetchMediosByDeficienciaId(idBusquedaValidacion)) ?? [];
-
-    const fotosActivas = activos.filter((a) => isPhotoArchTipo(a?.ArchTipo));
-
-    // Lee carpeta pública (si existe)
-    let publicUris = [];
-    let publicNames = new Set();
-
-    if (Platform.OS === "android" && picturesRoot && picturesTargetDir) {
-      try {
-        publicUris = (await SAF.readDirectoryAsync(picturesTargetDir)) ?? [];
-        report.pudoVerificarCarpetaPublica = true;
-      } catch (e) {
-        console.warn("⚠️ No se pudo leer carpeta pública para validaciones:", e);
-      }
+  if (Platform.OS === "android" && picturesRoot && picturesTargetDir) {
+    try {
+      publicUris = (await SAF.readDirectoryAsync(picturesTargetDir)) ?? [];
+      report.pudoVerificarCarpetaPublica = true;
+    } catch (e) {
+      console.warn("⚠️ No se pudo leer carpeta pública para validaciones:", e);
     }
+  }
 
-    const desactivadosIds = new Set();
-    const expectedNames = fotosActivas
-      .map((a) => basenameFromAnyPath(a?.ArchNombre))
-      .filter(Boolean);
+  const desactivadosIds = new Set();
+  const expectedNames = fotosActivas
+    .map((a) => basenameFromAnyPath(a?.ArchNombre))
+    .filter(Boolean);
 
-
-    if (report.pudoVerificarCarpetaPublica) {
-      for (const a of fotosActivas) {
-        const archInterno = a?.ArchInterno;
-        const nombre = basenameFromAnyPath(a?.ArchNombre);
-        if (!nombre || !archInterno) continue;
-
-        // Excepción Admin: si ese registro está representado por placeholder, NO validar existencia
-        if (isElevated && placeholderIds.has(archInterno)) {
-          report.placeholdersOmitidos += 1;
-          continue;
-        }
-
-        if (!safHasFileName(publicUris, nombre)) {
-
-          const ok = await markArchivoAsInactive(archInterno);
-          if (ok) {
-            report.desactivadosPorFaltaPublica += 1;
-            desactivadosIds.add(archInterno);
-          }
-        }
-      }
-
-      // Fotos huérfanas: están en pública pero NO están en registros activos
-      // (las placeholders no deberían estar en pública)
-      const trashSegments = [PUBLIC_TRASH_DIR_NAME, ...pathSegments.slice(1)];
-      let picturesTrashDir = null;
-
-      for (const uri of publicUris) {
-        const nombre = safDisplayName(uri);
-        if (!nombre) continue;
-
-        // ✅ acepta con extensión o sin extensión (como quedan cuando usas stripExt)
-        const nLower = String(nombre).toLowerCase();
-        const pareceFoto =
-          /\.(jpg|jpeg|png)$/i.test(nombre) || nLower.startsWith("fot-") || nLower.startsWith("img-");
-
-        if (!pareceFoto) continue;
-
-        // ✅ FIX: compara soportando archivos SAF sin extensión
-        const isExpected = expectedNames.some((fn) => safNameMatches(uri, fn));
-
-        if (!isExpected) {
-          try {
-            if (!picturesTrashDir) {
-              picturesTrashDir = await ensureSafPath(picturesRoot, trashSegments);
-            }
-
-            // Copia a ELIMINADOS y borra original
-            await writeFileIntoSafDir({
-              dirUri: picturesTrashDir,
-              fileName: nombre,
-              mimeType: "image/jpeg",
-              sourceFileUri: uri, // ✅ leemos desde SAF y escribimos en SAF
-            });
-
-            await SAF.deleteAsync(uri);
-            report.orfanasMovidasEliminados += 1;
-          } catch (e) {
-            console.warn("⚠️ No se pudo mover huérfana a ELIMINADOS:", e);
-          }
-        }
-      }
-
-    }
-
-    // 2) Validación DefiInspeccionado según fotos obligatorias 1-4
-    const presentes = new Set();
-
+  if (report.pudoVerificarCarpetaPublica) {
     for (const a of fotosActivas) {
       const archInterno = a?.ArchInterno;
-      const tipo = Number(a?.ArchTipo);
       const nombre = basenameFromAnyPath(a?.ArchNombre);
+      if (!nombre || !archInterno) continue;
 
-      if (!REQUIRED_PHOTO_TYPES.includes(tipo)) continue;
-
-      // Si se desactivó por falta en pública, no cuenta
-      if (desactivadosIds.has(archInterno)) continue;
-
-      // Admin: placeholder cuenta
+      // Excepción Admin: si ese registro está representado por placeholder, NO validar existencia
       if (isElevated && placeholderIds.has(archInterno)) {
-        presentes.add(tipo);
+        report.placeholdersOmitidos += 1;
         continue;
       }
 
-      // Inspector: debe existir físicamente (si pudimos verificar)
-      if (report.pudoVerificarCarpetaPublica) {
-        if (safHasFileName(publicUris, nombre)) presentes.add(tipo);
-
-      } else {
-        // Fallback si no pudimos verificar pública
-        presentes.add(tipo);
+      if (!safHasFileName(publicUris, nombre)) {
+        const ok = await markArchivoAsInactive(archInterno);
+        if (ok) {
+          report.desactivadosPorFaltaPublica += 1;
+          desactivadosIds.add(archInterno);
+        }
       }
     }
 
-    const cumple = REQUIRED_PHOTO_TYPES.every((t) => presentes.has(t));
-    report.defiInspeccionadoNuevo = cumple ? 1 : 0;
+    // Fotos huérfanas: están en pública pero NO están en registros activos
+    // (las placeholders no deberían estar en pública)
+    const trashSegments = [PUBLIC_TRASH_DIR_NAME, ...pathSegments.slice(1)];
+    let picturesTrashDir = null;
 
-    if (report.defiInspeccionadoNuevo !== report.defiInspeccionadoPrevio) {
-      await setDefiInspeccionadoLocal(selectedDeficiency.id, report.defiInspeccionadoNuevo);
-    }
+    for (const uri of publicUris) {
+      const nombre = safDisplayName(uri);
+      if (!nombre) continue;
 
-    // 3) Validación Pines.Inspeccionado (POSTE)
-    if (String(deficiencyData?.DefiTipoElemento ?? "").toUpperCase() === "POST") {
-      const res = await recalcularPinInspeccionadoParaPoste(deficiencyData?.DefiIdElemento);
-      report.pinPrevio = res?.previo ?? null;
-      report.pinNuevo = res?.nuevo ?? null;
-      report.pinActualizado = res?.ok ?? false;
-    }
+      // ✅ acepta con extensión o sin extensión
+      const nLower = String(nombre).toLowerCase();
+      const pareceFoto =
+        /\.(jpg|jpeg|png)$/i.test(nombre) || nLower.startsWith("fot-") || nLower.startsWith("img-");
 
-    // 4) Mensaje final + resumen (mejorado)
-    const checks = [];
-    const details = [];
-    const notes = [];
+      if (!pareceFoto) continue;
 
-    // Estado explicativo de verificación pública
-    if (Platform.OS === "android") {
-      if (report.pudoVerificarCarpetaPublica) {
-        checks.push("✅ Verificación de carpeta pública: OK");
-      } else {
-        checks.push("⚠️ Verificación de carpeta pública: NO DISPONIBLE");
-        notes.push("No se pudo acceder a la carpeta pública (SAF). Se aplicó una verificación parcial (fallback).");
+      // ✅ FIX: compara soportando archivos SAF sin extensión
+      const isExpected = expectedNames.some((fn) => safNameMatches(uri, fn));
+
+      if (!isExpected) {
+        try {
+          if (!picturesTrashDir) {
+            picturesTrashDir = await ensureSafPath(picturesRoot, trashSegments);
+          }
+
+          // Copia a ELIMINADOS y borra original
+          await writeFileIntoSafDir({
+            dirUri: picturesTrashDir,
+            fileName: nombre,
+            mimeType: "image/jpeg",
+            sourceFileUri: uri,
+          });
+
+          await SAF.deleteAsync(uri);
+          report.orfanasMovidasEliminados += 1;
+        } catch (e) {
+          console.warn("⚠️ No se pudo mover huérfana a ELIMINADOS:", e);
+        }
       }
     }
-
-    // Resultados de consistencia BD ↔ pública
-    if (report.desactivadosPorFaltaPublica > 0) {
-      details.push(
-        `• Registros desactivados por falta de archivo en carpeta pública: ${report.desactivadosPorFaltaPublica}\n  ↳ Se marcó ArchActivo=0 para permitir reemplazo.`
-      );
-    } else {
-      details.push("• Registros desactivados por falta de archivo en pública: 0");
-    }
-
-    if (report.orfanasMovidasEliminados > 0) {
-      details.push(
-        `• Fotos huérfanas movidas a ELIMINADOS: ${report.orfanasMovidasEliminados}\n  ↳ Estaban en pública pero no tenían registro activo asociado.`
-      );
-    } else {
-      details.push("• Fotos huérfanas movidas a ELIMINADOS: 0");
-    }
-
-    // Placeholders (Admin + Inspector): informativos en pantalla
-    if (canGeneratePlaceholders) {
-      details.push(
-        `• Placeholders en pantalla: ${report.placeholdersEnPantalla}\n  ↳ Indican que falta la foto real en este dispositivo.`
-      );
-
-      // ✅ SOLO ADMIN puede “exonerar” placeholders en la validación
-      if (isElevated) {
-        details.push(
-          `• Placeholders omitidos en validación: ${report.placeholdersOmitidos}\n  ↳ En Admin, NO se desactivan registros por este caso.`
-        );
-        notes.push("Admin: los placeholders pueden contar como evidencia visual para evitar falsos negativos.");
-        notes.push("Los placeholders NO se copian a la carpeta pública. Solo se mueven a ELIMINADOS si el Admin los elimina o reemplaza.");
-      } else {
-        notes.push("Inspector: los placeholders son informativos y NO reemplazan la foto real. Si aparece uno, reemplaza la foto.");
-      }
-    }
-
-    // DefiInspeccionado
-    const inspeccionTxt =
-      report.defiInspeccionadoNuevo === 1
-        ? "✅ Inspección COMPLETA (fotos obligatorias 1–4 presentes)"
-        : "⚠️ Inspección INCOMPLETA (falta alguna foto obligatoria 1–4)";
-
-    checks.push(inspeccionTxt);
-    details.push(`• DefiInspeccionado: ${report.defiInspeccionadoPrevio} → ${report.defiInspeccionadoNuevo}`);
-
-    // Pines (poste)
-    if (String(deficiencyData?.DefiTipoElemento ?? "").toUpperCase() === "POST") {
-      if (report.pinActualizado) {
-        checks.push("✅ Estado del PIN (Poste) actualizado");
-        details.push(`• Pin.Inspeccionado: ${report.pinPrevio} → ${report.pinNuevo}`);
-      } else {
-        checks.push("⚠️ Estado del PIN (Poste) no se pudo actualizar");
-        notes.push("No se pudo recalcular el pin. Reintenta o revisa la tabla Pines/relación IdOriginal.");
-      }
-    }
-
-    // Construir texto final
-    const bodyParts = [];
-    bodyParts.push("📌 RESULTADO DE VERIFICACIÓN");
-    bodyParts.push(checks.join("\n"));
-    bodyParts.push("\n📷 CONSISTENCIA DE FOTOS");
-    bodyParts.push(details.join("\n"));
-
-    if (notes.length > 0) {
-      bodyParts.push("\n📝 NOTAS");
-      bodyParts.push(notes.map((n) => `• ${n}`).join("\n"));
-    }
-
-    const resumen = bodyParts.join("\n");
-
-    // Título final
-    let titulo = "✅ Guardado exitoso";
-    if (report.desactivadosPorFaltaPublica > 0 || report.orfanasMovidasEliminados > 0) {
-      titulo = "⚠️ Guardado con correcciones";
-    } else if (!report.pudoVerificarCarpetaPublica && Platform.OS === "android") {
-      titulo = "✅ Guardado (con observaciones)";
-    }
-
-    return {
-      ...report,
-      titulo,
-      resumen,
-    };
-
   }
+
+  // 2) Validación DefiInspeccionado según fotos obligatorias 1-4
+  const presentes = new Set();
+
+  for (const a of fotosActivas) {
+    const archInterno = a?.ArchInterno;
+    const tipo = Number(a?.ArchTipo);
+    const nombre = basenameFromAnyPath(a?.ArchNombre);
+
+    if (!REQUIRED_PHOTO_TYPES.includes(tipo)) continue;
+
+    // Si se desactivó por falta en pública, no cuenta
+    if (desactivadosIds.has(archInterno)) continue;
+
+    // Admin/Supervisor: placeholder cuenta
+    if (isElevated && placeholderIds.has(archInterno)) {
+      presentes.add(tipo);
+      continue;
+    }
+
+    // Inspector: debe existir físicamente (si pudimos verificar)
+    if (report.pudoVerificarCarpetaPublica) {
+      if (safHasFileName(publicUris, nombre)) presentes.add(tipo);
+    } else {
+      // Fallback si no pudimos verificar pública
+      presentes.add(tipo);
+    }
+  }
+
+  const cumple = REQUIRED_PHOTO_TYPES.every((t) => presentes.has(t));
+  report.defiInspeccionadoNuevo = cumple ? 1 : 0;
+
+  if (report.defiInspeccionadoNuevo !== report.defiInspeccionadoPrevio) {
+    await setDefiInspeccionadoLocal(selectedDeficiency.id, report.defiInspeccionadoNuevo);
+  }
+
+  // 3) ✅ Recalcular inspección del ELEMENTO (POST / VANO) y actualizar tabla correcta
+  const tipoElem = String(deficiencyData?.DefiTipoElemento ?? "").trim().toUpperCase();
+
+  if (tipoElem === "POST" || tipoElem === "VANO") {
+    const res = await recalcularPinInspeccionadoParaElemento(
+      deficiencyData?.DefiIdElemento,
+      tipoElem
+    );
+
+    report.pinPrevio = res?.previo ?? null;
+    report.pinNuevo = res?.nuevo ?? null;
+    report.pinActualizado = res?.ok ?? false;
+    report.tablaActualizada = res?.tablaActualizada ?? (tipoElem === "VANO" ? "Vanos.VanoInspeccionado" : "Pines.Inspeccionado");
+  }
+
+  // 4) Mensaje final + resumen
+  const checks = [];
+  const details = [];
+  const notes = [];
+
+  // Estado explicativo de verificación pública
+  if (Platform.OS === "android") {
+    if (report.pudoVerificarCarpetaPublica) {
+      checks.push("✅ Verificación de carpeta pública: OK");
+    } else {
+      checks.push("⚠️ Verificación de carpeta pública: NO DISPONIBLE");
+      notes.push("No se pudo acceder a la carpeta pública (SAF). Se aplicó una verificación parcial (fallback).");
+    }
+  }
+
+  // Resultados de consistencia BD ↔ pública
+  if (report.desactivadosPorFaltaPublica > 0) {
+    details.push(
+      `• Registros desactivados por falta de archivo en carpeta pública: ${report.desactivadosPorFaltaPublica}\n  ↳ Se marcó ArchActivo=0 para permitir reemplazo.`
+    );
+  } else {
+    details.push("• Registros desactivados por falta de archivo en pública: 0");
+  }
+
+  if (report.orfanasMovidasEliminados > 0) {
+    details.push(
+      `• Fotos huérfanas movidas a ELIMINADOS: ${report.orfanasMovidasEliminados}\n  ↳ Estaban en pública pero no tenían registro activo asociado.`
+    );
+  } else {
+    details.push("• Fotos huérfanas movidas a ELIMINADOS: 0");
+  }
+
+  // Placeholders
+  if (canGeneratePlaceholders) {
+    details.push(
+      `• Placeholders en pantalla: ${report.placeholdersEnPantalla}\n  ↳ Indican que falta la foto real en este dispositivo.`
+    );
+
+    if (isElevated) {
+      details.push(
+        `• Placeholders omitidos en validación: ${report.placeholdersOmitidos}\n  ↳ En Admin/Supervisor, NO se desactivan registros por este caso.`
+      );
+      notes.push("Admin/Supervisor: los placeholders pueden contar como evidencia visual para evitar falsos negativos.");
+      notes.push("Los placeholders NO se copian a la carpeta pública. Solo se mueven a ELIMINADOS si el usuario los elimina o reemplaza.");
+    } else {
+      notes.push("Inspector: los placeholders son informativos y NO reemplazan la foto real. Si aparece uno, reemplaza la foto.");
+    }
+  }
+
+  // DefiInspeccionado
+  const inspeccionTxt =
+    report.defiInspeccionadoNuevo === 1
+      ? "✅ Inspección COMPLETA (fotos obligatorias 1–4 presentes)"
+      : "⚠️ Inspección INCOMPLETA (falta alguna foto obligatoria 1–4)";
+
+  checks.push(inspeccionTxt);
+  details.push(`• DefiInspeccionado: ${report.defiInspeccionadoPrevio} → ${report.defiInspeccionadoNuevo}`);
+
+  // ✅ Elemento (POST/VANO)
+  const tipoElem2 = String(deficiencyData?.DefiTipoElemento ?? "").trim().toUpperCase();
+  if (tipoElem2 === "POST" || tipoElem2 === "VANO") {
+    const label = tipoElem2 === "VANO" ? "Vano" : "Poste";
+
+    if (report.pinActualizado) {
+      checks.push(`✅ Estado del elemento (${label}) actualizado`);
+      details.push(`• ${report.tablaActualizada ?? "Estado"}: ${report.pinPrevio} → ${report.pinNuevo}`);
+    } else {
+      checks.push(`⚠️ Estado del elemento (${label}) no se pudo actualizar`);
+      notes.push("No se pudo recalcular el estado del elemento. Revisa que existan deficiencias del elemento y que el ID corresponda en la tabla (Pines o Vanos).");
+    }
+  }
+
+  const bodyParts = [];
+  bodyParts.push("📌 RESULTADO DE VERIFICACIÓN");
+  bodyParts.push(checks.join("\n"));
+  bodyParts.push("\n📷 CONSISTENCIA DE FOTOS");
+  bodyParts.push(details.join("\n"));
+
+  if (notes.length > 0) {
+    bodyParts.push("\n📝 NOTAS");
+    bodyParts.push(notes.map((n) => `• ${n}`).join("\n"));
+  }
+
+  const resumen = bodyParts.join("\n");
+
+  let titulo = "✅ Guardado exitoso";
+  if (report.desactivadosPorFaltaPublica > 0 || report.orfanasMovidasEliminados > 0) {
+    titulo = "⚠️ Guardado con correcciones";
+  } else if (!report.pudoVerificarCarpetaPublica && Platform.OS === "android") {
+    titulo = "✅ Guardado (con observaciones)";
+  }
+
+  return {
+    ...report,
+    titulo,
+    resumen,
+  };
+}
+
 
   const finalizar = async () => {
     if (!requireEditPermission()) return;
