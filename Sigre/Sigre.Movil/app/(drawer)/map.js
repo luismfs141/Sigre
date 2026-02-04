@@ -14,13 +14,15 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+
+
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -110,12 +112,15 @@ const Map = () => {
   const [overlappedGaps, setOverlappedGaps] = useState([]);
   // Estados para el Modal de Búsqueda
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchCode, setSearchCode] = useState(""); // Para el código
-  const [searchLabel, setSearchLabel] = useState(""); // Para la etiqueta
+  const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedSearchResult, setSelectedSearchResult] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
+
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
-    // ===========================
+  // ===========================
   // ✅ REFRESH SIN MOVER LA CÁMARA (vista actual)
   // ===========================
   const regionRef = useRef(region);
@@ -219,7 +224,7 @@ const Map = () => {
 
 
 
-    // ------------------- CARGA DE PINS Y GAPS -------------------
+  // ------------------- CARGA DE PINS Y GAPS -------------------
   useEffect(() => {
     if (user?.proyecto === 1 && !selectedFeeder) {
       pinsRef.current = [];
@@ -460,84 +465,178 @@ const Map = () => {
     );
   }
 
-  //---busqueda por codigo y etiqueta ----
-  // ------------------- BÚSQUEDA ROBUSTA (SENIOR FIX) -------------------
-  const handleSearchItem = () => {
-    // 1. Preparar texto
-    const rawSearch = searchCode || searchLabel || "";
-    const query = rawSearch.toString().trim().toLowerCase();
 
-    if (!query) return;
+  // ------------------- BÚSQUEDA (LISTA + UBICAR/SELECCIONAR) -------------------
+  const normalizeText = (s) =>
+    String(s ?? "")
+      .replace(/\r?\n|\r/g, " ")
+      .trim()
+      .toLowerCase();
 
-    console.log(`🔎 Buscando: "${query}"`);
+  const scoreText = (text, query) => {
+    if (!text || !query) return 0;
+    if (text === query) return 100;
+    if (text.startsWith(query)) return 80;
+    if (text.includes(query)) return 60;
+    return 0;
+  };
 
-    // =========================================================
-    // 🔥 EL SECRETO: Usar pinsRef.current
-    // =========================================================
-    // "pinsRef" mira los datos actuales (146 postes), no los antiguos (0).
-    const currentPins = pinsRef.current;
+  const centerMap = (lat, lng) => {
+    const _lat = Number(lat);
+    const _lng = Number(lng);
+    if (!Number.isFinite(_lat) || !Number.isFinite(_lng)) return;
 
-    console.log(
-      `⚡ Escaneando ${currentPins ? currentPins.length : 0} elementos en memoria...`,
+    mapRef.current?.animateToRegion(
+      {
+        latitude: _lat,
+        longitude: _lng,
+        latitudeDelta: 0.0005,
+        longitudeDelta: 0.0005,
+      },
+      800
     );
+  };
 
-    let foundItem = null;
-    let itemType = "";
+  const buildSearchResults = (queryRaw) => {
+    const query = normalizeText(queryRaw);
+    if (!query) return [];
 
-    // 1. BUSCAR EN PINS (Postes)
-    if (currentPins && currentPins.length > 0) {
-      foundItem = currentPins.find((pin) => {
-        // Buscamos coincidencia exacta o parcial en Código y Etiqueta
-        const pCodigo = (pin.ElementCode || "").toString().toLowerCase();
-        const pEtiqueta = (pin.Label || "").toString().toLowerCase();
+    const currentPins = Array.isArray(pinsRef.current) ? pinsRef.current : [];
+    const currentGaps = Array.isArray(gaps) ? gaps : [];
 
-        return pCodigo.includes(query) || pEtiqueta.includes(query);
-      });
+    const pinResults = currentPins
+      .map((pin) => {
+        const code = normalizeText(pin.ElementCode);
+        const label = normalizeText(pin.Label);
 
-      if (foundItem) {
-        const t = Number(foundItem.Type);
-        itemType = t === 5 ? "Poste" : "SED";
-        console.log(`✅ ¡EUREKA! Encontrado ID: ${foundItem.Id}`);
+        const sc = Math.max(scoreText(code, query), scoreText(label, query));
+        if (sc <= 0) return null;
+
+        const t = Number(pin.Type);
+        const subKind = t === 5 ? "Poste" : isSedType(t) ? "SED" : "Pin";
+
+        const lat = Number(pin.Latitude);
+        const lng = Number(pin.Longitude);
+
+        return {
+          key: `PIN_${pin.Id ?? pin.IdOriginal ?? Math.random()}`,
+          kind: "PIN",
+          subKind,
+          code: pin.ElementCode ?? "",
+          label: pin.Label ?? "",
+          lat,
+          lng,
+          raw: pin,
+          score: sc,
+        };
+      })
+      .filter(Boolean);
+
+    const gapResults = currentGaps
+      .map((gap, idx) => {
+        const code = normalizeText(gap.VanoCodigo);
+        const label = normalizeText(gap.VanoEtiqueta);
+
+        const sc = Math.max(scoreText(code, query), scoreText(label, query));
+        if (sc <= 0) return null;
+
+        const lat = Number(gap.VanoLatitudIni);
+        const lng = Number(gap.VanoLongitudIni);
+
+        return {
+          key: `VANO_${gap.VanoInterno ?? gap.VanoCodigo ?? idx}`,
+          kind: "VANO",
+          subKind: "Vano",
+          code: gap.VanoCodigo ?? "",
+          label: gap.VanoEtiqueta ?? "",
+          lat,
+          lng,
+          raw: gap,
+          score: sc,
+        };
+      })
+      .filter(Boolean);
+
+    // Orden: mejor score primero
+    const all = [...pinResults, ...gapResults].sort((a, b) => b.score - a.score);
+
+    // Limitar para no reventar el modal (ajusta si quieres)
+    return all.slice(0, 80);
+  };
+
+  const handleDoSearch = () => {
+    const q = normalizeText(searchText);
+    if (!q) return;
+
+    const res = buildSearchResults(q);
+
+    setHasSearched(true);
+    setSearchResults(res);
+    setSelectedSearchResult(null);
+  };
+
+  const cleanupSearchModal = () => {
+    setShowSearchModal(false);
+    setSearchText("");
+    setSearchResults([]);
+    setSelectedSearchResult(null);
+    setHasSearched(false);
+  };
+
+  const handleLocateSelected = () => {
+    if (!selectedSearchResult) return;
+
+    centerMap(selectedSearchResult.lat, selectedSearchResult.lng);
+    cleanupSearchModal();
+  };
+
+  const handleSelectSelected = async () => {
+    if (!selectedSearchResult) return;
+
+    try {
+      // primero ubica (siempre)
+      centerMap(selectedSearchResult.lat, selectedSearchResult.lng);
+
+      let datoElemento = null;
+
+      // POSTE
+      if (selectedSearchResult.kind === "PIN" && selectedSearchResult.subKind === "Poste") {
+        const pin = selectedSearchResult.raw;
+        const postId = pin?.IdOriginal ?? pin?.Id ?? null;
+
+        datoElemento = await getPostData(postId);
+        if (!datoElemento) {
+          Alert.alert("Error", "No se pudo cargar el poste desde SQLite.");
+          return;
+        }
       }
-    }
+      // SED
+      else if (selectedSearchResult.kind === "PIN" && selectedSearchResult.subKind === "SED") {
+        const pin = selectedSearchResult.raw;
+        const sedId = pin?.IdOriginal ?? pin?.Id ?? null;
 
-    // 2. SI NO, BUSCAR EN VANOS
-    if (!foundItem && gaps && gaps.length > 0) {
-      foundItem = gaps.find((gap) => {
-        const vCodigo = (gap.VanoCodigo || "").toString().toLowerCase();
-        return vCodigo.includes(query);
-      });
-      if (foundItem) itemType = "Vano";
-    }
-
-    // 3. MOVER CÁMARA
-    if (foundItem) {
-      setShowSearchModal(false);
-      setSearchCode("");
-      setSearchLabel("");
-
-      // Extraemos coordenadas asegurando que sean números
-      const lat = Number(foundItem.Latitude || foundItem.VanoLatitudIni);
-      const lng = Number(foundItem.Longitude || foundItem.VanoLongitudIni);
-
-      if (mapRef.current && !isNaN(lat)) {
-        mapRef.current.animateToRegion(
-          {
-            latitude: lat,
-            longitude: lng,
-            latitudeDelta: 0.0005,
-            longitudeDelta: 0.0005,
-          },
-          1500,
-        );
+        const sed = await fetchAndSelectSed(sedId);
+        datoElemento = sed ?? pin; // fallback
       }
-    } else {
-      Alert.alert(
-        "Sin resultados",
-        `No se encontró "${rawSearch}" en los ${currentPins.length} elementos.`,
-      );
+      // VANO
+      else if (selectedSearchResult.kind === "VANO") {
+        datoElemento = selectedSearchResult.raw;
+      } else {
+        datoElemento = selectedSearchResult.raw;
+      }
+
+      cleanupSearchModal();
+
+      setSelectedItem(datoElemento);
+      router.push("inspection");
+    } catch (err) {
+      console.warn("Error seleccionando desde búsqueda:", err);
+      Alert.alert("Error", "No se pudo seleccionar el elemento.");
     }
   };
+
+
+
   // ------------------- RENDER -------------------
   return (
     <View style={{ flex: 1 }}>
@@ -744,7 +843,14 @@ const Map = () => {
       <View style={styles.topRightButtons}>
         {/* 🔎 Buscar */}
         <TouchableOpacity
-          onPress={() => setShowSearchModal(true)}
+          onPress={() => {
+            setShowSearchModal(true);
+            setSearchText("");
+            setSearchResults([]);
+            setSelectedSearchResult(null);
+            setHasSearched(false);
+          }}
+
           disabled={loadingPins || loadingGaps || loadingLocation}
           style={[
             styles.circleBtn,
@@ -753,6 +859,7 @@ const Map = () => {
         >
           <Ionicons name="search" size={24} color="#333" />
         </TouchableOpacity>
+
 
         {/* 🔄 Refresh */}
         <TouchableOpacity
@@ -770,103 +877,136 @@ const Map = () => {
 
 
 
-      {/* 🔽 MODAL DE BÚSQUEDA (Estilo unificado) */}
+      {/* 🔽 MODAL DE BÚSQUEDA */}
       {showSearchModal && (
         <View style={modalStyles.modalOverlay}>
-          {/* KeyboardAvoidingView para que el teclado no tape el modal */}
-          <KeyboardAvoidingView
-            behavior="padding"
-            style={{
-              flex: 1,
-              width: "100%",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <View style={modalStyles.modalContainer}>
-              <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
+          <View style={modalStyles.modalContainer}>
+            <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
 
-              {/* OPCIÓN 1: Búsqueda por CÓDIGO (VanoCodigo o ElementCode) */}
-              <Text style={styles.inputLabel}>Buscar por Código de Poste:</Text>
+            <Text style={styles.inputLabel}>Ingrese código o etiqueta:</Text>
 
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.inputField}
-                  value={searchCode}
-                  onChangeText={(t) => {
-                    setSearchCode(t);
-                    if (t) setSearchLabel(""); // Limpia el otro campo para evitar confusión
-                  }}
-                  placeholder="Ej: 035840"
-                  keyboardType="default"
-                  placeholderTextColor="#999"
-                />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.inputField}
+                value={searchText}
+                onChangeText={(t) => setSearchText(t)}
+                placeholder="Ej: 035840 / VBT..."
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+              />
 
-                {/* La X ahora está dentro del contenedor flexible */}
-                {searchCode.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchCode("")}
-                    style={styles.clearButton}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* OPCIÓN 2: Búsqueda por ETIQUETA (VanoEtiqueta o Label) */}
-              <Text style={styles.inputLabel}>Buscar por Etiqueta:</Text>
-
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.inputField}
-                  value={searchLabel}
-                  onChangeText={(t) => {
-                    setSearchLabel(t);
-                    if (t) setSearchCode(""); // Limpia el otro campo
-                  }}
-                  placeholder="Ej: VBT../PTO.."
-                  placeholderTextColor="#999"
-                />
-
-                {/* La X ahora está dentro del contenedor flexible */}
-                {searchLabel.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchLabel("")}
-                    style={styles.clearButton}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* --- FOOTER BUTTONS --- */}
-              <View style={modalStyles.footerButtons}>
-                {/* Botón Cancelar */}
+              {searchText.length > 0 && (
                 <TouchableOpacity
-                  style={[
-                    modalStyles.cancelButton,
-                    { flex: 1, marginRight: 10 },
-                  ]}
-                  onPress={() => setShowSearchModal(false)}
+                  onPress={() => {
+                    setSearchText("");
+                    setSearchResults([]);
+                    setSelectedSearchResult(null);
+                    setHasSearched(false);
+                  }}
+                  style={styles.clearButton}
                 >
-                  <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
+                  <Ionicons name="close-circle" size={20} color="#999" />
                 </TouchableOpacity>
-
-                {/* Botón Buscar */}
-                <TouchableOpacity
-                  style={[modalStyles.saveButton, { flex: 1, marginLeft: 10 }]}
-                  onPress={handleSearchItem}
-                >
-                  <Text style={modalStyles.saveButtonText}>Buscar</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
-          </KeyboardAvoidingView>
+
+            {/* Botón Buscar */}
+            <TouchableOpacity
+              style={[modalStyles.saveButton, { marginTop: 6 }]}
+              onPress={handleDoSearch}
+            >
+              <Text style={modalStyles.saveButtonText}>Buscar</Text>
+            </TouchableOpacity>
+
+            {/* Resultados (con scroll + recorte) */}
+            <View style={styles.resultsBox}>
+              {!hasSearched ? (
+                <Text style={styles.hintText}>Escribe algo y presiona “Buscar”.</Text>
+              ) : searchResults.length === 0 ? (
+                <Text style={styles.hintText}>Sin resultados.</Text>
+              ) : (
+                <ScrollView
+                  style={styles.resultsScroll}
+                  contentContainerStyle={styles.resultsContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                >
+                  {searchResults.map((r) => {
+                    const isSelected = selectedSearchResult?.key === r.key;
+
+                    return (
+                      <TouchableOpacity
+                        key={r.key}
+                        style={[
+                          styles.resultItem,
+                          isSelected && styles.resultItemSelected,
+                        ]}
+                        onPress={() => setSelectedSearchResult(r)}
+                      >
+                        <Text style={styles.resultTitle}>
+                          {r.subKind} — {String(r.code ?? "").trim() || "(sin código)"}
+                        </Text>
+
+                        {!!String(r.label ?? "").trim() && (
+                          <Text style={styles.resultSubtitle} numberOfLines={2}>
+                            {String(r.label).replace(/\r?\n|\r/g, " - ").trim()}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+
+            {/* Footer: Cancelar / Ubicar / Seleccionar */}
+            <View style={modalStyles.footerButtons}>
+              <TouchableOpacity
+                style={[modalStyles.cancelButton, { flex: 1, marginRight: 8 }]}
+                onPress={cleanupSearchModal}
+              >
+                <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  modalStyles.saveButton,
+                  { flex: 1, marginHorizontal: 8 },
+                  !selectedSearchResult && { opacity: 0.5 },
+                ]}
+                disabled={!selectedSearchResult}
+                onPress={handleLocateSelected}
+              >
+                <Text style={modalStyles.saveButtonText}>Ubicar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  modalStyles.saveButton,
+                  { flex: 1, marginLeft: 8 },
+                  !selectedSearchResult && { opacity: 0.5 },
+                ]}
+                disabled={!selectedSearchResult}
+                onPress={handleSelectSelected}
+              >
+                <Text style={modalStyles.saveButtonText}>Seleccionar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
+
+
+
+
     </View>
   );
 };
+
+
+
+
 
 const styles = StyleSheet.create({
   floatBtn: {
@@ -985,7 +1125,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
- 
+
 
   circleBtn: {
     backgroundColor: "white",
@@ -1005,8 +1145,92 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
- 
+  resultsBox: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 8,
+    backgroundColor: "#fff",
+    maxHeight: 260,
+  },
 
+  resultsList: {
+    maxHeight: 240,
+  },
+
+  hintText: {
+    color: "#666",
+    fontSize: 13,
+    paddingVertical: 10,
+    textAlign: "center",
+  },
+
+  resultsScroll: {
+    maxHeight: 260,       // asegura que el ScrollView se limite al contenedor
+  },
+
+  resultsContent: {
+    padding: 8,
+  },
+
+  resultItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    borderRadius: 6,
+  },
+  resultItemSelected: {
+    backgroundColor: "#eef6ff",
+    borderColor: "#cfe6ff",
+    borderWidth: 1,
+  },
+  resultTitle: {
+    fontWeight: "700",
+    color: "#222",
+    fontSize: 14,
+  },
+  resultSubtitle: {
+    marginTop: 3,
+    color: "#555",
+    fontSize: 13,
+  },
+  kav: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  searchModalContainer: {
+    width: "90%",
+    maxHeight: "80%", // 🔥 clave para que el teclado no lo tape
+  },
+
+  resultsBox: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    maxHeight: 260,       // controla el alto para que no empuje el footer
+    overflow: "hidden",   // 🔥 CLAVE: evita que la lista se salga del borde
+  },
+
+  resultsList: {
+    maxHeight: 240,
+  },
+
+  resultItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    borderRadius: 6,
+  },
+
+  
 
 });
 
