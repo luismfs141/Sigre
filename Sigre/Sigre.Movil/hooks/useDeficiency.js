@@ -12,6 +12,7 @@ import {
   getDeficiencyByTypificationElement,
   saveOrUpdateDeficiency,
   updateDefiInspeccionadoLocal,
+  updateDeficiencyIdAfterSync,
 } from "../database/offlineDB/deficiencies";
 import {
   getPinInspeccionadoByIdOriginalLocal,
@@ -71,6 +72,21 @@ export const useDeficiency = () => {
     if (Number.isNaN(d.getTime())) return null;
 
     return d.toISOString();
+  };
+
+  const normalizeSqlServerDate = (value) => {
+    if (!value || typeof value !== "string") return value;
+
+    // Detecta exactamente: "2026-02-01 23:41:00"
+    const sqlServerFormat = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+    if (!sqlServerFormat.test(value)) {
+      // No es el formato problemático → no toca nada
+      return value;
+    }
+
+    // Normaliza: "YYYY-MM-DD HH:mm:ss" → "YYYY-MM-DDTHH:mm:ss"
+    return value.replace(" ", "T");
   };
 
   // ------------------- GET BY ID LOCAL -------------------
@@ -165,12 +181,12 @@ export const useDeficiency = () => {
       DefiResponsable: Boolean(def?.DefiResponsable),
 
       // 🔹 FECHAS ISO
-      DefiFecRegistro: fecRegistro,
-      DefiFecModificacion: fecMod,
-      DefiFechaCreacion: normalizeDate(def?.DefiFechaCreacion) || nowIso,
-      DefiFechaDenuncia: normalizeDate(def?.DefiFechaDenuncia),
-      DefiFechaInspeccion: normalizeDate(def?.DefiFechaInspeccion),
-      DefiFechaSubsanacion: normalizeDate(def?.DefiFechaSubsanacion),
+      DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
+      DefiFecModificacion: normalizeSqlServerDate(fecMod),
+      DefiFechaCreacion: normalizeSqlServerDate(def?.DefiFechaCreacion),
+      DefiFechaDenuncia: normalizeSqlServerDate(def?.DefiFechaDenuncia),
+      DefiFechaInspeccion: normalizeSqlServerDate(def?.DefiFechaInspeccion),
+      DefiFechaSubsanacion: normalizeSqlServerDate(def?.DefiFechaSubsanacion),
 
       // 🔹 IDENTIFICADOR ÚNICO
       DefiCol3: def?.DefiCol3 ?? null,
@@ -188,85 +204,29 @@ export const useDeficiency = () => {
         console.log("📴 Sin conexión, no se sincroniza");
         return;
       }
+      const def = await getDeficiencyByIdLocal(defOrId);
+      console.log("🔄 [autoSyncDeficiency] START →", def);
+      const normalized = normalizeDeficiencyForSync(def);
+      const payload = [normalized];
 
-      // ✅ Acepta ID o objeto
-      let def = defOrId;
-
-      if (typeof defOrId === "number" || typeof defOrId === "string") {
-        const id = Number(defOrId);
-
-        // 1) Intentar desde pendientes (mejor, porque trae EstadoOffLine y campos listos)
-        const pendientes = await getDeficienciesPendientes();
-        def =
-          pendientes.find(
-            (d) =>
-              (Number(d?.DefiInterno) === id || Number(d?.DefiServerId) === id) &&
-              [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
-          ) ?? null;
-
-        // 2) Fallback: leer directo
-        if (!def) def = await getDeficiencyByIdLocal(id);
-      }
-
-      if (!def) {
-        console.warn("⚠ autoSyncDeficiency: no hay deficiencia para sincronizar");
-        return;
-      }
-
-      // ✅ asegurar DefiInterno
-      const localId = def?.DefiInterno ?? (typeof defOrId === "number" ? defOrId : null);
-      const defToSend = {
-        ...def,
-        DefiInterno: def?.DefiInterno ?? localId,
-      };
-
-      const normalized = normalizeDeficiencyForSync(defToSend);
-      const payload = [normalized]; // ✅ el backend espera LISTA ROOT
-
-      console.log("🔄 [autoSyncDeficiency] Enviando payload (LISTA):", payload);
-
-      const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
-        timeout: 15000,
-      });
+      const response = await client.post(
+        "/Deficiency/SyncFromSQLite",
+        payload,
+        { timeout: 15000 }
+      );
 
       console.log("📥 Respuesta del servidor:", response.data);
 
-      const map = response.data?.[0] ?? null;
-      if (!map) {
-        console.log("⚠ Respuesta vacía del servidor");
-        return;
-      }
-
-      // ✅ compatibilidad con respuestas
-      const ok = map?.ok !== false; // si no viene ok, asumimos true
-      if (!ok) {
-        console.log("⛔ Sync rechazado por servidor:", map?.error || "Sin detalle");
-        return;
-      }
-
-      const serverId = map?.serverId ?? map?.ServerId ?? null;
-      const returnedLocalId =
-        map?.localId ?? map?.LocalId ?? defToSend?.DefiInterno ?? localId ?? null;
-
-      if (!serverId || !returnedLocalId) {
-        console.log("⚠ Respuesta sin serverId/localId:", map);
-        return;
-      }
-
-      // ✅ Aplica mapping / mark synced (según lo que exista en tu offlineDB)
-      if (Number(returnedLocalId) !== Number(serverId)) {
-        const did = await safeCall("updateDeficiencyIdAfterSync", returnedLocalId, serverId);
-        if (did === undefined) {
-          // fallback
-          await safeCall("setServerIdToDeficiency", returnedLocalId, serverId);
-        }
-      } else {
-        const did = await safeCall("markDeficiencyAsSynced", serverId);
-        if (did === undefined) {
-          // fallback mínimo
-          await safeCall("setServerIdToDeficiency", returnedLocalId, serverId);
+      // ✅ ACTUALIZAR SQLITE
+      if (Array.isArray(response.data)) {
+        for (const r of response.data) {
+          await updateDeficiencyIdAfterSync(
+            r.localId,
+            r.serverId
+          );
         }
       }
+
     } catch (err) {
       console.error(
         "❌ [autoSyncDeficiency] Falló:",
@@ -292,72 +252,53 @@ export const useDeficiency = () => {
 
       if (!aSincronizar.length) return { ok: true, synced: 0 };
 
-      // ✅ preparar payload
+      // 🔹 Normalizar TODAS
       const payload = aSincronizar.map((d) =>
-        normalizeDeficiencyForSync({
-          ...d,
-          DefiInterno: d?.DefiInterno,
-        })
+        normalizeDeficiencyForSync(d)
       );
 
-      const sentLocalIds = aSincronizar.map((d) => d?.DefiInterno);
-
-      const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
-        timeout: 15000,
-      });
+      const response = await client.post(
+        "/Deficiency/SyncFromSQLite",
+        payload,
+        { timeout: 20000 }
+      );
 
       const respList = Array.isArray(response.data) ? response.data : [];
       let syncedCount = 0;
 
-      for (let i = 0; i < respList.length; i++) {
-        const map = respList[i] ?? null;
-        if (!map) continue;
-
-        const ok = map?.ok !== false;
-        if (!ok) {
-          console.log("⛔ Sync rechazado:", map?.error || "Sin detalle", map);
+      // 🔹 MISMA lógica que autosync
+      for (const r of respList) {
+        if (!r?.localId || !r?.serverId) {
+          console.warn("⚠ Respuesta inválida:", r);
           continue;
         }
 
-        const serverId = map?.serverId ?? map?.ServerId ?? null;
-        const returnedLocalId =
-          map?.localId ??
-          map?.LocalId ??
-          sentLocalIds?.[i] ??
-          null;
-
-        if (!serverId || !returnedLocalId) {
-          console.warn("⚠ Respuesta inválida (sin ids):", map);
-          continue;
-        }
-
-        if (Number(returnedLocalId) !== Number(serverId)) {
-          const did = await safeCall("updateDeficiencyIdAfterSync", returnedLocalId, serverId);
-          if (did === undefined) {
-            await safeCall("setServerIdToDeficiency", returnedLocalId, serverId);
-          }
-        } else {
-          const did = await safeCall("markDeficiencyAsSynced", serverId);
-          if (did === undefined) {
-            await safeCall("setServerIdToDeficiency", returnedLocalId, serverId);
-          }
-        }
+        await updateDeficiencyIdAfterSync(
+          r.localId,
+          r.serverId
+        );
 
         syncedCount++;
       }
 
       return { ok: true, synced: syncedCount };
+
     } catch (err) {
-      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
+      console.error(
+        "❌ Sync masivo deficiencias falló:",
+        err?.response?.data || err?.message || err
+      );
       return { ok: false };
     }
   };
+
 
   // ------------------- SAVE + AUTO SYNC -------------------
   const saveDeficiency = async (deficiency, userId) => {
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
+    console.log(deficiency);
     try {
       const normalized = normalizeDeficiencyBeforeSave(deficiency, userId);
       const localId = await saveOrUpdateDeficiency(normalized);
@@ -383,9 +324,6 @@ export const useDeficiency = () => {
 
     try {
       await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
-
-      // ✅ intenta sync si corresponde
-      await autoSyncDeficiency(defiInterno);
 
       return true;
     } catch (err) {

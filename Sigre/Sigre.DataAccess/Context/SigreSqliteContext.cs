@@ -54,6 +54,7 @@ namespace Sigre.DataAccess.Context
             });
             modelBuilder.Entity<Archivo>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Archivo>().Property<int?>("DefiServerId");
+            modelBuilder.Entity<Archivo>().Property<string?>("DefiUUID");
             modelBuilder.Entity<Poste>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Vano>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Sed>().Property<int?>("EstadoOffLine");

@@ -183,7 +183,6 @@ namespace Sigre.DataAccess
             }
             return archivos;
         }
-
         public async Task<(int deficiencias, int archivos)> DAOFF_SyncDataOffline(IFormFile file)
         {
             int defCount = 0;
@@ -197,44 +196,71 @@ namespace Sigre.DataAccess
                                 .Where(a => a.EstadoOffLine != 0)
                                 .ToList();
 
-            // 🔹 Deficiencias        
-            if (deficiencias_off.Count() > 0)
+            // 🔹 Deficiencias
+            var errores = new List<string>();
+            var dADeficiency = new DADeficiency();
+
+            foreach (var def_off in deficiencias_off)
             {
-                var dADeficiency = new DADeficiency();
-                foreach (var def_off in deficiencias_off)
+                try
                 {
-                    var existente = dADeficiency.DADEFI_ExistDeficiency(def_off.DefiCol3);
-
-                    def_off.DefiInterno = existente.DefiInterno;
-
+                    // Convertimos primero para poder validar con la entidad completa
                     var deficiencia = dADeficiency.DADEFI_ConvertDeficiency(def_off);
+
+                    // 🔹 Buscar existencia (maneja TipiInterno 60 internamente)
+                    int defiInterno = dADeficiency.DADEFI_ExistDeficiency(deficiencia);
+
+                    deficiencia.DefiInterno = defiInterno;
+
                     dADeficiency.DADEFI_Save(deficiencia);
 
-                    defCount++;
+                    if(defiInterno == 0)
+                    {
+                        defCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errores.Add(
+                        $"DefiCodigoElemento={def_off.DefiCodigoElemento}, " +
+                        $"TipiInterno={def_off.TipiInterno}, " +
+                        $"Error={ex.Message}"
+                    );
                 }
             }
 
+            if (errores.Any())
+            {
+                throw new Exception(
+                    "Errores en sincronización de deficiencias:\n" +
+                    string.Join("\n", errores)
+                );
+            }
+
             // 🔹 Archivos
-            if (archivos_off.Count() > 0)
+            if (archivos_off.Any())
             {
                 var dAFile = new DAFile();
+
                 foreach (var arch_off in archivos_off)
                 {
                     int idArchivo = dAFile.ARCH_ExistPhoto(arch_off.ArchNombre);
 
+                    // 🔹 Si existe, reutiliza ID (puedes hacer continue si NO quieres guardar)
                     arch_off.ArchInterno = idArchivo;
 
                     var archivo = dAFile.ARCH_ConvertFile(arch_off);
                     dAFile.DAARCH_Save(archivo);
 
-                    archCount++;
+                    if(idArchivo == 0)
+                    {
+                        archCount++;
+                    }
                 }
             }
-
             return (defCount, archCount);
         }
     }
-
 
     // Extensiones para lectura nullable usando nombres de columna
     public static class SqliteDataReaderExtensions
