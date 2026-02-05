@@ -16,7 +16,7 @@ const LoginForm = ({ onLogin }) => {
     event.preventDefault();
 
     try {
-      // const data = await loginUsuario(usuario, btoa(password)); // Enviar las credenciales
+      // const data = await loginUsuario(usuario, btoa(password)); // Enviar las credenciales.
       const data = await loginUsuario(usuario, password);
       localStorage.setItem('usuario', JSON.stringify(data)); // Guardar los datos del cliente
       onLogin(); // Cambiar el estado de autenticación
