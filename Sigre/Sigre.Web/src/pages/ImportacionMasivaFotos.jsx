@@ -227,8 +227,32 @@ export default function ImportacionMasivaFotos() {
 
                 setStatusMsg(`Grupo ${i + 1}/${totalGroups}: Analizando rutas...`);
 
-                const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p.toUpperCase().includes('VANO'));
-                let gisCode = "", defCode = "", feeder = "NA", sed = "NA", structType = "Poste";
+const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p.toUpperCase().includes('VANO'));
+    let gisCode = "", defCode = "", feeder = "NA", sed = "NA", structType = "Poste";
+    
+    // 1. NUEVA VARIABLE: Para guardar el "1" o "2" de las carpetas 7004
+    let subFolder7004 = ""; 
+
+    if (typeIndex !== -1) {
+        const typeRaw = pathParts[typeIndex].toUpperCase();
+        structType = typeRaw.includes('POST') ? 'Poste' : 'Vano';
+        
+        if (pathParts.length > typeIndex + 1) gisCode = safeSeg(pathParts[typeIndex + 1]);
+        if (pathParts.length > typeIndex + 2) defCode = safeSeg(pathParts[typeIndex + 2]);
+
+        // 2. LÓGICA DE DETECCIÓN: Solo si es 7004 y hay algo después
+        if (defCode === "7004" && pathParts.length > typeIndex + 3) {
+             // Capturamos la carpeta '1' o '2'
+             subFolder7004 = safeSeg(pathParts[typeIndex + 3]);
+        }
+
+        if (typeIndex - 1 >= 0) sed = safeSeg(pathParts[typeIndex - 1]);
+        if (typeIndex - 2 >= 0) feeder = safeSeg(pathParts[typeIndex - 2]);
+    } else if (pathParts.length >= 2) {
+        // Lógica fallback existente
+        defCode = safeSeg(pathParts[pathParts.length - 1]);
+        gisCode = safeSeg(pathParts[pathParts.length - 2]);
+    }
 
                 if (typeIndex !== -1) {
                     const typeRaw = pathParts[typeIndex].toUpperCase();
@@ -295,9 +319,13 @@ export default function ImportacionMasivaFotos() {
                     const { fileObj, previewUrl } = await processImageWithWatermark(file, metaForWatermark);
 
                     const originalName = file.name;
-                    const pathSegments = [feeder, sed, structType, gisCode, defCode];
-                    const cleanPath = pathSegments.filter(seg => seg && seg !== "NA").join('/');
-                    const finalDbPath = `${cleanPath}/${originalName}`;
+                    // 3. ACTUALIZACIÓN DE RUTA: Agregamos subFolder7004 al array
+        // Si no es 7004, la variable estará vacía y no afectará nada.
+        // Si es 7004, se generará: .../7004/1/foto.jpg o .../7004/2/foto.jpg
+        const pathSegments = [feeder, sed, structType, gisCode, defCode, subFolder7004];
+        
+        const cleanPath = pathSegments.filter(seg => seg && seg !== "NA").join('/');
+        const finalDbPath = `${cleanPath}/${originalName}`;
 
                     return {
                         id: Date.now() + Math.random(),
