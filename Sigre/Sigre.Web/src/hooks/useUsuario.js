@@ -7,6 +7,35 @@ export function useUsuario(autoFetch = false) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+    const loginUsuario = async (correo, password) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await api.post('/User/Login', {
+        correo,
+        password,
+        imei: null
+      });
+
+      if (response.data) {
+        const usuarioData = response.data;
+        localStorage.setItem('usuario', JSON.stringify(usuarioData));
+        localStorage.setItem('token', usuarioData.token);
+        return usuarioData;
+      } else {
+        setError('Credenciales inválidas.');
+        throw new Error('Credenciales inválidas.');
+      }
+    } catch (err) {
+      console.error('Error de login:', err);
+      setError(err.response?.data?.message || 'Error al intentar hacer login');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- 1. MÉTODOS DE DATOS (CRUD) ---
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -53,12 +82,23 @@ export function useUsuario(autoFetch = false) {
   }, [usuarios]);
 
   // --- 3. MÉTODOS DE AUTENTICACIÓN ---
-  const getUsuarioLocalStorage = useCallback(() => {
-    try {
-      const usuario = localStorage.getItem('usuario');
-      return usuario ? JSON.parse(usuario) : null;
-    } catch (e) { return null; }
-  }, []);
+ const getUsuarioLocalStorage = () => {
+   const usuarioStr = localStorage.getItem('usuario');
+   if (!usuarioStr) return null;
+
+   try {
+     const usuario = JSON.parse(usuarioStr);
+     return {
+       id: usuario.usuaInterno,
+       nombre: usuario.usuaNombres,
+       apellidos: usuario.usuaApellidos,
+       token: usuario.token
+     };
+   } catch (error) {
+     console.error("Error al leer usuario del localStorage:", error);
+     return null;
+   }
+ };
 
   const logoutUsuario = useCallback(() => {
     localStorage.removeItem('token');
@@ -73,6 +113,7 @@ export function useUsuario(autoFetch = false) {
     reload: fetchData,
     getInspectorName, 
     getUsuarioLocalStorage,
-    logoutUsuario
+    logoutUsuario,
+    loginUsuario
   };
 }
