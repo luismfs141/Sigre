@@ -163,16 +163,16 @@ const compressImageForLite = (blob) => {
             URL.revokeObjectURL(url);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
+
             // ✅ CAMBIO: Escala de 0.7 a 0.5 (Mitad del tamaño original)
-            const scale = 0.7; 
-            
+            const scale = 0.7;
+
             canvas.width = img.width * scale;
             canvas.height = img.height * scale;
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
+
             // ✅ CAMBIO: Calidad JPEG a 0.5 para reducir peso drásticamente
-            canvas.toBlob(resolve, 'image/jpeg', 0.7); 
+            canvas.toBlob(resolve, 'image/jpeg', 0.7);
         };
     });
 };
@@ -227,32 +227,32 @@ export default function ImportacionMasivaFotos() {
 
                 setStatusMsg(`Grupo ${i + 1}/${totalGroups}: Analizando rutas...`);
 
-const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p.toUpperCase().includes('VANO'));
-    let gisCode = "", defCode = "", feeder = "NA", sed = "NA", structType = "Poste";
-    
-    // 1. NUEVA VARIABLE: Para guardar el "1" o "2" de las carpetas 7004
-    let subFolder7004 = ""; 
+                const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p.toUpperCase().includes('VANO'));
+                let gisCode = "", defCode = "", feeder = "NA", sed = "NA", structType = "Poste";
 
-    if (typeIndex !== -1) {
-        const typeRaw = pathParts[typeIndex].toUpperCase();
-        structType = typeRaw.includes('POST') ? 'Poste' : 'Vano';
-        
-        if (pathParts.length > typeIndex + 1) gisCode = safeSeg(pathParts[typeIndex + 1]);
-        if (pathParts.length > typeIndex + 2) defCode = safeSeg(pathParts[typeIndex + 2]);
+                // 1. NUEVA VARIABLE: Para guardar el "1" o "2" de las carpetas 7004
+                let subFolder7004 = "";
 
-        // 2. LÓGICA DE DETECCIÓN: Solo si es 7004 y hay algo después
-        if (defCode === "7004" && pathParts.length > typeIndex + 3) {
-             // Capturamos la carpeta '1' o '2'
-             subFolder7004 = safeSeg(pathParts[typeIndex + 3]);
-        }
+                if (typeIndex !== -1) {
+                    const typeRaw = pathParts[typeIndex].toUpperCase();
+                    structType = typeRaw.includes('POST') ? 'Poste' : 'Vano';
 
-        if (typeIndex - 1 >= 0) sed = safeSeg(pathParts[typeIndex - 1]);
-        if (typeIndex - 2 >= 0) feeder = safeSeg(pathParts[typeIndex - 2]);
-    } else if (pathParts.length >= 2) {
-        // Lógica fallback existente
-        defCode = safeSeg(pathParts[pathParts.length - 1]);
-        gisCode = safeSeg(pathParts[pathParts.length - 2]);
-    }
+                    if (pathParts.length > typeIndex + 1) gisCode = safeSeg(pathParts[typeIndex + 1]);
+                    if (pathParts.length > typeIndex + 2) defCode = safeSeg(pathParts[typeIndex + 2]);
+
+                    // 2. LÓGICA DE DETECCIÓN: Solo si es 7004 y hay algo después
+                    if (defCode === "7004" && pathParts.length > typeIndex + 3) {
+                        // Capturamos la carpeta '1' o '2'
+                        subFolder7004 = safeSeg(pathParts[typeIndex + 3]);
+                    }
+
+                    if (typeIndex - 1 >= 0) sed = safeSeg(pathParts[typeIndex - 1]);
+                    if (typeIndex - 2 >= 0) feeder = safeSeg(pathParts[typeIndex - 2]);
+                } else if (pathParts.length >= 2) {
+                    // Lógica fallback existente
+                    defCode = safeSeg(pathParts[pathParts.length - 1]);
+                    gisCode = safeSeg(pathParts[pathParts.length - 2]);
+                }
 
                 if (typeIndex !== -1) {
                     const typeRaw = pathParts[typeIndex].toUpperCase();
@@ -320,12 +320,12 @@ const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p
 
                     const originalName = file.name;
                     // 3. ACTUALIZACIÓN DE RUTA: Agregamos subFolder7004 al array
-        // Si no es 7004, la variable estará vacía y no afectará nada.
-        // Si es 7004, se generará: .../7004/1/foto.jpg o .../7004/2/foto.jpg
-        const pathSegments = [feeder, sed, structType, gisCode, defCode, subFolder7004];
-        
-        const cleanPath = pathSegments.filter(seg => seg && seg !== "NA").join('/');
-        const finalDbPath = `${cleanPath}/${originalName}`;
+                    // Si no es 7004, la variable estará vacía y no afectará nada.
+                    // Si es 7004, se generará: .../7004/1/foto.jpg o .../7004/2/foto.jpg
+                    const pathSegments = [feeder, sed, structType, gisCode, defCode, subFolder7004];
+
+                    const cleanPath = pathSegments.filter(seg => seg && seg !== "NA").join('/');
+                    const finalDbPath = `${cleanPath}/${originalName}`;
 
                     return {
                         id: Date.now() + Math.random(),
@@ -405,7 +405,7 @@ const typeIndex = pathParts.findIndex(p => p.toUpperCase().includes('POST') || p
                 const content = await blobToArrayBuffer(blobToZip);
 
                 const originalDate = item.dbDateStr ? new Date(item.dbDateStr) : new Date();
-                
+
                 // ✅ CÁLCULO CLAVE PARA ARREGLAR LA HORA:
                 // Restamos el offset de minutos (ej. 300 min para Perú) para "engañar" al ZIP
                 // y que al sumarle UTC internamente, quede en la hora visual correcta.
