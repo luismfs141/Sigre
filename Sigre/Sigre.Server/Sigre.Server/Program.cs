@@ -57,11 +57,14 @@ builder.Services.AddScoped<DAOffline>();
 // 🔥 Agregar CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowLocalhost3000", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")  // origen del front React
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "https://kind-coast-0e9ecb71e.2.azurestaticapps.net"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod();
     });
 });
 
@@ -77,7 +80,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // ✅ Usa la política CORS antes de Authentication/Authorization
-app.UseCors("AllowLocalhost3000");
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -55,6 +55,7 @@ export const saveOrUpdateVano = async (vano) => {
           VanoNodoInicial = ?,
           VanoNodoFinal = ?,
           VanoTerceros = ?,
+          VanoTramo = COALESCE(?, VanoTramo),
           EstadoOffLine = ?,
           VanoInspeccionado = ?
         WHERE VanoInterno = ?
@@ -66,6 +67,7 @@ export const saveOrUpdateVano = async (vano) => {
         vano.VanoNodoInicial,
         vano.VanoNodoFinal,
         vano.VanoTerceros,
+         vano.VanoTramo,
         estado,
         vano.VanoInspeccionado ?? "",
         vano.VanoInterno
@@ -81,11 +83,12 @@ export const saveOrUpdateVano = async (vano) => {
           VanoNodoInicial,
           VanoNodoFinal,
           VanoTerceros,
+          VanoTramo, 
           EstadoOffLine,
           VanoInspeccionado,
           AlimInterno,
           VanoSubestacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
       `;
 
       const result = await runQuery(insertQuery, [
@@ -94,7 +97,8 @@ export const saveOrUpdateVano = async (vano) => {
         vano.VanoNodoInicial,
         vano.VanoNodoFinal,
         vano.VanoTerceros ?? "",
-        2, // Nuevo dato
+         vano.VanoTramo ?? null,
+        2, 
         vano.VanoInspeccionado ?? "",
         vano.AlimInterno ?? null,
         vano.VanoSubestacion ?? null
@@ -159,4 +163,47 @@ export const updateVanoIdAfterSync = async (localId, serverId) => {
   `;
   await runQuery(query, [serverId, localId]);
 };
+
+// ======================= INSPECCIONADO (VANOS) =======================
+
+export const getVanoInspeccionadoByIdOriginalLocal = async (vanoInterno) => {
+  try {
+    const id = Number(vanoInterno);
+    if (!Number.isFinite(id)) return null;
+
+    const rows = await runQuery(
+      "SELECT VanoInspeccionado FROM Vanos WHERE VanoInterno = ? LIMIT 1",
+      [id]
+    );
+
+    if (!rows || rows.length === 0) return null;
+    return rows[0]?.VanoInspeccionado ?? null;
+  } catch (error) {
+    console.error("❌ Error getVanoInspeccionadoByIdOriginalLocal:", error);
+    return null;
+  }
+};
+
+export const updateVanoInspeccionadoByIdOriginalLocal = async (vanoInterno, inspeccionado) => {
+  try {
+    const id = Number(vanoInterno);
+    if (!Number.isFinite(id)) return false;
+
+    const val = Number(inspeccionado) === 1 ? 1 : 0;
+
+    await runQuery(
+      "UPDATE Vanos SET VanoInspeccionado = ? WHERE VanoInterno = ?",
+      [val, id]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error updateVanoInspeccionadoByIdOriginalLocal:", error);
+    return false;
+  }
+};
+
+
+
+
 

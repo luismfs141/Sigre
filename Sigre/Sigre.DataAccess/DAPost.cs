@@ -140,7 +140,8 @@ namespace Sigre.DataAccess
                         PostInspeccionado = dto.PostInspeccionado,
                         PostEsBt = dto.PostEsBt,
                         PostEsMt = dto.PostEsMt,
-                        PostAltura = dto.PostAltura
+                        PostAltura = dto.PostAltura,
+                        PostTramo = dto.PostTramo
 
                     };
 
@@ -175,6 +176,7 @@ namespace Sigre.DataAccess
                     existente.PostEsBt = dto.PostEsBt;
                     existente.PostEsMt = dto.PostEsMt;
                     existente.PostAltura = dto.PostAltura;
+                    existente.PostTramo = dto.PostTramo;
 
 
                     ctx.SaveChanges();

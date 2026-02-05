@@ -37,6 +37,31 @@ export default function ImportData() {
     await loadFromSqliteFile(selectedFile);
   };
 
+  // const handleSync = async () => {
+  //   if (!file) {
+  //     setLocalError("Seleccione un archivo SQLite");
+  //     return;
+  //   }
+
+  //   if (!hasOfflineData) {
+  //     setLocalError("No existen datos offline para sincronizar");
+  //     return;
+  //   }
+
+  //   if (!window.confirm("¿Desea sincronizar los datos offline?")) return;
+
+  //   try {
+  //     const result = await syncData(file);
+
+  //     alert(`✔ Sincronización completa
+  // Deficiencias sincronizadas: ${result.deficienciasSincronizadas}
+  // Archivos sincronizados: ${result.archivosSincronizados}`);
+
+  //   } catch {
+  //     // error manejado en el hook
+  //   }
+  // };
+
   const handleSync = async () => {
     if (!file) {
       setLocalError("Seleccione un archivo SQLite");
@@ -54,8 +79,17 @@ export default function ImportData() {
       const result = await syncData(file);
 
       alert(`✔ Sincronización completa
-  Deficiencias sincronizadas: ${result.deficienciasSincronizadas}
-  Archivos sincronizados: ${result.archivosSincronizados}`);
+
+      Deficiencias:
+        Insertadas: ${result.deficiencias.insertadas}
+        Modificadas: ${result.deficiencias.modificadas}
+        Total: ${result.deficiencias.total}
+
+      Archivos:
+        Insertados: ${result.archivos.insertados}
+        Modificados: ${result.archivos.modificados}
+        Total: ${result.archivos.total}
+          `);
 
     } catch {
       // error manejado en el hook

@@ -1,3 +1,10 @@
+import {
+  getVanoInspeccionadoByIdOriginalLocal,
+  updateVanoInspeccionadoByIdOriginalLocal,
+} from "../database/offlineDB/gaps";
+
+
+
 import { useRef, useState } from "react";
 import uuid from "react-native-uuid";
 import { api } from "../config";
@@ -48,6 +55,87 @@ export const useDeficiency = () => {
   };
 
   const generateUUID = () => uuid.v4();
+
+  // ------------------- HELPERS PIN -------------------
+  const extractPinValue = (v) => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === "object") {
+      // por si tu query devuelve row { Inspeccionado: 0/1 } o similar
+      const possible =
+        v.Inspeccionado ??
+        v.inspeccionado ??
+        v.PIN_Inspeccionado ??
+        v.PinInspeccionado ??
+        v.value ??
+        null;
+      return possible === null || possible === undefined ? null : Number(possible);
+    }
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // ------------------- MENSAJE PROFESIONAL (PIN) -------------------
+  const labelTipoElemento = (t) => {
+    const s = String(t ?? "").trim().toUpperCase();
+    if (s === "POST") return "POSTE";
+    if (s === "VANO") return "VANO";
+    if (s === "SED") return "SED";
+    return s || "ELEMENTO";
+  };
+
+  const labelEstadoPin = (v) => (Number(v) === 1 ? "INSPECCIONADO" : "NO INSPECCIONADO");
+  const iconEstadoPin = (v) => (Number(v) === 1 ? "✅" : "🟡");
+
+  const buildPinMsg = ({
+    idOriginal,
+    typeElement,
+    previo,
+    nuevo,
+    totalDeficiencias,
+    pendientes,
+    accion,
+  }) => {
+    const tipo = labelTipoElemento(typeElement);
+
+    const prev = extractPinValue(previo);
+    const next = extractPinValue(nuevo);
+
+    // Si no existe el pin, no podemos explicar cambio real
+    if (prev === null) {
+      return (
+        `⚠️ No se pudo actualizar el estado del PIN.\n\n` +
+        `📍 Elemento: ${tipo} ${idOriginal}\n` +
+        `🧩 Motivo: No se encontró el pin asociado a este elemento.`
+      );
+    }
+
+    const antes = labelEstadoPin(prev);
+    const despues = labelEstadoPin(next);
+
+    const iconAntes = iconEstadoPin(prev);
+    const iconDespues = iconEstadoPin(next);
+
+    // Motivo más claro
+    let motivo = "";
+    if (Number(next) === 1) {
+      motivo = "Todas las deficiencias asociadas están finalizadas.";
+    } else if (Number(totalDeficiencias) === 0) {
+      motivo = "No hay deficiencias activas asociadas.";
+    } else {
+      motivo = `Aún hay ${Number(pendientes) || 0} deficiencia(s) pendiente(s) por completar.`;
+    }
+
+    const accionTxt = accion ? `🛠️ Acción: ${accion}` : "";
+
+    return (
+      `📌 Estado del PIN actualizado\n\n` +
+      `📍 Elemento: ${tipo} ${idOriginal}\n` +
+      `🔁 Estado: ${iconAntes} ${antes} → ${iconDespues} ${despues}\n` +
+      `📊 Deficiencias activas: ${Number(totalDeficiencias) || 0} (Pendientes: ${Number(pendientes) || 0})\n` +
+      `ℹ️ Motivo: ${motivo}\n` +
+      `${accionTxt}`
+    ).trim();
+  };
 
   // ------------------- NORMALIZAR FECHAS -------------------
   const normalizeDate = (value) => {
@@ -104,20 +192,12 @@ export const useDeficiency = () => {
   };
 
   // ------------------- FETCH -------------------
-  const fetchDeficiencyByTypificationElement = async (
-    idElement,
-    typeElement,
-    idTypification
-  ) => {
+  const fetchDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
     const dbOk = await checkDatabase();
     if (!dbOk) return [];
 
     try {
-      return await getDeficiencyByTypificationElement(
-        idElement,
-        typeElement,
-        idTypification
-      );
+      return await getDeficiencyByTypificationElement(idElement, typeElement, idTypification);
     } catch (err) {
       console.error("❌ Error obteniendo deficiencias:", err);
       return [];
@@ -156,11 +236,7 @@ export const useDeficiency = () => {
   const normalizeDeficiencyForSync = (def) => {
     const nowIso = new Date().toISOString();
 
-    const fecRegistro =
-      normalizeDate(def?.DefiFecRegistro) ||
-      normalizeDate(def?.DefiFechaCreacion) ||
-      nowIso;
-
+    const fecRegistro = normalizeDate(def?.DefiFecRegistro) || normalizeDate(def?.DefiFechaCreacion) || nowIso;
     const fecMod = normalizeDate(def?.DefiFecModificacion) || nowIso;
 
     return {
@@ -204,34 +280,25 @@ export const useDeficiency = () => {
         console.log("📴 Sin conexión, no se sincroniza");
         return;
       }
+
       const def = await getDeficiencyByIdLocal(defOrId);
       console.log("🔄 [autoSyncDeficiency] START →", def);
+
       const normalized = normalizeDeficiencyForSync(def);
       const payload = [normalized];
 
-      const response = await client.post(
-        "/Deficiency/SyncFromSQLite",
-        payload,
-        { timeout: 15000 }
-      );
+      const response = await client.post("/Deficiency/SyncFromSQLite", payload, { timeout: 15000 });
 
       console.log("📥 Respuesta del servidor:", response.data);
 
       // ✅ ACTUALIZAR SQLITE
       if (Array.isArray(response.data)) {
         for (const r of response.data) {
-          await updateDeficiencyIdAfterSync(
-            r.localId,
-            r.serverId
-          );
+          await updateDeficiencyIdAfterSync(r.localId, r.serverId);
         }
       }
-
     } catch (err) {
-      console.error(
-        "❌ [autoSyncDeficiency] Falló:",
-        err?.response?.data || err?.message || err
-      );
+      console.error("❌ [autoSyncDeficiency] Falló:", err?.response?.data || err?.message || err);
     } finally {
       syncingRef.current = false;
     }
@@ -246,76 +313,158 @@ export const useDeficiency = () => {
       const pendientes = await getDeficienciesPendientes();
       if (!pendientes.length) return { ok: true, synced: 0 };
 
-      const aSincronizar = pendientes.filter((d) =>
-        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
-      );
-
+      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
       if (!aSincronizar.length) return { ok: true, synced: 0 };
 
       // 🔹 Normalizar TODAS
-      const payload = aSincronizar.map((d) =>
-        normalizeDeficiencyForSync(d)
-      );
+      const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
 
-      const response = await client.post(
-        "/Deficiency/SyncFromSQLite",
-        payload,
-        { timeout: 20000 }
-      );
+      const response = await client.post("/Deficiency/SyncFromSQLite", payload, { timeout: 20000 });
 
       const respList = Array.isArray(response.data) ? response.data : [];
       let syncedCount = 0;
 
-      // 🔹 MISMA lógica que autosync
       for (const r of respList) {
         if (!r?.localId || !r?.serverId) {
           console.warn("⚠ Respuesta inválida:", r);
           continue;
         }
 
-        await updateDeficiencyIdAfterSync(
-          r.localId,
-          r.serverId
-        );
-
+        await updateDeficiencyIdAfterSync(r.localId, r.serverId);
         syncedCount++;
       }
 
       return { ok: true, synced: syncedCount };
-
     } catch (err) {
-      console.error(
-        "❌ Sync masivo deficiencias falló:",
-        err?.response?.data || err?.message || err
-      );
+      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
       return { ok: false };
     }
   };
 
-
-  // ------------------- SAVE + AUTO SYNC -------------------
+  // ------------------- SAVE + AUTO SYNC (+ PIN MSG SIEMPRE) -------------------
+  // ------------------- SAVE + AUTO SYNC (+ PIN MSG PRE/POST) -------------------
   const saveDeficiency = async (deficiency, userId) => {
     const dbOk = await checkDatabase();
-    if (!dbOk) return null;
+    if (!dbOk) return { ok: false, error: "DB_NOT_READY" };
 
-    console.log(deficiency);
     try {
-      const normalized = normalizeDeficiencyBeforeSave(deficiency, userId);
-      const localId = await saveOrUpdateDeficiency(normalized);
+      const isNew = !(deficiency?.DefiInterno ?? deficiency?.defiInterno);
 
+      // ✅ Normalizar (pero OJO: aún no guardamos)
+      const normalized = normalizeDeficiencyBeforeSave(deficiency, userId);
+
+      // ✅ ID/TIPO del elemento (robusto)
+      const idOriginalRaw =
+        normalized?.DefiIdElemento ??
+        normalized?.elementId ??
+        deficiency?.DefiIdElemento ??
+        deficiency?.elementId;
+
+      const typeElementRaw =
+        normalized?.DefiTipoElemento ??
+        normalized?.typeElement ??
+        deficiency?.DefiTipoElemento ??
+        deficiency?.typeElement;
+
+      const idOriginal =
+        idOriginalRaw != null && String(idOriginalRaw).trim() !== ""
+          ? Number(idOriginalRaw)
+          : null;
+
+      const typeElement =
+        typeElementRaw != null && String(typeElementRaw).trim() !== ""
+          ? String(typeElementRaw).trim().toUpperCase()
+          : null;
+
+      console.log("📍 [PIN][SAVE] target:", { idOriginal, typeElement, isNew });
+
+      // =========================
+      // 1) PRE: recalcular ANTES
+      // =========================
+      let preRes = null;
+      if (idOriginal != null && typeElement) {
+        preRes = await recalcularPinInspeccionadoParaElemento(idOriginal, typeElement);
+        console.log("🟦 [PIN][SAVE][PRE] =>", preRes);
+      }
+
+      // =========================
+      // 2) GUARDAR DEFICIENCIA
+      // =========================
+      const localId = await saveOrUpdateDeficiency(normalized);
       console.log("✅ Deficiencia guardada con ID local:", localId);
 
+      // =========================
+      // 3) POST: recalcular DESPUÉS
+      // =========================
+      let postRes = null;
+      if (idOriginal != null && typeElement) {
+        postRes = await recalcularPinInspeccionadoParaElemento(idOriginal, typeElement);
+        console.log("🟩 [PIN][SAVE][POST] =>", postRes);
+      }
+
+      // =========================
+      // 4) Mensaje PRE → POST
+      // =========================
+      let pinMsg = null;
+
+      if (idOriginal != null && typeElement && preRes && postRes) {
+        const tipo = labelTipoElemento(typeElement);
+
+        const antesVal = extractPinValue(preRes?.nuevo);
+        const despuesVal = extractPinValue(postRes?.nuevo);
+
+        const antesTxt = labelEstadoPin(antesVal);
+        const despuesTxt = labelEstadoPin(despuesVal);
+
+        const iconAntes = iconEstadoPin(antesVal);
+        const iconDespues = iconEstadoPin(despuesVal);
+
+        const beforeTotal = Number(preRes?.totalDeficiencias ?? 0);
+        const beforePend = Number(preRes?.pendientes ?? 0);
+
+        const afterTotal = Number(postRes?.totalDeficiencias ?? 0);
+        const afterPend = Number(postRes?.pendientes ?? 0);
+
+        let motivo = "";
+        if (Number(despuesVal) === 1) {
+          motivo = "Todas las deficiencias asociadas están finalizadas.";
+        } else if (afterTotal === 0) {
+          motivo = "No hay deficiencias activas asociadas.";
+        } else {
+          motivo = `Aún hay ${afterPend} deficiencia(s) pendiente(s) por completar.`;
+        }
+
+        pinMsg =
+          `📌 Estado del PIN recalculado\n\n` +
+          `📍 Elemento: ${tipo} ${idOriginal}\n` +
+          `🔁 Estado: ${iconAntes} ${antesTxt} → ${iconDespues} ${despuesTxt}\n` +
+          `📊 Antes: Activas ${beforeTotal} (Pendientes ${beforePend})\n` +
+          `📊 Después: Activas ${afterTotal} (Pendientes ${afterPend})\n` +
+          `ℹ️ Motivo: ${motivo}\n` +
+          `🛠️ Acción: ${isNew ? "Se registró una nueva deficiencia" : "Se actualizó la deficiencia"}`;
+
+        console.log("📌 [PIN MSG][SAVE]\n" + pinMsg);
+      } else if (idOriginal != null && typeElement) {
+        pinMsg =
+          `⚠️ No se pudo armar mensaje PRE/POST del PIN.\n\n` +
+          `📍 Elemento: ${labelTipoElemento(typeElement)} ${idOriginal}\n` +
+          `🧩 Motivo: faltó PRE o POST recalculo (revisa logs).`;
+        console.warn("⚠️ [PIN][SAVE] faltó preRes/postRes", { preRes, postRes });
+      }
+
+      // ✅ Auto-sync
       if (localId) {
         console.log("🔄 Iniciando auto-sync para ID:", localId);
         await autoSyncDeficiency(localId);
       }
 
-      return localId;
+      return { ok: true, localId, pinMsg, preRes, postRes, isNew };
     } catch (err) {
       console.error("❌ Error guardando deficiencia:", err);
-      return null;
+      return { ok: false, error: String(err?.message || err) };
     }
   };
+
 
   // ------------------- SET INSPECCIONADO (LOCAL + SYNC) -------------------
   const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
@@ -324,7 +473,6 @@ export const useDeficiency = () => {
 
     try {
       await updateDefiInspeccionadoLocal(defiInterno, inspeccionado ? 1 : 0);
-
       return true;
     } catch (err) {
       console.error("❌ Error actualizando DefiInspeccionado:", err);
@@ -393,20 +541,19 @@ export const useDeficiency = () => {
     }
   };
 
-  // ------------------- DELETE (PERMISOS + VALIDACIÓN + SYNC) -------------------
+  // ------------------- DELETE (PRE/POST PIN + PERMISOS + VALIDACIÓN + SYNC) -------------------
   const deleteDeficiency = async (defiInterno) => {
     const dbOk = await checkDatabase();
-    if (!dbOk) return false;
+    if (!dbOk) return { ok: false };
 
     try {
       const def = await getDeficiencyByIdLocal(defiInterno);
-      if (!def) return false;
+      if (!def) return { ok: false };
 
       // ✅ PERMISOS
       const privileged = isAdmin || isSupervisor;
 
       if (!privileged) {
-        // inspector (u otros) solo si es dueño
         const owner = def.DefiUsuarioInic;
         const me = currentUserId;
 
@@ -417,12 +564,87 @@ export const useDeficiency = () => {
 
         if (!isOwner) {
           console.log("⛔ No permitido: inspector intentando eliminar deficiencia de otro usuario");
-          return false;
+          return { ok: false, reason: "NO_PERMISSION" };
         }
       }
 
-      // 🔴 BORRADO LÓGICO LOCAL
+      const idOriginal = def?.DefiIdElemento != null ? Number(def.DefiIdElemento) : null;
+      const typeElement = def?.DefiTipoElemento != null ? String(def.DefiTipoElemento).trim().toUpperCase() : null;
+
+      console.log("📍 [PIN][DEL] target:", { idOriginal, typeElement });
+
+      // =========================
+      // 1) PRE: recalcular ANTES
+      // =========================
+      let preRes = null;
+      if (idOriginal != null && typeElement) {
+        preRes = await recalcularPinInspeccionadoParaElemento(idOriginal, typeElement);
+        console.log("🟦 [PIN][DEL][PRE] =>", preRes);
+      }
+
+      // =========================
+      // 2) BORRADO LÓGICO LOCAL
+      // =========================
       await deleteDeficiencyById(defiInterno);
+
+      // =========================
+      // 3) POST: recalcular DESPUÉS
+      // =========================
+      let postRes = null;
+      if (idOriginal != null && typeElement) {
+        postRes = await recalcularPinInspeccionadoParaElemento(idOriginal, typeElement);
+        console.log("🟩 [PIN][DEL][POST] =>", postRes);
+      }
+
+      // =========================
+      // 4) Mensaje PRE → POST
+      // =========================
+      let pinMsg = null;
+
+      if (idOriginal != null && typeElement && preRes && postRes) {
+        const tipo = labelTipoElemento(typeElement);
+
+        const antesVal = extractPinValue(preRes?.nuevo);
+        const despuesVal = extractPinValue(postRes?.nuevo);
+
+        const antesTxt = labelEstadoPin(antesVal);
+        const despuesTxt = labelEstadoPin(despuesVal);
+
+        const iconAntes = iconEstadoPin(antesVal);
+        const iconDespues = iconEstadoPin(despuesVal);
+
+        const beforeTotal = Number(preRes?.totalDeficiencias ?? 0);
+        const beforePend = Number(preRes?.pendientes ?? 0);
+
+        const afterTotal = Number(postRes?.totalDeficiencias ?? 0);
+        const afterPend = Number(postRes?.pendientes ?? 0);
+
+        let motivo = "";
+        if (Number(despuesVal) === 1) {
+          motivo = "Todas las deficiencias asociadas están finalizadas.";
+        } else if (afterTotal === 0) {
+          motivo = "No hay deficiencias activas asociadas.";
+        } else {
+          motivo = `Aún hay ${afterPend} deficiencia(s) pendiente(s) por completar.`;
+        }
+
+        pinMsg =
+          `📌 Estado del PIN recalculado\n\n` +
+          `📍 Elemento: ${tipo} ${idOriginal}\n` +
+          `🔁 Estado: ${iconAntes} ${antesTxt} → ${iconDespues} ${despuesTxt}\n` +
+          `📊 Antes: Activas ${beforeTotal} (Pendientes ${beforePend})\n` +
+          `📊 Después: Activas ${afterTotal} (Pendientes ${afterPend})\n` +
+          `ℹ️ Motivo: ${motivo}\n` +
+          `🛠️ Acción: Se eliminó una deficiencia`;
+
+        console.log("📌 [PIN MSG][DEL]\n" + pinMsg);
+      } else if (idOriginal != null && typeElement) {
+        pinMsg =
+          `⚠️ No se pudo armar mensaje PRE/POST del PIN.\n\n` +
+          `📍 Elemento: ${labelTipoElemento(typeElement)} ${idOriginal}\n` +
+          `🧩 Motivo: faltó PRE o POST recalculo (revisa logs).`;
+        console.warn("⚠️ [PIN][DEL] faltó preRes/postRes", { preRes, postRes });
+      }
 
       // 🌐 VALIDAR EN SERVIDOR ANTES DE SINCRONIZAR
       const existeEnServidor = await checkDeficiencyOnServer(def);
@@ -434,33 +656,76 @@ export const useDeficiency = () => {
         console.log("📱 Deficiencia no existe o no coincide en servidor, no se sincroniza");
       }
 
-      return true;
+      return { ok: true, pinMsg, preRes, postRes };
     } catch (err) {
       console.error("❌ Error eliminando deficiencia:", err);
-      return false;
+      return { ok: false, error: String(err?.message || err) };
     }
   };
 
-  // ------------------- Recalcula Pines.Inspeccionado para POSTE -------------------
-  async function recalcularPinInspeccionadoParaPoste(postId) {
+
+  // ------------------- Recalcula inspección para POST/VANO/SED -------------------
+  async function recalcularPinInspeccionadoParaElemento(idOriginal, typeElement) {
     const dbOk = await checkDatabase();
     if (!dbOk) return { ok: false };
 
-    const previo = await getPinInspeccionadoByIdOriginalLocal(postId);
+    const t = String(typeElement ?? "").trim().toUpperCase();
+    const id = idOriginal != null ? Number(idOriginal) : null;
 
-    const defs = await getDeficienciesByElement(postId, "POST");
-    const todasInspeccionadas =
-      defs?.length > 0 && defs.every((d) => Number(d?.DefiInspeccionado) === 1);
+    if (!Number.isFinite(id)) {
+      return { ok: false, error: "ID_INVALIDO", previo: null, nuevo: null };
+    }
 
+    // 1) PREVIO: leer desde la tabla correcta
+    let previoRaw = null;
+
+    if (t === "VANO") {
+      // ✅ VANO -> tabla Vanos
+      previoRaw = await getVanoInspeccionadoByIdOriginalLocal(id);
+    } else {
+      // ✅ POST/SED/otros -> tabla Pines
+      previoRaw = await getPinInspeccionadoByIdOriginalLocal(id);
+    }
+
+    const previo = extractPinValue(previoRaw);
+
+    // 2) Deficiencias activas del elemento
+    const defs = await getDeficienciesByElement(id, t);
+
+    const totalDeficiencias = defs?.length ?? 0;
+    const inspeccionadas =
+      defs?.filter((d) => Number(d?.DefiInspeccionado) === 1).length ?? 0;
+    const pendientes = Math.max(0, totalDeficiencias - inspeccionadas);
+
+    // Regla: inspeccionado SOLO si existen deficiencias y TODAS están inspeccionadas
+    const todasInspeccionadas = totalDeficiencias > 0 && pendientes === 0;
     const nuevo = todasInspeccionadas ? 1 : 0;
-    const ok = await updatePinInspeccionadoByIdOriginalLocal(postId, nuevo);
+
+    // 3) UPDATE: escribir en la tabla correcta
+    let ok = false;
+
+    if (t === "VANO") {
+      ok = await updateVanoInspeccionadoByIdOriginalLocal(id, nuevo);
+    } else {
+      ok = await updatePinInspeccionadoByIdOriginalLocal(id, nuevo);
+    }
 
     return {
       ok,
       previo,
       nuevo,
-      totalDeficiencias: defs?.length ?? 0,
+      totalDeficiencias,
+      inspeccionadas,
+      pendientes,
+      tablaActualizada: t === "VANO" ? "Vanos.VanoInspeccionado" : "Pines.Inspeccionado",
     };
+  }
+
+
+
+  // ✅ Mantén esta función para no romper llamadas existentes
+  async function recalcularPinInspeccionadoParaPoste(postId) {
+    return await recalcularPinInspeccionadoParaElemento(postId, "POST");
   }
 
   // ------------------- LISTADOS -------------------
@@ -512,9 +777,7 @@ export const useDeficiency = () => {
           orderInCode: nroEnCodigo,
 
           name: hasTypification
-            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${
-                def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""
-              }`
+            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""}`
             : `0000 → ${def.Deficiency ?? "Sin Deficiencia"}`,
 
           data: {
@@ -562,6 +825,11 @@ export const useDeficiency = () => {
     deleteDeficiency,
 
     setDefiInspeccionadoLocal,
+
+    // ✅ NECESARIO para Multimedia.js
+    recalcularPinInspeccionadoParaElemento,
+
+    // ✅ Compatibilidad (si lo llamas en otros lados)
     recalcularPinInspeccionadoParaPoste,
 
     autoSyncDeficiency,
@@ -571,4 +839,6 @@ export const useDeficiency = () => {
     fetchDeficienciesByElement,
     deficienciesForFlatList,
   };
+
+
 };

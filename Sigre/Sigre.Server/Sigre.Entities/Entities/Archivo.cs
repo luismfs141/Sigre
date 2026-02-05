@@ -30,4 +30,5 @@ public partial class Archivo
     public int? TipiInterno { get; set; }
 
     public bool? ArchActivo { get; set; }
+    public string? DefiUUID { get; set; }
 }

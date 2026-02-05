@@ -41,9 +41,7 @@ namespace Sigre.Server.Controllers
         [Consumes("multipart/form-data")]
         [DisableRequestSizeLimit]
         [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
-        public async Task<IActionResult> SyncData(
-            [FromForm(Name = "file")] IFormFile file
-        )
+        public async Task<IActionResult> SyncData([FromForm(Name = "file")] IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("Archivo inválido");
@@ -55,15 +53,32 @@ namespace Sigre.Server.Controllers
             {
                 var daOffline = new DAOffline();
 
-                // 🔑 Ejecutar sincronización real
-                var (defCount, archCount) =
-                    await daOffline.DAOFF_SyncDataOffline(file);
+                // 🔑 Ejecutar sincronización
+                var (
+                    defInsertadas,
+                    defModificadas,
+                    archInsertados,
+                    archModificados
+                ) = await daOffline.DAOFF_SyncDataOffline(file);
 
                 return Ok(new
                 {
                     success = true,
-                    deficienciasSincronizadas = defCount,
-                    archivosSincronizados = archCount,
+
+                    deficiencias = new
+                    {
+                        insertadas = defInsertadas,
+                        modificadas = defModificadas,
+                        total = defInsertadas + defModificadas
+                    },
+
+                    archivos = new
+                    {
+                        insertados = archInsertados,
+                        modificados = archModificados,
+                        total = archInsertados + archModificados
+                    },
+
                     mensaje = "Sincronización completada correctamente"
                 });
             }
@@ -77,5 +92,6 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+
     }
 }

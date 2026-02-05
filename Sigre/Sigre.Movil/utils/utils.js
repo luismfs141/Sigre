@@ -66,11 +66,11 @@ export const getSourceImageFromType2 = (pin) => {
 
 
 export const getGapColorByInspected = (gap)=>{
-  if(gap.vanoInspeccionado==true){
+  if(gap.VanoInspeccionado==true){
     return '#55BA00';
   }
   else{
-    if(gap.vanoTerceros ==true){
+    if(gap.VanoTerceros ==true){
       return  '#EA0000';
     }
     else{

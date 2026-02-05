@@ -161,3 +161,33 @@ BEGIN
     ALTER TABLE dbo.Postes
     ADD POST_Altura NUMERIC(10,2) NULL;
 END
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+-- POST_Tramo en Postes
+IF COL_LENGTH('dbo.Postes', 'POST_Tramo') IS NULL
+BEGIN
+  ALTER TABLE dbo.Postes
+  ADD POST_Tramo NVARCHAR(20) NULL;
+END
+GO
+
+-- VANO_Tramo en Vanos
+IF COL_LENGTH('dbo.Vanos', 'VANO_Tramo') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vanos
+  ADD VANO_Tramo NVARCHAR(20) NULL;
+END
+GO
+
+
+----------------------------------------------------------------------------------------------
+
+
+IF COL_LENGTH('dbo.Archivos', 'DEFI_UUID') IS NULL
+BEGIN
+    ALTER TABLE dbo.Archivos
+    ADD DEFI_UUID VARCHAR(50) NULL;
+END
+

@@ -183,10 +183,18 @@ namespace Sigre.DataAccess
             }
             return archivos;
         }
-        public async Task<(int deficiencias, int archivos)> DAOFF_SyncDataOffline(IFormFile file)
+
+        public async Task<(
+            int defInsertadas,
+            int defModificadas,
+            int archInsertados,
+            int archModificados
+        )> DAOFF_SyncDataOffline(IFormFile file)
         {
-            int defCount = 0;
-            int archCount = 0;
+            int defInsertadas = 0;
+            int defModificadas = 0;
+            int archInsertados = 0;
+            int archModificados = 0;
 
             var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(file))
                                     .Where(d => d.EstadoOffLine != 0)
@@ -196,28 +204,72 @@ namespace Sigre.DataAccess
                                 .Where(a => a.EstadoOffLine != 0)
                                 .ToList();
 
-            // 🔹 Deficiencias
             var errores = new List<string>();
             var dADeficiency = new DADeficiency();
+            var dAFile = new DAFile();
+
+            /* ===============================
+               🔹 CACHE EN MEMORIA
+               =============================== */
+
+            var cacheDefByUUID = new Dictionary<string, int>();
+            var cacheDefExist = new Dictionary<string, int>();
+            var cacheArchivos = new Dictionary<string, int>();
+
+            /* ===============================
+               🔹 DEFICIENCIAS
+               =============================== */
 
             foreach (var def_off in deficiencias_off)
             {
                 try
                 {
-                    // Convertimos primero para poder validar con la entidad completa
                     var deficiencia = dADeficiency.DADEFI_ConvertDeficiency(def_off);
+                    int defiInterno = 0;
 
-                    // 🔹 Buscar existencia (maneja TipiInterno 60 internamente)
-                    int defiInterno = dADeficiency.DADEFI_ExistDeficiency(deficiencia);
+                    // 🔹 Buscar por UUID
+                    if (!string.IsNullOrEmpty(deficiencia.DefiCol3))
+                    {
+                        if (!cacheDefByUUID.TryGetValue(deficiencia.DefiCol3, out defiInterno))
+                        {
+                            defiInterno = dADeficiency
+                                .DADEFI_GetDeficiencyIDByUUID(deficiencia.DefiCol3);
+
+                            cacheDefByUUID[deficiencia.DefiCol3] = defiInterno;
+                        }
+                    }
+                    else
+                    {
+                        // 🔹 Clave lógica clásica
+                        string key = $"{deficiencia.DefiCodigoElemento}|{deficiencia.TipiInterno}";
+
+                        if (!cacheDefExist.TryGetValue(key, out defiInterno))
+                        {
+                            defiInterno = dADeficiency
+                                .DADEFI_ExistDeficiency(deficiencia);
+
+                            cacheDefExist[key] = defiInterno;
+                        }
+                    }
+
+                    if (defiInterno > 0)
+                    {
+                        // Nunca modificar UUID
+                        var existente = dADeficiency.DADEFI_GetById(defiInterno);
+                        deficiencia.DefiCol3 = existente.DefiCol3;
+
+                        defModificadas++;
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(deficiencia.DefiCol3))
+                            deficiencia.DefiCol3 = Guid.NewGuid().ToString().ToUpper();
+
+                        defInsertadas++;
+                    }
 
                     deficiencia.DefiInterno = defiInterno;
-
                     dADeficiency.DADEFI_Save(deficiencia);
-
-                    if(defiInterno == 0)
-                    {
-                        defCount++;
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -230,40 +282,75 @@ namespace Sigre.DataAccess
             }
 
             if (errores.Any())
-            {
                 throw new Exception(
                     "Errores en sincronización de deficiencias:\n" +
                     string.Join("\n", errores)
                 );
-            }
 
-            // 🔹 Archivos
-            if (archivos_off.Any())
+            /* ===============================
+               🔹 ARCHIVOS
+               =============================== */
+
+            foreach (var arch_off in archivos_off)
             {
-                var dAFile = new DAFile();
+                int codtabla = 0;
+                var archivo = dAFile.ARCH_ConvertFile(arch_off);
 
-                foreach (var arch_off in archivos_off)
+                // 🔹 Resolver Deficiencia
+                if (!string.IsNullOrEmpty(arch_off.DefiUUID))
                 {
-                    int idArchivo = dAFile.ARCH_ExistPhoto(arch_off.ArchNombre);
-
-                    // 🔹 Si existe, reutiliza ID (puedes hacer continue si NO quieres guardar)
-                    arch_off.ArchInterno = idArchivo;
-
-                    var archivo = dAFile.ARCH_ConvertFile(arch_off);
-                    dAFile.DAARCH_Save(archivo);
-
-                    if(idArchivo == 0)
+                    if (!cacheDefByUUID.TryGetValue(arch_off.DefiUUID, out codtabla))
                     {
-                        archCount++;
+                        codtabla = dADeficiency
+                            .DADEFI_GetDeficiencyIDByUUID(arch_off.DefiUUID);
+
+                        cacheDefByUUID[arch_off.DefiUUID] = codtabla;
                     }
                 }
+                else
+                {
+                    string key = $"{archivo.ArchIdElemento}|{archivo.ArchTipoElemento}|{archivo.TipiInterno}";
+
+                    if (!cacheDefExist.TryGetValue(key, out codtabla))
+                    {
+                        codtabla = dADeficiency
+                            .DADEFI_GetDeficiencyIDByElementAndType(
+                                (int)archivo.ArchIdElemento,
+                                archivo.ArchTipoElemento,
+                                (int)archivo.TipiInterno
+                            );
+
+                        cacheDefExist[key] = codtabla;
+                    }
+                }
+
+                if (codtabla <= 0)
+                    continue;
+
+                // 🔹 Archivo existente
+                if (!cacheArchivos.TryGetValue(arch_off.ArchNombre, out int idArchivo))
+                {
+                    idArchivo = dAFile.ARCH_ExistPhoto(arch_off.ArchNombre);
+                    cacheArchivos[arch_off.ArchNombre] = idArchivo;
+                }
+
+                archivo.ArchCodTabla = codtabla;
+                archivo.ArchInterno = idArchivo;
+
+                if (idArchivo > 0)
+                    archModificados++;
+                else
+                    archInsertados++;
+
+                dAFile.DAARCH_Save(archivo);
             }
-            return (defCount, archCount);
+
+            return (defInsertadas, defModificadas, archInsertados, archModificados);
         }
     }
 
-    // Extensiones para lectura nullable usando nombres de columna
-    public static class SqliteDataReaderExtensions
+        // Extensiones para lectura nullable usando nombres de columna
+        public static class SqliteDataReaderExtensions
     {
         public static int? GetNullableInt32(this SqliteDataReader r, string col)
             => r.IsDBNull(r.GetOrdinal(col)) ? (int?)null : r.GetInt32(r.GetOrdinal(col));

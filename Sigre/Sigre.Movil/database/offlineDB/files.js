@@ -25,16 +25,17 @@ export const getNextArchCodTablaLocal = async () => {
 /**
  * Inserta un archivo en la tabla Archivos.
  *
- * ⚠️ Ahora la semántica de ArchTipo cambia:
- *   - Fotos: sufijo del slot (1..6)
- *     1 = Frontal
- *     2 = P. derecho
- *     3 = P. izquierdo
- *     4 = Panorámico
- *     5 = Medidor
- *     6 = Adicional
+ * ✅ Semántica actual de ArchTipo (fotos por slot 1..6):
+ *   1 = Panorámica
+ *   2 = Frontal
+ *   3 = Izquierda
+ *   4 = Derecha
+ *   5 = Medidor
+ *   6 = Adicional
+ *
  *   - Audios: siempre 0
  */
+
 
 export const insertArchivoLocal = async ({
   archTipo,
@@ -47,6 +48,7 @@ export const insertArchivoLocal = async ({
   archTipoElemento,
   archIdElemento,
   tipiInterno,
+  defiUUID = null,
 
   archActiv = 1,
 }) => {
@@ -63,6 +65,7 @@ export const insertArchivoLocal = async ({
       archTipoElemento,
       archIdElemento,
       tipiInterno,
+      defiUUID,
       archActiv,
     });
     await runQuery(
@@ -79,11 +82,12 @@ export const insertArchivoLocal = async ({
         archTipoElemento,
         archIdElemento,
         tipiInterno,
+        DefiUUID,
 
         ArchActivo,
         EstadoOffLine
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2);
       `,
       [
         String(archTipo),
@@ -96,6 +100,7 @@ export const insertArchivoLocal = async ({
         archTipoElemento,
         archIdElemento,
         tipiInterno,
+        defiUUID,
 
         archActiv,
       ]
@@ -130,7 +135,8 @@ export const getArchivosByBasePathLocal = async (basePathPrefix) => {
         ArchLongitud,
         ArchFecha,
         ArchActivo,
-        EstadoOffLine
+        EstadoOffLine,
+         DefiUUID
       FROM Archivos
       WHERE ArchTabla = 'Deficiencias'
         AND ArchActivo = 1
@@ -271,6 +277,17 @@ export const markArchivoInactiveLocal = async (archInterno) => {
 
 export const saveOrUpdateArchivoLocal = async (arch) => {
   try {
+    // ✅ ÚNICA FUENTE: DefiUUID (NO usar DefiUuid nunca)
+    const normalized = {
+      ...arch,
+      DefiUUID: arch?.DefiUUID ?? null,
+    };
+
+    // ✅ Limita a 50
+    if (normalized.DefiUUID != null) {
+      normalized.DefiUUID = String(normalized.DefiUUID).slice(0, 50);
+    }
+
     const allFields = [
       "ArchInterno",
       "ArchTipo",
@@ -286,55 +303,56 @@ export const saveOrUpdateArchivoLocal = async (arch) => {
       "ArchActivo",
       "EstadoOffLine",
       "DefiServerId",
-      "DefiUUID"
+      "DefiUUID",
     ];
 
     // ---------------- UPDATE ----------------
-    if (arch.ArchInterno) {
-      const updateFields = allFields.filter(f => f !== "ArchInterno");
+    if (normalized.ArchInterno !== null && normalized.ArchInterno !== undefined) {
+      const updateFields = allFields.filter((f) => f !== "ArchInterno");
 
-      // 🔴 MISMA LÓGICA QUE DEFICIENCIAS
       const estado =
-        arch.EstadoOffLine == null ? 1 : arch.EstadoOffLine;
+        normalized.EstadoOffLine == null ? 1 : normalized.EstadoOffLine;
 
       const updateQuery = `
         UPDATE Archivos
-        SET ${updateFields.map(f => `${f} = ?`).join(", ")}
+        SET ${updateFields.map((f) => `${f} = ?`).join(", ")}
         WHERE ArchInterno = ?
       `;
 
       const updateValues = [
-        ...updateFields.map(f =>
-          f === "EstadoOffLine" ? estado : arch[f] ?? null
+        ...updateFields.map((f) =>
+          f === "EstadoOffLine" ? estado : (normalized[f] ?? null)
         ),
-        arch.ArchInterno
+        normalized.ArchInterno,
       ];
 
       await runQuery(updateQuery, updateValues);
-      return arch.ArchInterno;
+      return normalized.ArchInterno;
     }
 
     // ---------------- INSERT ----------------
-    const insertFields = allFields.filter(f => f !== "ArchInterno");
+    const insertFields = allFields.filter((f) => f !== "ArchInterno");
 
     const insertQuery = `
       INSERT INTO Archivos (${insertFields.join(", ")})
       VALUES (${insertFields.map(() => "?").join(", ")})
     `;
 
-    const insertValues = insertFields.map(f =>
-      f === "EstadoOffLine" ? 2 : arch[f] ?? null
+    const insertValues = insertFields.map((f) =>
+      f === "EstadoOffLine" ? 2 : (normalized[f] ?? null)
     );
 
-    const result = await runQuery(insertQuery, insertValues);
+    await runQuery(insertQuery, insertValues);
 
-    return result?.lastInsertRowId ?? null;
-
+    const row = await runQuery(`SELECT last_insert_rowid() AS id;`, []);
+    return row?.[0]?.id ?? null;
   } catch (error) {
     console.error("❌ Error guardando o actualizando archivo:", error);
     throw error;
   }
 };
+
+
 
 
 export const getMediosByDeficienciaIdLocal = async (deficienciaId) => {

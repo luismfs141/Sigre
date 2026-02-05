@@ -34,7 +34,8 @@ namespace Sigre.DataAccess
                 VanoMaterial = van.VanoMaterial == null? "ALU" : van.VanoMaterial,
                 VanoNodoFinal = van.VanoNodoFinal,
                 VanoNodoInicial = van.VanoNodoInicial,
-                VanoTerceros = van.VanoTerceros
+                VanoTerceros = van.VanoTerceros,
+                VanoTramo = van.VanoTramo,
             }
             );
             return vanos.ToList();
@@ -145,7 +146,8 @@ namespace Sigre.DataAccess
                         VanoInspeccionado = dto.VanoInspeccionado,
                         VanoSubestacion = dto.VanoSubestacion,
                         VanoEsMt = dto.VanoEsMt,
-                        VanoEsBt = dto.VanoEsBt
+                        VanoEsBt = dto.VanoEsBt,
+                        VanoTramo = dto.VanoTramo,
                     };
 
                     ctx.Vanos.Add(nuevo);
@@ -176,6 +178,7 @@ namespace Sigre.DataAccess
                     existente.VanoInspeccionado = dto.VanoInspeccionado;
                     existente.VanoEsMt = dto.VanoEsMt;
                     existente.VanoEsBt = dto.VanoEsBt;
+                    existente.VanoTramo = dto.VanoTramo;
 
                     ctx.SaveChanges();
 
