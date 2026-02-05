@@ -14,7 +14,7 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
-import { InputTextarea } from 'primereact/inputtextarea'; // ✅ IMPORTADO
+import { InputTextarea } from 'primereact/inputtextarea';
 import { Calendar } from 'primereact/calendar';
 import { Dropdown } from 'primereact/dropdown';
 import { ConfirmDialog } from 'primereact/confirmdialog';
@@ -54,17 +54,17 @@ export default function WebInspectionManager() {
 
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
-    const [isEditing, setIsEditing] = useState(false); // ✅ Controlar si es edición
+    const [isEditing, setIsEditing] = useState(false);
     
     const defaultForm = { 
         id: null, 
         selectedDeficiencyId: null, 
         deficiencyCode: '', 
         tipo: 1, 
-        date: new Date(), // ✅ Fecha por defecto al abrir
+        date: new Date(), 
         lat: '', 
         long: '', 
-        comment: '', // ✅ Nuevo campo Comentario
+        comment: '', 
         file: null, 
         preview: null 
     };
@@ -85,13 +85,28 @@ export default function WebInspectionManager() {
         }
     }, [structureType, masterTypifications, fetchTypificationsByTypeElement]);
 
-    // Auto-completar Código
+    // =================================================================
+    // 🔄 AUTO-COMPLETADO INTELIGENTE (LAT/LONG/FECHA/CODIGO)
+    // =================================================================
     useEffect(() => {
         if (formData.selectedDeficiencyId && historicalData.length > 0) {
             const def = historicalData.find(d => d.defiInterno === formData.selectedDeficiencyId);
-            if (def && def.tipiInterno) {
-                const realCode = getCodeById(def.tipiInterno);
-                if (realCode) setFormData(prev => ({ ...prev, deficiencyCode: realCode }));
+            
+            if (def) {
+                // 1. Resolver el código visual
+                const realCode = def.tipiInterno ? getCodeById(def.tipiInterno) : '';
+                
+                // 2. Resolver la fecha (Si existe en BD se usa, si no, actual)
+                const originalDate = def.defiFecha ? new Date(def.defiFecha) : new Date();
+
+                // 3. Actualizar formulario heredando datos del padre
+                setFormData(prev => ({
+                    ...prev,
+                    deficiencyCode: realCode || prev.deficiencyCode,
+                    lat: def.defiLatitud || '',     // Hereda Latitud
+                    long: def.defiLongitud || '',   // Hereda Longitud
+                    date: originalDate              // Hereda Fecha
+                }));
             }
         }
     }, [formData.selectedDeficiencyId, historicalData, getCodeById]);
@@ -110,19 +125,19 @@ export default function WebInspectionManager() {
         }
     };
 
-    // 🟢 NUEVO
     const openNewLocal = () => {
         let autoLat = '', autoLong = '';
         if (historicalData.length > 0) {
+            // Intento de pre-llenado básico si no selecciona deficiencia específica aún
             const last = historicalData[historicalData.length - 1];
-            autoLat = last.defiLatitud || ''; autoLong = last.defiLongitud || '';
+            autoLat = last.defiLatitud || ''; 
+            autoLong = last.defiLongitud || '';
         }
         setIsEditing(false);
         setFormData({ ...defaultForm, id: Date.now(), lat: autoLat, long: autoLong, date: new Date() });
         setModalVisible(true);
     };
 
-    // 🟡 EDITAR
     const openEditLocal = (item) => {
         setIsEditing(true);
         setFormData({ ...item });
@@ -137,7 +152,7 @@ export default function WebInspectionManager() {
     const deleteLocalItem = (id) => setLocalItems(prev => prev.filter(i => i.id !== id));
 
     // =================================================================
-    // 💾 GUARDAR (NUEVO O EDITAR)
+    // 💾 GUARDAR (LÓGICA SQL ROBUSTA)
     // =================================================================
     const handleSaveAndSync = async () => {
         if (!formData.file && !formData.preview) return;
@@ -160,14 +175,38 @@ export default function WebInspectionManager() {
         }
 
         // --- MODO NUEVO (Guardar en BD) ---
+        
+        // 1. CÁLCULO DE COLUMNAS SQL CRÍTICAS
+        let finalTipiInterno = 0;
+        let finalIdElemento = 0;
+        let finalTipoElemento = structureType === 'Poste' ? 'POST' : 'VANO';
         let targetDeficiency = null;
+
         if (formData.selectedDeficiencyId) {
+            // Caso A: Seleccionó del historial
             targetDeficiency = historicalData.find(d => d.defiInterno === formData.selectedDeficiencyId);
+            if (targetDeficiency) {
+                finalTipiInterno  = targetDeficiency.tipiInterno;
+                finalIdElemento   = targetDeficiency.defiIdElemento;
+                finalTipoElemento = targetDeficiency.defiTipoElemento; 
+            }
+        } else {
+            // Caso B: Modo Manual
+            if (historicalData.length > 0) {
+                // Heredamos el ID del elemento del historial cargado
+                finalIdElemento = historicalData[0].defiIdElemento;
+            }
+            // Buscamos el ID de la tipificación manualmente
+            const foundTypo = masterTypifications.find(t => 
+                t.tipiCodigo === formData.deficiencyCode || t.code === formData.deficiencyCode
+            );
+            if (foundTypo) {
+                finalTipiInterno = foundTypo.tipiInterno || foundTypo.id;
+            }
         }
 
         const dateStr = formData.date.toISOString().slice(0,19).replace(/[:]/g, '-');
         const standardizedName = `${safeSeg(structureCode)}_${safeSeg(formData.deficiencyCode)}_${dateStr}_Tipo${formData.tipo}.jpg`;
-
         const relativePath = `${safeSeg(feederLabel)}/${safeSeg(sedCode)}/${safeSeg(structureType)}/${safeSeg(structureCode)}/${safeSeg(formData.deficiencyCode)}`;
         const dbPath = `SIGREMOVIL/${relativePath}/${standardizedName}`;
 
@@ -177,14 +216,20 @@ export default function WebInspectionManager() {
             archNombre: dbPath,
             archTabla: "Deficiencias",
             archCodTabla: targetDeficiency ? targetDeficiency.defiInterno : 0,
+            
+            // Usamos los datos heredados/editados del form
             archLatitud: formData.lat || 0,
             archLongitud: formData.long || 0,
-            archFecha: formData.date.toISOString(),
-            archTipoElemento: targetDeficiency ? targetDeficiency.defiTipoElemento : "POST",
-            archIdElemento: targetDeficiency ? targetDeficiency.defiIdElemento : 0,
-            tipiInterno: targetDeficiency ? targetDeficiency.tipiInterno : 0,
-            archActivo: true,
+            archFecha: formData.date.toISOString(), 
+
+            // Datos Relacionales
+            archTipoElemento: finalTipoElemento,
+            archIdElemento: finalIdElemento,
+            tipiInterno: finalTipiInterno,
+            archActivo: 1, // Siempre activo
             estadoOffLine: 0
+            
+            // 🚫 COMENTARIO ELIMINADO DEL PAYLOAD
         };
 
         const success = await addFile(payload);
@@ -245,9 +290,9 @@ export default function WebInspectionManager() {
                     const dateStr = item.date.toISOString().slice(0,19).replace(/[:]/g, '-');
                     const fname = `${safeSeg(structureCode)}_${safeSeg(item.deficiencyCode)}_${dateStr}_Tipo${item.tipo}.jpg`;
                     
-                    // Opcional: Guardar comentario en .txt
+                    // Comentario solo en ZIP local (TXT)
                     if(item.comment){
-                         zip.folder(path).file(fname.replace('.jpg','.txt'), item.comment);
+                          zip.folder(path).file(fname.replace('.jpg','.txt'), item.comment);
                     }
 
                     zip.folder(path).file(fname, blob);
@@ -317,14 +362,8 @@ export default function WebInspectionManager() {
                 <DataTable value={localItems} size="small" emptyMessage="Lista vacía." stripedRows>
                     <Column header="Vista" body={(r)=><img src={r.preview} alt="img" className="w-10 h-10 rounded border object-cover"/>} style={{width:'60px'}} />
                     <Column field="deficiencyCode" header="Cód. Def" body={(r)=><span className="font-mono font-bold text-blue-700">{r.deficiencyCode}</span>} />
-                    
-                    {/* ✅ FECHA CON HORA */}
                     <Column header="Fecha Toma" body={(r)=> formatDateTime(r.date)} style={{minWidth: '130px'}} />
-                    
-                    {/* ✅ COMENTARIO */}
                     <Column header="Comentario" body={(r) => <span className="text-xs italic text-gray-600">{r.comment || '-'}</span>} />
-
-                    {/* ✅ ACCIONES (EDITAR/BORRAR) */}
                     <Column body={(r) => (
                         <div className="flex gap-1">
                              <Button icon="pi pi-pencil" rounded text severity="info" onClick={() => openEditLocal(r)} tooltip="Editar" />
@@ -377,12 +416,10 @@ export default function WebInspectionManager() {
                     </div>
 
                      <div className="border-2 border-dashed border-gray-300 p-4 rounded bg-gray-50 text-center relative cursor-pointer hover:bg-gray-100">
-                        {/* Permitir cambiar foto solo si es nuevo, o habilitarlo siempre si deseas */}
                         <input type="file" accept="image/*" onChange={handleFileSelect} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
                         {formData.preview ? <img src={formData.preview} className="h-32 mx-auto object-contain" alt="prev"/> : <span className="text-gray-400">Toque para subir</span>}
                     </div>
 
-                    {/* ✅ FECHA INDIVIDUAL EDITABLE */}
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-bold text-blue-700">Fecha y Hora</label>
                         <Calendar 
@@ -394,7 +431,6 @@ export default function WebInspectionManager() {
                         />
                     </div>
 
-                    {/* ✅ CAMPO COMENTARIO NUEVO */}
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-bold text-gray-600">Comentario</label>
                         <InputTextarea 
@@ -405,7 +441,6 @@ export default function WebInspectionManager() {
                         />
                     </div>
 
-                    {/* CAMPOS LATITUD Y LONGITUD */}
                     <div className="flex gap-2">
                         <div className="w-1/2">
                             <label className="text-xs font-bold text-gray-500">Latitud</label>

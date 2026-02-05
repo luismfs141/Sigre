@@ -24,33 +24,34 @@ const ALL_CRITICIDAD_OPTIONS = [
     { label: 'CRÍTICO', value: 3 }
 ];
 
-export default function DeficiencyForm({ 
-    visible, 
-    onHide, 
-    onSave, 
-    deficiencyToEdit, 
-    sedId, 
+export default function DeficiencyForm({
+    visible,
+    onHide,
+    onSave,
+    deficiencyToEdit,
+    sedId,
     existingDeficiencies = [],
-    referenceSelection 
+    referenceSelection
 }) {
     const [formData, setFormData] = useState({});
     const [submitted, setSubmitted] = useState(false);
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
-    
-    const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification(); 
+
+    const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
 
     // =========================================================================
     // 1. REGLA DE NEGOCIO: DETECTAR "SIN DEFICIENCIA" (S/D)
     // =========================================================================
     const hasCleanRecord = useMemo(() => {
+
         if (!formData.defiCodigoElemento) return false;
-        
+
         const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
 
         // Buscamos si existe ALGÚN registro activo para este código que sea S/D (tipiInterno 0)
-        const foundSD = existingDeficiencies.find(d => 
-            d.defiActivo && 
+        const foundSD = existingDeficiencies.find(d =>
+            d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
             Number(d.tipiInterno) === 0 // ID 0 es "Sin Deficiencia"
         );
@@ -60,7 +61,7 @@ export default function DeficiencyForm({
         return !!foundSD;
 
     }, [formData.defiCodigoElemento, existingDeficiencies]);
-
+    const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
     // =========================================================================
     // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
     // =========================================================================
@@ -79,7 +80,7 @@ export default function DeficiencyForm({
 
         // --- PASO A: IDENTIFICAR QUÉ CÓDIGOS YA ESTÁN USADOS ---
         const currentGis = formData.defiCodigoElemento?.trim().toUpperCase();
-        
+
         const usedCodes = existingDeficiencies
             .filter(d => {
                 // 1. Que pertenezca al mismo elemento (código GIS)
@@ -100,7 +101,7 @@ export default function DeficiencyForm({
 
             // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
             if (usedCodes.includes(opt.code) && opt.code !== '7004') {
-                return false; 
+                return false;
             }
 
             return true;
@@ -108,7 +109,7 @@ export default function DeficiencyForm({
 
         // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
         return validOptions.map(staticOpt => {
-            const matchInDb = masterTypifications.find(t => 
+            const matchInDb = masterTypifications.find(t =>
                 String(t.code || t.tipiCodigo) === String(staticOpt.code)
             );
 
@@ -116,17 +117,17 @@ export default function DeficiencyForm({
 
             return {
                 label: staticOpt.name,
-                value: Number(matchInDb.tipiInterno || matchInDb.typificationId) 
+                value: Number(matchInDb.tipiInterno || matchInDb.typificationId)
             };
         }).filter(opt => opt !== null);
 
     }, [
-        formData.defiTipoElemento, 
-        formData.defiCodigoElemento, 
-        masterTypifications, 
-        existingDeficiencies, 
-        deficiencyToEdit, 
-        getCodeById 
+        formData.defiTipoElemento,
+        formData.defiCodigoElemento,
+        masterTypifications,
+        existingDeficiencies,
+        deficiencyToEdit,
+        getCodeById
     ]);
 
     const criticidadOptions = useMemo(() => {
@@ -140,8 +141,8 @@ export default function DeficiencyForm({
     useEffect(() => {
         if (visible) {
             // Reseteamos errores al abrir
-            setFieldErrors({}); 
-            
+            setFieldErrors({});
+
             if (deficiencyToEdit) {
                 // --- MODO EDICIÓN ---
                 const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
@@ -150,10 +151,10 @@ export default function DeficiencyForm({
 
                 setFormData({
                     defiInterno: Number(getValue('Interno')),
-                    
+
                     // 🔥 FORZADO: Estado a 'N' al editar para que aparezca "Nueva"
-                    defiEstado: 'N', 
-                    
+                    defiEstado: 'N',
+
                     defiCodigoElemento: getValue('CodigoElemento') || '',
                     defiTipoElemento: getValue('TipoElemento') || 'POST',
                     tipiInterno: Number(deficiencyToEdit.tipiInterno ?? deficiencyToEdit.TipiInterno),
@@ -169,7 +170,7 @@ export default function DeficiencyForm({
                     defiAccesibilidad: getValue('Accesibilidad'),
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
-                    defiUsuarioInic: getValue('UsuarioInic') 
+                    defiUsuarioInic: getValue('UsuarioInic')
                 });
             } else {
                 // --- MODO NUEVO ---
@@ -192,9 +193,9 @@ export default function DeficiencyForm({
                     defiLongitud: Number(lngRaw),
                     defiObservacion: '',
                     defiComentario: '',
-                    defiEstadoCriticidad: 1 
+                    defiEstadoCriticidad: 1
                 });
-                
+
                 if (Number(latRaw) === 0 && navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         (p) => setFormData(prev => ({ ...prev, defiLatitud: p.coords.latitude, defiLongitud: p.coords.longitude })),
@@ -210,7 +211,7 @@ export default function DeficiencyForm({
     // =========================================================================
     // 5. MANEJO DE CAMBIOS Y VALIDACIÓN INDIVIDUAL
     // =========================================================================
-    
+
     // Función auxiliar para validar un campo específico
     const validateField = (fieldKey, value) => {
         if (!currentConfig) return null;
@@ -232,7 +233,7 @@ export default function DeficiencyForm({
     const updateField = (key, value) => {
         setFormData(prev => {
             const newData = { ...prev, [key]: value };
-            if (key === 'defiTipoElemento') newData.tipiInterno = null; 
+            if (key === 'defiTipoElemento') newData.tipiInterno = null;
             return newData;
         });
 
@@ -243,19 +244,19 @@ export default function DeficiencyForm({
 
     // Validación Total antes de guardar
     const validateDynamicForm = () => {
-        if (!currentConfig) return true; 
+        if (!currentConfig) return true;
         const errors = [];
-        
+
         currentConfig.fields.forEach(field => {
             if (field.readonly || field.hidden) return;
             const value = formData[field.key];
-            
+
             // Requeridos
             if (field.required && (value === null || value === undefined || value === '')) {
-                errors.push(`El campo "${field.label}" es obligatorio.`); 
+                errors.push(`El campo "${field.label}" es obligatorio.`);
                 return;
             }
-            
+
             // Validaciones específicas
             const fieldError = validateField(field.key, value);
             if (fieldError) {
@@ -276,8 +277,11 @@ export default function DeficiencyForm({
     const handleSubmit = () => {
         setSubmitted(true);
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
-        if (!formData.tipiInterno) { alert("Falta Tipificación."); return; }
-        
+        if (formData.tipiInterno === null || formData.tipiInterno === undefined) {
+            alert("Falta Tipificación.");
+            return;
+        }
+
         if (hasCleanRecord && (!deficiencyToEdit || Number(formData.tipiInterno) !== 0)) {
             alert("No se puede guardar: El elemento tiene registro 'SIN DEFICIENCIA'.");
             return;
@@ -292,7 +296,7 @@ export default function DeficiencyForm({
         const cleanPayload = {
             defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
             sedCodigo: sedId,
-            defiUsuarioInic: formData.defiUsuarioInic, 
+            defiUsuarioInic: formData.defiUsuarioInic,
             defiCodigoElemento: formData.defiCodigoElemento.trim(),
             defiTipoElemento: formData.defiTipoElemento,
             tipiInterno: Number(formData.tipiInterno),
@@ -300,16 +304,16 @@ export default function DeficiencyForm({
             defiLongitud: Number(formData.defiLongitud) || 0,
             defiFecRegistro: registroDate.toISOString(),
             defiDistHorizontal: isPoste ? null : (Number(formData.defiDistHorizontal) || 0),
-            defiDistVertical:   isPoste ? null : (Number(formData.defiDistVertical)   || 0),
-            defiAccesibilidad:  isPoste ? null : (formData.defiAccesibilidad ? String(formData.defiAccesibilidad) : null),
-            defiTipoCruce:      isPoste ? null : (formData.defiTipoCruce ? String(formData.defiTipoCruce) : null),
+            defiDistVertical: isPoste ? null : (Number(formData.defiDistVertical) || 0),
+            defiAccesibilidad: isPoste ? null : (formData.defiAccesibilidad ? String(formData.defiAccesibilidad) : null),
+            defiTipoCruce: isPoste ? null : (formData.defiTipoCruce ? String(formData.defiTipoCruce) : null),
             defiNumSuministro: formData.defiNumSuministro ? String(formData.defiNumSuministro).trim() : null,
             defiObservacion: formData.defiObservacion ? String(formData.defiObservacion).trim() : '',
             defiComentario: formData.defiComentario ? String(formData.defiComentario).trim() : '',
             defiEstadoCriticidad: Number(formData.defiEstadoCriticidad),
             defiActivo: true
         };
-        
+
         onSave(cleanPayload);
     };
 
@@ -319,12 +323,12 @@ export default function DeficiencyForm({
     const renderDynamicField = (field) => {
         if (field.hidden) return null;
         const fieldKey = field.key;
-        
+
         // Verificamos si hay error en este campo
         const hasError = !!fieldErrors[fieldKey];
 
         const commonProps = {
-            id: fieldKey, value: formData[fieldKey], 
+            id: fieldKey, value: formData[fieldKey],
             // Clase condicional: Error de validación O Submit vacío requerido
             className: classNames('w-full', { 'p-invalid': hasError || (submitted && field.required && !formData[fieldKey]) }),
             placeholder: field.label, disabled: field.readonly
@@ -334,23 +338,23 @@ export default function DeficiencyForm({
         let dynamicHelper = field.helperText;
         // Caso especial 7006: Mostrar límite según cruce
         if (fieldKey === 'defiDistVertical' && formData.tipiInterno && getCodeById(formData.tipiInterno) === '7006' && formData.defiTipoCruce) {
-             const limites = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
-             const limiteExacto = limites[Number(formData.defiTipoCruce)];
-             if (limiteExacto) {
-                 dynamicHelper = `(Límite: < ${limiteExacto}m)`;
-             }
+            const limites = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
+            const limiteExacto = limites[Number(formData.defiTipoCruce)];
+            if (limiteExacto) {
+                dynamicHelper = `(Límite: < ${limiteExacto}m)`;
+            }
         }
 
         if (fieldKey === 'defiEstadoCriticidad') {
-             return (<div className="field mb-3 w-full" key={fieldKey}><label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label><Dropdown {...commonProps} options={criticidadOptions} optionLabel="label" optionValue="value" onChange={(e) => updateField(fieldKey, e.value)} /></div>);
+            return (<div className="field mb-3 w-full" key={fieldKey}><label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label><Dropdown {...commonProps} options={criticidadOptions} optionLabel="label" optionValue="value" onChange={(e) => updateField(fieldKey, e.value)} /></div>);
         }
 
         return (
-            <div className="field mb-3 w-full" key={fieldKey}> 
+            <div className="field mb-3 w-full" key={fieldKey}>
                 <label htmlFor={fieldKey} className="font-bold text-sm block mb-1 text-gray-700">
-                    {field.label} 
+                    {field.label}
                     {field.required && <span className="text-red-500">*</span>}
-                    
+
                     {/* Renderizamos el Texto de Ayuda Naranja */}
                     {dynamicHelper && (
                         <span className="ml-2 text-xs text-orange-600 font-normal">
@@ -363,7 +367,7 @@ export default function DeficiencyForm({
                 {field.type === 'textarea' && <InputTextarea {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} rows={5} autoResize style={{ minHeight: '100px' }} />}
                 {field.selectable && field.valueMap && fieldKey !== 'defiEstadoCriticidad' && <Dropdown {...commonProps} options={Object.entries(field.valueMap).map(([k, v]) => ({ label: v, value: isNaN(k) ? k : Number(k) }))} onChange={(e) => updateField(fieldKey, e.value)} />}
                 {field.type === 'text' && !field.selectable && (<InputText {...commonProps} onChange={(e) => updateField(fieldKey, e.target.value)} maxLength={fieldKey === 'defiObservacion' ? 20 : undefined} />)}
-                
+
                 {/* Mensaje de error debajo del input (Opcional, pero recomendado) */}
                 {hasError && <small className="p-error block">{fieldErrors[fieldKey]}</small>}
             </div>
@@ -371,7 +375,7 @@ export default function DeficiencyForm({
     };
 
     return (
-        <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t"><Button label="Cancelar" icon="pi pi-times" onClick={onHide} severity="danger" /><Button label="Guardar" icon="pi pi-check" onClick={handleSubmit} severity="success" disabled={hasCleanRecord} /></div>}>
+        <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t"><Button label="Cancelar" icon="pi pi-times" onClick={onHide} severity="danger" /><Button label="Guardar" icon="pi pi-check" onClick={handleSubmit} severity="success" disabled={hasCleanRecord && !isEditingSD} /></div>}>
             <div className="flex flex-col gap-4 mt-2">
                 <div className="p-4 border rounded bg-blue-50 border-blue-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
@@ -384,31 +388,31 @@ export default function DeficiencyForm({
                             <InputText value={formData.defiCodigoElemento} onChange={(e) => updateField('defiCodigoElemento', e.target.value)} required placeholder="Ingrese código" disabled={!!deficiencyToEdit} />
                         </div>
                     </div>
-                    
+
                     {hasCleanRecord && (
-                        <Message 
-                            severity="warn" 
-                            text="Este elemento está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente." 
-                            className="w-full mb-3 shadow-sm" 
+                        <Message
+                            severity="warn"
+                            text="Este elemento está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente."
+                            className="w-full mb-3 shadow-sm"
                             style={{ borderLeft: '5px solid #f59e0b' }}
                         />
                     )}
 
                     <div className="field">
                         <label className="font-bold text-blue-800 block mb-1">Tipificación (Defecto)</label>
-                        <Dropdown 
-                            value={formData.tipiInterno} 
-                            options={typificationOptions} 
-                            onChange={(e) => updateField('tipiInterno', e.value)} 
-                            filter 
-                            showClear 
-                            placeholder={hasCleanRecord ? "BLOQUEADO (ELEMENTO S/D)" : "Seleccione defecto..."} 
-                            disabled={!formData.defiCodigoElemento || hasCleanRecord} 
-                            itemTemplate={(op) => <div className="whitespace-normal py-1 text-sm">{op.label}</div>} 
+                        <Dropdown
+                            value={formData.tipiInterno}
+                            options={typificationOptions}
+                            onChange={(e) => updateField('tipiInterno', e.value)}
+                            filter
+                            showClear
+                            placeholder={hasCleanRecord ? "BLOQUEADO (ELEMENTO S/D)" : "Seleccione defecto..."}
+                            disabled={!formData.defiCodigoElemento || hasCleanRecord}
+                            itemTemplate={(op) => <div className="whitespace-normal py-1 text-sm">{op.label}</div>}
                         />
                     </div>
                 </div>
-                
+
                 <div className="flex flex-col md:flex-row gap-8 min-h-[300px]">
                     {currentConfig ? (
                         <>
@@ -430,7 +434,9 @@ export default function DeficiencyForm({
                         <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
                             <div className="text-center">
                                 <i className="pi pi-info-circle text-2xl mb-2 block"></i>
-                                {hasCleanRecord ? "Acción no permitida." : "Seleccione una tipificación."}
+                                {hasCleanRecord && !isEditingSD
+                                    ? "Acción no permitida (Ya existe registro S/D)."
+                                    : (isEditingSD ? "Edición restringida: Solo Ubicación y Fecha." : "Seleccione una tipificación.")}
                             </div>
                         </div>
                     )}
