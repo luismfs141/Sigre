@@ -44,4 +44,6 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_KIND_COAST_0E9ECB71E }}
           action: "close"
+env:
+  CI: false
 
