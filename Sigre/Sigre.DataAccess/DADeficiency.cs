@@ -739,7 +739,8 @@ namespace Sigre.DataAccess
                 DefiRefer1 = def_offline.DefiRefer1,
                 DefiRefer2 = def_offline.DefiRefer2,
                 DefiCodAmt = def_offline.DefiCodAmt,
-                DefiNroOrden = def_offline.DefiNroOrden
+                DefiNroOrden = def_offline.DefiNroOrden,
+                DefiCol3 = def_offline.DefiCol3
             };
         }
         public int DADEFI_ExistDeficiency(Deficiencia def)
