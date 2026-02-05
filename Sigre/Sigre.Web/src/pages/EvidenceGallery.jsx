@@ -64,17 +64,32 @@ export default function EvidenceGallery({ deficiency, onCountUpdate }) {
     // 4. Generador de URL (Rutas corregidas)
     const getFileUrl = (fileData) => {
         let rawName = fileData.archNombre || fileData.ARCH_Nombre || ""; 
-        const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://subobscure-hilda-audacious.ngrok-free.dev"; 
+        const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://through-indirect-museums-judges.trycloudflare.com"; 
 
-        if (!rawName) return null;
+if (!rawName) return null;
 
-        rawName = rawName.replace(/^SIGRE\.MOVIL[\/\\]/i, '');
-        rawName = rawName.replace(/[\/\\]0000[\/\\]/, '/SINDEF/');
-        rawName = rawName.replace(/[\/\\]Poste[\/\\]/i, '/POSTE/');
-        rawName = rawName.replace(/[\/\\]Vano[\/\\]/i, '/VANO/');
-        // Parche para carpeta limpia 7004
-        rawName = rawName.replace(/[\/\\]7004\.[^/\\]+[\/\\]/, '/7004/');
+        // 1. Normalizar todas las barras a formato Web (/)
         rawName = rawName.replace(/\\/g, '/');
+
+        // 2. Limpieza Inteligente de Raíz
+        // Detecta y elimina el nombre de la carpeta raíz para dejar solo la ruta relativa
+        // Cubre: "SigreMovil", "SIGRE.MOVIL", "D:/SIGRE.MOVIL", etc.
+        rawName = rawName.replace(/^.*SigreMovil\//i, ''); 
+        rawName = rawName.replace(/^.*SIGRE\.MOVIL\//i, '');
+        
+        // OJO: Si tus fotos de 'SigreMedios' están dentro de la carpeta del servidor, 
+        // no necesitamos borrar 'SigreMedios', pero si el servidor está DENTRO de SigreMovil,
+        // las de SigreMedios podrían dar 404 si están en otra ruta física.
+        // Por ahora, asumimos que SigreMedios es una carpeta válida:
+        // rawName = rawName.replace(/^.*SigreMedios\//i, ''); // Descomenta si necesitas borrar esto también.
+
+        // 3. Estandarización de carpetas comunes (Mayúsculas)
+        // Esto ayuda si Windows/Linux se confunden con Vano vs VANO
+        rawName = rawName.replace(/\/Vano\//i, '/VANO/');
+        rawName = rawName.replace(/\/Poste\//i, '/POSTE/');
+        rawName = rawName.replace(/\/0000\//, '/SINDEF/');
+        if (rawName.startsWith('/')) rawName = rawName.substring(1)
+
 
         return `${baseUrl}/${rawName}`;
     };
