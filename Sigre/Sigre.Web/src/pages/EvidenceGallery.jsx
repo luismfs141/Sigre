@@ -64,7 +64,7 @@ export default function EvidenceGallery({ deficiency, onCountUpdate }) {
     // 4. Generador de URL (Rutas corregidas)
     const getFileUrl = (fileData) => {
         let rawName = fileData.archNombre || fileData.ARCH_Nombre || ""; 
-        const baseUrl = process.env.REACT_APP_FOTOS_URL || "http://localhost:8080"; 
+        const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://subobscure-hilda-audacious.ngrok-free.dev"; 
 
         if (!rawName) return null;
 
