@@ -64,7 +64,7 @@ export default function EvidenceGallery({ deficiency, onCountUpdate }) {
     // 4. Generador de URL (Rutas corregidas)
     const getFileUrl = (fileData) => {
         let rawName = fileData.archNombre || fileData.ARCH_Nombre || ""; 
-        const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://through-indirect-museums-judges.trycloudflare.com"; 
+        const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://capacity-preceding-skills-outline.trycloudflare.com/"; 
 
 if (!rawName) return null;
 
