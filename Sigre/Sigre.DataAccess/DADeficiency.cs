@@ -852,9 +852,15 @@ namespace Sigre.DataAccess
 
                     // Actualizar ubicación solo si viene válida (distinta de 0)
                     if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
-                    if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
 
+                    if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
+                    if (input.DefiFecRegistro != DateTime.MinValue)
+                    {
+                        existente.DefiFecRegistro = input.DefiFecRegistro;
+                        existente.DefiFechaCreacion = input.DefiFecRegistro;
+                    }
                     // Auditoría
+                    
                     existente.DefiFecModificacion = DateTime.Now;
                     // Usamos el usuario que viene o un default
                     existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
