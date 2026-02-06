@@ -1,9 +1,14 @@
 import axios from 'axios';
 
-export const API_URL = process.env.REACT_APP_API_URL;
+// 👉 URL base del backend
+//const baseURL = 'http://localhost/SigreHost/api/';
+// Producción
+const baseURL = 'https://sigre-api-a6bbh4drgpgjeshw.canadacentral-01.azurewebsites.net/api/';
 
+export const API_URL = baseURL; 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: baseURL,
+  //timeout: 10000, // un poco más alto por seguridad
 });
 
 // ✅ Interceptor de solicitud: agrega el token JWT automáticamente
