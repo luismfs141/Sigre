@@ -109,15 +109,15 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
   const [selectConfig, setSelectConfig] = useState(null);
 
   const tercerosOptions = [
-    { label: "No", value: 0 },
-    { label: "Sí", value: 1 },
+    { label: "Sí", value: 0 },
+    { label: "No", value: 1 },
   ];
 
   const handleSelectValue = (field, value) => {
     if (field === "VanoTerceros" && Number(value) === 1 && Number(form.VanoTerceros) !== 1) {
       Alert.alert(
         "Aviso",
-        "Si marcas Terceros = Sí, este vano desaparecerá del mapa y solo el ADMINISTRADOR podrá volverlo a habilitar.\n\n¿Deseas continuar?",
+        "Si marcas Red existente = No, este vano desaparecerá del mapa y solo el ADMINISTRADOR podrá volverlo a habilitar.\n\n¿Deseas continuar?",
         [
           { text: "Cancelar", style: "cancel", onPress: () => setSelectConfig(null) },
           {
@@ -130,6 +130,7 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
           },
         ]
       );
+
       return;
     }
 
@@ -204,7 +205,7 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
     VanoNodoInicial: "Nodo Inicial",
     VanoNodoFinal: "Nodo Final",
     VanoInterno: "Interno",
-    VanoTerceros: "Terceros",
+    VanoTerceros: "Red existente",
   };
 
   const dimmedFields = ["VanoTerceros"];
