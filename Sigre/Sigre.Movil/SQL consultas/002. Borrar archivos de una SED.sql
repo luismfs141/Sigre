@@ -61,7 +61,7 @@ LEFT JOIN Vanos V
 INNER JOIN Seds S
     ON S.SED_Interno = COALESCE(P.POST_Subestacion, V.VANO_Subestacion)
 WHERE S.SED_Codigo like @SED_CODIGO
-ORDER BY A.ARCH_Interno DESC;
+ORDER BY A.ARCH_Fecha DESC;
 GO
 
 ------------------------------------------------------------------

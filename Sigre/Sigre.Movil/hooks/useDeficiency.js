@@ -214,6 +214,7 @@ export const useDeficiency = () => {
 
       // ✅ defaults para columnas nuevas
       DefiCol3: deficiency?.DefiCol3 ?? generateUUID(),
+      DefiCol2: deficiency?.DefiCol2 ?? "",
       DefiAccesibilidad: deficiency?.DefiAccesibilidad ?? "",
       DefiTipoCruce: deficiency?.DefiTipoCruce ?? "",
 
@@ -266,6 +267,7 @@ export const useDeficiency = () => {
 
       // 🔹 IDENTIFICADOR ÚNICO
       DefiCol3: def?.DefiCol3 ?? null,
+      DefiCol2: def?.DefiCol2 ?? null,
     };
   };
 
