@@ -1,6 +1,12 @@
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
-export default function DeficiencyField({ field, value, onChange, onPress }) {
+export default function DeficiencyField({
+  field,
+  value,
+  onChange,
+  onPress,
+  editable, // ✅ override opcional
+}) {
   const rawValue = value ?? "";
 
   const displayValue =
@@ -22,12 +28,10 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
   const onlyDigits = !!field.onlyDigits;
 
   const keyboardType =
-    field.keyboardType ??
-    (isNumberField ? "numeric" : "default");
+    field.keyboardType ?? (isNumberField ? "numeric" : "default");
 
   const currentLen = String(rawValue ?? "").length;
-  const exceeded =
-    typeof maxChars === "number" && currentLen > maxChars;
+  const exceeded = typeof maxChars === "number" && currentLen > maxChars;
 
   const handleChangeText = (txt) => {
     let v = txt ?? "";
@@ -41,6 +45,8 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
 
     onChange?.(v);
   };
+
+  const isEditable = editable ?? !field.readonly;
 
   return (
     <View style={{ marginBottom: 12 }}>
@@ -57,7 +63,7 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
             borderColor: "#ccc",
             borderRadius: 4,
             padding: 8,
-            backgroundColor: "#fff"
+            backgroundColor: "#fff",
           }}
         >
           <Text>{String(displayValue || "Seleccione...")}</Text>
@@ -67,11 +73,10 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
           <TextInput
             value={String(displayValue)}
             onChangeText={handleChangeText}
-            editable={!field.readonly}
+            editable={isEditable}
             keyboardType={keyboardType}
             multiline={isTextarea}
             numberOfLines={isTextarea ? 4 : 1}
-            // ✅ SOLO hard limit usa maxLength
             maxLength={hardMaxLength}
             placeholder={field.placeholder}
             placeholderTextColor="#9CA3AF"
@@ -81,27 +86,31 @@ export default function DeficiencyField({ field, value, onChange, onPress }) {
               borderRadius: 4,
               padding: 8,
               minHeight: isTextarea ? 80 : 40,
-              backgroundColor: field.readonly
+              backgroundColor: !isEditable
                 ? "#eee"
                 : exceeded
-                  ? "rgba(220,38,38,0.06)"
-                  : "#fff",
+                ? "rgba(220,38,38,0.06)"
+                : "#fff",
               textAlign: "left",
-              textAlignVertical: isTextarea ? "top" : "center", // Android
-              paddingTop: isTextarea ? 10 : 8, // opcional
+              textAlignVertical: isTextarea ? "top" : "center",
+              paddingTop: isTextarea ? 10 : 8,
             }}
           />
 
-          {/* ✅ Mensaje debajo cuando se pasa del máximo */}
           {showMaxError && exceeded && (
             <Text style={{ marginTop: 4, color: "#DC2626" }}>
               Máximo {maxChars} caracteres.
             </Text>
           )}
 
-          {/* (Opcional) contador si quieres verlo siempre */}
           {field.showCounter && typeof maxChars === "number" && (
-            <Text style={{ alignSelf: "flex-end", marginTop: 4, color: exceeded ? "#DC2626" : "#666" }}>
+            <Text
+              style={{
+                alignSelf: "flex-end",
+                marginTop: 4,
+                color: exceeded ? "#DC2626" : "#666",
+              }}
+            >
               {currentLen}/{maxChars}
             </Text>
           )}

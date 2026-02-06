@@ -129,7 +129,7 @@ namespace Sigre.DataAccess
                      InspInterno = d.InspInterno,
                      InspInternoNavigation = d.InspInternoNavigation,
                      TablInterno = d.TablInterno,
-                     TipiInterno = d.TipiInterno,//
+                     TipiInterno = d.TipiInterno,
                      DefiInspeccionado = d.DefiInspeccionado,
                      DefiKeyWords = d.DefiKeyWords,
                      DefiAccesibilidad = d.DefiAccesibilidad,
@@ -507,6 +507,8 @@ namespace Sigre.DataAccess
                     existente.DefiTipoCruce = dto.DefiTipoCruce;
                     existente.DefiActivo = dto.DefiActivo;
 
+                    existente.DefiCol2 = dto.DefiCol2;
+
                     ctx.SaveChanges();
                     resultado.Add((dto.DefiInterno, existente.DefiInterno));
                 }
@@ -578,6 +580,8 @@ namespace Sigre.DataAccess
                         DefiAccesibilidad = dto.DefiAccesibilidad,
                         DefiTipoCruce = dto.DefiTipoCruce,
                         DefiCol3 = dto.DefiCol3,
+                        DefiCol2 = dto.DefiCol2,
+                        DefiCol1 = dto.DefiCol1,
                     };
 
                     ctx.Deficiencias.Add(nueva);
@@ -740,7 +744,9 @@ namespace Sigre.DataAccess
                 DefiRefer2 = def_offline.DefiRefer2,
                 DefiCodAmt = def_offline.DefiCodAmt,
                 DefiNroOrden = def_offline.DefiNroOrden,
-                DefiCol3 = def_offline.DefiCol3
+                DefiCol3 = def_offline.DefiCol3,
+                DefiCol2 = def_offline.DefiCol2,
+                DefiCol1 = def_offline.DefiCol1 
             };
         }
         public int DADEFI_ExistDeficiency(Deficiencia def)

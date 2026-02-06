@@ -156,6 +156,7 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiEstadoCriticidad",
       "DefiInspeccionado",
       "DefiCol1",
+      "DefiCol2",
       "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
@@ -181,15 +182,6 @@ export const saveOrUpdateDeficiency = async (def) => {
         ),
         def.DefiInterno
       ];
-
-      // const updateValues = [
-      //   ...updateFields.map(f =>
-      //     f === "EstadoOffLine"
-      //       ? estado
-      //       : (emptyToNull(def[f]) ?? null)
-      //   ),
-      //   def.DefiInterno
-      // ];
 
 
       await runQuery(updateQuery, updateValues);
@@ -327,22 +319,16 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         d.DefiIdElemento,
         d.DefiTipoElemento,
         d.DefiNumSuministro,
-
-        -- ✅ NUEVO (dueño / creador)
         d.DefiUsuarioInic,
-
-        -- ✅ NUEVO: campos que quieres mostrar en la lista
         d.DefiObservacion,
         d.DefiComentario,
         d.DefiDistVertical,
         d.DefiDistHorizontal,
-
         t.TypificationId AS TipiInterno,
         t.Code,
         t.Component,
         t.Deficiency,
         t.Typification
-
       FROM Deficiencias d
       LEFT JOIN Tipificaciones t
         ON d.TipiInterno = t.TypificationId

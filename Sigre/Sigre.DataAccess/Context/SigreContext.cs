@@ -242,10 +242,12 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_CodigoElemento");
+
             entity.Property(e => e.DefiCol1)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col1");
+
             entity.Property(e => e.DefiCol2)
                 .HasMaxLength(50)
                 .IsUnicode(false)

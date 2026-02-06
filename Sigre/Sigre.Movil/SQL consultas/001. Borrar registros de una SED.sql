@@ -3,7 +3,7 @@
 -- TOADAS LAS DEFICIENCIAS DE UNA SUBESTACIÓN --------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%1994%';
+DECLARE @SUB_ETI VARCHAR(20) = '%1727%';
 
 SELECT  
         D.DEFI_Interno,
@@ -67,11 +67,14 @@ UNION ALL
 
 ORDER BY C.CODI_Codigo, D.DEFI_CodigoElemento;
 
+
+
+
 ------------------------------------------------------------------
 -- BUSCA DEFICIENCIAS POR CÓDIGO DE ELEMENTO ---------------------
 ------------------------------------------------------------------
 
-DECLARE @codigo varchar(50) = '%057740'; 
+DECLARE @codigo varchar(50) = '%000132360'; 
 
 ;WITH Q AS
 (
