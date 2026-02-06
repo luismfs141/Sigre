@@ -59,7 +59,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 -- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%8102%'-- <-- tu SED_Codigo
+DECLARE @SUB_ETI VARCHAR(20) = '%8154%'-- <-- tu SED_Codigo
 (
     SELECT  
             ALI.ALIM_Interno AS [Id Alimentador],
@@ -68,7 +68,8 @@ DECLARE @SUB_ETI VARCHAR(20) = '%8102%'-- <-- tu SED_Codigo
             S.SED_Etiqueta AS [Etiqueta Sub],
             Elemento = 'Poste',
             P.POST_Interno AS [ID Elemento interno],
-            P.POST_Etiqueta AS [Etiqueta elemento]
+            P.POST_Etiqueta AS [Etiqueta elemento],
+            p.POST_CodigoNodo as cod
         
     FROM Postes AS P
     LEFT JOIN Seds AS S
@@ -87,7 +88,8 @@ DECLARE @SUB_ETI VARCHAR(20) = '%8102%'-- <-- tu SED_Codigo
             S.SED_Etiqueta AS [Etiqueta Sub],
             Elemento = 'Vano',
             V.VANO_Interno AS [ID Interno],
-            V.VANO_Codigo [Etiqueta]
+            V.VANO_Codigo [Etiqueta],
+            v.VANO_Codigo as cod
     FROM Vanos AS V
     LEFT JOIN Seds AS S
         ON V.VANO_Subestacion = S.SED_Interno
@@ -96,7 +98,7 @@ DECLARE @SUB_ETI VARCHAR(20) = '%8102%'-- <-- tu SED_Codigo
 
     WHERE S.SED_Etiqueta LIKE @SUB_ETI
 )
-ORDER BY [Etiqueta elemento]
+ORDER BY 6
 
 
 
@@ -111,37 +113,51 @@ ORDER BY [Etiqueta elemento]
 
 
 ------------------------------------------------------------------
--- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
+-- BUSCA UN POSTE ------------------------------------------------
 ------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = 'PTO000111434'
 
-DECLARE @CodElemento varchar(20) = '%57734';
-
-;WITH Q AS
-(
-    SELECT
-        ElementoEtiqueta =
-            CASE a.ARCH_TipoElemento
-                WHEN 'POST' THEN p.POST_Etiqueta
-                WHEN 'VANO' THEN v.VANO_Etiqueta
-                ELSE NULL
-            END,
-    d.DEFI_CodigoElemento,
-        a.*
-    FROM dbo.Archivos AS a
-    LEFT JOIN dbo.Postes AS p
-        ON a.ARCH_TipoElemento = 'POST'
-       AND a.ARCH_IdElemento   = p.POST_Interno
-    LEFT JOIN dbo.Vanos AS v
-        ON a.ARCH_TipoElemento = 'VANO'
-       AND a.ARCH_IdElemento   = v.VANO_Interno
-    LEFT JOIN dbo.Deficiencias as d
-        on a.ARCH_CodTabla = d.DEFI_Interno
-)
-SELECT  Q.*
-FROM Q
-WHERE Q.DEFI_CodigoElemento LIKE @CodElemento
-ORDER BY Q.ARCH_Fecha DESC;
+SELECT  P.POST_Interno,
+        P.POST_Etiqueta,
+        A.ALIM_Etiqueta,
+        PM.POSMT_Nombre,
+        RT.RTNTP_Nombre,
+        P.POST_Altura,
+        P.POST_Terceros,
+        [***] = '',
+        p.*
+FROM Postes AS P
+LEFT JOIN Alimentadores AS A
+    ON P.ALIM_Interno = A.ALIM_Interno
+LEFT JOIN PosteMaterial AS PM
+    ON P.POST_Material = PM.POSMT_Interno
+LEFT JOIN RetenidaTipo AS RT
+    ON P.POST_RetenidaTipo = RT.RTNTP_Interno
+WHERE P.POST_CodigoNodo LIKE '%' + @CODIGO
+    OR P.POST_CodigoNodo = @CODIGO
 GO
+
+------------------------------------------------------------------
+-- BUSCA UN VANO ------------------------------------------------
+------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = '033052'
+
+SELECT  V.VANO_Interno,
+        V.VANO_Codigo,
+        A.ALIM_Etiqueta,
+        V.VANO_NodoInicial,
+        V.VANO_NodoFinal,
+        VANO_Terceros,
+        [***] = '',
+        V.*
+FROM Vanos AS V
+LEFT JOIN Alimentadores AS A
+    ON V.ALIM_Interno = A.ALIM_Interno
+
+WHERE V.VANO_Codigo LIKE '%' + @CODIGO
+    OR V.VANO_Codigo = @CODIGO
+GO
+
 
 
 
