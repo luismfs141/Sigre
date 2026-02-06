@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Image } from 'primereact/image';
 import { Tag } from 'primereact/tag';
 import { Skeleton } from 'primereact/skeleton';
@@ -7,98 +8,145 @@ import { useFiles } from '../hooks/useFiles';
 export default function EvidenceGallery({ deficiency, onCountUpdate }) {
     const { files, loadingFiles, loadFiles } = useFiles();
 
-    // 1. Cargar archivos al cambiar la deficiencia
+    // 1. Cargar archivos
     useEffect(() => {
         if (deficiency?.defiInterno) {
             loadFiles(deficiency.defiInterno); 
         }
     }, [deficiency, loadFiles]);
 
-    // 2. FILTRADO MAESTRO (ACTIVOS + COINCIDENCIA)
+    // 2. Filtrado Maestro
     const relevantFiles = useMemo(() => {
         if (!files || !deficiency) return [];
-
         const targetId = String(deficiency.defiIdElemento || "").trim();
         const targetTipo = String(deficiency.defiTipoElemento || "").trim().toUpperCase();
         const targetTipi = String(deficiency.tipiInterno ?? ""); 
 
         return files.filter(file => {
-            // --- VALIDACIÓN DE ACTIVO BLINDADA ---
-            // Aceptamos: 1 (num), "1" (string), true (bool), "true" (string)
             const valActivo = file.archActivo ?? file.ARCH_Activo;
-            const isActivo = 
-                valActivo === 1 || 
-                valActivo === "1" || 
-                valActivo === true || 
-                valActivo === "true";
-            
+            const isActivo = valActivo === 1 || valActivo === "1" || valActivo === true || valActivo === "true";
             if (!isActivo) return false;
-            // -------------------------------------
 
-            // Datos del archivo
             const fileId = String(file.archIdElemento || file.ARCH_IdElemento || "").trim();
             const fileTipo = String(file.archTipoElemento || file.archTipo || file.ARCH_TipoElemento || "").trim().toUpperCase();
             const fileTipi = String(file.tipiInterno ?? file.TIPI_Interno ?? "");
 
-            // Comparación Clave
             const matchId = (fileId === targetId);
             const matchTipo = (fileTipo === targetTipo);
-            
-            // Comparación Tipi (Inclusiva para 7004.x.x)
             let matchTipi = (fileTipi === targetTipi);
+            
             if (!matchTipi && targetTipi.length > 0 && targetTipi !== "0") {
                 matchTipi = fileTipi.startsWith(`${targetTipi}.`) || fileTipi.startsWith(`${targetTipi}_`);
             }
-
             return matchId && matchTipo && matchTipi;
         });
     }, [files, deficiency]);
 
-    // 3. Notificar cantidad al padre
+    // --- ESTADOS VISOR (LIGHTBOX) ---
+    const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(-1);
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+
+    // --- ACCIONES DEL VISOR ---
+    const openLightbox = (index) => {
+        setSelectedPhotoIndex(index);
+        setZoomLevel(1);
+        setPosition({ x: 0, y: 0 });
+    };
+
+    const closeLightbox = () => {
+        setSelectedPhotoIndex(-1);
+        setZoomLevel(1);
+        setPosition({ x: 0, y: 0 });
+        setIsDragging(false);
+    };
+
+    const handleNext = (e) => {
+        e?.stopPropagation();
+        setZoomLevel(1);
+        setPosition({ x: 0, y: 0 });
+        setSelectedPhotoIndex((prev) => (prev + 1) % photos.length);
+    };
+
+    const handlePrev = (e) => {
+        e?.stopPropagation();
+        setZoomLevel(1);
+        setPosition({ x: 0, y: 0 });
+        setSelectedPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+    };
+
+    const handleZoomIn = (e) => {
+        e?.stopPropagation();
+        setZoomLevel(prev => Math.min(prev + 0.5, 5));
+    };
+
+    const handleZoomOut = (e) => {
+        e?.stopPropagation();
+        setZoomLevel(prev => {
+            const newZoom = Math.max(prev - 0.5, 1);
+            if (newZoom === 1) setPosition({ x: 0, y: 0 });
+            return newZoom;
+        });
+    };
+
+    // --- LÓGICA DE ARRASTRE (PAN) ---
+    const handleMouseDown = (e) => {
+        if (zoomLevel > 1) {
+            e.preventDefault();
+            e.stopPropagation(); 
+            setIsDragging(true);
+            dragStartRef.current = { 
+                x: e.clientX - position.x, 
+                y: e.clientY - position.y 
+            };
+        }
+    };
+
+    const handleMouseMove = (e) => {
+        if (isDragging && zoomLevel > 1) {
+            e.preventDefault();
+            e.stopPropagation();
+            setPosition({
+                x: e.clientX - dragStartRef.current.x,
+                y: e.clientY - dragStartRef.current.y
+            });
+        }
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    // 3. Notificar al padre
     useEffect(() => {
         if (onCountUpdate) {
             onCountUpdate(relevantFiles.length);
         }
     }, [relevantFiles.length, onCountUpdate]);
-
-    // 4. Generador de URL (Rutas corregidas)
+  
+    // 4. Generador de URL
     const getFileUrl = (fileData) => {
         let rawName = fileData.archNombre || fileData.ARCH_Nombre || ""; 
         const baseUrl = process.env.REACT_APP_FOTOS_URL || "https://capacity-preceding-skills-outline.trycloudflare.com/"; 
-
-if (!rawName) return null;
-
-        // 1. Normalizar todas las barras a formato Web (/)
+        if (!rawName) return null;
+        
         rawName = rawName.replace(/\\/g, '/');
-
-        // 2. Limpieza Inteligente de Raíz
-        // Detecta y elimina el nombre de la carpeta raíz para dejar solo la ruta relativa
-        // Cubre: "SigreMovil", "SIGRE.MOVIL", "D:/SIGRE.MOVIL", etc.
         rawName = rawName.replace(/^.*SigreMovil\//i, ''); 
         rawName = rawName.replace(/^.*SIGRE\.MOVIL\//i, '');
-        
-        // OJO: Si tus fotos de 'SigreMedios' están dentro de la carpeta del servidor, 
-        // no necesitamos borrar 'SigreMedios', pero si el servidor está DENTRO de SigreMovil,
-        // las de SigreMedios podrían dar 404 si están en otra ruta física.
-        // Por ahora, asumimos que SigreMedios es una carpeta válida:
-        // rawName = rawName.replace(/^.*SigreMedios\//i, ''); // Descomenta si necesitas borrar esto también.
-
-        // 3. Estandarización de carpetas comunes (Mayúsculas)
-        // Esto ayuda si Windows/Linux se confunden con Vano vs VANO
         rawName = rawName.replace(/\/Vano\//i, '/VANO/');
         rawName = rawName.replace(/\/Poste\//i, '/POSTE/');
         rawName = rawName.replace(/\/0000\//, '/SINDEF/');
+        
         if (rawName.startsWith('/')) rawName = rawName.substring(1)
-
-
         return `${baseUrl}/${rawName}`;
     };
 
-    // 5. Clasificar (Fotos vs Audios)
+    // 5. Clasificación (Fotos vs Audios)
     const { audios, photos } = useMemo(() => {
         const audiosArr = [];
         const photosArr = [];
-        
         relevantFiles.forEach(file => {
             const rawName = (file.archNombre || file.ARCH_Nombre || "").toLowerCase();
             if (rawName.endsWith('.m4a') || rawName.endsWith('.mp3') || rawName.endsWith('.wav')) {
@@ -110,17 +158,121 @@ if (!rawName) return null;
         return { audios: audiosArr, photos: photosArr };
     }, [relevantFiles]);
 
-    // --- RENDERIZADO ---
+    // ------------------------------------------------------------------
+    // RENDERIZADO DEL VISOR (PORTAL) - VERSIÓN LIMPIA SIN DIFUMINADO
+    // ------------------------------------------------------------------
+    const renderLightbox = () => {
+        if (selectedPhotoIndex === -1 || !photos[selectedPhotoIndex]) return null;
+
+        return ReactDOM.createPortal(
+            <div 
+                className="fixed inset-0 z-[99999] bg-black/95 flex items-center justify-center overflow-hidden cursor-pointer select-none"
+                onClick={closeLightbox} // Clic en el fondo cierra
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+            >
+                {/* 1. BOTÓN CERRAR (X) - TOTALMENTE TRANSPARENTE 
+                    Se eliminaron los fondos, bordes y efectos de desenfoque.
+                    Solo el icono es visible, con fondo rojo al pasar el mouse.
+                */}
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation(); 
+                        closeLightbox();
+                    }} 
+                    className="fixed top-4 right-4 z-[100002] group bg-transparent hover:bg-red-600 text-white/80 hover:text-white rounded-full w-12 h-12 flex items-center justify-center transition-all hover:scale-110 active:scale-90 cursor-pointer outline-none"
+                    title="Cerrar (Esc)"
+                >
+                    <i className="pi pi-times text-2xl"></i>
+                </button>
+
+                {/* 2. FLECHAS LATERALES */}
+                <button 
+                    onClick={handlePrev} 
+                    className="fixed left-4 top-1/2 -translate-y-1/2 z-[100001] bg-transparent hover:bg-black/40 text-white/60 hover:text-white rounded-full p-4 transition-all hover:scale-110 active:scale-90 outline-none cursor-pointer"
+                >
+                    <i className="pi pi-chevron-left text-4xl drop-shadow-sm"></i>
+                </button>
+
+                <button 
+                    onClick={handleNext} 
+                    className="fixed right-4 top-1/2 -translate-y-1/2 z-[100001] bg-transparent hover:bg-black/40 text-white/60 hover:text-white rounded-full p-4 transition-all hover:scale-110 active:scale-90 outline-none cursor-pointer"
+                >
+                    <i className="pi pi-chevron-right text-4xl drop-shadow-sm"></i>
+                </button>
+
+                {/* 3. IMAGEN PRINCIPAL (DRAGGABLE) */}
+                <div 
+                    className="w-full h-full flex items-center justify-center overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    style={{ 
+                        cursor: isDragging ? 'grabbing' : (zoomLevel > 1 ? 'grab' : 'default'),
+                        touchAction: 'none'
+                    }}
+                >
+                    <img 
+                        src={getFileUrl(photos[selectedPhotoIndex])} 
+                        alt="Full Screen"
+                        draggable={false}
+                        className="max-w-none transition-transform duration-100 ease-out select-none shadow-2xl"
+                        style={{ 
+                            transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`,
+                            maxHeight: '100vh',
+                            maxWidth: '100vw',
+                            objectFit: 'contain'
+                        }}
+                    />
+                </div>
+
+                {/* 4. BARRA INFERIOR (ZOOM + INFO) */}
+                <div 
+                    className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100001] flex flex-col items-center gap-3 cursor-default"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Controles de Zoom - Fondo semitransparente sutil */}
+                    <div className="flex items-center gap-4 bg-black/40 px-6 py-2 rounded-full border border-white/10 shadow-sm">
+                        <button 
+                            onClick={handleZoomOut} 
+                            disabled={zoomLevel <= 1}
+                            className="text-white/80 hover:text-white disabled:opacity-30 transition-colors w-8 h-8 flex items-center justify-center active:scale-90 cursor-pointer outline-none"
+                        >
+                            <i className="pi pi-minus font-bold"></i>
+                        </button>
+                        
+                        <span className="text-white font-mono font-bold text-sm w-12 text-center select-none">
+                            {Math.round(zoomLevel * 100)}%
+                        </span>
+                        
+                        <button 
+                            onClick={handleZoomIn} 
+                            disabled={zoomLevel >= 5}
+                            className="text-white/80 hover:text-white disabled:opacity-30 transition-colors w-8 h-8 flex items-center justify-center active:scale-90 cursor-pointer outline-none"
+                        >
+                            <i className="pi pi-plus font-bold"></i>
+                        </button>
+                    </div>
+
+                    {/* Contador */}
+                    <span className="text-white/60 text-xs font-medium tracking-wider drop-shadow-sm select-none">
+                        {selectedPhotoIndex + 1} / {photos.length}
+                    </span>
+                </div>
+            </div>,
+            document.body
+        );
+    };
+
+    // --- RENDERIZADO PRINCIPAL ---
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22150%22%20height%3D%22150%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20font-family%3D%22sans-serif%22%20font-size%3D%2212%22%20dy%3D%2210.5%22%20font-weight%3D%22bold%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
 
     if (!deficiency) return <div className="h-full flex items-center justify-center text-gray-400">Selecciona un registro</div>;
     if (loadingFiles) return <div className="p-4"><Skeleton height="100%" /></div>;
 
     return (
-        // Contenedor Principal: Usa h-full para llenar el SplitterPanel
         <div className="flex flex-col h-full bg-white overflow-hidden font-sans border-t border-gray-200">
-            
-            {/* CABECERA: Título y Datos */}
+            {/* Header */}
             <div className="flex-none p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <div>
                     <h2 className="text-xl font-black text-gray-800 m-0 leading-none">
@@ -136,10 +288,8 @@ if (!rawName) return null;
                 </div>
             </div>
 
-            {/* CUERPO DIVIDIDO: Izquierda (Fotos) - Derecha (Audios) */}
             <div className="flex-1 flex flex-row overflow-hidden relative">
-                
-                {/* 1. ZONA FOTOS (IZQUIERDA - EXPANDIBLE) */}
+                {/* Panel Izquierdo: FOTOS */}
                 <div className="flex-1 overflow-y-auto p-3 bg-white">
                     {photos.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-50">
@@ -151,11 +301,14 @@ if (!rawName) return null;
                             {photos.map((file, i) => {
                                 const url = getFileUrl(file);
                                 return (
-                                    <div key={i} className="relative group h-24 w-24 shrink-0 rounded border border-gray-200 shadow-sm overflow-hidden bg-gray-100 hover:shadow-md transition-all">
+                                    <div 
+                                        key={i} 
+                                        onClick={() => openLightbox(i)}
+                                        className="relative group h-24 w-24 shrink-0 rounded border border-gray-200 shadow-sm overflow-hidden bg-gray-100 hover:shadow-md transition-all cursor-pointer"
+                                    >
                                         <Image 
                                             src={url} 
                                             alt="Foto" 
-                                            preview 
                                             className="w-full h-full"
                                             imageClassName="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
                                             onError={(e) => {
@@ -175,12 +328,11 @@ if (!rawName) return null;
                     )}
                 </div>
 
-                {/* 2. ZONA AUDIOS (DERECHA - FIJO - PEGADO) */}
+                {/* Panel Derecho: AUDIOS */}
                 <div className="flex-none w-64 h-full border-l border-gray-200 bg-slate-50 flex flex-col">
                     <div className="flex-none p-2 bg-slate-100 border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider text-center">
                         Audios
                     </div>
-                    
                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
                         {audios.length === 0 ? (
                             <div className="text-center text-gray-400 mt-10 text-[10px] italic opacity-50">
@@ -210,8 +362,10 @@ if (!rawName) return null;
                         )}
                     </div>
                 </div>
-
             </div>
+
+            {/* Portal del Visor */}
+            {renderLightbox()}
         </div>
     );
 }
