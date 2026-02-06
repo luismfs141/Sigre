@@ -107,7 +107,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
         baseRef.current = normalize(updatedForm);
         lastDirtyRef.current = false;
 
-        
+
 
         baseRef.current = normalize(updatedForm);
         lastDirtyRef.current = false;
@@ -221,8 +221,8 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
   // =========================
 
   const tercerosOptions = [
-    { label: "No", value: 0 },
-    { label: "Sí", value: 1 }
+    { label: "Sí", value: 0 },
+    { label: "No", value: 1 }
   ];
 
   const lockedFields = [
@@ -254,7 +254,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     PostArmadoMaterial: "Material armado",
     PostRetenidaTipo: "Tipo de retenida",
     PostRetenidaMaterial: "Material de retenida",
-    PostTerceros: "Terceros", //Antes TERCEROS
+    PostTerceros: "Poste existente", //Antes TERCEROS
     // PostTerceros: "Cod. poste", 
     PostLatitud: "Latitud",
     PostLongitud: "Longitud",
@@ -441,7 +441,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     if (field === "PostTerceros" && Number(value) === 1 && Number(form.PostTerceros) !== 1) {
       Alert.alert(
         "Aviso",
-        "Si marcas Terceros = Sí, este poste desaparecerá del mapa y solo el ADMINISTRADOR podrá volverlo a habilitar.\n\n¿Deseas continuar?",
+        "Si marcas Poste existente = No, este poste desaparecerá del mapa y solo el ADMINISTRADOR podrá volverlo a habilitar.\n\n¿Deseas continuar?",
         [
           { text: "Cancelar", style: "cancel", onPress: () => setSelectConfig(null) },
           {
@@ -454,6 +454,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
           }
         ]
       );
+
       return;
     }
 
