@@ -12,7 +12,7 @@ export function useUsuario(autoFetch = false) {
     setError('');
 
     try {
-      const response = await api.post('/api/User/Login', {
+      const response = await api.post('/User/Login', {
         correo,
         password,
         imei: null
