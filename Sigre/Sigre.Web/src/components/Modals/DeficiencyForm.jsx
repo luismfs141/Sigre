@@ -292,6 +292,11 @@ export default function DeficiencyForm({
         const now = new Date();
         const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
         const isPoste = formData.defiTipoElemento === 'POST' || formData.defiTipoElemento === 'POSTE';
+        const toLocalISOString = (date) => {
+            const tzOffset = date.getTimezoneOffset() * 60000; // offset en milisegundos
+            const localISOTime = (new Date(date - tzOffset)).toISOString().slice(0, -1);
+            return localISOTime; // Retorna formato "YYYY-MM-DDTHH:mm:ss.sss" (Hora Local)
+        };
 
         const cleanPayload = {
             defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
@@ -302,7 +307,7 @@ export default function DeficiencyForm({
             tipiInterno: Number(formData.tipiInterno),
             defiLatitud: Number(formData.defiLatitud) || 0,
             defiLongitud: Number(formData.defiLongitud) || 0,
-            defiFecRegistro: registroDate.toISOString(),
+            defiFecRegistro: toLocalISOString(registroDate),
             defiDistHorizontal: isPoste ? null : (Number(formData.defiDistHorizontal) || 0),
             defiDistVertical: isPoste ? null : (Number(formData.defiDistVertical) || 0),
             defiAccesibilidad: isPoste ? null : (formData.defiAccesibilidad ? String(formData.defiAccesibilidad) : null),
