@@ -63,32 +63,17 @@ const LocalFileStore = {
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 
-// 🔥 FUNCIÓN DEPURADORA PARA EL FEEDER
 const resolveFeederName = (feederProp, deficiencyObj) => {
-    // Consoleo interno para ver el detalle paso a paso
-    console.log("🔍 [resolveFeederName] Analizando:", { feederProp, deficiencyObj });
-
-    // 1. Intentar Prop (Prioridad)
+    // 1. Intentar Prop
     if (feederProp) {
         const val = feederProp.label || feederProp.nombre || feederProp.value || (typeof feederProp === 'string' ? feederProp : null);
-        if (val) {
-            const result = String(val).split(' - ')[0].trim().toUpperCase();
-            console.log("✅ [resolveFeederName] Encontrado en Prop:", result);
-            return result;
-        }
+        if (val) return String(val).split(' - ')[0].trim().toUpperCase();
     }
-
-    // 2. Intentar Deficiencia (Respaldo)
+    // 2. Intentar Deficiencia
     if (deficiencyObj) {
         const candidate = deficiencyObj.alimentador || deficiencyObj.Alimentador || deficiencyObj.defiAlimentador || deficiencyObj.nombreAlimentador;
-        if (candidate) {
-            const result = String(candidate).split(' - ')[0].trim().toUpperCase();
-            console.log("✅ [resolveFeederName] Encontrado en Deficiencia:", result);
-            return result;
-        }
+        if (candidate) return String(candidate).split(' - ')[0].trim().toUpperCase();
     }
-
-    console.warn("⚠️ [resolveFeederName] No se encontró. Retornando SIN_FEEDER");
     return "SIN_FEEDER";
 };
 
@@ -120,12 +105,10 @@ const urlToBlob = async (url) => {
 
 export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate }) {
     
-    // 🔥 CONSOLEO PRINCIPAL: Se ejecuta al cargar la galería
+    // Logs de depuración (puedes quitarlos si ya funciona bien el feeder)
     useEffect(() => {
-        console.group("🚀 RENDER EVIDENCE GALLERY - DEBUG FEEDER");
-        console.log("1. Prop 'feeder' recibido:", feeder);
-        console.log("2. Tipo de dato:", typeof feeder);
-        console.log("3. Resultado de resolución:", resolveFeederName(feeder, deficiency));
+        console.groupCollapsed("🚀 RENDER EVIDENCE GALLERY");
+        console.log("Feeder:", resolveFeederName(feeder, deficiency));
         console.groupEnd();
     }, [feeder, deficiency]);
 
@@ -135,11 +118,9 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     const [zipLoading, setZipLoading] = useState(false);
     const [localCacheVersion, setLocalCacheVersion] = useState(0); 
 
-    // Carga inicial y Limpieza de caché
     useEffect(() => { 
         if (deficiency?.defiInterno) {
             loadFiles(deficiency.defiInterno);
-            // Limpiamos fotos temporales de la deficiencia anterior
             LocalFileStore.clear().then(() => setLocalCacheVersion(v => v + 1));
         }
     }, [deficiency?.defiInterno, loadFiles]);
@@ -154,10 +135,24 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
         });
     }, [files, deficiency]);
 
+    // 🔥🔥 AQUÍ ESTÁ LA CORRECCIÓN PARA "SINDEF" 🔥🔥
     const getFileUrl = (file) => {
         let rawName = file.archNombre || file.ARCH_Nombre || "";
         if (!rawName) return null;
-        rawName = rawName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '');
+        
+        // 1. Normalizar slashes
+        rawName = rawName.replace(/\\/g, '/');
+        
+        // 2. Quitar raíz
+        rawName = rawName.replace(/^.*SIGRE\.MOVIL\//i, '');
+        
+        // 3. 🚨 RESTAURADO: Traducción de códigos históricos
+        // Si la BD dice ".../0000/...", lo cambiamos a ".../SINDEF/..." para que el servidor lo encuentre
+        rawName = rawName.replace(/\/0000\//g, '/SINDEF/');
+        
+        // 4. Normalizar mayúsculas de carpetas clave (por si acaso)
+        rawName = rawName.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+
         return `${process.env.REACT_APP_FOTOS_URL || "https://capacity-preceding-skills-outline.trycloudflare.com/"}${rawName.split('/').map(encodeURIComponent).join('/')}`;
     };
 
@@ -183,14 +178,10 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     };
 
     // ------------------------------------------------------------------
-    // 💾 GUARDAR (SQL + LOCAL)
+    // GUARDADO
     // ------------------------------------------------------------------
     const handleUploadSave = async (dataToSave) => {
-        console.log("💾 Guardando Evidencia...");
-        
-        // Usamos la función robusta para el feeder
         const feederLbl = resolveFeederName(feeder, deficiency);
-        
         const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
@@ -198,21 +189,17 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
         const idElem = getValue('IdElemento');                   
         
         let defCodeFolder = safeSeg(deficiency.tipiCodigo || "6002"); 
-
+        
+        // Si el código es 0000 (S/D), podemos forzar SINDEF en la ruta si lo deseas, 
+        // pero la corrección visual en getFileUrl ya debería bastar para verlas.
+        
         const compactDate = formatCompactDate(dataToSave.date);
         const fileName = `FOT-${sedLbl}-${codeElemLbl}-${defCodeFolder}-${compactDate}-${dataToSave.tipo}.jpg`;
         const relativePath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeFolder}`;
         const dbPath = `SIGRE.MOVIL/${relativePath}/${fileName}`;
 
-        console.log("📂 Ruta Generada:", relativePath);
+        try { await LocalFileStore.save(fileName, dataToSave.file); } catch (e) { console.error(e); }
 
-        // 1. Guardar copia física localmente (evita error 415 al servidor)
-        try {
-            await LocalFileStore.save(fileName, dataToSave.file);
-            console.log("✅ Foto guardada en IndexedDB");
-        } catch (err) { console.error("❌ Error guardando local:", err); }
-
-        // 2. Enviar Metadata JSON al servidor
         const payload = {
             archInterno: 0,
             archTipo: String(dataToSave.tipo),
@@ -230,17 +217,17 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
 
         const success = await addFile(payload);
         if (success) {
-            toast.current.show({ severity: 'success', summary: 'Registrado', detail: 'Foto guardada correctamente.' });
+            toast.current.show({ severity: 'success', summary: 'Registrado', detail: 'Foto guardada.' });
             setModalVisible(false);
             loadFiles(deficiency.defiInterno);
             setLocalCacheVersion(v => v + 1);
         } else {
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar en BD.' });
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar.' });
         }
     };
 
     // ------------------------------------------------------------------
-    // 📦 ZIP GENERATOR (Estructura Servidor)
+    // ZIP GENERATOR
     // ------------------------------------------------------------------
     const handleDownloadZip = async () => {
         if (photos.length === 0) return;
@@ -248,39 +235,27 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
         try {
             const zip = new JSZip();
 
-            // 1. Reconstruir ruta de carpetas
             const feederLbl = resolveFeederName(feeder, deficiency);
             const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
             const codeElemLbl = safeSeg(getValue('CodigoElemento'));
-            const tipoElemRaw = getValue('TipoElemento') || 'POST';
-            const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
+            const tipoElem = String(getValue('TipoElemento') || 'POST').toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
             let defCodeFolder = safeSeg(deficiency.tipiCodigo || "6002");
             
             const serverFolderPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeFolder}`;
-            
-            // 🔥 Creamos las carpetas dentro del ZIP
             const targetFolder = zip.folder(serverFolderPath);
 
             for (let i = 0; i < photos.length; i++) {
                 const fileRec = photos[i];
-                const fullPath = fileRec.archNombre || fileRec.ARCH_Nombre || "";
-                const fileName = fullPath.split(/[/\\]/).pop();
-
-                let fileBlob = null;
+                const fileName = (fileRec.archNombre || fileRec.ARCH_Nombre || "").split(/[/\\]/).pop();
                 
-                // Intento 1: Buscar en Local (recién subidas)
-                const localBlob = await LocalFileStore.get(fileName);
-                if (localBlob) {
-                    fileBlob = localBlob;
-                } else {
-                    // Intento 2: Buscar en Servidor (antiguas)
-                    const remoteUrl = getFileUrl(fileRec);
-                    if (remoteUrl) fileBlob = await urlToBlob(remoteUrl);
+                let fileBlob = await LocalFileStore.get(fileName);
+                if (!fileBlob) {
+                    const url = getFileUrl(fileRec);
+                    if (url) fileBlob = await urlToBlob(url);
                 }
 
                 if (fileBlob) {
-                    const cleanName = decodeURIComponent(fileName);
-                    targetFolder.file(cleanName, fileBlob);
+                    targetFolder.file(decodeURIComponent(fileName), fileBlob);
                 }
             }
 
@@ -360,7 +335,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
                         const tipoNum = parseInt(f.archTipo || f.ARCH_Tipo, 10);
                         return (
                             <div key={i} className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group" onClick={() => openLightbox(i)}>
-                                {/* Placeholder si la imagen es local y no se ha subido al server aun */}
+                                {/* Placeholder si la imagen falla */}
                                 <Image src={getFileUrl(f)} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" 
                                     onError={(e) => { 
                                         e.target.onerror = null; 
