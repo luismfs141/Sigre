@@ -84,6 +84,7 @@ export default function Subestaciones() {
     // 2. USO DE HOOKS
     // -------------------------------------------------------------------
     const { feeders, loading: loadingFeeders } = useFeeder();
+    const feederObject = feeders.find(f => f.value === selectedFeeder);
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
     
     const { 
@@ -431,7 +432,7 @@ export default function Subestaciones() {
                             {/* Renderizamos el componente DIRECTAMENTE para que llene el 100% */}
                             <EvidenceGallery 
                                 deficiency={selectedDeficiency} 
-                                feeder={selectedFeeder} 
+                                feeder={feederObject} 
                                 sed={selectedSed} 
                                 // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
                                 onCountUpdate={setEvidenceCount} 

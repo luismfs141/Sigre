@@ -10,9 +10,87 @@ import { Toast } from 'primereact/toast';
 import { useFiles } from '../hooks/useFiles'; 
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 
+// --- 📦 ALMACENAMIENTO LOCAL (IndexedDB) ---
+const LocalFileStore = {
+    dbName: "SigreTempPhotos",
+    storeName: "photos",
+    async open() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, 1);
+            request.onupgradeneeded = (e) => {
+                if (!e.target.result.objectStoreNames.contains(this.storeName)) {
+                    e.target.result.createObjectStore(this.storeName);
+                }
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e);
+        });
+    },
+    async save(fileName, fileBlob) {
+        try {
+            const db = await this.open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.storeName, "readwrite");
+                tx.objectStore(this.storeName).put(fileBlob, fileName);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(false);
+            });
+        } catch (e) { console.error("Error DB Save:", e); return false; }
+    },
+    async get(fileName) {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(this.storeName, "readonly");
+                const req = tx.objectStore(this.storeName).get(fileName);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) { return null; }
+    },
+    async clear() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(this.storeName, "readwrite");
+                tx.objectStore(this.storeName).clear();
+                tx.oncomplete = () => resolve(true);
+            });
+        } catch (e) { return false; }
+    }
+};
+
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
-const cleanFeederName = (label) => label ? label.split(' - ')[0].trim().toUpperCase() : "SIN_FEEDER";
+
+// 🔥 FUNCIÓN DEPURADORA PARA EL FEEDER
+const resolveFeederName = (feederProp, deficiencyObj) => {
+    // Consoleo interno para ver el detalle paso a paso
+    console.log("🔍 [resolveFeederName] Analizando:", { feederProp, deficiencyObj });
+
+    // 1. Intentar Prop (Prioridad)
+    if (feederProp) {
+        const val = feederProp.label || feederProp.nombre || feederProp.value || (typeof feederProp === 'string' ? feederProp : null);
+        if (val) {
+            const result = String(val).split(' - ')[0].trim().toUpperCase();
+            console.log("✅ [resolveFeederName] Encontrado en Prop:", result);
+            return result;
+        }
+    }
+
+    // 2. Intentar Deficiencia (Respaldo)
+    if (deficiencyObj) {
+        const candidate = deficiencyObj.alimentador || deficiencyObj.Alimentador || deficiencyObj.defiAlimentador || deficiencyObj.nombreAlimentador;
+        if (candidate) {
+            const result = String(candidate).split(' - ')[0].trim().toUpperCase();
+            console.log("✅ [resolveFeederName] Encontrado en Deficiencia:", result);
+            return result;
+        }
+    }
+
+    console.warn("⚠️ [resolveFeederName] No se encontró. Retornando SIN_FEEDER");
+    return "SIN_FEEDER";
+};
 
 const getPhotoTypeName = (typeId) => {
     const types = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' };
@@ -33,18 +111,38 @@ const formatCompactDate = (date) => {
 };
 
 const urlToBlob = async (url) => {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Error loading ${url}`);
-    return response.blob();
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("404");
+        return await response.blob();
+    } catch { return null; }
 };
 
 export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate }) {
+    
+    // 🔥 CONSOLEO PRINCIPAL: Se ejecuta al cargar la galería
+    useEffect(() => {
+        console.group("🚀 RENDER EVIDENCE GALLERY - DEBUG FEEDER");
+        console.log("1. Prop 'feeder' recibido:", feeder);
+        console.log("2. Tipo de dato:", typeof feeder);
+        console.log("3. Resultado de resolución:", resolveFeederName(feeder, deficiency));
+        console.groupEnd();
+    }, [feeder, deficiency]);
+
     const toast = useRef(null);
     const { files, loadingFiles, loadFiles, addFile } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
+    const [localCacheVersion, setLocalCacheVersion] = useState(0); 
 
-    useEffect(() => { if (deficiency?.defiInterno) loadFiles(deficiency.defiInterno); }, [deficiency, loadFiles]);
+    // Carga inicial y Limpieza de caché
+    useEffect(() => { 
+        if (deficiency?.defiInterno) {
+            loadFiles(deficiency.defiInterno);
+            // Limpiamos fotos temporales de la deficiencia anterior
+            LocalFileStore.clear().then(() => setLocalCacheVersion(v => v + 1));
+        }
+    }, [deficiency?.defiInterno, loadFiles]);
 
     const relevantFiles = useMemo(() => {
         if (!files || !deficiency) return [];
@@ -57,10 +155,10 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     }, [files, deficiency]);
 
     const getFileUrl = (file) => {
-        let raw = file.archNombre || file.ARCH_Nombre || "";
-        if (!raw) return null;
-        raw = raw.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '');
-        return `${process.env.REACT_APP_FOTOS_URL || "https://capacity-preceding-skills-outline.trycloudflare.com/"}${raw.split('/').map(encodeURIComponent).join('/')}`;
+        let rawName = file.archNombre || file.ARCH_Nombre || "";
+        if (!rawName) return null;
+        rawName = rawName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '');
+        return `${process.env.REACT_APP_FOTOS_URL || "https://capacity-preceding-skills-outline.trycloudflare.com/"}${rawName.split('/').map(encodeURIComponent).join('/')}`;
     };
 
     const { audios, photos } = useMemo(() => {
@@ -71,88 +169,173 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
 
     const getValue = (keyBase) => {
         if (!deficiency) return null;
-        return deficiency[`defi${keyBase}`] ?? 
-               deficiency[`Defi${keyBase}`] ?? 
-               deficiency[keyBase] ?? 
-               deficiency[keyBase.toLowerCase()] ?? 
-               null;
+        return deficiency[`defi${keyBase}`] ?? deficiency[`Defi${keyBase}`] ?? deficiency[keyBase] ?? deficiency[keyBase.toLowerCase()] ?? null;
     };
 
     const getInitialFormData = () => {
         const _fechaRaw = getValue('FecRegistro') || getValue('Fecha');
         let _fecha = new Date(); 
-        if (_fechaRaw) {
-            const parsed = new Date(_fechaRaw);
-            if (!isNaN(parsed.getTime())) _fecha = parsed;
-        }
-
+        if (_fechaRaw && !isNaN(new Date(_fechaRaw).getTime())) _fecha = new Date(_fechaRaw);
         return { 
-            id: Date.now(), 
-            deficiencyCode: "", 
-            tipo: null, 
-            date: _fecha, 
-            lat: getValue('Latitud') || '', 
-            long: getValue('Longitud') || '', 
-            file: null, 
-            preview: null 
+            id: Date.now(), deficiencyCode: "", tipo: null, date: _fecha, 
+            lat: getValue('Latitud') || '', long: getValue('Longitud') || '', file: null, preview: null 
         };
     };
 
     // ------------------------------------------------------------------
-    // 💾 GUARDADO SIMPLE (SOLO DATOS JSON)
+    // 💾 GUARDAR (SQL + LOCAL)
     // ------------------------------------------------------------------
     const handleUploadSave = async (dataToSave) => {
-        if (!feeder || !sed) return toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta contexto.' });
-
-        const feederLbl = cleanFeederName(feeder.label || feeder.nombre || feeder.value);
-        const sedLbl = safeSeg(sed.sedCodigo || sed.codigo || sed);
+        console.log("💾 Guardando Evidencia...");
+        
+        // Usamos la función robusta para el feeder
+        const feederLbl = resolveFeederName(feeder, deficiency);
+        
+        const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
-        const tipoElem = getValue('TipoElemento') || 'POST';     
+        const tipoElemRaw = getValue('TipoElemento') || 'POST';
+        const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste'; 
         const idElem = getValue('IdElemento');                   
         
         let defCodeFolder = safeSeg(deficiency.tipiCodigo || "6002"); 
-        
-        // Lógica de nombre de archivo (igual que antes para mantener consistencia)
+
         const compactDate = formatCompactDate(dataToSave.date);
         const fileName = `FOT-${sedLbl}-${codeElemLbl}-${defCodeFolder}-${compactDate}-${dataToSave.tipo}.jpg`;
-        const relativePath = `${feederLbl}/${sedLbl}/${tipoElem === 'Vano' ? 'VANO' : 'POSTE'}/${codeElemLbl}/${defCodeFolder}`;
+        const relativePath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeFolder}`;
         const dbPath = `SIGRE.MOVIL/${relativePath}/${fileName}`;
 
-        // ⚠️ AQUÍ ESTÁ EL CAMBIO: Payload JSON plano
+        console.log("📂 Ruta Generada:", relativePath);
+
+        // 1. Guardar copia física localmente (evita error 415 al servidor)
+        try {
+            await LocalFileStore.save(fileName, dataToSave.file);
+            console.log("✅ Foto guardada en IndexedDB");
+        } catch (err) { console.error("❌ Error guardando local:", err); }
+
+        // 2. Enviar Metadata JSON al servidor
         const payload = {
             archInterno: 0,
             archTipo: String(dataToSave.tipo),
             archNombre: dbPath.substring(0, 150),
             archTabla: "Deficiencias",
-            archCodTabla: Number(deficiency.defiInterno),
+            archCodTabla: Number(getValue('Interno')),
             archLatitud: parseFloat(dataToSave.lat) || 0,
             archLongitud: parseFloat(dataToSave.long) || 0,
             archFecha: toLocalISOString(dataToSave.date),
-            archTipoElemento: tipoElem,
+            archTipoElemento: tipoElemRaw,
             archIdElemento: Number(idElem),
             tipiInterno: Number(deficiency.tipiInterno),
-            archActivo: true // O el valor que tu BD acepte (1 o true)
+            archActivo: true 
         };
 
-        // Al enviar un objeto simple, tu hook usa 'application/json' y no da error 415
-        const success = await addFile(payload); 
-        
+        const success = await addFile(payload);
         if (success) {
-            toast.current.show({ severity: 'success', summary: 'Registrado', detail: 'Datos guardados (Sin archivo).' });
+            toast.current.show({ severity: 'success', summary: 'Registrado', detail: 'Foto guardada correctamente.' });
             setModalVisible(false);
             loadFiles(deficiency.defiInterno);
+            setLocalCacheVersion(v => v + 1);
         } else {
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar.' });
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar en BD.' });
         }
     };
 
-    const handleDownloadZip = async () => { /* ... */ };
+    // ------------------------------------------------------------------
+    // 📦 ZIP GENERATOR (Estructura Servidor)
+    // ------------------------------------------------------------------
+    const handleDownloadZip = async () => {
+        if (photos.length === 0) return;
+        setZipLoading(true);
+        try {
+            const zip = new JSZip();
+
+            // 1. Reconstruir ruta de carpetas
+            const feederLbl = resolveFeederName(feeder, deficiency);
+            const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
+            const codeElemLbl = safeSeg(getValue('CodigoElemento'));
+            const tipoElemRaw = getValue('TipoElemento') || 'POST';
+            const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
+            let defCodeFolder = safeSeg(deficiency.tipiCodigo || "6002");
+            
+            const serverFolderPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeFolder}`;
+            
+            // 🔥 Creamos las carpetas dentro del ZIP
+            const targetFolder = zip.folder(serverFolderPath);
+
+            for (let i = 0; i < photos.length; i++) {
+                const fileRec = photos[i];
+                const fullPath = fileRec.archNombre || fileRec.ARCH_Nombre || "";
+                const fileName = fullPath.split(/[/\\]/).pop();
+
+                let fileBlob = null;
+                
+                // Intento 1: Buscar en Local (recién subidas)
+                const localBlob = await LocalFileStore.get(fileName);
+                if (localBlob) {
+                    fileBlob = localBlob;
+                } else {
+                    // Intento 2: Buscar en Servidor (antiguas)
+                    const remoteUrl = getFileUrl(fileRec);
+                    if (remoteUrl) fileBlob = await urlToBlob(remoteUrl);
+                }
+
+                if (fileBlob) {
+                    const cleanName = decodeURIComponent(fileName);
+                    targetFolder.file(cleanName, fileBlob);
+                }
+            }
+
+            const content = await zip.generateAsync({ type: "blob" });
+            saveAs(content, `Deficiencia_${getValue('CodigoElemento')}.zip`);
+            toast.current.show({ severity: 'success', summary: 'ZIP Listo', detail: 'Descarga iniciada.' });
+
+        } catch (e) {
+            console.error(e);
+            toast.current.show({ severity: 'error', summary: 'Error ZIP', detail: 'Falló la generación.' });
+        } finally {
+            setZipLoading(false);
+        }
+    };
+
+    // --- VISOR ---
     const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(-1);
-    const renderLightbox = () => { /* ... */ }; 
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+
+    const openLightbox = (index) => { setSelectedPhotoIndex(index); setZoomLevel(1); setPosition({ x: 0, y: 0 }); };
+    const closeLightbox = () => { setSelectedPhotoIndex(-1); setZoomLevel(1); setPosition({ x: 0, y: 0 }); setIsDragging(false); };
+    const handleNext = (e) => { e?.stopPropagation(); setZoomLevel(1); setPosition({x:0,y:0}); setSelectedPhotoIndex((prev) => (prev + 1) % photos.length); };
+    const handlePrev = (e) => { e?.stopPropagation(); setZoomLevel(1); setPosition({x:0,y:0}); setSelectedPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length); };
+    const handleZoomIn = (e) => { e?.stopPropagation(); setZoomLevel(prev => Math.min(prev + 0.5, 5)); };
+    const handleZoomOut = (e) => { e?.stopPropagation(); setZoomLevel(prev => { const n = Math.max(prev - 0.5, 1); if (n===1) setPosition({x:0,y:0}); return n; }); };
+    const handleMouseDown = (e) => { if (zoomLevel > 1) { e.preventDefault(); e.stopPropagation(); setIsDragging(true); dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y }; } };
+    const handleMouseMove = (e) => { if (isDragging && zoomLevel > 1) { e.preventDefault(); e.stopPropagation(); setPosition({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y }); } };
+    const handleMouseUp = () => { setIsDragging(false); };
+
+    const renderLightbox = () => {
+        if (selectedPhotoIndex === -1 || !photos[selectedPhotoIndex]) return null;
+        return ReactDOM.createPortal(
+            <div className="fixed inset-0 z-[99999] bg-black/95 flex items-center justify-center overflow-hidden" onClick={closeLightbox} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+                <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="fixed top-4 right-4 z-[100002] bg-transparent text-white/80 hover:text-white rounded-full p-2"><i className="pi pi-times text-2xl"></i></button>
+                <button onClick={handlePrev} className="fixed left-4 top-1/2 -translate-y-1/2 z-[100001] text-white/60 hover:text-white"><i className="pi pi-chevron-left text-4xl"></i></button>
+                <button onClick={handleNext} className="fixed right-4 top-1/2 -translate-y-1/2 z-[100001] text-white/60 hover:text-white"><i className="pi pi-chevron-right text-4xl"></i></button>
+                <div className="w-full h-full flex items-center justify-center overflow-hidden" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}>
+                    <img src={getFileUrl(photos[selectedPhotoIndex])} alt="Full" draggable={false} className="max-w-none transition-transform duration-100 ease-out select-none" style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`, maxHeight: '100vh', maxWidth: '100vw', objectFit: 'contain' }} onClick={(e)=>e.stopPropagation()}/>
+                </div>
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100001] flex gap-4 bg-black/40 px-4 py-2 rounded-full" onClick={(e)=>e.stopPropagation()}>
+                    <button onClick={handleZoomOut} disabled={zoomLevel<=1} className="text-white"><i className="pi pi-minus"></i></button>
+                    <span className="text-white text-sm">{Math.round(zoomLevel*100)}%</span>
+                    <button onClick={handleZoomIn} disabled={zoomLevel>=5} className="text-white"><i className="pi pi-plus"></i></button>
+                </div>
+            </div>, document.body
+        );
+    };
+
+    const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22150%22%20height%3D%22150%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20font-family%3D%22sans-serif%22%20font-size%3D%2212%22%20dy%3D%2210.5%22%20font-weight%3D%22bold%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
 
     if (!deficiency) return <div className="h-full flex items-center justify-center text-gray-400">Selecciona un registro</div>;
-    if (loadingFiles) return <div className="p-4"><Skeleton height="100%" /></div>;
-
+    
     return (
         <div className="flex flex-col h-full bg-white font-sans border-t border-gray-200">
             <Toast ref={toast} />
@@ -175,18 +358,25 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
                     </div>
                     {photos.map((f, i) => {
                         const tipoNum = parseInt(f.archTipo || f.ARCH_Tipo, 10);
-                        const nombreBonito = getPhotoTypeName(tipoNum);
                         return (
-                            <div key={i} className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group">
-                                <Image src={getFileUrl(f)} alt="Foto" preview width="100%" />
+                            <div key={i} className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group" onClick={() => openLightbox(i)}>
+                                {/* Placeholder si la imagen es local y no se ha subido al server aun */}
+                                <Image src={getFileUrl(f)} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" 
+                                    onError={(e) => { 
+                                        e.target.onerror = null; 
+                                        e.target.src = offlinePlaceholder;
+                                    }} 
+                                />
                                 <div className="absolute bottom-0 w-full bg-black/70 text-white text-[9px] font-bold text-center py-0.5 uppercase tracking-tighter">
-                                    {nombreBonito}
+                                    {getPhotoTypeName(tipoNum)}
                                 </div>
                             </div>
                         );
                     })}
                  </div>
             </div>
+
+            {renderLightbox()}
 
             <PhotoUploadModal 
                 visible={modalVisible}
