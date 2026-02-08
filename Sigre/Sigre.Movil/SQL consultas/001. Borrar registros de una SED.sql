@@ -3,7 +3,7 @@
 -- TOADAS LAS DEFICIENCIAS DE UNA SUBESTACIÓN --------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%1727%';
+DECLARE @SUB_ETI VARCHAR(20) = '%2755%';
 
 SELECT  
         D.DEFI_Interno,

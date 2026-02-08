@@ -217,6 +217,7 @@ export const useDeficiency = () => {
       DefiCol2: deficiency?.DefiCol2 ?? "",
       DefiAccesibilidad: deficiency?.DefiAccesibilidad ?? "",
       DefiTipoCruce: deficiency?.DefiTipoCruce ?? "",
+      DefiComentarioEstandar: deficiency?.DefiComentarioEstandar ?? "",
 
       ...(isNew && {
         DefiEstado: deficiency?.DefiEstado || "N",

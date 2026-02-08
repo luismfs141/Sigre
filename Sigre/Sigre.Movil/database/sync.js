@@ -52,6 +52,7 @@ export const syncDeficiencies = async (feeders) => {
         defi.defiCol3,
         defi.defiAccesibilidad ?? null,
         defi.defiTipoCruce ?? null,
+        defi.defiComentarioEstandar?? null,
         0, // pendingSync
         new Date().toISOString() // lastModified
       ];

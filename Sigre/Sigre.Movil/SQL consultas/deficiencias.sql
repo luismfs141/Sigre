@@ -4,11 +4,25 @@
 -- DEFICIENCIAS POR ALIMENTADOR ----------------------------------
 ------------------------------------------------------------------
 
+
+
+
+
+
+
+
+------------------------------------------------------------------
+-- DEFICIENCIAS POR ELEMENTO ----------------------------------
+------------------------------------------------------------------
+
+DECLARE @CODIGO VARCHAR(20) = '033052'
+
 SELECT	D.DEFI_Interno,
 		D.DEFI_TipoElemento,
 		D.DEFI_CodigoElemento,
 		CO.CODI_Codigo,
 		
+
 		CASE
 			WHEN D.DEFI_EstadoCriticidad = 1 THEN 'Leve'
 			WHEN D.DEFI_EstadoCriticidad = 2 THEN 'Moderado'
@@ -34,6 +48,7 @@ SELECT	D.DEFI_Interno,
 		D.DEFI_FechaCreacion,
 		D.DEFI_Latitud,
 		D.DEFI_Longitud,
+		D.DEFI_Activo,
 		[***] = '',
 		*
 FROM Deficiencias AS D
@@ -43,6 +58,5 @@ LEFT JOIN Codigos AS CO
 	ON TI.CODI_Interno = CO.CODI_Interno
 LEFT JOIN Usuarios AS US
 	ON D.DEFI_UsuarioInic = US.USUA_Interno
-
-	select * from Deficiencias
-	select * from Usuarios
+WHERE D.DEFI_CodigoElemento LIKE '%' + @CODIGO
+	OR D.DEFI_CodigoElemento = @CODIGO

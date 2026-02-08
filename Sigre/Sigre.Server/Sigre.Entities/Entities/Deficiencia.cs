@@ -123,5 +123,6 @@ public partial class Deficiencia
 
     public string? DefiAccesibilidad { get; set; }
     public string? DefiTipoCruce { get; set; }
+    public string? DefiComentarioEstandar { get; set; }
 
 }

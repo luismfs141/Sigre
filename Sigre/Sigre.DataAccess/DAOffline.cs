@@ -93,6 +93,7 @@ namespace Sigre.DataAccess
                                     DefiInspeccionado = reader.GetNullableBool("DefiInspeccionado") ?? false,
                                     DefiAccesibilidad = reader.GetNullableString("DefiAccesibilidad"),
                                     DefiTipoCruce = reader.GetNullableString("DefiTipoCruce"),
+                                    DefiComentarioEstandar = reader.GetNullableString("DefiComentarioEstandar"),
                                     EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
                                     DefiServerId = reader.GetNullableInt32("DefiServerId")
                                 };
