@@ -29,11 +29,28 @@ export default function PhotoUploadModal({
     initialData, 
     currentPhotos = [], 
     deficiencyData, 
-    contextData 
+    contextData ,
+    forcedSupply,
+    forcedCorrelativo
 }) {
     const toast = useRef(null);
     const [formData, setFormData] = useState(initialData);
+useEffect(() => {
+        if (visible) {
+            console.group("🕵️‍♀️ DEBUG: DATOS RECIBIDOS EN MODAL");
+            console.log("--------------------------------------------------");
+            console.log("👉 forcedSupply (Suministro):", forcedSupply);
+            console.log("👉 forcedCorrelativo (Conteo/Carpeta):", forcedCorrelativo);
+            console.log("--------------------------------------------------");
 
+            if (forcedCorrelativo === undefined || forcedCorrelativo === null) {
+                console.error("❌ ERROR: 'forcedCorrelativo' llegó UNDEFINED. Revisa EvidenceGallery.");
+            } else {
+                console.log("✅ OK: El correlativo llegó correctamente.");
+            }
+            console.groupEnd();
+        }
+    }, [visible, forcedSupply, forcedCorrelativo]);
     const tiposBase = [
         { label: '1 - Panorámica', value: 1 },
         { label: '2 - Frontal', value: 2 },
@@ -77,8 +94,7 @@ export default function PhotoUploadModal({
         const sCod = safeSeg(elementCode || "SIN_COD");
         const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}`;
 
-        // 1. Detección CORRECTA de 7004 (Corregimos error de lectura de 6002)
-        // Si tipiInterno es 60, ES una 7004, sin importar qué diga tipiCodigo.
+        // 1. Detección CORRECTA de 7004
         const tipInterno = String(deficiencyData?.tipiInterno || "");
         let tipCode = safeSeg(deficiencyData?.tipiCodigo || "0000");
 
@@ -86,85 +102,78 @@ export default function PhotoUploadModal({
             tipCode = "7004";
         }
 
-        // 2. Extracción ROBUSTA del Suministro (Para evitar el 0000)
-        // Buscamos en todas las posibles propiedades donde puede venir el dato
-        let sumStr = "0000";
-        if (deficiencyData?.defiSuministro) sumStr = String(deficiencyData.defiSuministro);
-        else if (deficiencyData?.suministro) sumStr = String(deficiencyData.suministro);
-        else if (deficiencyData?.Suministro) sumStr = String(deficiencyData.Suministro);
-        
-        sumStr = sumStr.trim();
-        if (sumStr === "null" || sumStr === "" || sumStr === "undefined") sumStr = "0000";
+        // 2. OBTENCIÓN ROBUSTA DEL SUMINISTRO (Prioridad al dato real)
+        let rawSupply = contextData?.forcedSupply 
+                      || deficiencyData?.defiNumSuministro 
+                      || deficiencyData?.suministro 
+                      || deficiencyData?.Suministro;
+
+        // Limpieza: Aseguramos que sea string y quitamos espacios
+        let cleanSupply = String(rawSupply || "").trim();
+
+        // Evitamos valores "basura" del sistema
+        if (cleanSupply === "null" || cleanSupply === "undefined" || cleanSupply === "") {
+            cleanSupply = "00000"; 
+        }
+
+        const currentSupply = safeSeg(cleanSupply);
 
         let finalFolderSegment = tipCode; 
         let defNamePart = tipCode;
 
         // --- LÓGICA ESPECÍFICA PARA 7004 ---
         if (tipCode === "7004") {
-            let maxFolderIndex = 0;
-            let photosInMaxFolder = 0;
-            let folderBySupply = {}; 
+          
 
-            // Escanear fotos existentes
-            currentPhotos.forEach(p => {
-                const path = (p.archNombre || p.ARCH_Nombre || "");
-                // Regex para detectar .../7004/N/...
-                const matchFolder = path.match(/\/7004\/(\d+)\//);
-                
-                if (matchFolder) {
-                    const folderIndex = parseInt(matchFolder[1], 10);
-                    
-                    if (folderIndex > maxFolderIndex) {
-                        maxFolderIndex = folderIndex;
-                        photosInMaxFolder = 0;
-                    }
-                    if (folderIndex === maxFolderIndex) {
-                        photosInMaxFolder++;
-                    }
+            // -------------------------------------------------------------
+            // LÓGICA SIMPLIFICADA: SOLO BUSCAR MÁXIMO CORRELATIVO + 1
+            // -------------------------------------------------------------
+let targetIndex = 1;
 
-                    // Asociar Suministro con Carpeta existente
-                    // Buscamos 7004.1.SUMINISTRO en el nombre del archivo
-                    const matchSupply = path.match(/7004\.1\.(\d+)/);
-                    if (matchSupply) {
-                        const supplyFound = matchSupply[1];
-                        folderBySupply[supplyFound] = folderIndex;
-                    }
-                }
-            });
-
-            // Determinar carpeta destino
-            let targetIndex;
-
-            // A. Si este suministro YA tiene carpeta, úsala
-            if (sumStr !== "0000" && folderBySupply[sumStr]) {
-                targetIndex = folderBySupply[sumStr];
+            // 🔥 3. AQUÍ ESTÁ EL CAMBIO CLAVE 🔥
+            // Si recibimos el conteo desde Subestaciones (forcedCorrelativo), LO USAMOS.
+            if (forcedCorrelativo) {
+                console.log("✅ Usando Correlativo Forzado desde BD:", forcedCorrelativo);
+                targetIndex = forcedCorrelativo;
             } 
-            // B. Si es nuevo o no tiene suministro
             else {
-                if (maxFolderIndex === 0) {
-                    targetIndex = 1; // Primera vez
-                } else if (photosInMaxFolder >= 6) {
-                    targetIndex = maxFolderIndex + 1; // Carpeta llena, nueva
-                } else {
-                    targetIndex = maxFolderIndex; // Cabe en la actual
-                }
+                // FALLBACK: Si no viene el dato, escaneamos las fotos locales (Lógica antigua)
+                let maxFolderIndex = 0;
+                currentPhotos.forEach(p => {
+                    const path = (p.archNombre || p.ARCH_Nombre || "");
+                    const matchFolder = path.match(/\/7004\/(\d+)\//);
+                    if (matchFolder) {
+                        const folderIndex = parseInt(matchFolder[1], 10);
+                        if (folderIndex > maxFolderIndex) maxFolderIndex = folderIndex;
+                    }
+                });
+                targetIndex = maxFolderIndex + 1;
             }
 
             finalFolderSegment = `7004/${targetIndex}`;
-            // El nombre SIEMPRE lleva el suministro: 7004.1.SUMINISTRO
-            defNamePart = `7004.1.${sumStr}`;
+            
+            // 🔥 AQUÍ SE PONE EL SUMINISTRO EN EL NOMBRE (PARA BORRAR LUEGO) 🔥
+            // Formato actual: 7004_CORRELATIVO-SUMINISTRO
+            // Ej: 7004_5-123456
+            defNamePart = `7004_${targetIndex}-${currentSupply}`;
+
         } else {
-            // Lógica para otras deficiencias (no 7004)
-            if (sumStr !== "0000") defNamePart = `${tipCode}.1.${sumStr}`;
+            // Lógica para otras deficiencias (NO 7004)
+            if (currentSupply !== "00000" && currentSupply !== "0") {
+                defNamePart = `${tipCode}.1.${currentSupply}`;
+            } else {
+                defNamePart = tipCode;
+            }
         }
 
         const dateStr = formatCompactDate(formData.date);
+        
+        // Nombre Final: FOT-SED-COD-7004_N-SUM-FECHA-TIPO.jpg
         const fileName = `FOT-${sSed}-${sCod}-${defNamePart}-${dateStr}-${formData.tipo}.jpg`;
         const dbPath = `${elementBaseRel}/${finalFolderSegment}/${fileName}`;
         
         return { dbPath, fileName };
     };
-
     const handleSaveClick = () => {
         if (!formData.file && !formData.preview) { 
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta seleccionar foto.' }); 

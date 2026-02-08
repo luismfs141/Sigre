@@ -229,7 +229,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
     );
 };
 
-export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate,suministro }) {
+export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate,suministro,element7004Count,my7004Correlativo }) {
     const toast = useRef(null);
     const { files, loadingFiles, loadFiles, addFile } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
@@ -242,6 +242,12 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
+    useEffect(() => {
+        console.log("📢 --- REVISIÓN DE PROPS EVIDENCE GALLERY ---");
+        console.log("1. Suministro:", suministro);
+        console.log("2. Correlativo (Carpeta):", my7004Correlativo);
+    }, [suministro, my7004Correlativo]);
+
 
     useEffect(() => { 
         if (deficiency?.defiInterno) {
@@ -267,6 +273,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
             return true;
         });
     }, [files, deficiency,suministro]);
+    
 
     const { photos } = useMemo(() => {
         return { photos: relevantFiles.filter(f => !(f.archNombre||"").toLowerCase().match(/\.(m4a|mp3)$/)) };
@@ -291,63 +298,105 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
         };
     };
 
-    const handleUploadSave = async (dataToSave) => {
+const handleUploadSave = async (dataToSave) => {
+        // 1. Datos Base
         const feederLbl = resolveFeederName(feeder, deficiency);
         const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
         const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste'; 
         const idElem = getValue('IdElemento'); 
+        const currentDefId = Number(getValue('Interno')); // ID único de la fila (ej: 113177)
         
         const defCodeBase = safeSeg(deficiency.tipiCodigo || "7004");
         const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
-        const suministro = String(deficiency.defiSuministro || deficiency.suministro || "").trim();
+        
+        const rawSupply = suministro || deficiency.defiNumSuministro || deficiency.suministro;
+        const sumStr = (rawSupply && String(rawSupply) !== '0' && String(rawSupply) !== 'null') ? String(rawSupply).trim() : '00000';
 
         let defFolder = defCodeBase;
+        let namePart = defCodeBase;
 
         if (is7004) {
-            let sumStr = (suministro && suministro !== '0' && suministro !== 'null') ? suministro : '0000';
-            let maxCorrelativo = 1;
-            let countInMax = 0;
+            let targetFolderId = 0;
+            let maxFolderFound = 0;
 
+            // -------------------------------------------------------------
+            // LÓGICA DE DETECCIÓN DE CORRELATIVO (Basada en tus 5 filas de SQL)
+            // -------------------------------------------------------------
+            
+            // A. Escaneamos TODAS las fotos 7004 de este elemento
             const photos7004 = photos.filter(p => (p.archNombre || p.ARCH_Nombre || "").includes("/7004/"));
+            
+            // B. Buscamos si ESTA deficiencia específica (currentDefId) ya tiene carpeta asignada
+            const myExistingPhoto = photos7004.find(p => 
+                Number(p.archCodTabla || p.ARCH_CodTabla) === currentDefId
+            );
+
+            // Calculamos el máximo global existente
             photos7004.forEach(p => {
-                const match = (p.archNombre || p.ARCH_Nombre || "").match(/\/7004\/(\d+)\//);
+                const path = (p.archNombre || p.ARCH_Nombre || "").replace(/\\/g, '/');
+                const match = path.match(/\/7004\/(\d+)\//);
                 if (match) {
-                    const corr = parseInt(match[1], 10);
-                    if (corr > maxCorrelativo) { maxCorrelativo = corr; countInMax = 1; }
-                    else if (corr === maxCorrelativo) { countInMax++; }
+                    const fid = parseInt(match[1], 10);
+                    if (fid > maxFolderFound) maxFolderFound = fid;
                 }
             });
 
-            if (countInMax >= 6) maxCorrelativo++;
-            defFolder = `7004/${maxCorrelativo}`;
+            if (myExistingPhoto) {
+                // CASO 1: Ya tenemos fotos, reutilizamos NUESTRA carpeta
+                const path = (myExistingPhoto.archNombre || myExistingPhoto.ARCH_Nombre || "").replace(/\\/g, '/');
+                const match = path.match(/\/7004\/(\d+)\//);
+                if (match) targetFolderId = parseInt(match[1], 10);
+                else targetFolderId = maxFolderFound + 1; // Fallback
+            } else {
+                // CASO 2: Somos una deficiencia nueva, creamos la SIGUIENTE carpeta
+                targetFolderId = maxFolderFound + 1;
+            }
+
+            // --- DEFINICIÓN DE RUTA ---
+            
+            // Carpeta Física: .../7004/5
+            defFolder = `7004/${targetFolderId}`;
+
+            // -----------------------------------------------------------------------
+            // 🔥 LÍNEA DEL SUMINISTRO EN EL NOMBRE (PARA BORRAR EN EL FUTURO) 🔥
+            // Actualmente sale: 7004_5-123456
+            // En el futuro cambiarás a: `7004_${targetFolderId}`
+            // -----------------------------------------------------------------------
+            namePart = `7004_${targetFolderId}-${sumStr}`;
+
         } else {
-             if (suministro && suministro !== '0') defFolder = `${defCodeBase}.1.${suministro}`;
+             // Lógica estándar NO-7004
+             if (sumStr !== '00000') {
+                 defFolder = `${defCodeBase}.1.${sumStr}`;
+                 namePart = `${defCodeBase}.1.${sumStr}`;
+             }
         }
         
         const compactDate = formatCompactDate(dataToSave.date);
         
-        let nameFolderPart = defFolder;
-        if (is7004) {
-             let sumStr = (suministro && suministro !== '0') ? suministro : '0000';
-             nameFolderPart = `7004.1.${sumStr}`;
-        } else {
-             nameFolderPart = defFolder.replace(/\//g, '.');
-        }
-
-        const fileName = `FOT-${sedLbl}-${codeElemLbl}-${nameFolderPart}-${compactDate}-${dataToSave.tipo}.jpg`;
+        // Nombre Final: FOT-SED-COD-7004_N-SUM-FECHA-TIPO.jpg
+        const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${compactDate}-${dataToSave.tipo}.jpg`;
+        
         const relativePath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}`;
         const dbPath = `SIGRE.MOVIL/${relativePath}/${fileName}`;
 
         try { await LocalFileStore.save(fileName, dataToSave.file); } catch (e) { console.error(e); }
 
         const payload = {
-            archInterno: 0, archTipo: String(dataToSave.tipo), archNombre: dbPath.substring(0, 255),
-            archTabla: "Deficiencias", archCodTabla: Number(getValue('Interno')),
-            archLatitud: parseFloat(dataToSave.lat) || 0, archLongitud: parseFloat(dataToSave.long) || 0,
-            archFecha: toLocalISOString(dataToSave.date), archTipoElemento: tipoElemRaw,
-            archIdElemento: Number(idElem), tipiInterno: Number(deficiency.tipiInterno), archActivo: true 
+            archInterno: 0, 
+            archTipo: String(dataToSave.tipo), 
+            archNombre: dbPath.substring(0, 255),
+            archTabla: "Deficiencias", 
+            archCodTabla: currentDefId, // ID de la fila (113177, etc)
+            archLatitud: parseFloat(dataToSave.lat) || 0, 
+            archLongitud: parseFloat(dataToSave.long) || 0,
+            archFecha: toLocalISOString(dataToSave.date), 
+            archTipoElemento: tipoElemRaw,
+            archIdElemento: Number(idElem), 
+            tipiInterno: Number(deficiency.tipiInterno), 
+            archActivo: true 
         };
 
         if (await addFile(payload)) {
@@ -359,8 +408,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar.' });
         }
     };
-
-    // 🔥🔥🔥 GENERACIÓN DE ZIP EXACTA (SIN CARPETAS FANTASMA) 🔥🔥🔥
+// 🔥🔥🔥 GENERACIÓN DE ZIP EXACTA (CON CORRECCIÓN DE SUMINISTRO) 🔥🔥🔥
     const handleDownloadZip = async () => {
         if (photos.length === 0) return;
         setZipLoading(true);
@@ -378,38 +426,55 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
                 const fileRec = photos[i];
                 // Obtenemos la ruta CRUD de la BD: SIGRE.MOVIL/Alim/Sed/Tipo/Cod/7004/1/FOT.jpg
                 const rawPath = (fileRec.archNombre || fileRec.ARCH_Nombre || "").replace(/\\/g, '/');
-                const fileName = rawPath.split('/').pop();
+                const originalFileName = rawPath.split('/').pop(); // Nombre original (para buscar en cache)
 
                 // 2. Extraer la estructura de carpetas EXACTA del archivo
                 // Quitamos "SIGRE.MOVIL/" del inicio si existe
                 let relativePath = rawPath.replace(/^.*SIGRE\.MOVIL\//i, '');
                 
-                // Quitamos el nombre del archivo para quedarnos solo con las carpetas
-                // Ej: Mejia/8154/Vano/VBT.../7004/1
-                let folderStructure = relativePath.substring(0, relativePath.lastIndexOf('/'));
-                
-                // Si la carpeta física tiene /Vano/ o /Poste/, lo respetamos en el ZIP
-                // Si la carpeta física es .../7004/1, se creará así.
-                // Si la carpeta física era .../6002/, se creará así. 
-                // NO forzamos 6002 por defecto. Usamos lo que tiene el archivo.
+                // 🔥🔥🔥 CORRECCIÓN DE SUMINISTRO EN TIEMPO REAL 🔥🔥🔥
+                // Si tenemos un suministro válido (ej: 123456), reemplazamos cualquier '00000' o errores
+                if (currentSupply && currentSupply !== "0000" && currentSupply !== "0") {
+                    // Reemplaza en carpetas (ej: .../7004.1.00000/... -> .../7004.1.123456/...)
+                    relativePath = relativePath.replace(/7004\.1\.0+/, `7004.1.${currentSupply}`);
+                    relativePath = relativePath.replace(/7004\.1\.undefined/, `7004.1.${currentSupply}`);
+                    relativePath = relativePath.replace(/7004\.1\.null/, `7004.1.${currentSupply}`);
+                    
+                    // También intenta reemplazar segmentos sueltos .00000.
+                    relativePath = relativePath.replace(/\.00000\./, `.${currentSupply}.`);
+                }
 
+                // 3. Separamos estructura y nombre (ya corregidos en relativePath)
+                let folderStructure = relativePath.substring(0, relativePath.lastIndexOf('/'));
+                let zipFileName = relativePath.substring(relativePath.lastIndexOf('/') + 1);
+
+                // 🔥🔥🔥 CORRECCIÓN TAMBIÉN EN EL NOMBRE DEL ARCHIVO 🔥🔥🔥
+                // Ej: FOT-...-7004.1.00000-...jpg -> FOT-...-7004.1.123456-...jpg
+                if (currentSupply && currentSupply !== "0000" && currentSupply !== "0") {
+                     zipFileName = zipFileName.replace(/7004\.1\.0+/, `7004.1.${currentSupply}`);
+                     zipFileName = zipFileName.replace(/\.00000\-/, `.${currentSupply}-`);
+                }
+                
+                // Creamos la carpeta en el ZIP
                 const targetFolder = zip.folder(folderStructure);
 
-                // 3. Obtener Blob y guardar
-                let fileBlob = await LocalFileStore.get(fileName);
+                // 4. Obtener Blob y guardar
+                let fileBlob = await LocalFileStore.get(originalFileName);
                 if (!fileBlob) {
                     const url = getBestUrl(fileRec, i);
                     if (url) fileBlob = await urlToBlob(url);
                 }
 
                 if (fileBlob) {
-                    targetFolder.file(fileName, fileBlob);
+                    // Guardamos el archivo con el nombre CORREGIDO (zipFileName)
+                    targetFolder.file(zipFileName, fileBlob);
                 }
             }
 
             const content = await zip.generateAsync({ type: "blob" });
-            saveAs(content, `Deficiencia_${getValue('CodigoElemento')}.zip`);
-            toast.current.show({ severity: 'success', summary: 'ZIP Generado', detail: 'Descarga iniciada.' });
+            // Incluimos el suministro en el nombre del ZIP final también
+            saveAs(content, `Deficiencia_${getValue('CodigoElemento')}_${currentSupply}.zip`);
+            toast.current.show({ severity: 'success', summary: 'ZIP Generado', detail: 'Descarga iniciada (Rutas corregidas).' });
 
         } catch (e) {
             console.error("ZIP Error:", e);
@@ -455,7 +520,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     };
 
     if (!deficiency) return <div className="h-full flex items-center justify-center text-gray-400">Selecciona un registro</div>;
-    const currentSupply = String(deficiency.defiSuministro || deficiency.suministro || "").trim();
+    const currentSupply = String(deficiency.defiNumSuministro || deficiency.suministro || "").trim();
     const defCode = String(deficiency.tipiCodigo || "7004").trim();
 
     return (
@@ -492,7 +557,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
                  </div>
             </div>
             {renderLightbox()}
-            <PhotoUploadModal visible={modalVisible} onHide={() => setModalVisible(false)} onSave={handleUploadSave} isEditing={false} initialData={getInitialFormData()} currentPhotos={photos} deficiencyData={deficiency} forcedSupply={suministro}contextData={{feeder, sed, elementCode: getValue('CodigoElemento'), elementType: getValue('TipoElemento')}} />
+            <PhotoUploadModal visible={modalVisible} onHide={() => setModalVisible(false)} onSave={handleUploadSave} isEditing={false} initialData={getInitialFormData()} currentPhotos={photos} deficiencyData={deficiency} forcedSupply={suministro} forcedCorrelativo={my7004Correlativo} contextData={{feeder, sed, elementCode: getValue('CodigoElemento'), elementType: getValue('TipoElemento')}} />
         </div>
     );
 }

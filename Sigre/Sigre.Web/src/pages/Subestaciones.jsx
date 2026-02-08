@@ -293,6 +293,31 @@ export default function Subestaciones() {
             }
         });
     };
+    // NUEVO: CÁLCULO DE CORRELATIVO PARA 7004
+    // -------------------------------------------------------------------
+    const correlativoInfo = useMemo(() => {
+        if (!selectedDeficiency) return { count: 0, myCorrelativo: 0 };
+
+        const targetGis = selectedDeficiency.defiCodigoElemento;
+        const targetType = "7004"; // O el código interno 60
+
+        // 1. Filtramos todas las deficiencias de ESTE elemento que sean 7004
+        const sameElement7004s = mappedDeficiencies.filter(d =>
+            d.defiCodigoElemento === targetGis &&
+            (getCodeById(d.tipiInterno) === targetType || d.tipiInterno === 60)
+        );
+
+        // 2. Ordenamos por fecha de registro (o ID) para saber "cuál soy yo" en la fila
+        // Esto es útil si quieres decir "Soy la 7004 número 2 de 5"
+        sameElement7004s.sort((a, b) => a.defiInterno - b.defiInterno);
+
+        const myIndex = sameElement7004s.findIndex(d => d.defiInterno === selectedDeficiency.defiInterno) + 1;
+
+        return {
+            totalCount: sameElement7004s.length, // Total de 7004s para este poste
+            myCorrelativo: myIndex > 0 ? myIndex : (sameElement7004s.length + 1) // Si es nueva, será la siguiente
+        };
+    }, [selectedDeficiency, mappedDeficiencies, getCodeById]);
 
     // -------------------------------------------------------------------
     // 6. TEMPLATES
@@ -436,9 +461,10 @@ export default function Subestaciones() {
                                 sed={selectedSed}
                                 // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
                                 onCountUpdate={setEvidenceCount}
-                                suministro={
-                                    selectedDeficiency?.defiNumSuministro 
-                                }
+                                suministro={selectedDeficiency?.defiNumSuministro || "0000"}
+                                // 🔥 PASAMOS EL DATO CALCULADO 🔥
+                                element7004Count={correlativoInfo.totalCount}
+                                my7004Correlativo={correlativoInfo.myCorrelativo}
                             />
                         </div>
                     </SplitterPanel>
