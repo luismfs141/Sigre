@@ -316,5 +316,56 @@ namespace Sigre.Server.Controllers
                 return BadRequest(new { estado = "Error", mensaje = $"Error interno: {ex.Message}" });
             }
         }
+        
+        [HttpGet("GetBySedWithTerceros")]
+        public IActionResult GetBySedWithTerceros(int x_sedId)
+        {
+            try
+            {
+                var da = new DADeficiency();
+
+                // Llamamos EXCLUSIVAMENTE al método nuevo
+                var lista = da.DADEFI_GetBySed_ConEstadoTerceros(x_sedId);
+
+                return Ok(lista);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Error al obtener deficiencias: " + ex.Message);
+            }
+        }
+        public class EstadoTerceroDto
+        {
+            public int DefiInterno { get; set; } // El ID de la fila que seleccionaste en la tabla
+            public bool EsTercero { get; set; }  // true (No existe/Rojo) o false (Existe/Verde)
+        }
+
+        [HttpPost("CambiarEstadoTercero")]
+        public IActionResult CambiarEstadoTercero([FromBody] EstadoTerceroDto modelo)
+        {
+            try
+            {
+                var da = new DADeficiency();
+
+                // Llamamos al método "Quirúrgico" (SQL Raw) que creamos
+                // Si mandas modelo.EsTercero = true  --> Lo marca como eliminado (1)
+                // Si mandas modelo.EsTercero = false --> Lo restaura (0)
+                bool exito = da.DADEFI_CambiarEstadoTerceroDesdeDeficiencia(modelo.DefiInterno, modelo.EsTercero);
+
+                if (exito)
+                {
+                    string accion = modelo.EsTercero ? "marcado como NO EXISTE" : "RESTAURADO a campo";
+                    return Ok(new { message = $"Elemento {accion} correctamente." });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se pudo actualizar. Verifica que la deficiencia exista y tenga un elemento asociado." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Error interno: " + ex.Message);
+            }
+        }
     }
 }

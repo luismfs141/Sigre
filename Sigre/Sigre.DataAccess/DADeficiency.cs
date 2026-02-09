@@ -999,5 +999,99 @@ namespace Sigre.DataAccess
                 return deficiency != null ? deficiency.DefiInterno : 0;
             }
         }
+        // Método NUEVO y EXCLUSIVO para traer deficiencias + estado de terceros
+        public List<Deficiencia> DADEFI_GetBySed_ConEstadoTerceros(int x_sed)
+        {
+            using (var ctx = new SigreContext())
+            {
+                var resultadoFinal = new List<Deficiencia>();
+
+                // ---------------------------------------------------------
+                // 1. BUSCAR EN POSTES (Usando Join para velocidad máxima)
+                // ---------------------------------------------------------
+                var queryPostes = from d in ctx.Deficiencias
+                                  join p in ctx.Postes on d.DefiIdElemento equals p.PostInterno
+                                  where d.DefiTipoElemento == "POST"
+                                     && p.PostSubestacion == x_sed // Filtro por SED en el padre
+                                  select new
+                                  {
+                                      Deficiencia = d,
+                                      // Convertimos el 1/0 a true/false aquí mismo
+                                      EsTercero = p.PostTerceros
+                                  };
+
+                // Ejecutamos y mapeamos
+                foreach (var item in queryPostes.ToList())
+                {
+                    // Llenamos la propiedad virtual
+                    item.Deficiencia.EsTercero = item.EsTercero;
+                    resultadoFinal.Add(item.Deficiencia);
+                }
+
+                // ---------------------------------------------------------
+                // 2. BUSCAR EN VANOS
+                // ---------------------------------------------------------
+                var queryVanos = from d in ctx.Deficiencias
+                                 join v in ctx.Vanos on d.DefiIdElemento equals v.VanoInterno
+                                 where d.DefiTipoElemento == "VANO"
+                                    && v.VanoSubestacion == x_sed
+                                 select new
+                                 {
+                                     Deficiencia = d,
+                                     EsTercero = v.VanoTerceros
+                                 };
+
+                foreach (var item in queryVanos.ToList())
+                {
+                    item.Deficiencia.EsTercero = item.EsTercero;
+                    resultadoFinal.Add(item.Deficiencia);
+                }
+
+                return resultadoFinal;
+            }
+        }
+        // Método para cambiar el estado "Tercero" del ELEMENTO PADRE (Poste/Vano)
+        // usando el ID de la Deficiencia como referencia.
+        public bool DADEFI_CambiarEstadoTerceroDesdeDeficiencia(int x_defiInterno, bool x_esTercero)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Buscamos la deficiencia (Esto no falla porque la tabla Deficiencias está bien)
+                var deficiencia = ctx.Deficiencias
+                                     .Select(d => new { d.DefiInterno, d.DefiTipoElemento, d.DefiIdElemento }) // Proyectamos solo lo necesario para evitar errores en otras columnas
+                                     .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
+
+                if (deficiencia == null || deficiencia.DefiIdElemento == null)
+                {
+                    return false;
+                }
+
+                int filasAfectadas = 0;
+                int valorBit = x_esTercero ? 1 : 0; // Convertimos bool a 1 o 0 para SQL
+
+                // 2. Si es POSTE -> SQL Directo
+                if (deficiencia.DefiTipoElemento == "POST")
+                {
+                    // Ejecutamos UPDATE directo ignorando el resto de columnas
+                    filasAfectadas = ctx.Database.ExecuteSqlRaw(
+                        "UPDATE Postes SET POST_Terceros = {0} WHERE POST_Interno = {1}",
+                        valorBit,
+                        deficiencia.DefiIdElemento
+                    );
+                }
+                // 3. Si es VANO -> SQL Directo (Aquí evitamos el error de VANO_Tramo)
+                else if (deficiencia.DefiTipoElemento == "VANO")
+                {
+                    // Al escribir el SQL a mano, nunca mencionamos VANO_Tramo, así que no fallará
+                    filasAfectadas = ctx.Database.ExecuteSqlRaw(
+                        "UPDATE Vanos SET VANO_Terceros = {0} WHERE VANO_Interno = {1}",
+                        valorBit,
+                        deficiencia.DefiIdElemento
+                    );
+                }
+
+                return filasAfectadas > 0;
+            }
+        }
     }
 }

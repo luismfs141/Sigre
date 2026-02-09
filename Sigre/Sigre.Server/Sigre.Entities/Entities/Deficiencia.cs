@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Sigre.Entities.Entities;
 
@@ -123,5 +124,12 @@ public partial class Deficiencia
 
     public string? DefiAccesibilidad { get; set; }
     public string? DefiTipoCruce { get; set; }
+    [NotMapped]
+    public bool EsTercero { get; set; }
 
+}
+public class EstadoTerceroDto
+{
+    public int DefiInterno { get; set; } // El ID de la deficiencia seleccionada
+    public bool EsTercero { get; set; }  // true = ELIMINAR (No existe), false = RESTAURAR (Existe)
 }

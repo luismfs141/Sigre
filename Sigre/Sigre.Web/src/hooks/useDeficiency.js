@@ -53,7 +53,7 @@ export const useDeficienciesBySed = () => {
         setError(null);
         try {
             console.log(`📡 [GET] Buscando Deficiencias de la SED: ${sedId}`);
-            const response = await api.get('/Deficiency/GetBySed', { params: { x_sed: sedId } });
+            const response = await api.get('/Deficiency/GetBySedWithTerceros', { params: { x_sedId: sedId } });
             const rawData = response.data || [];
             setDeficiencies(rawData);
             return rawData;

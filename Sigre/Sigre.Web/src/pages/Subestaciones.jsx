@@ -25,7 +25,7 @@ import { useUsuario } from '../hooks/useUsuario';
 // --- COMPONENTES ---
 import EvidenceGallery from './EvidenceGallery';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
-
+import EstadoBadge from '../utils/estadoBadge';
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
@@ -293,6 +293,51 @@ export default function Subestaciones() {
             }
         });
     };
+    // --- ACCIÓN: CAMBIAR ESTADO TERCERO (Restaurar / Eliminar de Campo) ---
+    const confirmToggleTercero = (rowData) => {
+        // Si actualmente esTercero es true, queremos pasarlo a false (Restaurar)
+        const nuevoEstado = !rowData.esTercero;
+        
+        const accionTexto = nuevoEstado ? "MARCAR COMO NO EXISTE" : "RESTAURAR A CAMPO";
+        const icono = nuevoEstado ? "pi pi-times-circle" : "pi pi-check-circle";
+
+        confirmDialog({
+            message: `¿Estás seguro de ${accionTexto} el elemento asociado a esta deficiencia?`,
+            header: 'Confirmar Estado en Campo',
+            icon: `pi ${icono} text-yellow-500`,
+            acceptLabel: 'Sí, cambiar',
+            rejectLabel: 'Cancelar',
+            accept: async () => {
+                try {
+                    // Llamamos al endpoint "Quirúrgico" que creamos
+                    await api.post('/Deficiency/CambiarEstadoTercero', {
+                        defiInterno: rowData.defiInterno, // Enviamos el ID de la deficiencia
+                        esTercero: nuevoEstado            // true = Eliminar, false = Restaurar
+                    });
+
+                    toast.current.show({ 
+                        severity: 'success', 
+                        summary: 'Actualizado', 
+                        detail: `Elemento ${nuevoEstado ? 'marcado como NO EXISTE' : 'RESTAURADO'} correctamente.` 
+                    });
+
+                    // IMPORTANTE: Recargamos la tabla para ver el cambio de color al instante
+                    if (selectedSed) {
+                        const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                        await fetchBySed(idSed);
+                    }
+
+                } catch (error) {
+                    console.error("Error cambiando estado tercero:", error);
+                    toast.current.show({ 
+                        severity: 'error', 
+                        summary: 'Error', 
+                        detail: 'No se pudo cambiar el estado.' 
+                    });
+                }
+            }
+        });
+    };
     // NUEVO: CÁLCULO DE CORRELATIVO PARA 7004
     // -------------------------------------------------------------------
     const correlativoInfo = useMemo(() => {
@@ -334,10 +379,76 @@ export default function Subestaciones() {
     const inspectorTemplate = (rowData) => { if (loadingUsers) return <Skeleton width="80px" />; return <span className="text-gray-700 text-xs font-medium uppercase truncate">{rowData.inspectorLabel}</span>; };
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
 
-    const actionBodyTemplate = (rowData) => {
+
+// --- AGREGAR ESTE TEMPLATE NUEVO ---
+const terceroTemplate = (rowData) => {
+    // Convertimos la propiedad 'esTercero' (bool) al formato 0/1 que espera tu Badge
+    // true = No Existe (1), false = Existe (0)
+    const estadoNumerico = rowData.esTercero ? 1 : 0; 
+    return <EstadoBadge estado={estadoNumerico} />;
+};
+   const actionBodyTemplate = (rowData) => {
+        // 1. Si la deficiencia está eliminada (Soft Delete), solo mostramos Restaurar Deficiencia
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
-        if (isDeleted) return <div className="flex gap-1 justify-center"><Button icon="pi pi-refresh" rounded text severity="success" size="small" onClick={() => confirmRestoreDeficiency(rowData)} tooltip="Restaurar" /></div>;
-        return <div className="flex gap-1 justify-center"><Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} tooltip="Editar" /><Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} tooltip="Eliminar" /></div>;
+        
+        if (isDeleted) {
+            return (
+                <div className="flex gap-1 justify-center">
+                    <Button 
+                        icon="pi pi-refresh" 
+                        rounded 
+                        text 
+                        severity="success" 
+                        size="small" 
+                        onClick={() => confirmRestoreDeficiency(rowData)} 
+                        tooltip="Restaurar Deficiencia" 
+                    />
+                </div>
+            );
+        }
+
+        // 2. Lógica para el botón de "En Campo / Terceros"
+        // Si esTercero es true (No existe) -> Botón VERDE para Restaurar
+        // Si esTercero es false (Existe) -> Botón NARANJA para Eliminar de campo
+        const isNoExiste = rowData.esTercero === true;
+        
+        return (
+            <div className="flex gap-1 justify-center">
+                {/* Botón Editar */}
+                <Button 
+                    icon="pi pi-pencil" 
+                    rounded 
+                    text 
+                    severity="info" 
+                    size="small" 
+                    onClick={() => openEdit(rowData)} 
+                    tooltip="Editar" 
+                />
+
+                {/* --- NUEVO BOTÓN: RESTAURAR O QUITAR DE CAMPO --- */}
+                <Button 
+                    icon={isNoExiste ? "pi pi-check-circle" : "pi pi-ban"} 
+                    rounded 
+                    text 
+                    severity={isNoExiste ? "success" : "warning"} 
+                    size="small" 
+                    onClick={() => confirmToggleTercero(rowData)} 
+                    tooltip={isNoExiste ? "Restaurar elemento a Campo" : "Marcar elemento como No Existe"} 
+                />
+
+                {/* Botón Eliminar Deficiencia */}
+                <Button 
+                    icon="pi pi-trash" 
+                    rounded 
+                    text 
+                    severity="danger" 
+                    size="small" 
+                    onClick={() => confirmDeleteDeficiency(rowData)} 
+                    tooltip="Eliminar Deficiencia" 
+                />
+            </div>
+        );
+    
     };
 
     // -------------------------------------------------------------------
@@ -429,7 +540,13 @@ export default function Subestaciones() {
                             <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
                             <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '130px', textAlign: 'center' }} filter filterElement={statusFilterTemplate} showFilterMenu={false} />
                             <Column field="criticidadLabel" header="Crit." body={criticidadTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ width: '100px', textAlign: 'center' }} />
-
+                            <Column 
+    field="esTercero" 
+    header="En Campo" 
+    body={terceroTemplate} 
+    sortable 
+    style={{ textAlign: 'center', width: '110px' }} 
+/>
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                         </DataTable>
                     </SplitterPanel>
