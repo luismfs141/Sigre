@@ -10,8 +10,12 @@ import { useFiles } from '../hooks/useFiles';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 
 // 🔥 CONEXIÓN AL SERVIDOR CLOUDFLARE
+//cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
 //const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
-const API_BASE_URL = "http://localhost:8080/";
+//ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
+const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
+//servidor estatico enlocal
+//const API_BASE_URL = "http://localhost:8080/";
 
 // --- 📦 ALMACENAMIENTO LOCAL ---
 const LocalFileStore = {
