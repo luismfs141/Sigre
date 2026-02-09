@@ -10,7 +10,7 @@ export const useFiles = () => {
         if (!defiInterno) return;
         setLoadingFiles(true);
         try {
-            const response = await api.get('/File/GetByDeficiency', {
+            const response = await api.get('/File/GetByDeficiencyWeb', {
                 params: { x_deficiency: defiInterno }
             });
             setFiles(response.data);
@@ -39,7 +39,7 @@ export const useFiles = () => {
     // 3. AGREGAR (POST UploadFile)
     const addFile = async (fileData) => {
         try {
-            await api.post('/File/UploadFile', fileData);
+            await api.post('/File/UploadFileInWeb', fileData);
             return true; 
         } catch (error) {
             console.error("Error subiendo:", error);

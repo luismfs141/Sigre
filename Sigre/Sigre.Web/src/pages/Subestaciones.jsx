@@ -456,6 +456,7 @@ const terceroTemplate = (rowData) => {
     // -------------------------------------------------------------------
     return (
         <div className="flex flex-col h-screen bg-gray-100 p-2 overflow-hidden">
+            
             <style>{highContrastStyle}</style>
             <Toast ref={toast} />
             <ConfirmDialog />
@@ -498,10 +499,10 @@ const terceroTemplate = (rowData) => {
 
             {/* --- CONTENIDO PRINCIPAL --- */}
             <div className="flex-grow bg-white rounded shadow border border-gray-300 overflow-hidden">
-                <Splitter style={{ height: '100%' }} layout="vertical" className="border-0">
+                <Splitter style={{ height: '100%' }} layout="horizontal" className="border-0">
 
                     {/* PANEL IZQUIERDO: TABLA */}
-                    <SplitterPanel size={70} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
+                    <SplitterPanel size={85} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
                         <DataTable
                             value={mappedDeficiencies}
                             loading={loadingDef}
@@ -527,13 +528,10 @@ const terceroTemplate = (rowData) => {
                             <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column field="defiNumSuministro" header="Num Suministro" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
-                            <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
-                            <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
-                            <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
-                            <Column field="DefiAmrmadoMaterial" header="Armado" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
+                        
 
                             <Column field="tipificacionLabel" header="Tipificación" body={typificationTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ textAlign: 'center', width: '130px' }} />
-                            <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} />
+                            
 
                             <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
 
@@ -548,12 +546,19 @@ const terceroTemplate = (rowData) => {
     style={{ textAlign: 'center', width: '110px' }} 
 />
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
+                            <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} />
+                            <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
+                            <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
+                            <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
+                            <Column field="DefiAmrmadoMaterial" header="Armado" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
                         </DataTable>
                     </SplitterPanel>
 
                     {/* PANEL DERECHO: GALERÍA */}
                     {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
-                    <SplitterPanel size={30} minSize={15} className="bg-white flex flex-col overflow-hidden">
+                    <SplitterPanel size={15} minSize={10} className="bg-white flex flex-col overflow-hidden">
+                    
+      
 
                         {/* CABECERA DEL PANEL (Con el contador) */}
                         <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0 z-10">

@@ -8,14 +8,15 @@ import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { useFiles } from '../hooks/useFiles'; 
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
-
+import { useTypification } from '../hooks/useTypification';
 // 🔥 CONEXIÓN AL SERVIDOR CLOUDFLARE
 //cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
 //const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
 //ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
+//const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
 //servidor estatico enlocal
-//const API_BASE_URL = "http://localhost:8080/";
+const API_BASE_URL = "http://localhost:8080/";
+
 
 // --- 📦 ALMACENAMIENTO LOCAL ---
 const LocalFileStore = {
@@ -68,6 +69,7 @@ const LocalFileStore = {
 };
 
 // --- UTILIDADES ---
+
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 const resolveFeederName = (feederProp, deficiencyObj) => {
     if (feederProp) {
@@ -214,6 +216,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
             setCurrentSrc(offlinePlaceholder);
         }
     };
+    
 
     return (
         <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group" onClick={() => onImageClick(index)}>
@@ -240,6 +243,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     const [zipLoading, setZipLoading] = useState(false);
     const [localCacheVersion, setLocalCacheVersion] = useState(0); 
     const resolvedUrlsRef = useRef({}); 
+    const { getCodeById } = useTypification();
 
     const [lightboxIndex, setLightboxIndex] = useState(-1);
     const [zoomLevel, setZoomLevel] = useState(1);
@@ -277,7 +281,6 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
             return true;
         });
     }, [files, deficiency,suministro]);
-    
 
     const { photos } = useMemo(() => {
         return { photos: relevantFiles.filter(f => !(f.archNombre||"").toLowerCase().match(/\.(m4a|mp3)$/)) };
@@ -303,86 +306,60 @@ export default function EvidenceGallery({ deficiency, feeder, sed, onCountUpdate
     };
 
 const handleUploadSave = async (dataToSave) => {
-        // 1. Datos Base
+        // --- 1. PREPARACIÓN DE DATOS ---
         const feederLbl = resolveFeederName(feeder, deficiency);
         const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
         const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste'; 
         const idElem = getValue('IdElemento'); 
-        const currentDefId = Number(getValue('Interno')); // ID único de la fila (ej: 113177)
+        const currentDefId = Number(getValue('Interno'));
         
-        const defCodeBase = safeSeg(deficiency.tipiCodigo || "7004");
-        const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
-        
-        const rawSupply = suministro || deficiency.defiNumSuministro || deficiency.suministro;
-        const sumStr = (rawSupply && String(rawSupply) !== '0' && String(rawSupply) !== 'null') ? String(rawSupply).trim() : '00000';
+        // --- DETECCIÓN DE ESCENARIO (CONSTANTE) ---
+        // Obtenemos el código limpio usando el hook getCodeById o tipiCodigo
+        const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
+        const defCodeBase = String(defCodeRaw).trim();
 
-        let defFolder = defCodeBase;
-        let namePart = defCodeBase;
+        // Flags para los 3 escenarios
+        const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
+        const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(deficiency.tipiInterno) === "0";
+        
+        // Preparar Suministro (si existe)
+        const rawSupply = suministro || deficiency.defiNumSuministro || deficiency.suministro;
+        const sumStr = (rawSupply && String(rawSupply) !== '0' && String(rawSupply) !== 'null') ? String(rawSupply).trim() : "00000";
+
+        // --- 2. LÓGICA DE NOMBRADO Y CARPETAS ---
+        let defFolder = "";
+        let namePart = "";
 
         if (is7004) {
-            let targetFolderId = 0;
-            let maxFolderFound = 0;
-
-            // -------------------------------------------------------------
-            // LÓGICA DE DETECCIÓN DE CORRELATIVO (Basada en tus 5 filas de SQL)
-            // -------------------------------------------------------------
+            // === ESCENARIO 1: 7004 (Especial) ===
+            // Usa subcarpeta correlativa y suministro en el nombre
+            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1;
             
-            // A. Escaneamos TODAS las fotos 7004 de este elemento
-            const photos7004 = photos.filter(p => (p.archNombre || p.ARCH_Nombre || "").includes("/7004/"));
-            
-            // B. Buscamos si ESTA deficiencia específica (currentDefId) ya tiene carpeta asignada
-            const myExistingPhoto = photos7004.find(p => 
-                Number(p.archCodTabla || p.ARCH_CodTabla) === currentDefId
-            );
-
-            // Calculamos el máximo global existente
-            photos7004.forEach(p => {
-                const path = (p.archNombre || p.ARCH_Nombre || "").replace(/\\/g, '/');
-                const match = path.match(/\/7004\/(\d+)\//);
-                if (match) {
-                    const fid = parseInt(match[1], 10);
-                    if (fid > maxFolderFound) maxFolderFound = fid;
-                }
-            });
-
-            if (myExistingPhoto) {
-                // CASO 1: Ya tenemos fotos, reutilizamos NUESTRA carpeta
-                const path = (myExistingPhoto.archNombre || myExistingPhoto.ARCH_Nombre || "").replace(/\\/g, '/');
-                const match = path.match(/\/7004\/(\d+)\//);
-                if (match) targetFolderId = parseInt(match[1], 10);
-                else targetFolderId = maxFolderFound + 1; // Fallback
-            } else {
-                // CASO 2: Somos una deficiencia nueva, creamos la SIGUIENTE carpeta
-                targetFolderId = maxFolderFound + 1;
-            }
-
-            // --- DEFINICIÓN DE RUTA ---
-            
-            // Carpeta Física: .../7004/5
-            defFolder = `7004/${targetFolderId}`;
-
-            // -----------------------------------------------------------------------
-            // 🔥 LÍNEA DEL SUMINISTRO EN EL NOMBRE (PARA BORRAR EN EL FUTURO) 🔥
-            // Actualmente sale: 7004_5-123456
-            // En el futuro cambiarás a: `7004_${targetFolderId}`
-            // -----------------------------------------------------------------------
-            namePart = `7004_${targetFolderId}-${sumStr}`;
-
-        } else {
-             // Lógica estándar NO-7004
-             if (sumStr !== '00000') {
-                 defFolder = `${defCodeBase}.1.${sumStr}`;
-                 namePart = `${defCodeBase}.1.${sumStr}`;
-             }
+            defFolder = `7004/${folderNum}`;           
+            namePart = `7004_${folderNum}-${sumStr}`;  
+        } 
+        else if (isSinDef) {
+            // === ESCENARIO 2: SINDEF ===
+            // Carpeta fija SINDEF y nombre 0000
+            defFolder = "SINDEF";
+            namePart = "0000";
+        } 
+        else {
+            // === ESCENARIO 3: NORMAL (6004, 6026, ETC) ===
+            // Carpeta y nombre son IGUALES al código base. Sin adornos.
+            defFolder = defCodeBase; 
+            namePart = defCodeBase; 
         }
         
+        // --- 3. CONSTRUCCIÓN FINAL Y GUARDADO ---
         const compactDate = formatCompactDate(dataToSave.date);
         
-        // Nombre Final: FOT-SED-COD-7004_N-SUM-FECHA-TIPO.jpg
+        // Nombre Final: FOT-SED-COD-{namePart}-FECHA-TIPO.jpg
         const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${compactDate}-${dataToSave.tipo}.jpg`;
         
+        // Ruta BD Relativa
         const relativePath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}`;
         const dbPath = `SIGRE.MOVIL/${relativePath}/${fileName}`;
 
@@ -393,7 +370,7 @@ const handleUploadSave = async (dataToSave) => {
             archTipo: String(dataToSave.tipo), 
             archNombre: dbPath.substring(0, 255),
             archTabla: "Deficiencias", 
-            archCodTabla: currentDefId, // ID de la fila (113177, etc)
+            archCodTabla: currentDefId, 
             archLatitud: parseFloat(dataToSave.lat) || 0, 
             archLongitud: parseFloat(dataToSave.long) || 0,
             archFecha: toLocalISOString(dataToSave.date), 
@@ -412,57 +389,71 @@ const handleUploadSave = async (dataToSave) => {
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar.' });
         }
     };
-// 🔥🔥🔥 GENERACIÓN DE ZIP EXACTA (CON CORRECCIÓN DE SUMINISTRO) 🔥🔥🔥
-    const handleDownloadZip = async () => {
+ const handleDownloadZip = async () => {
         if (photos.length === 0) return;
         setZipLoading(true);
         try {
             const zip = new JSZip();
 
-            // 1. URL base de la API
+            // Helper para URL
             const getBestUrl = (f, idx) => {
                 if (resolvedUrlsRef.current[idx]) return resolvedUrlsRef.current[idx];
                 let r = (f.archNombre || f.ARCH_Nombre || "").replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/\/(?:Vano|Poste)\//gi, '/');
                 return `${API_BASE_URL}/${r.split('/').map(encodeURIComponent).join('/')}`;
             }
 
+            // --- DATOS BASE Y DETECCIÓN DE ESCENARIO ---
+            const feederLbl = resolveFeederName(feeder, deficiency);
+            const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
+            const codeElemLbl = safeSeg(getValue('CodigoElemento'));
+            const tipoElemRaw = getValue('TipoElemento') || 'POST';
+            const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
+            
+            // Usamos la misma constante de detección que en el guardado
+            const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
+            const defCodeBase = String(defCodeRaw).trim();
+
+            // Flags
+            const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
+            const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(deficiency.tipiInterno) === "0";
+
+            // --- ITERACIÓN ---
             for (let i = 0; i < photos.length; i++) {
                 const fileRec = photos[i];
-                // Obtenemos la ruta CRUD de la BD: SIGRE.MOVIL/Alim/Sed/Tipo/Cod/7004/1/FOT.jpg
                 const rawPath = (fileRec.archNombre || fileRec.ARCH_Nombre || "").replace(/\\/g, '/');
-                const originalFileName = rawPath.split('/').pop(); // Nombre original (para buscar en cache)
+                const originalFileName = rawPath.split('/').pop();
 
-                // 2. Extraer la estructura de carpetas EXACTA del archivo
-                // Quitamos "SIGRE.MOVIL/" del inicio si existe
-                let relativePath = rawPath.replace(/^.*SIGRE\.MOVIL\//i, '');
+                let folderStructure = "";
+                let zipFileName = originalFileName;
+
+                // --- LÓGICA DE 3 ESCENARIOS ---
                 
-                // 🔥🔥🔥 CORRECCIÓN DE SUMINISTRO EN TIEMPO REAL 🔥🔥🔥
-                // Si tenemos un suministro válido (ej: 123456), reemplazamos cualquier '00000' o errores
-                if (currentSupply && currentSupply !== "0000" && currentSupply !== "0") {
-                    // Reemplaza en carpetas (ej: .../7004.1.00000/... -> .../7004.1.123456/...)
-                    relativePath = relativePath.replace(/7004\.1\.0+/, `7004.1.${currentSupply}`);
-                    relativePath = relativePath.replace(/7004\.1\.undefined/, `7004.1.${currentSupply}`);
-                    relativePath = relativePath.replace(/7004\.1\.null/, `7004.1.${currentSupply}`);
+                if (is7004 && my7004Correlativo > 0) {
+                    // === ESCENARIO 1: 7004 ===
+                    // Ruta: .../CODIGO/7004/{CORRELATIVO}
+                    folderStructure = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/7004/${my7004Correlativo}`;
                     
-                    // También intenta reemplazar segmentos sueltos .00000.
-                    relativePath = relativePath.replace(/\.00000\./, `.${currentSupply}.`);
+                    // Opcional: Corregir nombre del archivo si tiene 00000 y tenemos suministro real
+                    if (currentSupply && currentSupply !== "0000" && currentSupply !== "0") {
+                        if (zipFileName.includes("00000")) {
+                             zipFileName = zipFileName.replace("00000", currentSupply);
+                        }
+                    }
+                } 
+                else if (isSinDef) {
+                    // === ESCENARIO 2: SINDEF ===
+                    // Ruta: .../CODIGO/SINDEF
+                    folderStructure = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/SINDEF`;
+                } 
+                else {
+                    // === ESCENARIO 3: NORMAL ===
+                    // Ruta: .../CODIGO/{CODIGO_DEF} (Ej: 6004)
+                    folderStructure = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeBase}`;
                 }
 
-                // 3. Separamos estructura y nombre (ya corregidos en relativePath)
-                let folderStructure = relativePath.substring(0, relativePath.lastIndexOf('/'));
-                let zipFileName = relativePath.substring(relativePath.lastIndexOf('/') + 1);
-
-                // 🔥🔥🔥 CORRECCIÓN TAMBIÉN EN EL NOMBRE DEL ARCHIVO 🔥🔥🔥
-                // Ej: FOT-...-7004.1.00000-...jpg -> FOT-...-7004.1.123456-...jpg
-                if (currentSupply && currentSupply !== "0000" && currentSupply !== "0") {
-                     zipFileName = zipFileName.replace(/7004\.1\.0+/, `7004.1.${currentSupply}`);
-                     zipFileName = zipFileName.replace(/\.00000\-/, `.${currentSupply}-`);
-                }
-                
-                // Creamos la carpeta en el ZIP
+                // Agregar al ZIP
                 const targetFolder = zip.folder(folderStructure);
-
-                // 4. Obtener Blob y guardar
+                
                 let fileBlob = await LocalFileStore.get(originalFileName);
                 if (!fileBlob) {
                     const url = getBestUrl(fileRec, i);
@@ -470,15 +461,21 @@ const handleUploadSave = async (dataToSave) => {
                 }
 
                 if (fileBlob) {
-                    // Guardamos el archivo con el nombre CORREGIDO (zipFileName)
                     targetFolder.file(zipFileName, fileBlob);
                 }
             }
 
+            // Generar ZIP
             const content = await zip.generateAsync({ type: "blob" });
-            // Incluimos el suministro en el nombre del ZIP final también
-            saveAs(content, `Deficiencia_${getValue('CodigoElemento')}_${currentSupply}.zip`);
-            toast.current.show({ severity: 'success', summary: 'ZIP Generado', detail: 'Descarga iniciada (Rutas corregidas).' });
+            
+            // Nombre descriptivo del ZIP
+            let zipNameSuffix = "";
+            if (is7004) zipNameSuffix = `_7004_C${my7004Correlativo}_${currentSupply}`;
+            else if (isSinDef) zipNameSuffix = "_SINDEF";
+            else zipNameSuffix = `_${defCodeBase}`;
+
+            saveAs(content, `Deficiencia_${getValue('CodigoElemento')}${zipNameSuffix}.zip`);
+            toast.current.show({ severity: 'success', summary: 'ZIP Generado', detail: 'Descarga iniciada.' });
 
         } catch (e) {
             console.error("ZIP Error:", e);
@@ -536,6 +533,14 @@ const handleUploadSave = async (dataToSave) => {
                     <div className="flex gap-2 mt-1">
                         <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">ID: {getValue('Interno')}</span>
                         {currentSupply && currentSupply !== '0' && <Tag severity="warning" value={`SUM: ${currentSupply}`} className="text-[9px] py-0 px-1" />}
+                        {my7004Correlativo > 0 && (
+                <Tag 
+                    severity="success" 
+                    value={`CARPETA: ${my7004Correlativo}`} 
+                    className="text-[9px] py-0 px-1" 
+                    icon="pi pi-folder" // Opcional: Icono de carpeta
+                />
+            )}
                     </div>
                 </div>
                 <div className="flex gap-2 items-center">

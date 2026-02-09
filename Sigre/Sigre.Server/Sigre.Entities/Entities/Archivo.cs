@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Sigre.Entities.Entities;
 
@@ -31,4 +32,5 @@ public partial class Archivo
 
     public bool? ArchActivo { get; set; }
     public string? DefiUUID { get; set; }
+
 }
