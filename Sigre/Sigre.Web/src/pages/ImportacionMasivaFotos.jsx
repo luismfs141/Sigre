@@ -32,22 +32,22 @@ const formatDeficiency = (code) => {
 // =====================================================================
 
 const getUtmBandLetter = (lat) => {
-    if (-16 >= lat && lat >= -24) return 'K';
-    if (-8 >= lat && lat > -16) return 'L';
-    if (0 >= lat && lat > -8) return 'M';
-    return 'S';
+    if (-16 >= lat && lat >= -24) return 'K'; 
+    if (-8 >= lat && lat > -16) return 'L';   
+    if (0 >= lat && lat > -8) return 'M';     
+    return 'S'; 
 };
 
 const latLonToUTM = (lat, lon) => {
     if (!lat || !lon) return { zone: "--", easting: 0, northing: 0, letter: "-" };
 
-    const a = 6378137.0;
-    const f = 1 / 298.257223563;
-    const k0 = 0.9996;
+    const a = 6378137.0; 
+    const f = 1 / 298.257223563; 
+    const k0 = 0.9996; 
 
     const phi = lat * (Math.PI / 180);
     const lambda = lon * (Math.PI / 180);
-
+    
     const zoneNumber = Math.floor((lon + 180) / 6) + 1;
     const lambda0 = ((zoneNumber - 1) * 6 - 180 + 3) * (Math.PI / 180);
 
@@ -80,9 +80,9 @@ const latLonToUTM = (lat, lon) => {
         northing: Math.floor(northing)
     };
 };
-
 /**
  * 1. PROCESAMIENTO DE IMAGEN (WATERMARK)
+ * Colocar esta función FUERA y ANTES del componente ImportacionMasivaFotos
  */
 const processImageWithWatermark = (file, meta) => {
     return new Promise((resolve) => {
@@ -117,26 +117,29 @@ const processImageWithWatermark = (file, meta) => {
 
                 const padding = fontSize;
 
-                console.log(`🚨 [Watermark] Fecha RAW recibida para ${file.name}:`, meta.dateStr);
-
                 let dateFormatted = "SIN FECHA";
                 if (meta.dateStr) {
-                    const d = new Date(meta.dateStr);
+                    let d = new Date(meta.dateStr);
                     if (!isNaN(d.getTime())) {
+                        // Corrección de zona horaria para el texto visual en la foto
+                        const offsetMs = d.getTimezoneOffset() * 60000;
+                        d = new Date(d.getTime() - offsetMs);
+
                         const day = String(d.getDate()).padStart(2, '0');
                         const month = String(d.getMonth() + 1).padStart(2, '0');
                         const year = d.getFullYear();
                         dateFormatted = `${day}/${month}/${year}`;
                     } else {
-                        console.error(`🚨 [Watermark] Error: La fecha no es válida:`, meta.dateStr);
                         dateFormatted = "FECHA INVÁLIDA";
                     }
                 }
 
+                // Asegúrate que latLonToUTM esté definida antes de esto
                 const utm = latLonToUTM(meta.lat, meta.long);
                 const utmText = `${utm.zone}${utm.letter} ${utm.easting}E ${utm.northing}N`;
                 const gpsText = `Lat: ${meta.lat} | Long: ${meta.long}`;
 
+                // --- DIBUJAR ---
                 drawText(gpsText, padding, img.height - padding);
                 drawText(`UTM: ${utmText}`, padding, img.height - padding - lineHeight);
                 drawText(` ${dateFormatted}`, padding, img.height - padding - (lineHeight * 2));
@@ -152,7 +155,6 @@ const processImageWithWatermark = (file, meta) => {
         };
     });
 };
-
 // 🔴🔴 MODIFICACIÓN 1: RESOLUCIÓN AÚN MÁS BAJA 🔴🔴
 const compressImageForLite = (blob) => {
     return new Promise((resolve) => {
