@@ -296,51 +296,82 @@ namespace Sigre.DataAccess
         {
             using (SigreContext ctx = new SigreContext())
             {
-                var archivo = ctx.Archivos.SingleOrDefault(x => x.ArchInterno == idArchivo);
-                if (archivo != null)
+                try
                 {
-                    archivo.ArchActivo = false; // O 0, dependiendo de tu tipo de dato en BD
-                    ctx.SaveChanges();
-                    return true;
+                    // === SQL DIRECTO (Bypass Entity Framework) ===
+                    // Usamos UPDATE directo para no pasar por el modelo que busca DEFI_UUID.
+                    // Asumimos que la columna en BD es 'ARCH_Activo' y la llave 'ARCH_Interno' 
+                    // (basado en tus errores anteriores).
+
+                    string sql = "UPDATE Archivos SET ARCH_Activo = 0 WHERE ARCH_Interno = {0}";
+
+                    int filasAfectadas = ctx.Database.ExecuteSqlRaw(sql, idArchivo);
+
+                    // Si afectó al menos 1 fila, es true
+                    return filasAfectadas > 0;
                 }
-                return false;
+                catch (Exception)
+                {
+                    return false;
+                }
             }
         }
         public void DAARCH_SaveInWeb(Archivo x_archivo)
         {
             using (SigreContext ctx = new SigreContext())
             {
-                // 🔍 LÓGICA DE INSERCIÓN vs ACTUALIZACIÓN
                 if (x_archivo.ArchInterno == 0)
                 {
-                    // === CASO 1: ES NUEVO (INSERT) ===
-                    // Al agregar sin ID, la BD generará el correlativo automático.
-                    ctx.Archivos.Add(x_archivo);
+                    // === INSERTAR A LA FUERZA (BYPASS EF) ===
+                    // Usamos SQL directo para evitar que EF intente buscar columnas que no existen (DEFI_UUID)
+                    string sql = @"
+               INSERT INTO Archivos 
+                (
+                    ARCH_Nombre, 
+                    ARCH_Tipo, 
+                    ARCH_Tabla, 
+                    ARCH_CodTabla, 
+                    ARCH_Latitud, 
+                    ARCH_Longitud, 
+                    ARCH_Fecha, 
+                    ARCH_TipoElemento, 
+                    ARCH_IdElemento, 
+                    TIPI_Interno, 
+                    ARCH_Activo
+                ) 
+                VALUES 
+                ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10})";
+
+                    ctx.Database.ExecuteSqlRaw(sql,
+                        x_archivo.ArchNombre ?? (object)DBNull.Value,
+                        x_archivo.ArchTipo ?? (object)DBNull.Value,
+                        "Deficiencias", // ArchTabla hardcodeado como en tu lógica
+                        x_archivo.ArchCodTabla,
+                        x_archivo.ArchLatitud,
+                        x_archivo.ArchLongitud,
+                        x_archivo.ArchFecha,
+                        x_archivo.ArchTipoElemento ?? (object)DBNull.Value,
+                        x_archivo.ArchIdElemento ?? (object)DBNull.Value,
+                        x_archivo.TipiInterno ?? (object)DBNull.Value,
+                        (x_archivo.ArchActivo == true) ? 1 : 0
+                    );
                 }
                 else
                 {
-                    // === CASO 2: YA EXISTE (UPDATE) ===
+                    // === UPDATE (Este suele fallar menos, pero si falla, avísame) ===
                     var original = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == x_archivo.ArchInterno);
-
                     if (original != null)
                     {
-                        // Actualizamos solo los datos relevantes que vienen de la Web
                         original.ArchNombre = x_archivo.ArchNombre;
                         original.ArchTipo = x_archivo.ArchTipo;
                         original.ArchActivo = x_archivo.ArchActivo;
-
-                        // Actualizamos metadatos si vienen con valor
-                        if (x_archivo.ArchFecha > DateTime.MinValue)
-                            original.ArchFecha = x_archivo.ArchFecha;
-
+                        if (x_archivo.ArchFecha > DateTime.MinValue) original.ArchFecha = x_archivo.ArchFecha;
                         original.ArchLatitud = x_archivo.ArchLatitud;
                         original.ArchLongitud = x_archivo.ArchLongitud;
 
-                        // Nota: No tocamos IDs de tablas foráneas (ArchCodTabla) para evitar romper relaciones por error
+                        ctx.SaveChanges();
                     }
                 }
-
-                ctx.SaveChanges();
             }
         }
         public int ARCH_ExistPhoto(string ruta)
@@ -496,7 +527,37 @@ namespace Sigre.DataAccess
                 DefiUUID = defiUuid
             };
         }
+        public List<Archivo> DAARCH_GetByDeficiencyWeb(int x_deficiency)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // TRUCO: En lugar de 'select a' (que trae todo, incluso errores),
+                // creamos un nuevo objeto Archivo y llenamos SOLO lo que existe.
+                var query = ctx.Archivos
+                    .Where(a => a.ArchCodTabla == x_deficiency)
+                    .Select(a => new Archivo
+                    {
+                        // Copia aquí las propiedades tal cual se llaman en tu clase
+                        ArchInterno = a.ArchInterno,
+                        ArchNombre = a.ArchNombre,
+                        ArchTipo = a.ArchTipo,
+                        ArchFecha = a.ArchFecha,
+                        ArchIdElemento = a.ArchIdElemento,
+                        // Asegúrate de incluir estas coordenadas y datos clave
+                        ArchLatitud = a.ArchLatitud,
+                        ArchLongitud = a.ArchLongitud,
 
+                        ArchCodTabla = a.ArchCodTabla,
+                        ArchTabla = a.ArchTabla,
+                        ArchActivo = a.ArchActivo,
+
+                        // IMPORTANTE: NO incluyas 'Deficiencia' aquí.
+                        // Al no ponerlo, EF no intenta buscar el UUID.
+                    });
+
+                return query.ToList();
+            }
+        }
         public DataTable DAARCH_GetArchivosBySedsDT(List<int> sedInternos)
         {
             using var ctx = new SigreContext();

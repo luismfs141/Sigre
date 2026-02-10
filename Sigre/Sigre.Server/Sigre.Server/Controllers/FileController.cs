@@ -142,6 +142,42 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+        [HttpGet("GetByDeficiencyWeb")]
+        public IActionResult GetByDeficiencyWeb([FromQuery] int x_deficiency)
+        {
+            try
+            {
+                // 1. Instancia de tu capa de datos (igual que tu ejemplo)
+                DAFile dAFile = new DAFile(); // O DaArchivos, según donde pusiste el método corregido
 
+                // 2. Validación básica
+                if (x_deficiency <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "El ID de la deficiencia es inválido."
+                    });
+                }
+
+                // 3. Llamada al método que arreglamos (el que tiene .AsNoTracking o el Select manual)
+                var listaArchivos = dAFile.DAARCH_GetByDeficiencyWeb(x_deficiency);
+
+                // 4. Retorno exitoso
+                // OJO: Aquí devuelvo la lista directa porque tu frontend (React) 
+                // seguramente espera un Array [ ] para poder hacer el .map() de las fotos.
+                return Ok(listaArchivos);
+            }
+            catch (Exception ex)
+            {
+                // 5. Tu estructura de error personalizada
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = ex.Message,
+                    detalle = ex.InnerException?.Message
+                });
+            }
+        }
     }
 }

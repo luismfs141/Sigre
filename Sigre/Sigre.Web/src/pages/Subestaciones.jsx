@@ -9,23 +9,23 @@ import { Tag } from 'primereact/tag';
 import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Skeleton } from 'primereact/skeleton';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { InputText } from 'primereact/inputtext'; 
-import { FilterMatchMode } from 'primereact/api'; 
+import { InputText } from 'primereact/inputtext';
+import { FilterMatchMode } from 'primereact/api';
 import * as XLSX from 'xlsx';
 
 // --- API ---
 import api from '../api/apiConfig';
 
 // --- CUSTOM HOOKS ---
-import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
-import { useDeficienciesBySed } from '../hooks/useDeficiency'; 
+import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
+import { useDeficienciesBySed } from '../hooks/useDeficiency';
 import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
 
 // --- COMPONENTES ---
 import EvidenceGallery from './EvidenceGallery';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
-
+import EstadoBadge from '../utils/estadoBadge';
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
@@ -62,7 +62,7 @@ export default function Subestaciones() {
     const [filteredData, setFilteredData] = useState(null);
     const [globalFilterValue, setGlobalFilterValue] = useState('');
     const [evidenceCount, setEvidenceCount] = useState(0);
-    
+
     // --- FILTROS INICIALES ---
     const initialFilters = {
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
@@ -84,16 +84,17 @@ export default function Subestaciones() {
     // 2. USO DE HOOKS
     // -------------------------------------------------------------------
     const { feeders, loading: loadingFeeders } = useFeeder();
+    const feederObject = feeders.find(f => f.value === selectedFeeder);
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
-    
-    const { 
-        deficiencies, 
-        loading: loadingDef, 
-        fetchBySed, 
-        clearData, 
-        saveDeficiency, 
+
+    const {
+        deficiencies,
+        loading: loadingDef,
+        fetchBySed,
+        clearData,
+        saveDeficiency,
         softDeleteDeficiency,
-        restoreDeficiency 
+        restoreDeficiency
     } = useDeficienciesBySed();
 
     const { getCodeById, loading: loadingTypos } = useTypification();
@@ -108,7 +109,7 @@ export default function Subestaciones() {
             return {
                 ...item,
                 // Agregamos labels calculados para usarlos en filtros y en el formulario
-                tipificacionLabel: getCodeById(item.tipiInterno) || '', 
+                tipificacionLabel: getCodeById(item.tipiInterno) || '',
                 inspectorLabel: getInspectorName(item.defiUsuarioInic) || '',
                 criticidadLabel: critMap[item.defiEstadoCriticidad] || 'N/A'
             };
@@ -124,15 +125,15 @@ export default function Subestaciones() {
         const defCode = getCodeById(newData.tipiInterno) || String(newData.tipiInterno || "");
 
         // Filtrar existentes excluyendo al propio registro si es edición
-        const existingOnElement = currentList.filter(d => 
-            d.defiCodigoElemento === targetGis && 
-            d.defiActivo === true && 
+        const existingOnElement = currentList.filter(d =>
+            d.defiCodigoElemento === targetGis &&
+            d.defiActivo === true &&
             d.defiInterno !== newData.defiInterno // <--- CLAVE PARA EDICIÓN
         );
 
         // Regla: Exclusividad S/D (0)
         const isZero = defCode === "0" || defCode === "0000";
-        
+
         // Buscamos si YA EXISTE un 0 en la lista
         const hasZero = existingOnElement.some(d => {
             const codeStr = getCodeById(d.tipiInterno) || "";
@@ -152,7 +153,7 @@ export default function Subestaciones() {
     // -------------------------------------------------------------------
     // 5. ACCIONES & HANDLERS
     // -------------------------------------------------------------------
-    
+
     // Deseleccionar al hacer clic en el fondo blanco
     const handleTableContainerClick = (e) => {
         const isRowClick = e.target.closest('tbody') || e.target.closest('thead');
@@ -173,10 +174,10 @@ export default function Subestaciones() {
 
     const handleFeederChange = (e) => {
         setSelectedFeeder(e.value);
-        setSelectedSed(null); 
+        setSelectedSed(null);
         setFilteredSeds([]);
         setFilteredData(null);
-        clearData(); 
+        clearData();
         setSelectedDeficiency(null);
     };
 
@@ -186,7 +187,7 @@ export default function Subestaciones() {
             return;
         }
         setSelectedDeficiency(null);
-        setFilteredData(null); 
+        setFilteredData(null);
         const idParaBackend = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
         await fetchBySed(idParaBackend);
     };
@@ -204,21 +205,21 @@ export default function Subestaciones() {
 
     // --- GUARDADO UNIFICADO ---
     const handleSaveSuccess = async (deficiencyData) => {
-        
+
         // 1. Validar Reglas de Negocio (Capa Extra de Seguridad)
         const validation = validateBusinessRules(deficiencyData, mappedDeficiencies);
         if (!validation.valid) {
             toast.current.show({ severity: 'error', summary: 'Validación Fallida', detail: validation.msg, sticky: true });
-            return; 
+            return;
         }
 
         // 2. Guardar en Backend
         const result = await saveDeficiency(deficiencyData);
-        
+
         if (result.success) {
             setFormVisible(false);
             toast.current.show({ severity: 'success', summary: 'Guardado', detail: 'Registro procesado correctamente.' });
-            
+
             // Recargar datos
             if (selectedSed) {
                 const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
@@ -227,7 +228,7 @@ export default function Subestaciones() {
         } else {
             toast.current.show({ severity: 'error', summary: 'Error', detail: result.message });
         }
-    }; 
+    };
 
     const clearAll = () => {
         setSelectedFeeder(null);
@@ -235,8 +236,8 @@ export default function Subestaciones() {
         setFilteredSeds([]);
         setGlobalFilterValue('');
         setFilters(initialFilters);
-        setFilteredData(null); 
-        clearData(); 
+        setFilteredData(null);
+        clearData();
         setSelectedDeficiency(null);
         toast.current.show({ severity: 'info', summary: 'Limpieza', detail: 'Filtros restablecidos.', life: 1000 });
     };
@@ -250,9 +251,9 @@ export default function Subestaciones() {
         const dataToExport = sourceData.map((item) => ({
             "ID": item.defiIdElemento, "Tipo": item.defiTipoElemento, "Código GIS": item.defiCodigoElemento,
             "Material": item.DefiTipoMaterial || "", "Nodo Inicial": item.DefiNodoInicial || "", "Nodo Final": item.DefiNodoFinal || "", "Armado": item.DefiAmrmadoMaterial || "",
-            "Tipificación": item.tipificacionLabel || "S/D", "Inspector": item.inspectorLabel || "Desconocido", 
+            "Tipificación": item.tipificacionLabel || "S/D", "Inspector": item.inspectorLabel || "Desconocido",
             "Fecha": item.defiFecRegistro ? new Date(item.defiFecRegistro).toLocaleDateString('es-PE') : "-",
-            "Estado": item.defiActivo ? "ACTIVO" : "ELIMINADO", "Criticidad": item.criticidadLabel || 'N/A' 
+            "Estado": item.defiActivo ? "ACTIVO" : "ELIMINADO", "Criticidad": item.criticidadLabel || 'N/A'
         }));
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
@@ -292,12 +293,82 @@ export default function Subestaciones() {
             }
         });
     };
+    // --- ACCIÓN: CAMBIAR ESTADO TERCERO (Restaurar / Eliminar de Campo) ---
+    const confirmToggleTercero = (rowData) => {
+        // Si actualmente esTercero es true, queremos pasarlo a false (Restaurar)
+        const nuevoEstado = !rowData.esTercero;
+        
+        const accionTexto = nuevoEstado ? "MARCAR COMO NO EXISTE" : "RESTAURAR A CAMPO";
+        const icono = nuevoEstado ? "pi pi-times-circle" : "pi pi-check-circle";
+
+        confirmDialog({
+            message: `¿Estás seguro de ${accionTexto} el elemento asociado a esta deficiencia?`,
+            header: 'Confirmar Estado en Campo',
+            icon: `pi ${icono} text-yellow-500`,
+            acceptLabel: 'Sí, cambiar',
+            rejectLabel: 'Cancelar',
+            accept: async () => {
+                try {
+                    // Llamamos al endpoint "Quirúrgico" que creamos
+                    await api.post('/Deficiency/CambiarEstadoTercero', {
+                        defiInterno: rowData.defiInterno, // Enviamos el ID de la deficiencia
+                        esTercero: nuevoEstado            // true = Eliminar, false = Restaurar
+                    });
+
+                    toast.current.show({ 
+                        severity: 'success', 
+                        summary: 'Actualizado', 
+                        detail: `Elemento ${nuevoEstado ? 'marcado como NO EXISTE' : 'RESTAURADO'} correctamente.` 
+                    });
+
+                    // IMPORTANTE: Recargamos la tabla para ver el cambio de color al instante
+                    if (selectedSed) {
+                        const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                        await fetchBySed(idSed);
+                    }
+
+                } catch (error) {
+                    console.error("Error cambiando estado tercero:", error);
+                    toast.current.show({ 
+                        severity: 'error', 
+                        summary: 'Error', 
+                        detail: 'No se pudo cambiar el estado.' 
+                    });
+                }
+            }
+        });
+    };
+    // NUEVO: CÁLCULO DE CORRELATIVO PARA 7004
+    // -------------------------------------------------------------------
+    const correlativoInfo = useMemo(() => {
+        if (!selectedDeficiency) return { count: 0, myCorrelativo: 0 };
+
+        const targetGis = selectedDeficiency.defiCodigoElemento;
+        const targetType = "7004"; // O el código interno 60
+
+        // 1. Filtramos todas las deficiencias de ESTE elemento que sean 7004
+        const sameElement7004s = mappedDeficiencies.filter(d =>
+            d.defiCodigoElemento === targetGis &&
+            (getCodeById(d.tipiInterno) === targetType || d.tipiInterno === 60)
+        );
+
+        // 2. Ordenamos por fecha de registro (o ID) para saber "cuál soy yo" en la fila
+        // Esto es útil si quieres decir "Soy la 7004 número 2 de 5"
+        sameElement7004s.sort((a, b) => a.defiInterno - b.defiInterno);
+
+        const myIndex = sameElement7004s.findIndex(d => d.defiInterno === selectedDeficiency.defiInterno) + 1;
+
+        return {
+            totalCount: sameElement7004s.length, // Total de 7004s para este poste
+            myCorrelativo: myIndex > 0 ? myIndex : (sameElement7004s.length + 1) // Si es nueva, será la siguiente
+        };
+    }, [selectedDeficiency, mappedDeficiencies, getCodeById]);
 
     // -------------------------------------------------------------------
     // 6. TEMPLATES
     // -------------------------------------------------------------------
     const typeTemplate = (rowData) => <Tag value={rowData.defiTipoElemento} severity={rowData.defiTipoElemento === 'POST' ? 'info' : 'warning'} icon={rowData.defiTipoElemento === 'POST' ? 'pi pi-arrows-v' : 'pi pi-arrows-h'} />;
-    
+
     const statusFilterTemplate = (options) => (
         <Dropdown value={options.value} options={[{ label: 'Todos', value: null }, { label: 'Activo', value: true }, { label: 'Eliminado', value: false }]} onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => option.value === null ? <span>Todos</span> : <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />} placeholder="Estado" className="p-column-filter" showClear />
     );
@@ -307,11 +378,77 @@ export default function Subestaciones() {
     const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
     const inspectorTemplate = (rowData) => { if (loadingUsers) return <Skeleton width="80px" />; return <span className="text-gray-700 text-xs font-medium uppercase truncate">{rowData.inspectorLabel}</span>; };
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
-    
-    const actionBodyTemplate = (rowData) => {
+
+
+// --- AGREGAR ESTE TEMPLATE NUEVO ---
+const terceroTemplate = (rowData) => {
+    // Convertimos la propiedad 'esTercero' (bool) al formato 0/1 que espera tu Badge
+    // true = No Existe (1), false = Existe (0)
+    const estadoNumerico = rowData.esTercero ? 1 : 0; 
+    return <EstadoBadge estado={estadoNumerico} />;
+};
+   const actionBodyTemplate = (rowData) => {
+        // 1. Si la deficiencia está eliminada (Soft Delete), solo mostramos Restaurar Deficiencia
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
-        if (isDeleted) return <div className="flex gap-1 justify-center"><Button icon="pi pi-refresh" rounded text severity="success" size="small" onClick={() => confirmRestoreDeficiency(rowData)} tooltip="Restaurar" /></div>;
-        return <div className="flex gap-1 justify-center"><Button icon="pi pi-pencil" rounded text severity="info" size="small" onClick={() => openEdit(rowData)} tooltip="Editar" /><Button icon="pi pi-trash" rounded text severity="danger" size="small" onClick={() => confirmDeleteDeficiency(rowData)} tooltip="Eliminar" /></div>;
+        
+        if (isDeleted) {
+            return (
+                <div className="flex gap-1 justify-center">
+                    <Button 
+                        icon="pi pi-refresh" 
+                        rounded 
+                        text 
+                        severity="success" 
+                        size="small" 
+                        onClick={() => confirmRestoreDeficiency(rowData)} 
+                        tooltip="Restaurar Deficiencia" 
+                    />
+                </div>
+            );
+        }
+
+        // 2. Lógica para el botón de "En Campo / Terceros"
+        // Si esTercero es true (No existe) -> Botón VERDE para Restaurar
+        // Si esTercero es false (Existe) -> Botón NARANJA para Eliminar de campo
+        const isNoExiste = rowData.esTercero === true;
+        
+        return (
+            <div className="flex gap-1 justify-center">
+                {/* Botón Editar */}
+                <Button 
+                    icon="pi pi-pencil" 
+                    rounded 
+                    text 
+                    severity="info" 
+                    size="small" 
+                    onClick={() => openEdit(rowData)} 
+                    tooltip="Editar" 
+                />
+
+                {/* --- NUEVO BOTÓN: RESTAURAR O QUITAR DE CAMPO --- */}
+                <Button 
+                    icon={isNoExiste ? "pi pi-check-circle" : "pi pi-ban"} 
+                    rounded 
+                    text 
+                    severity={isNoExiste ? "success" : "warning"} 
+                    size="small" 
+                    onClick={() => confirmToggleTercero(rowData)} 
+                    tooltip={isNoExiste ? "Restaurar elemento a Campo" : "Marcar elemento como No Existe"} 
+                />
+
+                {/* Botón Eliminar Deficiencia */}
+                <Button 
+                    icon="pi pi-trash" 
+                    rounded 
+                    text 
+                    severity="danger" 
+                    size="small" 
+                    onClick={() => confirmDeleteDeficiency(rowData)} 
+                    tooltip="Eliminar Deficiencia" 
+                />
+            </div>
+        );
+    
     };
 
     // -------------------------------------------------------------------
@@ -319,7 +456,8 @@ export default function Subestaciones() {
     // -------------------------------------------------------------------
     return (
         <div className="flex flex-col h-screen bg-gray-100 p-2 overflow-hidden">
-            <style>{highContrastStyle}</style> 
+            
+            <style>{highContrastStyle}</style>
             <Toast ref={toast} />
             <ConfirmDialog />
 
@@ -361,57 +499,67 @@ export default function Subestaciones() {
 
             {/* --- CONTENIDO PRINCIPAL --- */}
             <div className="flex-grow bg-white rounded shadow border border-gray-300 overflow-hidden">
-                <Splitter style={{ height: '100%' }} layout="vertical" className="border-0">
-                    
+                <Splitter style={{ height: '100%' }} layout="horizontal" className="border-0">
+
                     {/* PANEL IZQUIERDO: TABLA */}
-                    <SplitterPanel size={70} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
-                        <DataTable 
-                            value={mappedDeficiencies} 
+                    <SplitterPanel size={80} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
+                        <DataTable
+                            value={mappedDeficiencies}
                             loading={loadingDef}
                             onValueChange={(processedData) => setFilteredData(processedData)}
-                            paginator rows={20} 
-                            size="small" 
+                            paginator rows={20}
+                            size="small"
                             stripedRows
                             className="text-sm border-none"
                             sortField="defiCodigoElemento" sortOrder={1}
                             scrollable scrollHeight="flex"
-                            selectionMode="single" 
-                            selection={selectedDeficiency} 
+                            selectionMode="single"
+                            selection={selectedDeficiency}
                             onSelectionChange={(e) => setSelectedDeficiency(e.value)}
-                            dataKey="defiInterno" 
-                            rowHover 
+                            dataKey="defiInterno"
+                            rowHover
                             emptyMessage="No hay deficiencias registradas."
                             filters={filters}
-                            filterDisplay="row" 
-                            globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento', 'tipificacionLabel', 'inspectorLabel', 'DefiTipoMaterial', 'DefiNodoInicial', 'DefiNodoFinal', 'DefiAmrmadoMaterial']} 
+                            filterDisplay="row"
+                            globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento', 'tipificacionLabel', 'inspectorLabel', 'DefiTipoMaterial', 'DefiNodoInicial', 'DefiNodoFinal', 'DefiAmrmadoMaterial']}
                             onFilter={(e) => setFilters(e.filters)}
                         >
                             <Column field="defiIdElemento" header="ID" sortable filter filterPlaceholder="Buscar ID" style={{ width: '90px' }} />
                             <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column field="defiNumSuministro" header="Num Suministro" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
+                        
+
+                            <Column field="tipificacionLabel" header="Tipificación" body={typificationTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ textAlign: 'center', width: '130px' }} />
+                            
+
+                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
+
+                            <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
+                            <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '130px', textAlign: 'center' }} filter filterElement={statusFilterTemplate} showFilterMenu={false} />
+                            <Column field="criticidadLabel" header="Crit." body={criticidadTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ width: '100px', textAlign: 'center' }} />
+                            <Column 
+    field="esTercero" 
+    header="En Campo" 
+    body={terceroTemplate} 
+    sortable 
+    style={{ textAlign: 'center', width: '110px' }} 
+/>
+                            <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
+                            <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} />
                             <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
                             <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
                             <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
                             <Column field="DefiAmrmadoMaterial" header="Armado" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
-
-                            <Column field="tipificacionLabel" header="Tipificación" body={typificationTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ textAlign: 'center', width: '130px' }} />
-                            <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} /> 
-                            
-                            <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
-                            
-                            <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
-                            <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '130px', textAlign: 'center' }} filter filterElement={statusFilterTemplate} showFilterMenu={false} />
-                            <Column field="criticidadLabel" header="Crit." body={criticidadTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ width: '100px', textAlign: 'center' }} />
-                            
-                            <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                         </DataTable>
                     </SplitterPanel>
 
-{/* PANEL DERECHO: GALERÍA */}
+                    {/* PANEL DERECHO: GALERÍA */}
                     {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
-                    <SplitterPanel size={30} minSize={15} className="bg-white flex flex-col overflow-hidden">
-                        
+                    <SplitterPanel size={20} minSize={10} className="bg-white flex flex-col overflow-hidden">
+                    
+      
+
                         {/* CABECERA DEL PANEL (Con el contador) */}
                         <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0 z-10">
                             <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
@@ -419,9 +567,9 @@ export default function Subestaciones() {
                                 Evidencias
                                 {/* CONTEO DINÁMICO */}
                                 {selectedDeficiency && evidenceCount > 0 && (
-                                   <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1 shadow-sm">
-                                       {evidenceCount}
-                                   </span>
+                                    <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1 shadow-sm">
+                                        {evidenceCount}
+                                    </span>
                                 )}
                             </span>
                         </div>
@@ -429,12 +577,16 @@ export default function Subestaciones() {
                         {/* CUERPO DEL PANEL (Sin padding p-2, Sin gap, Sin flex-row extra) */}
                         <div className="flex-grow w-full h-full overflow-hidden relative">
                             {/* Renderizamos el componente DIRECTAMENTE para que llene el 100% */}
-                            <EvidenceGallery 
-                                deficiency={selectedDeficiency} 
-                                feeder={selectedFeeder} 
-                                sed={selectedSed} 
+                            <EvidenceGallery
+                                deficiency={selectedDeficiency}
+                                feeder={feederObject}
+                                sed={selectedSed}
                                 // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
-                                onCountUpdate={setEvidenceCount} 
+                                onCountUpdate={setEvidenceCount}
+                                suministro={selectedDeficiency?.defiNumSuministro || "0000"}
+                                // 🔥 PASAMOS EL DATO CALCULADO 🔥
+                                element7004Count={correlativoInfo.totalCount}
+                                my7004Correlativo={correlativoInfo.myCorrelativo}
                             />
                         </div>
                     </SplitterPanel>
@@ -442,7 +594,7 @@ export default function Subestaciones() {
                 </Splitter>
             </div>
 
-            <DeficiencyForm 
+            <DeficiencyForm
                 visible={formVisible}
                 onHide={() => setFormVisible(false)}
                 onSave={handleSaveSuccess}

@@ -137,6 +137,28 @@ WHERE P.POST_CodigoNodo LIKE '%' + @CODIGO
     OR P.POST_CodigoNodo = @CODIGO
 GO
 
+------------------------------------------------------------------
+-- BUSCA UN VANO ------------------------------------------------
+------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = '033052'
+
+SELECT  V.VANO_Interno,
+        V.VANO_Codigo,
+        A.ALIM_Etiqueta,
+        V.VANO_NodoInicial,
+        V.VANO_NodoFinal,
+        VANO_Terceros,
+        [***] = '',
+        V.*
+FROM Vanos AS V
+LEFT JOIN Alimentadores AS A
+    ON V.ALIM_Interno = A.ALIM_Interno
+
+WHERE V.VANO_Codigo LIKE '%' + @CODIGO
+    OR V.VANO_Codigo = @CODIGO
+GO
+
+
 
 
 ------------------------------------------------------------------
