@@ -191,3 +191,71 @@ BEGIN
     ADD DEFI_UUID VARCHAR(50) NULL;
 END
 
+
+
+
+
+---------------------------------------------------------------------------------------
+
+
+
+IF COL_LENGTH('dbo.Deficiencias', 'DEFI_ComentarioEstandar') IS NULL
+BEGIN
+    ALTER TABLE dbo.Deficiencias
+    ADD DEFI_ComentarioEstandar VARCHAR(30) NULL;
+END
+
+
+
+
+begin transaction
+
+
+
+
+UPDATE d
+SET d.DEFI_ComentarioEstandar =
+  CASE CONVERT(VARCHAR(10), co.CODI_Codigo)
+    WHEN '6002' THEN 'Poste mal conservado'
+    WHEN '6004' THEN 'Inclinado/falla cimt'
+    WHEN '6006' THEN 'Portafus energ expos'
+    WHEN '6008' THEN 'Prot mec cable defic'
+    WHEN '6024' THEN 'Retenida mal estado'
+    WHEN '6026' THEN 'Past. AP inestab y/o roto'
+    WHEN '6028' THEN 'Artefacto AP suelto'
+    WHEN '7002' THEN 'Cond aisl deter/inad'
+    WHEN '7004' THEN 'Cond BT s/techo/met'
+    WHEN '7006' THEN 'Cond BT alt baja DS'
+    WHEN '7008' THEN 'Cond BT cerca grifo'
+  END
+FROM Deficiencias d
+LEFT JOIN Tipificaciones ti ON d.TIPI_Interno = ti.TIPI_Interno
+LEFT JOIN Codigos co ON ti.CODI_Interno = co.CODI_Interno
+WHERE CONVERT(VARCHAR(10), co.CODI_Codigo) IN ('6002','6004','6006','6008','6024','6026','6028','7002','7004','7006','7008')
+  AND (d.DEFI_ComentarioEstandar IS NULL OR LTRIM(RTRIM(d.DEFI_ComentarioEstandar)) = '');
+
+-- filas afectadas
+SELECT @@ROWCOUNT AS FilasActualizadas;
+
+
+
+rollback
+--commit
+
+
+
+
+
+
+
+
+
+select co.CODI_Codigo, d.DEFI_ComentarioEstandar,d.* 
+from Deficiencias as d
+left join Tipificaciones as ti
+    on d.TIPI_Interno = ti.TIPI_Interno
+left join Codigos as co
+    on ti.CODI_Interno = co.CODI_Interno
+order by co.CODI_Codigo desc
+
+

@@ -160,6 +160,7 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
+      "DefiComentarioEstandar",
       "EstadoOffLine"
     ];
 

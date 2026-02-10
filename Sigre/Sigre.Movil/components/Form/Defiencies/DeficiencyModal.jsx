@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { getStdCommentByCode } from "../../../utils/Deficiencies/standardComment";
 
 import { useEffect, useState } from "react";
 
@@ -25,6 +26,52 @@ import DeficiencyField from "../Defiencies/DeficiencyField";
 
 
 const RESPONSABILIDAD = "DefiCol2";
+const COMENTARIO_ESTANDAR = "DefiComentarioEstandar";
+
+const buildComentarioEstandarField = () => ({
+  key: COMENTARIO_ESTANDAR,
+  label: "Comentario estándar",
+  required: false,
+  placeholder: "Se autocompleta según el tipo",
+  maxLengthHard: 30,
+  readonly: true, // ✅ BLOQUEADO
+});
+
+const ensureComentarioEstandarDefault = (def) => {
+  if (!def) return def;
+
+  const curr = def?.[COMENTARIO_ESTANDAR];
+  const empty = curr === null || curr === undefined || String(curr).trim() === "";
+  if (!empty) return def;
+
+  const suggestion = getStdCommentByCode(def?.typificationCode);
+  if (!suggestion) return def;
+
+  return { ...def, [COMENTARIO_ESTANDAR]: suggestion };
+};
+
+const injectComentarioEstandarAfterObservacion = (baseFields) => {
+  const fields = Array.isArray(baseFields) ? baseFields : [];
+
+  // ✅ evitar duplicados
+  if (fields.some((f) => f?.key === COMENTARIO_ESTANDAR)) return fields;
+
+  const comentarioField = buildComentarioEstandarField();
+
+  // ✅ ubicar Observación por key/label (por si cambia el key exacto)
+  const idx = fields.findIndex((f) => {
+    const k = String(f?.key ?? "").toUpperCase();
+    const l = String(f?.label ?? "").toUpperCase();
+    return k.includes("OBSERV") || l.includes("OBSERV");
+  });
+
+  // si no existe Observación, lo ponemos al final
+  if (idx === -1) return [...fields, comentarioField];
+
+  return [...fields.slice(0, idx + 1), comentarioField, ...fields.slice(idx + 1)];
+};
+
+
 
 const buildResponsabilidadField = () => ({
   key: RESPONSABILIDAD,
@@ -142,11 +189,13 @@ export default function DeficiencyModal({
         const def = await fetchDeficiencyByIdLocal(deficiency.defiInterno);
         if (def) {
           setLocalDef(
-            ensureResponsabilidadDefault({
-              ...def,
-              typificationCode: deficiency.typificationCode,
-              typificationId: deficiency.typificationId,
-            })
+            ensureComentarioEstandarDefault(
+              ensureResponsabilidadDefault({
+                ...def,
+                typificationCode: deficiency.typificationCode,
+                typificationId: deficiency.typificationId,
+              })
+            )
           );
           return;
         }
@@ -159,7 +208,12 @@ export default function DeficiencyModal({
           userId,
           selectedItem
         });
-        setLocalDef(ensureResponsabilidadDefault(empty)); // ✅ default SEAL
+
+        setLocalDef(
+          ensureComentarioEstandarDefault(
+            ensureResponsabilidadDefault(empty)
+          )
+        );
         return;
       }
 
@@ -171,25 +225,38 @@ export default function DeficiencyModal({
       );
 
       if (result?.length) {
-        setLocalDef(ensureResponsabilidadDefault(result[0]));
+        setLocalDef(
+          ensureComentarioEstandarDefault(
+            ensureResponsabilidadDefault(result[0])
+          )
+        );
       } else {
         const empty = createEmptyDeficiency({
           ...deficiency,
           userId,
           selectedItem
         });
-        setLocalDef(ensureResponsabilidadDefault(empty)); // ✅ default SEAL
+
+        setLocalDef(
+          ensureComentarioEstandarDefault(
+            ensureResponsabilidadDefault(empty)
+          )
+        );
       }
     };
 
     load();
   }, [deficiency]);
 
+
   if (!visible || !localDef) return null;
 
   const code = String(localDef.typificationCode);
   const baseFields = getDeficiencyFields(code);
-  const fields = injectResponsabilidadAfterCriticidad(baseFields); // ✅ aquí se inserta
+  const withResp = injectResponsabilidadAfterCriticidad(baseFields);
+  const fields = injectComentarioEstandarAfterObservacion(withResp);
+
+
   const title = getDeficiencyLabel(code);
 
   const formKey = `${code}-${localDef.DefiTipoElemento}-${localDef.DefiIdElemento}-${deficiency?.nonce ?? 0}-${localDef.DefiInterno ?? 0}`;
@@ -277,23 +344,25 @@ export default function DeficiencyModal({
       }
 
       // ✅ garantiza que viaje idElemento/tipoElemento
-      const payload = ensureResponsabilidadDefault({
-        ...localDef,
+      const payload = ensureComentarioEstandarDefault(
+        ensureResponsabilidadDefault({
+          ...localDef,
 
-        DefiIdElemento:
-          localDef?.DefiIdElemento ??
-          deficiency?.elementId ??
-          localDef?.elementId,
+          DefiIdElemento:
+            localDef?.DefiIdElemento ??
+            deficiency?.elementId ??
+            localDef?.elementId,
 
-        DefiTipoElemento:
-          localDef?.DefiTipoElemento ??
-          deficiency?.typeElement ??
-          localDef?.typeElement,
+          DefiTipoElemento:
+            localDef?.DefiTipoElemento ??
+            deficiency?.typeElement ??
+            localDef?.typeElement,
 
-        // por si tu DAL usa camel:
-        elementId: localDef?.elementId ?? deficiency?.elementId,
-        typeElement: localDef?.typeElement ?? deficiency?.typeElement,
-      });
+          elementId: localDef?.elementId ?? deficiency?.elementId,
+          typeElement: localDef?.typeElement ?? deficiency?.typeElement,
+        })
+      );
+
 
       const res = await saveDeficiency(payload, userId);
 
@@ -393,13 +462,13 @@ export default function DeficiencyModal({
                           onPress={
                             field.selectable
                               ? () =>
-                                  setSelectConfig({
-                                    field: field.key,
-                                    title: field.label,
-                                    items,
-                                    labelKey: "label",
-                                    valueKey: "value"
-                                  })
+                                setSelectConfig({
+                                  field: field.key,
+                                  title: field.label,
+                                  items,
+                                  labelKey: "label",
+                                  valueKey: "value"
+                                })
                               : null
                           }
                         />
