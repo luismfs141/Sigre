@@ -6,6 +6,8 @@ using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
+using System.Data;
+using System.Linq;
 
 namespace Sigre.DataAccess
 {
@@ -1004,6 +1006,158 @@ namespace Sigre.DataAccess
                                                       && d.TipiInterno == x_tipiInterno);
                 return deficiency != null ? deficiency.DefiInterno : 0;
             }
+        }
+
+        public DataTable DADEFI_GetDeficienciasBySedsDT(List<int> sedInternos)
+        {
+            using var ctx = new SigreContext();
+
+            // 🔹 Consulta completa
+            var list =
+            (
+                from d in ctx.Deficiencias.AsNoTracking()
+
+                join p in ctx.Postes on d.DefiIdElemento equals p.PostInterno into pj
+                from p in pj.DefaultIfEmpty()
+
+                join v in ctx.Vanos on d.DefiIdElemento equals v.VanoInterno into vj
+                from v in vj.DefaultIfEmpty()
+
+                where
+                    (d.DefiTipoElemento == "POST" && sedInternos.Contains((int)p.PostSubestacion)) ||
+                    (d.DefiTipoElemento == "VANO" && sedInternos.Contains((int)v.VanoSubestacion))
+
+                select d   // 🔥 TODA la entidad
+            ).ToList();     // 🔥 UNA SOLA QUERY
+
+            // 🔹 Crear DataTable completo
+            var dt = new DataTable();
+
+            dt.Columns.Add("DEFI_Interno", typeof(int));
+            dt.Columns.Add("DEFI_Estado", typeof(string));
+            dt.Columns.Add("INSP_Interno", typeof(int));
+            dt.Columns.Add("TABL_Interno", typeof(int));
+            dt.Columns.Add("DEFI_CodigoElemento", typeof(string));
+            dt.Columns.Add("TIPI_Interno", typeof(int));
+            dt.Columns.Add("DEFI_NumSuministro", typeof(string));
+            dt.Columns.Add("DEFI_FechaDenuncia", typeof(DateTime));
+            dt.Columns.Add("DEFI_FechaInspeccion", typeof(DateTime));
+            dt.Columns.Add("DEFI_FechaSubsanacion", typeof(DateTime));
+            dt.Columns.Add("DEFI_Observacion", typeof(string));
+            dt.Columns.Add("DEFI_EstadoSubsanacion", typeof(int));
+            dt.Columns.Add("DEFI_Latitud", typeof(double));
+            dt.Columns.Add("DEFI_Longitud", typeof(double));
+            dt.Columns.Add("DEFI_TipoElemento", typeof(string));
+            dt.Columns.Add("DEFI_DistHorizontal", typeof(double));
+            dt.Columns.Add("DEFI_DistVertical", typeof(double));
+            dt.Columns.Add("DEFI_DistTransversal", typeof(double));
+            dt.Columns.Add("DEFI_IdElemento", typeof(int));
+            dt.Columns.Add("DEFI_FecRegistro", typeof(DateTime));
+            dt.Columns.Add("DEFI_CodDef", typeof(string));
+            dt.Columns.Add("DEFI_CodRes", typeof(int));
+            dt.Columns.Add("DEFI_CodDen", typeof(int));
+            dt.Columns.Add("DEFI_Refer1", typeof(string));
+            dt.Columns.Add("DEFI_Refer2", typeof(string));
+            dt.Columns.Add("DEFI_CoordX", typeof(double));
+            dt.Columns.Add("DEFI_CoordY", typeof(double));
+            dt.Columns.Add("DEFI_CodAMT", typeof(int));
+            dt.Columns.Add("DEFI_NroOrden", typeof(int));
+            dt.Columns.Add("DEFI_PointX", typeof(double));
+            dt.Columns.Add("DEFI_PointY", typeof(double));
+            dt.Columns.Add("DEFI_UsuCre", typeof(string));
+            dt.Columns.Add("DEFI_UsuNPC", typeof(string));
+            dt.Columns.Add("DEFI_FecModificacion", typeof(DateTime));
+            dt.Columns.Add("DEFI_FechaCreacion", typeof(DateTime));
+            dt.Columns.Add("DEFI_TipoMaterial", typeof(string));
+            dt.Columns.Add("DEFI_NodoInicial", typeof(string));
+            dt.Columns.Add("DEFI_NodoFinal", typeof(string));
+            dt.Columns.Add("DEFI_TipoRetenida", typeof(string));
+            dt.Columns.Add("DEFI_RetenidaMaterial", typeof(string));
+            dt.Columns.Add("DEFI_TipoArmado", typeof(string));
+            dt.Columns.Add("DEFI_ArmadoMaterial", typeof(string));
+            dt.Columns.Add("DEFI_NumPostes", typeof(int));
+            dt.Columns.Add("DEFI_PozoTierra", typeof(int));
+            dt.Columns.Add("DEFI_Responsable", typeof(string));
+            dt.Columns.Add("DEFI_Comentario", typeof(string));
+            dt.Columns.Add("DEFI_PozoTierra2", typeof(int));
+            dt.Columns.Add("DEFI_UsuarioInic", typeof(string));
+            dt.Columns.Add("DEFI_UsuarioMod", typeof(string));
+            dt.Columns.Add("DEFI_Activo", typeof(int));
+            dt.Columns.Add("DEFI_EstadoCriticidad", typeof(int));
+            dt.Columns.Add("DEFI_Inspeccionado", typeof(int));
+            dt.Columns.Add("DEFI_KeyWords", typeof(string));
+            dt.Columns.Add("DEFI_Col1", typeof(string));
+            dt.Columns.Add("DEFI_Col2", typeof(string));
+            dt.Columns.Add("DEFI_Col3", typeof(string)); // UUID
+            dt.Columns.Add("DEFI_Accesibilidad", typeof(int));
+            dt.Columns.Add("DEFI_TipoCruce", typeof(string));
+
+            // 🔹 Cargar datos
+            foreach (var d in list)
+            {
+                dt.Rows.Add(
+                    d.DefiInterno,
+                    d.DefiEstado,
+                    d.InspInterno,
+                    d.TablInterno,
+                    d.DefiCodigoElemento,
+                    d.TipiInterno,
+                    d.DefiNumSuministro,
+                    d.DefiFechaDenuncia,
+                    d.DefiFechaInspeccion,
+                    d.DefiFechaSubsanacion,
+                    d.DefiObservacion,
+                    d.DefiEstadoSubsanacion,
+                    d.DefiLatitud,
+                    d.DefiLongitud,
+                    d.DefiTipoElemento,
+                    d.DefiDistHorizontal,
+                    d.DefiDistVertical,
+                    d.DefiDistTransversal,
+                    d.DefiIdElemento,
+                    d.DefiFecRegistro,
+                    d.DefiCodDef,
+                    d.DefiCodRes,
+                    d.DefiCodDen,
+                    d.DefiRefer1,
+                    d.DefiRefer2,
+                    d.DefiCoordX,
+                    d.DefiCoordY,
+                    d.DefiCodAmt,
+                    d.DefiNroOrden,
+                    d.DefiPointX,
+                    d.DefiPointY,
+                    d.DefiUsuCre,
+                    d.DefiUsuNpc,
+                    d.DefiFecModificacion,
+                    d.DefiFechaCreacion,
+                    d.DefiTipoMaterial,
+                    d.DefiNodoInicial,
+                    d.DefiNodoFinal,
+                    d.DefiTipoRetenida,
+                    d.DefiRetenidaMaterial,
+                    d.DefiTipoArmado,
+                    d.DefiArmadoMaterial,
+                    d.DefiNumPostes,
+                    d.DefiPozoTierra,
+                    d.DefiResponsable,
+                    d.DefiComentario,
+                    d.DefiPozoTierra2,
+                    d.DefiUsuarioInic,
+                    d.DefiUsuarioMod,
+                    d.DefiActivo,
+                    d.DefiEstadoCriticidad,
+                    d.DefiInspeccionado,
+                    d.DefiKeyWords,
+                    d.DefiCol1,
+                    d.DefiCol2,
+                    d.DefiCol3,
+                    d.DefiAccesibilidad,
+                    d.DefiTipoCruce
+                );
+            }
+
+            return dt;
         }
     }
 }

@@ -5,7 +5,9 @@ using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.SyncData;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace Sigre.DataAccess
@@ -184,173 +186,393 @@ namespace Sigre.DataAccess
             return archivos;
         }
 
-        public async Task<(
-            int defInsertadas,
-            int defModificadas,
-            int archInsertados,
-            int archModificados
-        )> DAOFF_SyncDataOffline(IFormFile file)
+        public async Task<(int defInsertadas, int defModificadas, int archInsertados, int archModificados )> DAOFF_SyncDataOffline(IFormFile file)
         {
             int defInsertadas = 0;
             int defModificadas = 0;
             int archInsertados = 0;
             int archModificados = 0;
 
-            var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(file))
-                                    .Where(d => d.EstadoOffLine != 0)
-                                    .ToList();
-
-            var archivos_off = (await DAOFF_LeerArchivosDesdeSqliteAsync(file))
-                                .Where(a => a.EstadoOffLine != 0)
-                                .ToList();
-
-            var errores = new List<string>();
             var dADeficiency = new DADeficiency();
             var dAFile = new DAFile();
 
-            /* ===============================
-               🔹 CACHE EN MEMORIA
-               =============================== */
+            // =====================================================
+            // 1️⃣ LEER DATA OFFLINE (SQLITE)
+            // =====================================================
 
-            var cacheDefByUUID = new Dictionary<string, int>();
-            var cacheDefExist = new Dictionary<string, int>();
-            var cacheArchivos = new Dictionary<string, int>();
+            var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(file))
+                .Where(x => x.EstadoOffLine != 0)
+                .ToList();
 
-            /* ===============================
-               🔹 DEFICIENCIAS
-               =============================== */
+            var archivos_off = (await DAOFF_LeerArchivosDesdeSqliteAsync(file))
+                .Where(x => x.EstadoOffLine != 0)
+                .ToList();
 
-            foreach (var def_off in deficiencias_off)
+            var seds_off = await DAOFF_LeerSedsDesdeSqlite(file);
+
+            var sedInternos = seds_off
+                .Where(s => s.SedInterno > 0)
+                .Select(s => s.SedInterno)
+                .Distinct()
+                .ToList();
+
+            if (sedInternos.Count == 0)
+                return (0, 0, 0, 0);
+
+            // =====================================================
+            // 2️⃣ DATA ONLINE INICIAL
+            // =====================================================
+
+            DataTable dtDefOnline =
+                dADeficiency.DADEFI_GetDeficienciasBySedsDT(sedInternos);
+
+            DataTable dtArchOnline =
+                dAFile.DAARCH_GetArchivosBySedsDT(sedInternos);
+
+            // =====================================================
+            // 3️⃣ CONVERTIR DEFICIENCIAS OFFLINE
+            // =====================================================
+
+            var deficiencias = deficiencias_off
+                .Select(d => dADeficiency.DADEFI_ConvertDeficiency(d))
+                .ToList();
+
+            // =====================================================
+            // 4️⃣ RESOLVER DEFICIENCIAS (INTERNO + UUID)
+            // =====================================================
+
+            deficiencias = DAOFF_ResolverDeficienciasInternoSimple(
+                dtDefOnline,
+                deficiencias
+            );
+
+            // =====================================================
+            // 5️⃣ GUARDAR DEFICIENCIAS
+            // =====================================================
+
+            foreach (var def in deficiencias)
             {
-                try
-                {
-                    var deficiencia = dADeficiency.DADEFI_ConvertDeficiency(def_off);
-                    int defiInterno = 0;
+                if (def.DefiInterno > 0)
+                    defModificadas++;
+                else
+                    defInsertadas++;
 
-                    // 🔹 Buscar por UUID
-                    if (!string.IsNullOrEmpty(deficiencia.DefiCol3))
-                    {
-                        if (!cacheDefByUUID.TryGetValue(deficiencia.DefiCol3, out defiInterno))
-                        {
-                            defiInterno = dADeficiency
-                                .DADEFI_GetDeficiencyIDByUUID(deficiencia.DefiCol3);
-
-                            cacheDefByUUID[deficiencia.DefiCol3] = defiInterno;
-                        }
-                    }
-                    else
-                    {
-                        // 🔹 Clave lógica clásica
-                        string key = $"{deficiencia.DefiCodigoElemento}|{deficiencia.TipiInterno}";
-
-                        if (!cacheDefExist.TryGetValue(key, out defiInterno))
-                        {
-                            defiInterno = dADeficiency
-                                .DADEFI_ExistDeficiency(deficiencia);
-
-                            cacheDefExist[key] = defiInterno;
-                        }
-                    }
-
-                    if (defiInterno > 0)
-                    {
-                        // Nunca modificar UUID
-                        var existente = dADeficiency.DADEFI_GetById(defiInterno);
-                        deficiencia.DefiCol3 = existente.DefiCol3;
-
-                        defModificadas++;
-                    }
-                    else
-                    {
-                        if (string.IsNullOrEmpty(deficiencia.DefiCol3))
-                            deficiencia.DefiCol3 = Guid.NewGuid().ToString().ToUpper();
-
-                        defInsertadas++;
-                    }
-
-                    deficiencia.DefiInterno = defiInterno;
-                    dADeficiency.DADEFI_Save(deficiencia);
-                }
-                catch (Exception ex)
-                {
-                    errores.Add(
-                        $"DefiCodigoElemento={def_off.DefiCodigoElemento}, " +
-                        $"TipiInterno={def_off.TipiInterno}, " +
-                        $"Error={ex.Message}"
-                    );
-                }
+                dADeficiency.DADEFI_Save(def);
             }
 
-            if (errores.Any())
-                throw new Exception(
-                    "Errores en sincronización de deficiencias:\n" +
-                    string.Join("\n", errores)
-                );
+            // =====================================================
+            // 6️⃣ 🔄 RECARGAR DEFICIENCIAS ONLINE (ACTUALIZADO)
+            // =====================================================
 
-            /* ===============================
-               🔹 ARCHIVOS
-               =============================== */
+            dtDefOnline = dADeficiency.DADEFI_GetDeficienciasBySedsDT(sedInternos);
 
-            foreach (var arch_off in archivos_off)
+            // =====================================================
+            // 7️⃣ CONVERTIR ARCHIVOS OFFLINE
+            // =====================================================
+
+            var archivos = archivos_off
+                .Select(a => dAFile.ARCH_ConvertFile(a))
+                .ToList();
+
+            // =====================================================
+            // 8️⃣ RESOLVER ARCHIVOS (DEFICIENCIA + ARCHIVO)
+            // =====================================================
+
+            archivos = DAOFF_ResolverArchivosInternoSimple(
+                dtDefOnline,
+                dtArchOnline,
+                archivos
+            );
+
+            // =====================================================
+            // 9️⃣ GUARDAR ARCHIVOS
+            // =====================================================
+
+            foreach (var arch in archivos)
             {
-                int codtabla = 0;
-                var archivo = dAFile.ARCH_ConvertFile(arch_off);
+                if (arch.ArchCodTabla <= 0)
+                    continue; // no se guarda archivo sin deficiencia
 
-                // 🔹 Resolver Deficiencia
-                if (!string.IsNullOrEmpty(arch_off.DefiUUID))
-                {
-                    if (!cacheDefByUUID.TryGetValue(arch_off.DefiUUID, out codtabla))
-                    {
-                        codtabla = dADeficiency
-                            .DADEFI_GetDeficiencyIDByUUID(arch_off.DefiUUID);
-
-                        cacheDefByUUID[arch_off.DefiUUID] = codtabla;
-                    }
-                }
-                else
-                {
-                    string key = $"{archivo.ArchIdElemento}|{archivo.ArchTipoElemento}|{archivo.TipiInterno}";
-
-                    if (!cacheDefExist.TryGetValue(key, out codtabla))
-                    {
-                        codtabla = dADeficiency
-                            .DADEFI_GetDeficiencyIDByElementAndType(
-                                (int)archivo.ArchIdElemento,
-                                archivo.ArchTipoElemento,
-                                (int)archivo.TipiInterno
-                            );
-
-                        cacheDefExist[key] = codtabla;
-                    }
-                }
-
-                if (codtabla <= 0)
-                    continue;
-
-                // 🔹 Archivo existente
-                if (!cacheArchivos.TryGetValue(arch_off.ArchNombre, out int idArchivo))
-                {
-                    idArchivo = dAFile.ARCH_ExistPhoto(arch_off.ArchNombre);
-                    cacheArchivos[arch_off.ArchNombre] = idArchivo;
-                }
-
-                archivo.ArchCodTabla = codtabla;
-                archivo.ArchInterno = idArchivo;
-
-                if (idArchivo > 0)
+                if (arch.ArchInterno > 0)
                     archModificados++;
                 else
                     archInsertados++;
 
-                dAFile.DAARCH_Save(archivo);
+                dAFile.DAARCH_Save(arch);
             }
 
-            return (defInsertadas, defModificadas, archInsertados, archModificados);
+            return (
+                defInsertadas,
+                defModificadas,
+                archInsertados,
+                archModificados
+            );
+        }
+
+
+        public async Task<List<SedSyncDto>> DAOFF_LeerSedsDesdeSqlite(IFormFile file)
+        {
+            var seds = new List<SedSyncDto>();
+            var tempFile = Path.GetTempFileName();
+
+            try
+            {
+                using (var stream = File.Create(tempFile))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                using (var connection = new SqliteConnection($"Data Source={tempFile}"))
+                {
+                    await connection.OpenAsync();
+
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = @"
+                    SELECT
+                        SedInterno,
+                        EstadoOffLine,
+                        SedEtiqueta,
+                        SedLatitud,
+                        SedLongitud,
+                        SedTipo,
+                        AlimInterno,
+                        SedCodigo,
+                        SedSimbolo,
+                        SedTerceros,
+                        SedMaterial,
+                        SedInspeccionado,
+                        SedNumPostes,
+                        SedArmadoTipo,
+                        SedArmadoMaterial,
+                        SedRetenidaTipo,
+                        SedRetenidaMaterial
+                    FROM Seds";
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                seds.Add(new SedSyncDto
+                                {
+                                    SedInterno = reader.GetNullableInt32("SedInterno") ?? 0,
+                                    EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                    SedEtiqueta = reader.GetNullableString("SedEtiqueta"),
+                                    SedLatitud = reader.GetNullableDouble("SedLatitud"),
+                                    SedLongitud = reader.GetNullableDouble("SedLongitud"),
+                                    SedTipo = reader.GetNullableString("SedTipo"),
+                                    AlimInterno = reader.GetNullableInt32("AlimInterno"),
+                                    SedCodigo = reader.GetNullableString("SedCodigo"),
+                                    SedSimbolo = reader.GetNullableString("SedSimbolo"),
+                                    SedTerceros = reader.GetNullableBool("SedTerceros"),
+                                    SedMaterial = reader.GetNullableString("SedMaterial"),
+                                    SedInspeccionado = reader.GetNullableBool("SedInspeccionado"),
+                                    SedNumPostes = reader.GetNullableInt32("SedNumPostes"),
+                                    SedArmadoTipo = reader.GetNullableString("SedArmadoTipo"),
+                                    SedArmadoMaterial = reader.GetNullableString("SedArmadoMaterial"),
+                                    SedRetenidaTipo = reader.GetNullableString("SedRetenidaTipo"),
+                                    SedRetenidaMaterial = reader.GetNullableString("SedRetenidaMaterial")
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempFile))
+                    File.Delete(tempFile);
+            }
+
+            return seds;
+        }
+
+        public List<Deficiencia> DAOFF_ResolverDeficienciasInternoSimple( DataTable dtDefOnline, List<Deficiencia> deficienciasOffline )
+{
+            foreach (var def in deficienciasOffline)
+            {
+                int defiInterno = 0;
+                string defiUUID = null;
+
+                foreach (DataRow r in dtDefOnline.Rows)
+                {
+                    // ======================================
+                    // 1️⃣ CON UUID → prioridad absoluta
+                    // ======================================
+                    if (!string.IsNullOrWhiteSpace(def.DefiCol3))
+                    {
+                        if (r["DEFI_Col3"] != DBNull.Value &&
+                            r["DEFI_Col3"].ToString() == def.DefiCol3)
+                        {
+                            defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
+                            defiUUID = r["DEFI_Col3"].ToString();
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        int tipiOnline = Convert.ToInt32(r["TIPI_Interno"]);
+
+                        // ======================================
+                        // 2️⃣ SIN UUID
+                        // ======================================
+
+                        // 🔹 TIPI ≠ 60 → comparación básica
+                        if (tipiOnline != 60)
+                        {
+                            if (
+                                r["DEFI_CodigoElemento"].ToString() == def.DefiCodigoElemento &&
+                                r["DEFI_TipoElemento"].ToString() == def.DefiTipoElemento &&
+                                tipiOnline == def.TipiInterno
+                            )
+                            {
+                                defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
+                                defiUUID = r["DEFI_Col3"] == DBNull.Value
+                                    ? null
+                                    : r["DEFI_Col3"].ToString();
+                                break;
+                            }
+                        }
+                        // 🔹 TIPI = 60 → comparación COMPLETA
+                        else
+                        {
+                            if (
+                                r["DEFI_CodigoElemento"].ToString() == def.DefiCodigoElemento &&
+                                r["DEFI_TipoElemento"].ToString() == def.DefiTipoElemento &&
+                                tipiOnline == def.TipiInterno &&
+                                (r["DEFI_NumSuministro"] == DBNull.Value ? null : r["DEFI_NumSuministro"].ToString()) == def.DefiNumSuministro &&
+                                Nullable.Equals(
+                                    r["DEFI_Latitud"] == DBNull.Value ? (double?)null : Convert.ToDouble(r["DEFI_Latitud"]),
+                                    def.DefiLatitud
+                                ) &&
+                                Nullable.Equals(
+                                    r["DEFI_Longitud"] == DBNull.Value ? (double?)null : Convert.ToDouble(r["DEFI_Longitud"]),
+                                    def.DefiLongitud
+                                ) &&
+                                Nullable.Equals(
+                                    r["DEFI_DistHorizontal"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(r["DEFI_DistHorizontal"]),
+                                    def.DefiDistHorizontal
+                                ) &&
+                                Nullable.Equals(
+                                    r["DEFI_DistVertical"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(r["DEFI_DistVertical"]),
+                                    def.DefiDistVertical
+                                ) &&
+                                Nullable.Equals(
+                                    r["DEFI_DistTransversal"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(r["DEFI_DistTransversal"]),
+                                    def.DefiDistTransversal
+                                ) &&
+                                (r["DEFI_Observacion"] == DBNull.Value ? null : r["DEFI_Observacion"].ToString()) == def.DefiObservacion
+                            )
+                            {
+                                defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
+                                defiUUID = r["DEFI_Col3"] == DBNull.Value
+                                    ? null
+                                    : r["DEFI_Col3"].ToString();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // ======================================
+                // ASIGNACIÓN FINAL
+                // ======================================
+
+                if (defiInterno > 0)
+                {
+                    def.DefiInterno = defiInterno;
+
+                    // Si existe en DB pero no tenía UUID → usar el de DB
+                    def.DefiCol3 = string.IsNullOrWhiteSpace(defiUUID)
+                        ? def.DefiCol3
+                        : defiUUID;
+                }
+                else
+                {
+                    def.DefiInterno = 0;
+
+                    // Crear UUID si no existe
+                    if (string.IsNullOrWhiteSpace(def.DefiCol3))
+                        def.DefiCol3 = Guid.NewGuid().ToString().ToUpper();
+                }
+            }
+
+            return deficienciasOffline;
+        }
+
+        public List<Archivo> DAOFF_ResolverArchivosInternoSimple(DataTable dtDefOnline, DataTable dtArchOnline, List<Archivo> archivosOffline )
+        {
+            foreach (var archivo in archivosOffline)
+            {
+                int codTabla = 0;
+                int archInterno = 0;
+                string defiUUID = null;
+
+                // =================================================
+                // 1️⃣ RESOLVER DEFICIENCIA (ArchCodTabla + DefiUUID)
+                // =================================================
+
+                // 🔹 Prioridad: DEFI_UUID
+                if (!string.IsNullOrWhiteSpace(archivo.DefiUUID))
+                {
+                    foreach (DataRow r in dtDefOnline.Rows)
+                    {
+                        if (r["DEFI_Col3"] != DBNull.Value &&
+                            r["DEFI_Col3"].ToString() == archivo.DefiUUID)
+                        {
+                            codTabla = Convert.ToInt32(r["DEFI_Interno"]);
+                            defiUUID = r["DEFI_Col3"].ToString();
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    // 🔹 Sin UUID → buscar por clave compuesta
+                    foreach (DataRow r in dtDefOnline.Rows)
+                    {
+                        if (
+                            Convert.ToInt32(r["DEFI_IdElemento"]) == archivo.ArchIdElemento &&
+                            r["DEFI_TipoElemento"].ToString() == archivo.ArchTipoElemento &&
+                            Convert.ToInt32(r["TIPI_Interno"]) == archivo.TipiInterno
+                        )
+                        {
+                            codTabla = Convert.ToInt32(r["DEFI_Interno"]);
+                            defiUUID = r["DEFI_Col3"] == DBNull.Value
+                                ? null
+                                : r["DEFI_Col3"].ToString();
+                            break;
+                        }
+                    }
+                }
+
+                // Setear Deficiencia
+                archivo.ArchCodTabla = codTabla;
+                archivo.DefiUUID = defiUUID;
+
+                // =================================================
+                // 2️⃣ VERIFICAR SI EL ARCHIVO EXISTE
+                // =================================================
+
+                foreach (DataRow r in dtArchOnline.Rows)
+                {
+                    if (r["ARCH_Nombre"].ToString() == archivo.ArchNombre)
+                    {
+                        archInterno = Convert.ToInt32(r["ARCH_Interno"]);
+                        break;
+                    }
+                }
+
+                // Setear Archivo
+                archivo.ArchInterno = archInterno;
+            }
+
+            return archivosOffline;
         }
     }
 
-        // Extensiones para lectura nullable usando nombres de columna
-        public static class SqliteDataReaderExtensions
+    // Extensiones para lectura nullable usando nombres de columna
+    public static class SqliteDataReaderExtensions
     {
         public static int? GetNullableInt32(this SqliteDataReader r, string col)
             => r.IsDBNull(r.GetOrdinal(col)) ? (int?)null : r.GetInt32(r.GetOrdinal(col));

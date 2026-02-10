@@ -1,9 +1,11 @@
-﻿using Sigre.DataAccess.Context;
+﻿using Microsoft.EntityFrameworkCore;
+using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.SyncData;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -493,6 +495,66 @@ namespace Sigre.DataAccess
                 // ✅ INSERT también guarda DEFI_UUID
                 DefiUUID = defiUuid
             };
+        }
+
+        public DataTable DAARCH_GetArchivosBySedsDT(List<int> sedInternos)
+        {
+            using var ctx = new SigreContext();
+
+            var list =
+            (
+                from a in ctx.Archivos.AsNoTracking()
+
+                join p in ctx.Postes on a.ArchIdElemento equals p.PostInterno into pj
+                from p in pj.DefaultIfEmpty()
+
+                join v in ctx.Vanos on a.ArchIdElemento equals v.VanoInterno into vj
+                from v in vj.DefaultIfEmpty()
+
+                where
+                    (a.ArchTipoElemento == "POST" && sedInternos.Contains((int)p.PostSubestacion)) ||
+                    (a.ArchTipoElemento == "VANO" && sedInternos.Contains((int)v.VanoSubestacion))
+
+                select a
+            ).ToList();   // 🔥 UNA SOLA CONSULTA
+
+            // 🔹 DataTable completo
+            var dt = new DataTable();
+
+            dt.Columns.Add("ARCH_Interno", typeof(int));
+            dt.Columns.Add("ARCH_Tipo", typeof(int));
+            dt.Columns.Add("ARCH_Tabla", typeof(string));
+            dt.Columns.Add("ARCH_CodTabla", typeof(int));
+            dt.Columns.Add("ARCH_Nombre", typeof(string));
+            dt.Columns.Add("ARCH_Latitud", typeof(double));
+            dt.Columns.Add("ARCH_Longitud", typeof(double));
+            dt.Columns.Add("ARCH_Fecha", typeof(DateTime));
+            dt.Columns.Add("ARCH_TipoElemento", typeof(string));
+            dt.Columns.Add("ARCH_IdElemento", typeof(int));
+            dt.Columns.Add("TIPI_Interno", typeof(int));
+            dt.Columns.Add("ARCH_Activo", typeof(bool));
+            dt.Columns.Add("DEFI_UUID", typeof(string));
+
+            foreach (var a in list)
+            {
+                dt.Rows.Add(
+                    a.ArchInterno,
+                    a.ArchTipo,
+                    a.ArchTabla,
+                    a.ArchCodTabla,
+                    a.ArchNombre,
+                    a.ArchLatitud,
+                    a.ArchLongitud,
+                    a.ArchFecha,
+                    a.ArchTipoElemento,
+                    a.ArchIdElemento,
+                    a.TipiInterno,
+                    a.ArchActivo,
+                    a.DefiUUID
+                );
+            }
+
+            return dt;
         }
 
     }
