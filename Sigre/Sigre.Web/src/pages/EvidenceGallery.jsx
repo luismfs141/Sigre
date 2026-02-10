@@ -13,7 +13,7 @@ import { useTypification } from '../hooks/useTypification';
 //cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
 //const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
 //ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
+const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
 //servidor estatico enlocal
 //const API_BASE_URL = "http://localhost:8080/";
 
