@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Sigre.DataAccess;
 using Sigre.Entities.Entities.SyncData;
 using System.Threading.Tasks;
@@ -9,11 +10,21 @@ namespace Sigre.Server.Controllers
     [Route("api/offline")]
     public class OfflineController : ControllerBase
     {
+        private async Task<string> CrearTempSqlite(IFormFile file)
+        {
+            var tempFile = Path.GetTempFileName();
+
+            using (var stream = System.IO.File.Create(tempFile))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            return tempFile;
+        }
+
         [HttpPost("upload")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadSqlite(
-            [FromForm(Name = "file")] IFormFile file
-        )
+        public async Task<IActionResult> UploadSqlite([FromForm(Name = "file")] IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("Archivo inválido");
@@ -22,18 +33,26 @@ namespace Sigre.Server.Controllers
                 return BadRequest("Solo se permiten archivos SQLite (.db)");
 
             var daOffline = new DAOffline();
+            var tempFile = await CrearTempSqlite(file);
 
-            var deficiencias = await daOffline.DAOFF_LeerDeficienciasDesdeSqlite(file);
-
-            var archivos = await daOffline.DAOFF_LeerArchivosDesdeSqliteAsync(file);
-
-            return Ok(new
+            try
             {
-                deficiencias,
-                archivos
-            });
-        }
+                var deficiencias =
+                    await daOffline.DAOFF_LeerDeficienciasDesdeSqlite(tempFile);
 
+                var archivos =
+                    await daOffline.DAOFF_LeerArchivosDesdeSqliteAsync(tempFile);
+
+                return Ok(new
+                {
+                    deficiencias,
+                    archivos
+                });
+            }
+            finally
+            {
+            }
+        }
         /* ============================
           SINCRONIZAR SQLITE
           ============================ */
@@ -49,37 +68,28 @@ namespace Sigre.Server.Controllers
             if (!file.FileName.EndsWith(".db"))
                 return BadRequest("Solo se permiten archivos SQLite (.db)");
 
+            var daOffline = new DAOffline();
+            var tempFile = await CrearTempSqlite(file);
+
             try
             {
-                var daOffline = new DAOffline();
-
-                // 🔑 Ejecutar sincronización
-                var (
-                    defInsertadas,
-                    defModificadas,
-                    archInsertados,
-                    archModificados
-                ) = await daOffline.DAOFF_SyncDataOffline(file);
+                var result =
+                    await daOffline.DAOFF_SyncDataOffline(tempFile);
 
                 return Ok(new
                 {
                     success = true,
-
+                    mensaje = "Sincronización completada correctamente",
                     deficiencias = new
                     {
-                        insertadas = defInsertadas,
-                        modificadas = defModificadas,
-                        total = defInsertadas + defModificadas
+                        insertadas = result.defInsertadas,
+                        modificadas = result.defModificadas
                     },
-
                     archivos = new
                     {
-                        insertados = archInsertados,
-                        modificados = archModificados,
-                        total = archInsertados + archModificados
-                    },
-
-                    mensaje = "Sincronización completada correctamente"
+                        insertados = result.archInsertados,
+                        modificados = result.archModificados
+                    }
                 });
             }
             catch (Exception ex)
@@ -90,6 +100,22 @@ namespace Sigre.Server.Controllers
                     mensaje = "Error durante la sincronización",
                     detalle = ex.Message
                 });
+            }
+            finally
+            {
+                try
+                {
+                    SqliteConnection.ClearAllPools();
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+
+                    if (System.IO.File.Exists(tempFile))
+                        System.IO.File.Delete(tempFile);
+                }
+                catch
+                {
+                    // ignorar
+                }
             }
         }
 

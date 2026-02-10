@@ -126,7 +126,7 @@ public partial class Deficiencia
     public string? DefiTipoCruce { get; set; }
     [NotMapped]
     public bool EsTercero { get; set; }
-    public string? DefiComentarioEstandar { get; set; }
+    //public string? DefiComentarioEstandar { get; set; }
 
 }
 public class EstadoTerceroDto
