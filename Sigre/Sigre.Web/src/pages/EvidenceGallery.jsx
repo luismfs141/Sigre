@@ -13,9 +13,9 @@ import { useTypification } from '../hooks/useTypification';
 //cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
 //const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
 //ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-//const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
+const API_BASE_URL="https://karri-unworkable-noncriminally.ngrok-free.app/"; 
 //servidor estatico enlocal
-const API_BASE_URL = "http://localhost:8080/";
+//const API_BASE_URL = "http://localhost:8080/";
 
 
 // --- 📦 ALMACENAMIENTO LOCAL ---
@@ -512,6 +512,26 @@ const handleUploadSave = async (dataToSave) => {
                 <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="fixed top-4 right-4 z-[100002] bg-transparent text-white/80 hover:text-white rounded-full p-2"><i className="pi pi-times text-2xl"></i></button>
                 <button onClick={(e) => { e.stopPropagation(); navigate(-1); }} className="fixed left-4 top-1/2 -translate-y-1/2 z-[100001] text-white/60 hover:text-white"><i className="pi pi-chevron-left text-4xl"></i></button>
                 <button onClick={(e) => { e.stopPropagation(); navigate(1); }} className="fixed right-4 top-1/2 -translate-y-1/2 z-[100001] text-white/60 hover:text-white"><i className="pi pi-chevron-right text-4xl"></i></button>
+                {/* 🔥 AGREGA ESTO: CONTROLES DE ZOOM 🔥 */}
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100002] flex gap-4 bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
+                <button 
+                    onClick={handleZoomOut} 
+                    className="text-white hover:text-blue-400 disabled:opacity-30"
+                    disabled={zoomLevel <= 1}
+                >
+                    <i className="pi pi-minus text-xl"></i>
+                </button>
+                <span className="text-white text-sm font-bold min-w-[30px] text-center self-center">
+                    {Math.round(zoomLevel * 100)}%
+                </span>
+                <button 
+                    onClick={handleZoomIn} 
+                    className="text-white hover:text-blue-400 disabled:opacity-30"
+                    disabled={zoomLevel >= 5}
+                >
+                    <i className="pi pi-plus text-xl"></i>
+                </button>
+            </div>
                 <div className="w-full h-full flex items-center justify-center overflow-hidden" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}>
                     <img src={src} alt="Full" draggable={false} className="max-w-none transition-transform duration-100 ease-out select-none" style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`, maxHeight: '100vh', maxWidth: '100vw', objectFit: 'contain' }} onClick={(e)=>e.stopPropagation()}
                         onError={(e) => { if (e.target.src.toLowerCase().endsWith('.jpg')) e.target.src = e.target.src.substring(0, e.target.src.length - 4); }} />

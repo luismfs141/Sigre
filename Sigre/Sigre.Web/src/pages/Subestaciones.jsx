@@ -502,7 +502,7 @@ const terceroTemplate = (rowData) => {
                 <Splitter style={{ height: '100%' }} layout="horizontal" className="border-0">
 
                     {/* PANEL IZQUIERDO: TABLA */}
-                    <SplitterPanel size={85} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
+                    <SplitterPanel size={80} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
                         <DataTable
                             value={mappedDeficiencies}
                             loading={loadingDef}
@@ -556,7 +556,7 @@ const terceroTemplate = (rowData) => {
 
                     {/* PANEL DERECHO: GALERÍA */}
                     {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
-                    <SplitterPanel size={15} minSize={10} className="bg-white flex flex-col overflow-hidden">
+                    <SplitterPanel size={20} minSize={10} className="bg-white flex flex-col overflow-hidden">
                     
       
 
