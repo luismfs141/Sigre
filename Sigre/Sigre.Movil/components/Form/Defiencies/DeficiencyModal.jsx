@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { getStdCommentByCode } from "../../../utils/Deficiencies/standardComment";
 
 import { useEffect, useState } from "react";
 
@@ -26,50 +25,7 @@ import DeficiencyField from "../Defiencies/DeficiencyField";
 
 
 const RESPONSABILIDAD = "DefiCol2";
-const COMENTARIO_ESTANDAR = "DefiComentarioEstandar";
 
-const buildComentarioEstandarField = () => ({
-  key: COMENTARIO_ESTANDAR,
-  label: "Comentario estándar",
-  required: false,
-  placeholder: "Se autocompleta según el tipo",
-  maxLengthHard: 30,
-  readonly: true, // ✅ BLOQUEADO
-});
-
-const ensureComentarioEstandarDefault = (def) => {
-  if (!def) return def;
-
-  const curr = def?.[COMENTARIO_ESTANDAR];
-  const empty = curr === null || curr === undefined || String(curr).trim() === "";
-  if (!empty) return def;
-
-  const suggestion = getStdCommentByCode(def?.typificationCode);
-  if (!suggestion) return def;
-
-  return { ...def, [COMENTARIO_ESTANDAR]: suggestion };
-};
-
-const injectComentarioEstandarAfterObservacion = (baseFields) => {
-  const fields = Array.isArray(baseFields) ? baseFields : [];
-
-  // ✅ evitar duplicados
-  if (fields.some((f) => f?.key === COMENTARIO_ESTANDAR)) return fields;
-
-  const comentarioField = buildComentarioEstandarField();
-
-  // ✅ ubicar Observación por key/label (por si cambia el key exacto)
-  const idx = fields.findIndex((f) => {
-    const k = String(f?.key ?? "").toUpperCase();
-    const l = String(f?.label ?? "").toUpperCase();
-    return k.includes("OBSERV") || l.includes("OBSERV");
-  });
-
-  // si no existe Observación, lo ponemos al final
-  if (idx === -1) return [...fields, comentarioField];
-
-  return [...fields.slice(0, idx + 1), comentarioField, ...fields.slice(idx + 1)];
-};
 
 
 
@@ -189,13 +145,11 @@ export default function DeficiencyModal({
         const def = await fetchDeficiencyByIdLocal(deficiency.defiInterno);
         if (def) {
           setLocalDef(
-            ensureComentarioEstandarDefault(
-              ensureResponsabilidadDefault({
-                ...def,
-                typificationCode: deficiency.typificationCode,
-                typificationId: deficiency.typificationId,
-              })
-            )
+            ensureResponsabilidadDefault({
+              ...def,
+              typificationCode: deficiency.typificationCode,
+              typificationId: deficiency.typificationId,
+            })
           );
           return;
         }
@@ -209,11 +163,7 @@ export default function DeficiencyModal({
           selectedItem
         });
 
-        setLocalDef(
-          ensureComentarioEstandarDefault(
-            ensureResponsabilidadDefault(empty)
-          )
-        );
+        setLocalDef(ensureResponsabilidadDefault(empty));
         return;
       }
 
@@ -225,11 +175,7 @@ export default function DeficiencyModal({
       );
 
       if (result?.length) {
-        setLocalDef(
-          ensureComentarioEstandarDefault(
-            ensureResponsabilidadDefault(result[0])
-          )
-        );
+        setLocalDef(ensureResponsabilidadDefault(result[0]));
       } else {
         const empty = createEmptyDeficiency({
           ...deficiency,
@@ -237,11 +183,7 @@ export default function DeficiencyModal({
           selectedItem
         });
 
-        setLocalDef(
-          ensureComentarioEstandarDefault(
-            ensureResponsabilidadDefault(empty)
-          )
-        );
+        setLocalDef(ensureResponsabilidadDefault(empty));
       }
     };
 
@@ -249,12 +191,13 @@ export default function DeficiencyModal({
   }, [deficiency]);
 
 
+
   if (!visible || !localDef) return null;
 
   const code = String(localDef.typificationCode);
   const baseFields = getDeficiencyFields(code);
-  const withResp = injectResponsabilidadAfterCriticidad(baseFields);
-  const fields = injectComentarioEstandarAfterObservacion(withResp);
+  const fields = injectResponsabilidadAfterCriticidad(baseFields);
+
 
 
   const title = getDeficiencyLabel(code);
@@ -343,25 +286,24 @@ export default function DeficiencyModal({
         return;
       }
 
-      // ✅ garantiza que viaje idElemento/tipoElemento
-      const payload = ensureComentarioEstandarDefault(
-        ensureResponsabilidadDefault({
-          ...localDef,
+      const payload = ensureResponsabilidadDefault({
+        ...localDef,
 
-          DefiIdElemento:
-            localDef?.DefiIdElemento ??
-            deficiency?.elementId ??
-            localDef?.elementId,
+        DefiIdElemento:
+          localDef?.DefiIdElemento ??
+          deficiency?.elementId ??
+          localDef?.elementId,
 
-          DefiTipoElemento:
-            localDef?.DefiTipoElemento ??
-            deficiency?.typeElement ??
-            localDef?.typeElement,
+        DefiTipoElemento:
+          localDef?.DefiTipoElemento ??
+          deficiency?.typeElement ??
+          localDef?.typeElement,
 
-          elementId: localDef?.elementId ?? deficiency?.elementId,
-          typeElement: localDef?.typeElement ?? deficiency?.typeElement,
-        })
-      );
+        elementId: localDef?.elementId ?? deficiency?.elementId,
+        typeElement: localDef?.typeElement ?? deficiency?.typeElement,
+      });
+
+
 
 
       const res = await saveDeficiency(payload, userId);

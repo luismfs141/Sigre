@@ -274,11 +274,6 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .HasColumnName("DEFI_TipoCruce");
 
-            //entity.Property(e => e.DefiComentarioEstandar)
-            //    .HasMaxLength(30)
-            //    .IsUnicode(false)
-            //    .HasColumnName("DEFI_ComentarioEstandar");
-
 
             entity.Property(e => e.DefiCoordX).HasColumnName("DEFI_CoordX");
             entity.Property(e => e.DefiCoordY).HasColumnName("DEFI_CoordY");

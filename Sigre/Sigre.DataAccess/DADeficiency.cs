@@ -136,7 +136,7 @@ namespace Sigre.DataAccess
                      DefiKeyWords = d.DefiKeyWords,
                      DefiAccesibilidad = d.DefiAccesibilidad,
                      DefiTipoCruce = d.DefiTipoCruce,
-                     //DefiComentarioEstandar = d.DefiComentarioEstandar,
+         
                      EstadoOffLine = 0,
                  }).ToList();
 
@@ -281,7 +281,6 @@ namespace Sigre.DataAccess
                  DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                  DefiAccesibilidad = d.DefiAccesibilidad,
                  DefiTipoCruce = d.DefiTipoCruce,
-                 //DefiComentarioEstandar = d.DefiComentarioEstandar,
                  EstadoOffLine = 0,
              });
 
@@ -354,7 +353,6 @@ namespace Sigre.DataAccess
                     DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                     DefiAccesibilidad = d.DefiAccesibilidad,
                     DefiTipoCruce = d.DefiTipoCruce,
-                    //DefiComentarioEstandar = d.DefiComentarioEstandar,
                     EstadoOffLine = 0,
                 }
             ).ToList();
@@ -510,7 +508,6 @@ namespace Sigre.DataAccess
 
                     existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                     existente.DefiTipoCruce = dto.DefiTipoCruce;
-                    //existente.DefiComentarioEstandar = dto.DefiComentarioEstandar;
                     existente.DefiActivo = dto.DefiActivo;
 
                     existente.DefiCol2 = dto.DefiCol2;
@@ -585,7 +582,6 @@ namespace Sigre.DataAccess
 
                         DefiAccesibilidad = dto.DefiAccesibilidad,
                         DefiTipoCruce = dto.DefiTipoCruce,
-                        //DefiComentarioEstandar = dto.DefiComentarioEstandar,
                         DefiCol3 = dto.DefiCol3,
                         DefiCol2 = dto.DefiCol2,
                         DefiCol1 = dto.DefiCol1,
@@ -743,7 +739,6 @@ namespace Sigre.DataAccess
                 // 🚧 Otros
                 DefiAccesibilidad = def_offline.DefiAccesibilidad,
                 DefiTipoCruce = def_offline.DefiTipoCruce,
-                //DefiComentarioEstandar = def_offline.DefiComentarioEstandar,
                 DefiNumSuministro = def_offline.DefiNumSuministro,
                 DefiCodDef = def_offline.DefiCodDef,
                 DefiCodRes = def_offline.DefiCodRes,
@@ -864,7 +859,6 @@ namespace Sigre.DataAccess
                     existente.DefiDistVertical = input.DefiDistVertical;
                     existente.DefiAccesibilidad = input.DefiAccesibilidad;
                     existente.DefiTipoCruce = input.DefiTipoCruce;
-                    //existente.DefiComentarioEstandar = input.DefiComentarioEstandar;    
 
                     // Actualizar ubicación solo si viene válida (distinta de 0)
                     if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
