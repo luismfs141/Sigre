@@ -14,180 +14,136 @@ namespace Sigre.DataAccess
 {
     public class DAOffline
     {
-        public async Task<List<DeficienciaSyncDto>> DAOFF_LeerDeficienciasDesdeSqlite(IFormFile file)
+        public async Task<List<DeficienciaSyncDto>> DAOFF_LeerDeficienciasDesdeSqlite(string sqlitePath)
         {
             var deficiencias = new List<DeficienciaSyncDto>();
-            var tempFile = Path.GetTempFileName();
 
-            try
+            using (var connection = new SqliteConnection($"Data Source={sqlitePath}"))
             {
-                // Guardar archivo temporal
-                using (var stream = File.Create(tempFile))
-                {
-                    file.CopyTo(stream);
-                }
+                await connection.OpenAsync();
 
-                using (var connection = new SqliteConnection($"Data Source={tempFile}"))
+                using (var command = connection.CreateCommand())
                 {
-                    connection.Open();
+                    command.CommandText = "SELECT * FROM Deficiencias";
 
-                    using (var command = connection.CreateCommand())
+                    using (var reader = await command.ExecuteReaderAsync())
                     {
-                        command.CommandText = "SELECT * FROM Deficiencias";
-
-                        using (var reader = command.ExecuteReader())
+                        while (await reader.ReadAsync())
                         {
-                            while (reader.Read())
+                            var def = new DeficienciaSyncDto
                             {
-                                var def = new DeficienciaSyncDto
-                                {
-                                    DefiInterno = reader.GetNullableInt32("DefiInterno") ?? 0,
-                                    DefiEstado = reader.GetNullableString("DefiEstado"),
-                                    InspInterno = reader.GetNullableInt32("InspInterno"),
-                                    TablInterno = reader.GetNullableInt32("TablInterno"),
-                                    DefiCodigoElemento = reader.GetNullableString("DefiCodigoElemento"),
-                                    TipiInterno = reader.GetNullableInt32("TipiInterno"),
-                                    DefiNumSuministro = reader.GetNullableString("DefiNumSuministro"),
-                                    DefiFechaDenuncia = reader.GetNullableDateTime("DefiFechaDenuncia"),
-                                    DefiFechaInspeccion = reader.GetNullableDateTime("DefiFechaInspeccion"),
-                                    DefiFechaSubsanacion = reader.GetNullableDateTime("DefiFechaSubsanacion"),
-                                    DefiObservacion = reader.GetNullableString("DefiObservacion"),
-                                    DefiEstadoSubsanacion = reader.GetNullableString("DefiEstadoSubsanacion"),
-                                    DefiLatitud = reader.GetNullableDouble("DefiLatitud") ?? 0,
-                                    DefiLongitud = reader.GetNullableDouble("DefiLongitud") ?? 0,
-                                    DefiTipoElemento = reader.GetNullableString("DefiTipoElemento"),
-                                    DefiDistHorizontal = reader.GetNullableDecimal("DefiDistHorizontal"),
-                                    DefiDistVertical = reader.GetNullableDecimal("DefiDistVertical"),
-                                    DefiDistTransversal = reader.GetNullableDecimal("DefiDistTransversal"),
-                                    DefiIdElemento = reader.GetNullableInt32("DefiIdElemento"),
-                                    DefiFecRegistro = reader.GetNullableDateTime("DefiFecRegistro") ?? DateTime.MinValue,
-                                    DefiCodDef = reader.GetNullableString("DefiCodDef"),
-                                    DefiCodRes = reader.GetNullableInt32("DefiCodRes"),
-                                    DefiCodDen = reader.GetNullableInt32("DefiCodDen"),
-                                    DefiRefer1 = reader.GetNullableString("DefiRefer1"),
-                                    DefiRefer2 = reader.GetNullableString("DefiRefer2"),
-                                    DefiCoordX = reader.GetNullableDouble("DefiCoordX"),
-                                    DefiCoordY = reader.GetNullableDouble("DefiCoordY"),
-                                    DefiCodAmt = reader.GetNullableString("DefiCodAmt"),
-                                    DefiNroOrden = reader.GetNullableString("DefiNroOrden"),
-                                    DefiPointX = reader.GetNullableDouble("DefiPointX"),
-                                    DefiPointY = reader.GetNullableDouble("DefiPointY"),
-                                    DefiUsuCre = reader.GetNullableString("DefiUsuCre") ?? string.Empty,
-                                    DefiUsuNpc = reader.GetNullableString("DefiUsuNpc") ?? string.Empty,
-                                    DefiFecModificacion = reader.GetNullableDateTime("DefiFecModificacion"),
-                                    DefiFechaCreacion = reader.GetNullableDateTime("DefiFechaCreacion"),
-                                    DefiTipoMaterial = reader.GetNullableString("DefiTipoMaterial"),
-                                    DefiNodoInicial = reader.GetNullableString("DefiNodoInicial"),
-                                    DefiNodoFinal = reader.GetNullableString("DefiNodoFinal"),
-                                    DefiTipoRetenida = reader.GetNullableString("DefiTipoRetenida"),
-                                    DefiRetenidaMaterial = reader.GetNullableString("DefiRetenidaMaterial"),
-                                    DefiTipoArmado = reader.GetNullableString("DefiTipoArmado"),
-                                    DefiArmadoMaterial = reader.GetNullableString("DefiArmadoMaterial"),
-                                    DefiNumPostes = reader.GetNullableInt32("DefiNumPostes"),
-                                    DefiPozoTierra = reader.GetNullableString("DefiPozoTierra"),
-                                    DefiResponsable = reader.GetNullableBool("DefiResponsable"),
-                                    DefiComentario = reader.GetNullableString("DefiComentario"),
-                                    DefiPozoTierra2 = reader.GetNullableString("DefiPozoTierra2"),
-                                    DefiUsuarioInic = reader.GetNullableString("DefiUsuarioInic") ?? string.Empty,
-                                    DefiUsuarioMod = reader.GetNullableString("DefiUsuarioMod") ?? string.Empty,
-                                    DefiActivo = reader.GetNullableBool("DefiActivo"),
-                                    DefiEstadoCriticidad = reader.GetNullableInt32("DefiEstadoCriticidad"),
-                                    DefiInspeccionado = reader.GetNullableBool("DefiInspeccionado") ?? false,
-                                    DefiAccesibilidad = reader.GetNullableString("DefiAccesibilidad"),
-                                    DefiTipoCruce = reader.GetNullableString("DefiTipoCruce"),
-                                    DefiComentarioEstandar = reader.GetNullableString("DefiComentarioEstandar"),
-                                    EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
-                                    DefiServerId = reader.GetNullableInt32("DefiServerId")
-                                };
+                                DefiInterno = reader.GetNullableInt32("DefiInterno") ?? 0,
+                                DefiEstado = reader.GetNullableString("DefiEstado"),
+                                InspInterno = reader.GetNullableInt32("InspInterno"),
+                                TablInterno = reader.GetNullableInt32("TablInterno"),
+                                DefiCodigoElemento = reader.GetNullableString("DefiCodigoElemento"),
+                                TipiInterno = reader.GetNullableInt32("TipiInterno"),
+                                DefiNumSuministro = reader.GetNullableString("DefiNumSuministro"),
+                                DefiFechaDenuncia = reader.GetNullableDateTime("DefiFechaDenuncia"),
+                                DefiFechaInspeccion = reader.GetNullableDateTime("DefiFechaInspeccion"),
+                                DefiFechaSubsanacion = reader.GetNullableDateTime("DefiFechaSubsanacion"),
+                                DefiObservacion = reader.GetNullableString("DefiObservacion"),
+                                DefiEstadoSubsanacion = reader.GetNullableString("DefiEstadoSubsanacion"),
+                                DefiLatitud = reader.GetNullableDouble("DefiLatitud") ?? 0,
+                                DefiLongitud = reader.GetNullableDouble("DefiLongitud") ?? 0,
+                                DefiTipoElemento = reader.GetNullableString("DefiTipoElemento"),
+                                DefiDistHorizontal = reader.GetNullableDecimal("DefiDistHorizontal"),
+                                DefiDistVertical = reader.GetNullableDecimal("DefiDistVertical"),
+                                DefiDistTransversal = reader.GetNullableDecimal("DefiDistTransversal"),
+                                DefiIdElemento = reader.GetNullableInt32("DefiIdElemento"),
+                                DefiFecRegistro = reader.GetNullableDateTime("DefiFecRegistro") ?? DateTime.MinValue,
+                                DefiCodDef = reader.GetNullableString("DefiCodDef"),
+                                DefiCodRes = reader.GetNullableInt32("DefiCodRes"),
+                                DefiCodDen = reader.GetNullableInt32("DefiCodDen"),
+                                DefiRefer1 = reader.GetNullableString("DefiRefer1"),
+                                DefiRefer2 = reader.GetNullableString("DefiRefer2"),
+                                DefiCoordX = reader.GetNullableDouble("DefiCoordX"),
+                                DefiCoordY = reader.GetNullableDouble("DefiCoordY"),
+                                DefiCodAmt = reader.GetNullableString("DefiCodAmt"),
+                                DefiNroOrden = reader.GetNullableString("DefiNroOrden"),
+                                DefiPointX = reader.GetNullableDouble("DefiPointX"),
+                                DefiPointY = reader.GetNullableDouble("DefiPointY"),
+                                DefiUsuCre = reader.GetNullableString("DefiUsuCre") ?? string.Empty,
+                                DefiUsuNpc = reader.GetNullableString("DefiUsuNpc") ?? string.Empty,
+                                DefiFecModificacion = reader.GetNullableDateTime("DefiFecModificacion"),
+                                DefiFechaCreacion = reader.GetNullableDateTime("DefiFechaCreacion"),
+                                DefiTipoMaterial = reader.GetNullableString("DefiTipoMaterial"),
+                                DefiNodoInicial = reader.GetNullableString("DefiNodoInicial"),
+                                DefiNodoFinal = reader.GetNullableString("DefiNodoFinal"),
+                                DefiTipoRetenida = reader.GetNullableString("DefiTipoRetenida"),
+                                DefiRetenidaMaterial = reader.GetNullableString("DefiRetenidaMaterial"),
+                                DefiTipoArmado = reader.GetNullableString("DefiTipoArmado"),
+                                DefiArmadoMaterial = reader.GetNullableString("DefiArmadoMaterial"),
+                                DefiNumPostes = reader.GetNullableInt32("DefiNumPostes"),
+                                DefiPozoTierra = reader.GetNullableString("DefiPozoTierra"),
+                                DefiResponsable = reader.GetNullableBool("DefiResponsable"),
+                                DefiComentario = reader.GetNullableString("DefiComentario"),
+                                DefiPozoTierra2 = reader.GetNullableString("DefiPozoTierra2"),
+                                DefiUsuarioInic = reader.GetNullableString("DefiUsuarioInic") ?? string.Empty,
+                                DefiUsuarioMod = reader.GetNullableString("DefiUsuarioMod") ?? string.Empty,
+                                DefiActivo = reader.GetNullableBool("DefiActivo"),
+                                DefiEstadoCriticidad = reader.GetNullableInt32("DefiEstadoCriticidad"),
+                                DefiInspeccionado = reader.GetNullableBool("DefiInspeccionado") ?? false,
+                                DefiAccesibilidad = reader.GetNullableString("DefiAccesibilidad"),
+                                DefiTipoCruce = reader.GetNullableString("DefiTipoCruce"),
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                DefiServerId = reader.GetNullableInt32("DefiServerId")
+                            };
 
-                                deficiencias.Add(def);
-                            }
+                            deficiencias.Add(def);
                         }
                     }
-                }
-            }
-            finally
-            {
-                try
-                {
-                    if (File.Exists(tempFile))
-                        File.Delete(tempFile);
-                }
-                catch (IOException)
-                {
-                    // ignorar
                 }
             }
 
             return deficiencias;
         }
 
-
-        public async Task<List<ArchivoSyncDto>> DAOFF_LeerArchivosDesdeSqliteAsync(IFormFile file)
+        public async Task<List<ArchivoSyncDto>> DAOFF_LeerArchivosDesdeSqliteAsync(string sqlitePath)
         {
             var archivos = new List<ArchivoSyncDto>();
 
-            // Guardar temporalmente el archivo SQLite
-            var tempFile = Path.GetTempFileName();
-            try
+            using (var connection = new SqliteConnection($"Data Source={sqlitePath}"))
             {
-                using (var stream = File.Create(tempFile))
-                {
-                    await file.CopyToAsync(stream);
-                }
+                await connection.OpenAsync();
 
-                using (var connection = new SqliteConnection($"Data Source={tempFile}"))
+                using (var command = connection.CreateCommand())
                 {
-                    await connection.OpenAsync();
+                    command.CommandText = "SELECT * FROM Archivos";
 
-                    using (var command = connection.CreateCommand())
+                    using (var reader = await command.ExecuteReaderAsync())
                     {
-                        command.CommandText = "SELECT * FROM Archivos";
-
-                        using (var reader = await command.ExecuteReaderAsync())
+                        while (await reader.ReadAsync())
                         {
-                            while (await reader.ReadAsync())
+                            var archivo = new ArchivoSyncDto
                             {
-                                var archivo = new ArchivoSyncDto
-                                {
-                                    ArchInterno = reader.GetNullableInt32("ArchInterno") ?? 0,
-                                    ArchTipo = reader.GetNullableString("ArchTipo"),
-                                    ArchTabla = reader.GetNullableString("ArchTabla"),
-                                    ArchCodTabla = reader.GetNullableInt32("ArchCodTabla"),
-                                    ArchNombre = reader.GetNullableString("ArchNombre"),
-                                    ArchLatitud = reader.GetNullableDouble("ArchLatitud"),
-                                    ArchLongitud = reader.GetNullableDouble("ArchLongitud"),
-                                    ArchFecha = reader.GetNullableDateTime("ArchFecha"),
-                                    ArchTipoElemento = reader.GetNullableString("ArchTipoElemento"),
-                                    ArchIdElemento = reader.GetNullableInt32("ArchIdElemento"),
-                                    TipiInterno = reader.GetNullableInt32("TipiInterno"),
-                                    ArchActivo = reader.GetNullableBool("ArchActivo") ?? false,
-                                    EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
-                                    DefiServerId = reader.GetNullableInt32("DefiServerId") ?? 0, // ✅ usar la que existe
-                                };
-                                archivos.Add(archivo);
-                            }
+                                ArchInterno = reader.GetNullableInt32("ArchInterno") ?? 0,
+                                ArchTipo = reader.GetNullableString("ArchTipo"),
+                                ArchTabla = reader.GetNullableString("ArchTabla"),
+                                ArchCodTabla = reader.GetNullableInt32("ArchCodTabla"),
+                                ArchNombre = reader.GetNullableString("ArchNombre"),
+                                ArchLatitud = reader.GetNullableDouble("ArchLatitud"),
+                                ArchLongitud = reader.GetNullableDouble("ArchLongitud"),
+                                ArchFecha = reader.GetNullableDateTime("ArchFecha"),
+                                ArchTipoElemento = reader.GetNullableString("ArchTipoElemento"),
+                                ArchIdElemento = reader.GetNullableInt32("ArchIdElemento"),
+                                TipiInterno = reader.GetNullableInt32("TipiInterno"),
+                                ArchActivo = reader.GetNullableBool("ArchActivo") ?? false,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                DefiServerId = reader.GetNullableInt32("DefiServerId") ?? 0
+                            };
+
+                            archivos.Add(archivo);
                         }
                     }
                 }
             }
-            finally
-            {
-                // Borrar archivo temporal de manera segura
-                try
-                {
-                    if (File.Exists(tempFile))
-                        File.Delete(tempFile);
-                }
-                catch (IOException)
-                {
-                    // Ignorar si el archivo está en uso
-                }
-            }
+
             return archivos;
         }
 
-        public async Task<(int defInsertadas, int defModificadas, int archInsertados, int archModificados )> DAOFF_SyncDataOffline(IFormFile file)
+
+        public async Task<(int defInsertadas, int defModificadas, int archInsertados, int archModificados )> DAOFF_SyncDataOffline(string sqlitePath)
         {
             int defInsertadas = 0;
             int defModificadas = 0;
@@ -201,15 +157,15 @@ namespace Sigre.DataAccess
             // 1️⃣ LEER DATA OFFLINE (SQLITE)
             // =====================================================
 
-            var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(file))
+            var deficiencias_off = (await DAOFF_LeerDeficienciasDesdeSqlite(sqlitePath))
                 .Where(x => x.EstadoOffLine != 0)
                 .ToList();
 
-            var archivos_off = (await DAOFF_LeerArchivosDesdeSqliteAsync(file))
+            var archivos_off = (await DAOFF_LeerArchivosDesdeSqliteAsync(sqlitePath))
                 .Where(x => x.EstadoOffLine != 0)
                 .ToList();
 
-            var seds_off = await DAOFF_LeerSedsDesdeSqlite(file);
+            var seds_off = await DAOFF_LeerSedsDesdeSqlite(sqlitePath);
 
             var sedInternos = seds_off
                 .Where(s => s.SedInterno > 0)
@@ -311,82 +267,69 @@ namespace Sigre.DataAccess
         }
 
 
-        public async Task<List<SedSyncDto>> DAOFF_LeerSedsDesdeSqlite(IFormFile file)
+        public async Task<List<SedSyncDto>> DAOFF_LeerSedsDesdeSqlite(string sqlitePath)
         {
             var seds = new List<SedSyncDto>();
-            var tempFile = Path.GetTempFileName();
 
-            try
+            using (var connection = new SqliteConnection($"Data Source={sqlitePath}"))
             {
-                using (var stream = File.Create(tempFile))
-                {
-                    await file.CopyToAsync(stream);
-                }
+                await connection.OpenAsync();
 
-                using (var connection = new SqliteConnection($"Data Source={tempFile}"))
+                using (var command = connection.CreateCommand())
                 {
-                    await connection.OpenAsync();
+                    command.CommandText = @"
+                SELECT
+                    SedInterno,
+                    EstadoOffLine,
+                    SedEtiqueta,
+                    SedLatitud,
+                    SedLongitud,
+                    SedTipo,
+                    AlimInterno,
+                    SedCodigo,
+                    SedSimbolo,
+                    SedTerceros,
+                    SedMaterial,
+                    SedInspeccionado,
+                    SedNumPostes,
+                    SedArmadoTipo,
+                    SedArmadoMaterial,
+                    SedRetenidaTipo,
+                    SedRetenidaMaterial
+                FROM Seds";
 
-                    using (var command = connection.CreateCommand())
+                    using (var reader = await command.ExecuteReaderAsync())
                     {
-                        command.CommandText = @"
-                    SELECT
-                        SedInterno,
-                        EstadoOffLine,
-                        SedEtiqueta,
-                        SedLatitud,
-                        SedLongitud,
-                        SedTipo,
-                        AlimInterno,
-                        SedCodigo,
-                        SedSimbolo,
-                        SedTerceros,
-                        SedMaterial,
-                        SedInspeccionado,
-                        SedNumPostes,
-                        SedArmadoTipo,
-                        SedArmadoMaterial,
-                        SedRetenidaTipo,
-                        SedRetenidaMaterial
-                    FROM Seds";
-
-                        using (var reader = await command.ExecuteReaderAsync())
+                        while (await reader.ReadAsync())
                         {
-                            while (await reader.ReadAsync())
+                            seds.Add(new SedSyncDto
                             {
-                                seds.Add(new SedSyncDto
-                                {
-                                    SedInterno = reader.GetNullableInt32("SedInterno") ?? 0,
-                                    EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
-                                    SedEtiqueta = reader.GetNullableString("SedEtiqueta"),
-                                    SedLatitud = reader.GetNullableDouble("SedLatitud"),
-                                    SedLongitud = reader.GetNullableDouble("SedLongitud"),
-                                    SedTipo = reader.GetNullableString("SedTipo"),
-                                    AlimInterno = reader.GetNullableInt32("AlimInterno"),
-                                    SedCodigo = reader.GetNullableString("SedCodigo"),
-                                    SedSimbolo = reader.GetNullableString("SedSimbolo"),
-                                    SedTerceros = reader.GetNullableBool("SedTerceros"),
-                                    SedMaterial = reader.GetNullableString("SedMaterial"),
-                                    SedInspeccionado = reader.GetNullableBool("SedInspeccionado"),
-                                    SedNumPostes = reader.GetNullableInt32("SedNumPostes"),
-                                    SedArmadoTipo = reader.GetNullableString("SedArmadoTipo"),
-                                    SedArmadoMaterial = reader.GetNullableString("SedArmadoMaterial"),
-                                    SedRetenidaTipo = reader.GetNullableString("SedRetenidaTipo"),
-                                    SedRetenidaMaterial = reader.GetNullableString("SedRetenidaMaterial")
-                                });
-                            }
+                                SedInterno = reader.GetNullableInt32("SedInterno") ?? 0,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                SedEtiqueta = reader.GetNullableString("SedEtiqueta"),
+                                SedLatitud = reader.GetNullableDouble("SedLatitud"),
+                                SedLongitud = reader.GetNullableDouble("SedLongitud"),
+                                SedTipo = reader.GetNullableString("SedTipo"),
+                                AlimInterno = reader.GetNullableInt32("AlimInterno"),
+                                SedCodigo = reader.GetNullableString("SedCodigo"),
+                                SedSimbolo = reader.GetNullableString("SedSimbolo"),
+                                SedTerceros = reader.GetNullableBool("SedTerceros"),
+                                SedMaterial = reader.GetNullableString("SedMaterial"),
+                                SedInspeccionado = reader.GetNullableBool("SedInspeccionado"),
+                                SedNumPostes = reader.GetNullableInt32("SedNumPostes"),
+                                SedArmadoTipo = reader.GetNullableString("SedArmadoTipo"),
+                                SedArmadoMaterial = reader.GetNullableString("SedArmadoMaterial"),
+                                SedRetenidaTipo = reader.GetNullableString("SedRetenidaTipo"),
+                                SedRetenidaMaterial = reader.GetNullableString("SedRetenidaMaterial")
+                            });
                         }
                     }
                 }
             }
-            finally
-            {
-                if (File.Exists(tempFile))
-                    File.Delete(tempFile);
-            }
 
             return seds;
         }
+
 
         public List<Deficiencia> DAOFF_ResolverDeficienciasInternoSimple( DataTable dtDefOnline, List<Deficiencia> deficienciasOffline )
 {

@@ -205,72 +205,83 @@ export const useDeficiency = () => {
   };
 
   // ------------------- NORMALIZAR ANTES DE GUARDAR -------------------
-  const normalizeDeficiencyBeforeSave = (deficiency, userId) => {
-    const now = nowPeruISO?.() ?? new Date().toISOString();
-    const isNew = !deficiency?.DefiInterno;
+const normalizeDeficiencyBeforeSave = (deficiency, userId) => {
+  const now = nowPeruISO?.() ?? new Date().toISOString();
+  const isNew = !deficiency?.DefiInterno;
 
-    return {
-      ...deficiency,
+  const base = deficiency ?? {};
 
-      // ✅ defaults para columnas nuevas
-      DefiCol3: deficiency?.DefiCol3 ?? generateUUID(),
-      DefiCol2: deficiency?.DefiCol2 ?? "",
-      DefiAccesibilidad: deficiency?.DefiAccesibilidad ?? "",
-      DefiTipoCruce: deficiency?.DefiTipoCruce ?? "",
-      DefiComentarioEstandar: deficiency?.DefiComentarioEstandar ?? "",
+  return {
+    ...base,
 
-      ...(isNew && {
-        DefiEstado: deficiency?.DefiEstado || "N",
-        DefiFechaCreacion: now,
-        DefiFecRegistro: now,
-        DefiUsuarioInic: userId,
-        DefiLatitud: deficiency?.DefiLatitud ?? 0,
-        DefiLongitud: deficiency?.DefiLongitud ?? 0,
-        DefiInspeccionado: deficiency?.DefiInspeccionado ?? 0,
-      }),
+    // ✅ defaults para columnas nuevas
+    DefiCol3: base?.DefiCol3 ?? generateUUID(),
+    DefiCol2: base?.DefiCol2 ?? "",
+    DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
+    DefiTipoCruce: base?.DefiTipoCruce ?? "",
 
-      DefiUsuarioMod: userId,
-      DefiFecModificacion: now,
-    };
+    ...(isNew && {
+      DefiEstado: base?.DefiEstado || "N",
+      DefiFechaCreacion: now,
+      DefiFecRegistro: now,
+      DefiUsuarioInic: userId,
+      DefiLatitud: base?.DefiLatitud ?? 0,
+      DefiLongitud: base?.DefiLongitud ?? 0,
+      DefiInspeccionado: base?.DefiInspeccionado ?? 0,
+    }),
+
+    DefiUsuarioMod: userId,
+    DefiFecModificacion: now,
   };
+};
+
+
+  
 
   // ------------------- NORMALIZE PARA SYNC -------------------
-  const normalizeDeficiencyForSync = (def) => {
-    const nowIso = new Date().toISOString();
+const normalizeDeficiencyForSync = (def) => {
+  const nowIso = new Date().toISOString();
+  const base = def ?? {};
 
-    const fecRegistro = normalizeDate(def?.DefiFecRegistro) || normalizeDate(def?.DefiFechaCreacion) || nowIso;
-    const fecMod = normalizeDate(def?.DefiFecModificacion) || nowIso;
+  const fecRegistro =
+    normalizeDate(base?.DefiFecRegistro) ||
+    normalizeDate(base?.DefiFechaCreacion) ||
+    nowIso;
 
-    return {
-      ...def,
+  const fecMod = normalizeDate(base?.DefiFecModificacion) || nowIso;
 
-      // 🔹 STRINGS (compatibilidad server)
-      DefiUsuarioInic: def?.DefiUsuarioInic != null ? String(def.DefiUsuarioInic) : null,
-      DefiUsuarioMod: def?.DefiUsuarioMod != null ? String(def.DefiUsuarioMod) : null,
-      DefiUsuCre: def?.DefiUsuCre != null ? String(def.DefiUsuCre) : null,
-      DefiUsuNpc: def?.DefiUsuNpc != null ? String(def.DefiUsuNpc) : null,
+  return {
+    ...base,
 
-      DefiObservacion: def?.DefiObservacion ?? "",
-      DefiComentario: def?.DefiComentario ?? "",
+    // 🔹 STRINGS (compatibilidad server)
+    DefiUsuarioInic: base?.DefiUsuarioInic != null ? String(base.DefiUsuarioInic) : null,
+    DefiUsuarioMod: base?.DefiUsuarioMod != null ? String(base.DefiUsuarioMod) : null,
+    DefiUsuCre: base?.DefiUsuCre != null ? String(base.DefiUsuCre) : null,
+    DefiUsuNpc: base?.DefiUsuNpc != null ? String(base.DefiUsuNpc) : null,
 
-      // 🔹 BOOLEANS
-      DefiActivo: Boolean(def?.DefiActivo),
-      DefiInspeccionado: Boolean(def?.DefiInspeccionado),
-      DefiResponsable: Boolean(def?.DefiResponsable),
+    DefiObservacion: base?.DefiObservacion ?? "",
+    DefiComentario: base?.DefiComentario ?? "",
 
-      // 🔹 FECHAS ISO
-      DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
-      DefiFecModificacion: normalizeSqlServerDate(fecMod),
-      DefiFechaCreacion: normalizeSqlServerDate(def?.DefiFechaCreacion),
-      DefiFechaDenuncia: normalizeSqlServerDate(def?.DefiFechaDenuncia),
-      DefiFechaInspeccion: normalizeSqlServerDate(def?.DefiFechaInspeccion),
-      DefiFechaSubsanacion: normalizeSqlServerDate(def?.DefiFechaSubsanacion),
+    // 🔹 BOOLEANS
+    DefiActivo: Boolean(base?.DefiActivo),
+    DefiInspeccionado: Boolean(base?.DefiInspeccionado),
+    DefiResponsable: Boolean(base?.DefiResponsable),
 
-      // 🔹 IDENTIFICADOR ÚNICO
-      DefiCol3: def?.DefiCol3 ?? null,
-      DefiCol2: def?.DefiCol2 ?? null,
-    };
+    // 🔹 FECHAS ISO
+    DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
+    DefiFecModificacion: normalizeSqlServerDate(fecMod),
+    DefiFechaCreacion: normalizeSqlServerDate(base?.DefiFechaCreacion),
+    DefiFechaDenuncia: normalizeSqlServerDate(base?.DefiFechaDenuncia),
+    DefiFechaInspeccion: normalizeSqlServerDate(base?.DefiFechaInspeccion),
+    DefiFechaSubsanacion: normalizeSqlServerDate(base?.DefiFechaSubsanacion),
+
+    // 🔹 IDENTIFICADOR ÚNICO
+    DefiCol3: base?.DefiCol3 ?? null,
+    DefiCol2: base?.DefiCol2 ?? null,
   };
+};
+
+
 
   // ------------------- AUTO SYNC (robusto + compatible) -------------------
   const autoSyncDeficiency = async (defOrId) => {
