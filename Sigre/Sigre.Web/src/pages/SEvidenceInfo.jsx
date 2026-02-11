@@ -228,7 +228,7 @@ export default function EvidenceInfo({ deficiency, onSave, loading }) {
                     <div className="flex flex-col">
                         <span className="text-[9px] font-bold text-gray-500 uppercase">Estado Campo</span>
                         <span className={`text-[10px] font-bold ${esTercero ? 'text-orange-600' : 'text-green-600'}`}>
-                            {esTercero ? "NO EXISTE" : "EXISTE (Activo)"}
+                            {esTercero ? "NO EXISTE" : "EXISTE "}
                         </span>
                     </div>
                     <Button 
