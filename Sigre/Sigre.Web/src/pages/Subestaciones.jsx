@@ -373,33 +373,33 @@ export default function Subestaciones() {
     const statusFilterTemplate = (options) => (
         <Dropdown value={options.value} options={[{ label: 'Todos', value: null }, { label: 'Activo', value: true }, { label: 'Eliminado', value: false }]} onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => option.value === null ? <span>Todos</span> : <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />} placeholder="Estado" className="p-column-filter" showClear />
     );
-const responsabilidadTemplate = (rowData) => {
-    // CAMBIO CLAVE: Usar 'defiCol2' (d minúscula) para coincidir con el JSON
-    const valor = (rowData.defiCol2 || "").toString().trim().toUpperCase();
-    const esSeal = valor === 'SEAL';
+    const responsabilidadTemplate = (rowData) => {
+        // CAMBIO CLAVE: Usar 'defiCol2' (d minúscula) para coincidir con el JSON
+        const valor = (rowData.defiCol2 || "").toString().trim().toUpperCase();
+        const esSeal = valor === 'SEAL';
 
-    return (
-        <Tag 
-            value={esSeal ? 'SEAL' : 'TERCEROS'} 
-            severity={esSeal ? 'success' : 'warning'} 
-            style={{ fontSize: '10px', width: '90px', fontWeight: 'bold' }}
+        return (
+            <Tag
+                value={esSeal ? 'SEAL' : 'TERCEROS'}
+                severity={esSeal ? 'success' : 'warning'}
+                style={{ fontSize: '10px', width: '90px', fontWeight: 'bold' }}
+            />
+        );
+    };
+    const responsabilidadFilterTemplate = (options) => (
+        <Dropdown
+            value={options.value}
+            options={[
+                { label: 'Todos', value: null },
+                { label: 'SEAL', value: 'SEAL' },
+                { label: 'TERCEROS', value: 'TERCEROS' }
+            ]}
+            onChange={(e) => options.filterApplyCallback(e.value)}
+            placeholder="Resp."
+            className="p-inputtext-sm border border-gray-400"
+            showClear
         />
     );
-};
-const responsabilidadFilterTemplate = (options) => (
-    <Dropdown 
-        value={options.value} 
-        options={[
-            { label: 'Todos', value: null }, 
-            { label: 'SEAL', value: 'SEAL' }, 
-            { label: 'TERCEROS', value: 'TERCEROS' }
-        ]} 
-        onChange={(e) => options.filterApplyCallback(e.value)} 
-        placeholder="Resp." 
-        className="p-inputtext-sm border border-gray-400" 
-        showClear 
-    />
-);
     const activeTemplate = (rowData) => <Tag value={(rowData.defiActivo === true || rowData.defiActivo === 1) ? 'ACTIVO' : 'ELIMINADO'} severity={(rowData.defiActivo === true || rowData.defiActivo === 1) ? 'success' : 'danger'} style={{ fontSize: '10px' }} />;
     const criticidadTemplate = (rowData) => { const conf = { 'LEVE': 'success', 'MEDIO': 'warning', 'CRÍTICO': 'danger', 'N/A': 'null' }; return <Tag value={rowData.criticidadLabel} severity={conf[rowData.criticidadLabel] || 'null'} style={{ fontSize: '10px' }} />; };
     const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
@@ -576,16 +576,16 @@ const responsabilidadFilterTemplate = (options) => (
                             />
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                             <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} />
-                            <Column 
-    field="defiCol2" 
-    header="Responsabilidad" 
-    body={responsabilidadTemplate} 
-    sortable 
-    filter 
-    filterElement={responsabilidadFilterTemplate} 
-    showFilterMenu={false} 
-    style={{ minWidth: '150px', textAlign: 'center' }} 
-/>
+                            <Column
+                                field="defiCol2"
+                                header="Responsabilidad"
+                                body={responsabilidadTemplate}
+                                sortable
+                                filter
+                                filterElement={responsabilidadFilterTemplate}
+                                showFilterMenu={false}
+                                style={{ minWidth: '150px', textAlign: 'center' }}
+                            />
                             <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
                             <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
                             <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />

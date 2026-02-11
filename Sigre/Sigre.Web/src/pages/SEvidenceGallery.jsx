@@ -10,12 +10,7 @@ import { useFiles } from '../hooks/useFiles';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { useTypification } from '../hooks/useTypification';
 
-// 🔥 CONEXIÓN AL SERVIDOR CLOUDFLARE
-//cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
-//const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
-//ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-//const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//servidor estatico enlocal
+// 🔥 CONEXIÓN AL SERVIDOR
 const API_BASE_URL = "http://localhost:8080/";
 
 // --- ALMACENAMIENTO LOCAL ---
@@ -134,7 +129,6 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const currentSupply = String(suministro || deficiency?.defiNumSuministro || deficiency?.suministro || "0").trim();
     const defCode = String(deficiency?.tipiCodigo || "7004").trim();
 
-    // --- AQUÍ ESTÁ LA FUNCIÓN CORREGIDA ---
     const getInitialFormData = () => {
         const _fechaRaw = getValue('FecRegistro') || getValue('Fecha');
         let _fecha = new Date(); 
@@ -157,12 +151,20 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
         const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste'; 
+        
+        // CORRECCIÓN TAMBIÉN AQUÍ PARA CONSISTENCIA
         const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
         const defCodeBase = String(defCodeRaw).trim();
+        
         const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
         const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(deficiency.tipiInterno) === "0";
         let defFolder = "", namePart = "";
-        if (is7004) { const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1; defFolder = `7004/${folderNum}`; namePart = `7004_${folderNum}-${(currentSupply && currentSupply !== '0') ? currentSupply : "00000"}`; } 
+        
+        if (is7004) { 
+            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1; 
+            defFolder = `7004/${folderNum}`; 
+            namePart = `7004_${folderNum}-${(currentSupply && currentSupply !== '0') ? currentSupply : "00000"}`; 
+        } 
         else if (isSinDef) { defFolder = "SINDEF"; namePart = "0000"; } 
         else { defFolder = defCodeBase; namePart = defCodeBase; }
         
@@ -175,6 +177,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         else toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
     };
 
+    // 🔥🔥🔥 FUNCIÓN ZIP CORREGIDA PARA USAR getCodeById 🔥🔥🔥
     const handleDownloadZip = async () => {
         if (photos.length === 0) return;
         setZipLoading(true);
@@ -183,14 +186,25 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
             const getBestUrl = (f, i) => resolvedUrlsRef.current[i] || `${API_BASE_URL}/${(f.archNombre || "").replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/\/(?:Vano|Poste)\//gi, '/').split('/').map(encodeURIComponent).join('/')}`;
             const feederLbl = resolveFeederName(feeder, deficiency); const sedLbl = safeSeg(sed?.sedCodigo || "SIN_SED"); const codeElemLbl = safeSeg(getValue('CodigoElemento'));
             const tipoElem = (getValue('TipoElemento') || 'POST').toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
-            const defCodeBase = String(deficiency.tipiCodigo || "0000").trim();
+            
+            // ✅ AQUÍ ESTÁ LA CORRECCIÓN: Usamos getCodeById como respaldo si tipiCodigo es null
+            const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
+            const defCodeBase = String(defCodeRaw).trim();
+            
             const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
             
             for (let i = 0; i < photos.length; i++) {
                 const f = photos[i];
                 let pathStr = "";
-                if (is7004 && my7004Correlativo > 0) pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/7004/${my7004Correlativo}`;
-                else pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeBase}`;
+                
+                // Si es 7004, usamos la carpeta correcta con el correlativo
+                if (is7004 && my7004Correlativo > 0) {
+                    pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/7004/${my7004Correlativo}`;
+                } 
+                else {
+                    // Si no es 7004, usamos el código base (que ahora SÍ tiene el código correcto gracias a getCodeById)
+                    pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeBase}`;
+                }
                 
                 const blob = await LocalFileStore.get(f.archNombre.split('/').pop()) || await urlToBlob(getBestUrl(f, i));
                 if (blob) zip.folder(pathStr).file(f.archNombre.split('/').pop(), blob);
@@ -201,7 +215,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         } catch { toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo ZIP' }); } finally { setZipLoading(false); }
     };
 
-    // Lightbox Logic
+    // Lightbox Logic (Igual que antes)
     const openLightbox = (index) => { setLightboxIndex(index); setZoomLevel(1); setPosition({ x: 0, y: 0 }); };
     const closeLightbox = () => { setLightboxIndex(-1); setZoomLevel(1); setIsDragging(false); };
     const navigate = (d) => { setZoomLevel(1); setPosition({x:0,y:0}); setLightboxIndex((lightboxIndex + d + photos.length) % photos.length); };
@@ -245,33 +259,28 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
                         </Tag>
                     )}
                 </div>
-<Button 
-    onClick={handleDownloadZip} 
-    disabled={photos.length === 0 || zipLoading}
-    tooltip="Descargar todas las fotos en ZIP"
-    className="p-button-sm px-3 h-10 shadow-md border-none flex items-center gap-2 hover:scale-105 transition-transform"
-    style={{ 
-        // Si no hay fotos o está cargando, usa el gris por defecto.
-        // Si está habilitado, usa un GRADIENTE AZUL (Blue-500 a Blue-600)
-        background: (photos.length === 0 || zipLoading) 
-            ? undefined 
-            : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
-        color: '#fff' 
-    }}
->
-    {/* 1. ICONO (Cambia a spinner si está comprimiendo) */}
-    <i className={`pi ${zipLoading ? "pi-spin pi-spinner" : "pi-download"} text-lg font-bold`}></i>
-    
-    {/* 2. TEXTO EN DOS LÍNEAS */}
-    <div className="flex flex-col items-start leading-none">
-        <span className="font-extrabold text-[10px] tracking-wide">
-            {zipLoading ? "CREANDO..." : "DESCARGAR"}
-        </span>
-        <span className="text-[9px] font-medium opacity-90">
-            FOTOS ZIP
-        </span>
-    </div>
-</Button>
+                <Button 
+                    onClick={handleDownloadZip} 
+                    disabled={photos.length === 0 || zipLoading}
+                    tooltip="Descargar todas las fotos en ZIP"
+                    className="p-button-sm px-3 h-10 shadow-md border-none flex items-center gap-2 hover:scale-105 transition-transform"
+                    style={{ 
+                        background: (photos.length === 0 || zipLoading) 
+                            ? undefined 
+                            : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                        color: '#fff' 
+                    }}
+                >
+                    <i className={`pi ${zipLoading ? "pi-spin pi-spinner" : "pi-download"} text-lg font-bold`}></i>
+                    <div className="flex flex-col items-start leading-none">
+                        <span className="font-extrabold text-[10px] tracking-wide">
+                            {zipLoading ? "CREANDO..." : "DESCARGAR"}
+                        </span>
+                        <span className="text-[9px] font-medium opacity-90">
+                            FOTOS ZIP
+                        </span>
+                    </div>
+                </Button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 bg-gray-100/50">
                  <div className="flex flex-wrap gap-2 content-start">
