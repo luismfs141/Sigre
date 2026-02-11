@@ -190,7 +190,13 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(500)
                 .IsUnicode(false)
                 .HasColumnName("CODI_Deficiencia");
+
             entity.Property(e => e.CompInterno).HasColumnName("COMP_Interno");
+
+            entity.Property(e => e.CodiComentarioEstandar)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("CODI_ComentarioEstandar");
 
             entity.HasOne(d => d.CompInternoNavigation).WithMany(p => p.Codigos)
                 .HasForeignKey(d => d.CompInterno)
