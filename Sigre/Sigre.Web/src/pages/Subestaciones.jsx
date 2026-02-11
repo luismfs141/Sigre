@@ -23,7 +23,7 @@ import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
 
 // --- COMPONENTES ---
-import EvidenceGallery from './EvidenceGallery';
+import EvidenceView from './SEvidenceView';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
 import EstadoBadge from '../utils/estadoBadge';
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
@@ -502,7 +502,7 @@ const terceroTemplate = (rowData) => {
                 <Splitter style={{ height: '100%' }} layout="horizontal" className="border-0">
 
                     {/* PANEL IZQUIERDO: TABLA */}
-                    <SplitterPanel size={80} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
+                    <SplitterPanel size={70} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
                         <DataTable
                             value={mappedDeficiencies}
                             loading={loadingDef}
@@ -556,40 +556,27 @@ const terceroTemplate = (rowData) => {
 
                     {/* PANEL DERECHO: GALERÍA */}
                     {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
-                    <SplitterPanel size={20} minSize={10} className="bg-white flex flex-col overflow-hidden">
-                    
-      
+                    {/* PANEL DERECHO: EVIDENCE VIEW (INFO + GALERÍA) */}
+<SplitterPanel size={40} minSize={20} className="bg-white flex flex-col overflow-hidden border-l border-gray-200">
+    
+    {/* REEMPLAZAMOS <EvidenceGallery> POR <EvidenceView> */}
+    <EvidenceView 
+        selectedDeficiency={selectedDeficiency}
+        feeder={feederObject}
+        sed={selectedSed}
+        suministro={selectedDeficiency?.defiNumSuministro || "0000"}
+        my7004Correlativo={correlativoInfo.myCorrelativo}
+        
+        // Este callback permite recargar la tabla si guardas cambios en la ficha técnica
+        onUpdateDeficiency={() => {
+            if (selectedSed) {
+                const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                fetchBySed(idSed);
+            }
+        }}
+    />
 
-                        {/* CABECERA DEL PANEL (Con el contador) */}
-                        <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0 z-10">
-                            <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                                <i className="pi pi-images text-blue-600"></i>
-                                Evidencias
-                                {/* CONTEO DINÁMICO */}
-                                {selectedDeficiency && evidenceCount > 0 && (
-                                    <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1 shadow-sm">
-                                        {evidenceCount}
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-
-                        {/* CUERPO DEL PANEL (Sin padding p-2, Sin gap, Sin flex-row extra) */}
-                        <div className="flex-grow w-full h-full overflow-hidden relative">
-                            {/* Renderizamos el componente DIRECTAMENTE para que llene el 100% */}
-                            <EvidenceGallery
-                                deficiency={selectedDeficiency}
-                                feeder={feederObject}
-                                sed={selectedSed}
-                                // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
-                                onCountUpdate={setEvidenceCount}
-                                suministro={selectedDeficiency?.defiNumSuministro || "0000"}
-                                // 🔥 PASAMOS EL DATO CALCULADO 🔥
-                                element7004Count={correlativoInfo.totalCount}
-                                my7004Correlativo={correlativoInfo.myCorrelativo}
-                            />
-                        </div>
-                    </SplitterPanel>
+</SplitterPanel>
 
                 </Splitter>
             </div>
