@@ -89,8 +89,8 @@ export default function DeficiencyField({
               backgroundColor: !isEditable
                 ? "#eee"
                 : exceeded
-                ? "rgba(220,38,38,0.06)"
-                : "#fff",
+                  ? "rgba(220,38,38,0.06)"
+                  : "#fff",
               textAlign: "left",
               textAlignVertical: isTextarea ? "top" : "center",
               paddingTop: isTextarea ? 10 : 8,

@@ -272,6 +272,27 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
   }
 };
 
+export const getComentarioEstandarByTypificationIdLocal = async (typificationId) => {
+  try {
+    const id = Number(typificationId);
+    if (!Number.isFinite(id) || id <= 0) return "";
+
+    const rows = await runQuery(
+      `SELECT ComentarioEstandar
+       FROM Tipificaciones
+       WHERE TypificationId = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    const v = rows?.[0]?.ComentarioEstandar ?? "";
+    return String(v ?? "").trim();
+  } catch (error) {
+    console.error("❌ Error obteniendo ComentarioEstandar (Tipificaciones):", error);
+    return "";
+  }
+};
+
 
 // export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
 //   try {

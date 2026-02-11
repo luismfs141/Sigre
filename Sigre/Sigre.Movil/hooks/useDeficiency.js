@@ -12,6 +12,7 @@ import { useDatos } from "../context/DatosContext";
 import {
   deleteDeficiencyById,
   fetchDeficienciesForFlatList,
+  getComentarioEstandarByTypificationIdLocal,
   getDeficienciesByElement,
   getDeficienciesByElementAndTypi,
   getDeficienciesPendientes,
@@ -203,6 +204,22 @@ export const useDeficiency = () => {
       return [];
     }
   };
+
+// ------------------
+
+
+  const fetchComentarioEstandarTipiLocal = async (typificationId) => {
+  const dbOk = await checkDatabase();
+  if (!dbOk) return "";
+
+  try {
+    return await getComentarioEstandarByTypificationIdLocal(typificationId);
+  } catch (err) {
+    console.error("❌ Error fetchComentarioEstandarTipiLocal:", err);
+    return "";
+  }
+};
+
 
   // ------------------- NORMALIZAR ANTES DE GUARDAR -------------------
 const normalizeDeficiencyBeforeSave = (deficiency, userId) => {
@@ -852,6 +869,8 @@ const normalizeDeficiencyForSync = (def) => {
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
     deficienciesForFlatList,
+    fetchComentarioEstandarTipiLocal,
+
   };
 
 
