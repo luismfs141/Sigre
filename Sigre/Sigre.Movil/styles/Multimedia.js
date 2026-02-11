@@ -1,0 +1,31 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  finishButtonDisabled: { backgroundColor: "#9CA3AF" },
+  finishTextDisabled: { color: "#F3F4F6" },
+
+  safeArea: { flex: 1, backgroundColor: "#F6F6F6" },
+  scrollContent: { paddingHorizontal: 12, paddingBottom: 100 },
+  section: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  title: { fontSize: 18, fontWeight: "600" },
+  zipButton: { backgroundColor: "#2563EB", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  zipText: { color: "white", fontWeight: "bold", fontSize: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  audioHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  recButton: { backgroundColor: "#DC2626", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  recText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  emptyText: { color: "#999", fontStyle: "italic", textAlign: "center", marginTop: 5 },
+  footer: { height: 90, paddingHorizontal: 12, justifyContent: "center", backgroundColor: "#F6F6F6", borderTopWidth: 1, borderTopColor: "#e5e5e5" },
+  footerRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  cancelButton: { flex: 1, backgroundColor: "#EF4444", paddingVertical: 14, borderRadius: 10, alignItems: "center" },
+  cancelButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  finishButton: { flex: 1, backgroundColor: "#16A34A", paddingVertical: 14, borderRadius: 10, alignItems: "center" },
+  finishText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  previewContainer: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
+  previewImage: { width: "100%", height: "80%", resizeMode: "contain" },
+  closePreview: { marginTop: 20, padding: 10, backgroundColor: "#fff", borderRadius: 8 },
+  loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: "center" },
+  loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
+});
