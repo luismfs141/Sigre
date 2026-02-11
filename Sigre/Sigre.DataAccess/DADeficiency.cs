@@ -859,7 +859,7 @@ namespace Sigre.DataAccess
                     existente.DefiDistVertical = input.DefiDistVertical;
                     existente.DefiAccesibilidad = input.DefiAccesibilidad;
                     existente.DefiTipoCruce = input.DefiTipoCruce;
-
+                    existente.DefiCol2 = input.DefiCol2;
                     // Actualizar ubicación solo si viene válida (distinta de 0)
                     if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
 
@@ -900,6 +900,10 @@ namespace Sigre.DataAccess
                     input.DefiFecModificacion = now;
                     input.DefiInspeccionado = true;
                     // Usuarios (Evitar NULLs)
+                    if (string.IsNullOrEmpty(input.DefiCol2))
+                    {
+                        input.DefiCol2 = "SEAL"; 
+                    }
                     if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
                     if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
 

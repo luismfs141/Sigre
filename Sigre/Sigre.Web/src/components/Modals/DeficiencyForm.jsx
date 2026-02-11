@@ -170,7 +170,8 @@ export default function DeficiencyForm({
                     defiAccesibilidad: getValue('Accesibilidad'),
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
-                    defiUsuarioInic: getValue('UsuarioInic')
+                    defiUsuarioInic: getValue('UsuarioInic'),
+                    defiCol2: getValue('Col2') || '' 
                 });
             } else {
                 // --- MODO NUEVO ---
@@ -182,6 +183,7 @@ export default function DeficiencyForm({
                 let initialDate = new Date();
                 const dateRef = getRefValue('FecRegistro');
                 if (dateRef) initialDate = new Date(dateRef);
+                const initialCol2= getRefValue('Col2') || '';
 
                 setFormData({
                     defiCodigoElemento: initialCode,
@@ -193,7 +195,8 @@ export default function DeficiencyForm({
                     defiLongitud: Number(lngRaw),
                     defiObservacion: '',
                     defiComentario: '',
-                    defiEstadoCriticidad: 1
+                    defiEstadoCriticidad: 1,
+                    defiCol2: initialCol2
                 });
 
                 if (Number(latRaw) === 0 && navigator.geolocation) {
@@ -316,7 +319,8 @@ export default function DeficiencyForm({
             defiObservacion: formData.defiObservacion ? String(formData.defiObservacion).trim() : '',
             defiComentario: formData.defiComentario ? String(formData.defiComentario).trim() : '',
             defiEstadoCriticidad: Number(formData.defiEstadoCriticidad),
-            defiActivo: true
+            defiActivo: true,
+            defiCol2: formData.defiCol2 ? String(formData.defiCol2).trim() : ''
         };
 
         onSave(cleanPayload);
@@ -434,7 +438,10 @@ export default function DeficiencyForm({
                                     {currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
+                            
                         </>
+                        
+                        
                     ) : (
                         <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
                             <div className="text-center">
@@ -445,12 +452,33 @@ export default function DeficiencyForm({
                             </div>
                         </div>
                     )}
+
                 </div>
+                {/* SECCIÓN DE RESPONSABILIDAD (Estilo Compacto) */}
+<div className="bg-gray-100 p-3 rounded mt-2 border border-gray-200">
+    <div className="field mb-0 text-center">
+        <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase tracking-wider">
+            Responsabilidad
+        </label>
+        <Dropdown 
+            value={formData.defiCol2} 
+            options={[
+                { label: 'SEAL', value: 'SEAL' },
+                { label: 'TERCEROS', value: 'TERCEROS' }
+            ]} 
+            onChange={(e) => updateField('defiCol2', e.value)} 
+            placeholder="Seleccione Responsable"
+            className="w-full p-inputtext-sm text-center border border-gray-400 shadow-sm"
+            style={{ height: '34px' }}
+        />
+    </div>
+</div>
 
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">FECHA REGISTRO</label><Calendar value={formData.defiFecRegistro} onChange={(e) => updateField('defiFecRegistro', e.value)} showTime hourFormat="24" className="w-full p-inputtext-sm" inputClassName="text-center" /></div>
+                    
                 </div>
             </div>
         </Dialog>
