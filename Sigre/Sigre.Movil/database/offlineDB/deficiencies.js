@@ -160,7 +160,6 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
-      "DefiComentarioEstandar",
       "EstadoOffLine"
     ];
 
@@ -184,7 +183,6 @@ export const saveOrUpdateDeficiency = async (def) => {
         def.DefiInterno
       ];
 
-
       await runQuery(updateQuery, updateValues);
       return def.DefiInterno;
     }
@@ -200,13 +198,6 @@ export const saveOrUpdateDeficiency = async (def) => {
     const insertValues = insertFields.map(f =>
       f === "EstadoOffLine" ? 2 : def[f] ?? null
     );
-    // const insertValues = insertFields.map(f =>
-    //   f === "EstadoOffLine"
-    //     ? 2
-    //     : (emptyToNull(def[f]) ?? null)
-    // );
-
-
 
     const result = await runQuery(insertQuery, insertValues);
 
