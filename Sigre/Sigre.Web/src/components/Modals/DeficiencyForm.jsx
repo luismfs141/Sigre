@@ -65,11 +65,19 @@ export default function DeficiencyForm({
     // =========================================================================
     // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
     // =========================================================================
-    const currentConfig = useMemo(() => {
-        if (!formData.tipiInterno) return null;
+const currentConfig = useMemo(() => {
+        // Corrección: Validamos null/undefined explícitamente, permitiendo el 0
+        if (formData.tipiInterno === null || formData.tipiInterno === undefined) return null;
+        
+        // Si es 0, retornamos directo la config de SIN DEFICIENCIA
+        if (Number(formData.tipiInterno) === 0) return DEFICIENCY_FIELD_MAP["0"];
+
         const code = getCodeById(formData.tipiInterno);
         return DEFICIENCY_FIELD_MAP[code] || null;
     }, [formData.tipiInterno, getCodeById]);
+    
+    // Helper para saber si estamos en modo "Sin Deficiencia"
+    const isSinDeficiencia = Number(formData.tipiInterno) === 0;
 
     // =========================================================================
     // 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados + Mapeo ID)
@@ -97,6 +105,7 @@ export default function DeficiencyForm({
         // --- PASO B: FILTRAR LA LISTA ESTÁTICA ---
         const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
             // 1. Filtro Básico: ¿Es POSTE o VANO?
+            if (opt.code === "0") return true;
             if (opt.type !== 'BOTH' && opt.type !== formData.defiTipoElemento) return false;
 
             // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
@@ -109,6 +118,9 @@ export default function DeficiencyForm({
 
         // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
         return validOptions.map(staticOpt => {
+            if (staticOpt.code === "0") {
+                return { label: staticOpt.name, value: 0 };
+            }
             const matchInDb = masterTypifications.find(t =>
                 String(t.code || t.tipiCodigo) === String(staticOpt.code)
             );
@@ -424,13 +436,17 @@ export default function DeficiencyForm({
 
                 <div className="flex flex-col md:flex-row gap-8 min-h-[300px]">
                     {currentConfig ? (
-                        <>
+                        <>{/* COLUMNA IZQUIERDA: DATOS TÉCNICOS 
+                                (Se oculta si es Sin Deficiencia) */}
+                            {!isSinDeficiencia && (
+                        
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
                                 <div className="flex flex-col gap-1 w-full">
                                     {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
+                            )}
                             <Divider layout="vertical" className="hidden md:flex" />
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider>
