@@ -1,15 +1,13 @@
 import { Audio } from "expo-av";
-import { useState } from "react";
-import {
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useRef, useState } from "react";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+import { formatLocalISO, getUniqueNowMs } from "../../utils/dateUtils";
+
 
 export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
   const [recording, setRecording] = useState(null);
+  const stampRef = useRef(null); // ✅ timestamp único por grabación
 
   const startRecording = async () => {
     try {
@@ -20,6 +18,9 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
+
+      // ✅ UNA sola vez aquí
+      stampRef.current = getUniqueNowMs();
 
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
@@ -41,12 +42,19 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
       await rec.stopAndUnloadAsync();
       const uri = rec.getURI();
 
-      onAudioRecorded(uri);
+      // ✅ reutiliza el mismo timestamp
+      const capturedAtMs = stampRef.current ?? getUniqueNowMs();
+      const fechaISO = formatLocalISO(capturedAtMs);
+
+      stampRef.current = null;
+
+      onAudioRecorded({ uri, fechaISO, capturedAtMs });
       onClose();
     } catch (err) {
       console.warn("Grabación ya detenida");
     }
   };
+
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -55,22 +63,21 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
           <Text style={styles.title}>🎙️ Grabar audio</Text>
 
           {!recording ? (
-            <TouchableOpacity
-              style={styles.recordButton}
-              onPress={startRecording}
-            >
+            <TouchableOpacity style={styles.recordButton} onPress={startRecording}>
               <Text style={styles.buttonText}>Iniciar</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={styles.stopButton}
-              onPress={stopRecording}
-            >
+            <TouchableOpacity style={styles.stopButton} onPress={stopRecording}>
               <Text style={styles.buttonText}>Detener</Text>
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity
+            onPress={() => {
+              stampRef.current = null;
+              onClose();
+            }}
+          >
             <Text style={styles.cancel}>Cancelar</Text>
           </TouchableOpacity>
         </View>
@@ -86,7 +93,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   modal: {
     width: "80%",
     maxWidth: 320,
@@ -97,13 +103,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 5,
   },
-
   title: {
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 16,
   },
-
   recordButton: {
     backgroundColor: "#2563EB",
     paddingVertical: 12,
@@ -111,7 +115,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 12,
   },
-
   stopButton: {
     backgroundColor: "#DC2626",
     paddingVertical: 12,
@@ -119,13 +122,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 12,
   },
-
   buttonText: {
     color: "#fff",
     fontWeight: "600",
     fontSize: 14,
   },
-
   cancel: {
     marginTop: 4,
     fontSize: 13,

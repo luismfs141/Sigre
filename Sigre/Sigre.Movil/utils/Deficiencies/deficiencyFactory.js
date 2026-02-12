@@ -1,7 +1,9 @@
+import { formatLocalISO, getUniqueNowMs } from "../dateUtils"; // ✅ agrega esto
 import { DEFICIENCY_FIELD_MAP } from "./deficiencyFieldMap";
 
 /**
  * Crea una deficiencia base según tipificación y elemento
+ * - Usa timestamp LOCAL único (ms) para FechaCreacion/FecRegistro (como audio)
  */
 export const createEmptyDeficiency = ({
   typificationId,
@@ -10,21 +12,24 @@ export const createEmptyDeficiency = ({
   elementId,
   typeElement,
   userId,
-  selectedItem
+  selectedItem,
 }) => {
   const fieldConfig =
     DEFICIENCY_FIELD_MAP?.[String(typificationCode)]?.fields ?? [];
 
+  // ✅ timestamp único por creación (igual que audio)
+  const capturedAtMs = getUniqueNowMs();
+  const nowIso = formatLocalISO(capturedAtMs);
+
   // Inicializar SOLO campos dinámicos (no sistema)
   const dynamicFields = {};
-  fieldConfig.forEach(f => {
-    // Excluir campos controlados por el sistema
+  fieldConfig.forEach((f) => {
     if (
       [
         "DefiEstado",
         "DefiCodigoElemento",
         "DefiLatitud",
-        "DefiLongitud"
+        "DefiLongitud",
       ].includes(f.key)
     ) {
       return;
@@ -61,18 +66,20 @@ export const createEmptyDeficiency = ({
     DefiLatitud: null,
     DefiLongitud: null,
 
-    // Usuario / fechas
+    // Usuario / fechas (✅ usando el mismo stamp local único)
     DefiUsuarioInic: userId,
     DefiUsuarioMod: userId,
-    DefiFechaCreacion: new Date().toISOString(),
-    DefiFecRegistro: new Date().toISOString(),
+    DefiFechaCreacion: nowIso,
+    DefiFecRegistro: nowIso,
 
     // Tipificación
     typificationId,
     typificationCode,
+
+    // UUID (se setea al guardar si está null)
     DefiCol3: null,
 
     // Campos dinámicos (usuario)
-    ...dynamicFields
+    ...dynamicFields,
   };
 };

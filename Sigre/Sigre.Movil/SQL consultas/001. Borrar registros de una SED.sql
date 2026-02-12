@@ -143,7 +143,7 @@ GO
 -- BORRAR TODAS DEFICIENCIAS DE UNA SUBESTACIÓN ----------------------
 ----------------------------------------------------------------------
 
-DECLARE @SED_CODIGO VARCHAR(50) = '1994%';  -- <-- tu SED_Codigo
+DECLARE @SED_CODIGO VARCHAR(50) = '2755%';  -- <-- tu SED_Codigo
 
 SELECT COUNT(*) AS TotalAEliminar
 FROM Deficiencias D
@@ -155,7 +155,7 @@ GO
 
  --**************
 
-DECLARE @SED_CODIGO VARCHAR(50) = '1994%';  -- <-- tu SED_Codigo
+DECLARE @SED_CODIGO VARCHAR(50) = '2755%';  -- <-- tu SED_Codigo
 
 BEGIN TRAN;
 

@@ -21,6 +21,9 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 import { useFeeder } from "../../hooks/useFeeder";
 import { useFiles } from "../../hooks/useFiles";
 
+import { formatLocalISO, getUniqueNowMs, nowPeruISO } from "../../utils/dateUtils";
+
+
 import AudioCard from "../../components/Multimedia/AudioCard";
 import ModalAudio from "../../components/Multimedia/ModalAudio";
 import ModalCamera from "../../components/Multimedia/ModalCamera";
@@ -29,7 +32,12 @@ import PhotoCard from "../../components/Multimedia/PhotoCard";
 import ViewShot from "react-native-view-shot";
 import PhotoModal from "../../components/Modal/PhotoModal";
 
-import { styles } from "../../assets/styles/Multimedia";
+import { styles } from "../../styles/MultimediaStyles";
+
+
+
+console.log("✅ STYLES KEYS:", Object.keys(styles || {}));
+
 
 import {
   KEY_MUSIC_DIR,
@@ -45,11 +53,12 @@ import {
   buildMediaName,
   cleanUri,
   getDirFromRelative,
-  getUniqueStampParts,
+  getStampPartsFromMs,
   normalizeRelativePath,
   safeSeg,
   toTrashRelativePath,
 } from "../../utils/Multimedia/pathUtils";
+
 
 import { isPhotoArchTipo } from "../../utils/Multimedia/mediaUtils";
 
@@ -218,7 +227,9 @@ export default function Multimedia() {
               id: m.ArchInterno,
               type: 0,
               originalPath: m.ArchNombre,
+              fechaISO: m.ArchFecha, // ✅ importante
             });
+
           } else if (canGeneratePlaceholders) {
             audiosTmp.push({
               uri: null,
@@ -227,7 +238,9 @@ export default function Multimedia() {
               type: 0,
               originalPath: m.ArchNombre,
               isPlaceholder: true,
+              fechaISO: m.ArchFecha, // ✅
             });
+
           }
           continue;
         }
@@ -383,9 +396,9 @@ export default function Multimedia() {
     Alert.alert(
       "Solo lectura",
       `No puedes modificar esta evidencia.\n\n` +
-        `• Creador (DefiUsuarioInic): ${owner}\n` +
-        `• Tu usuario (UsuaInterno): ${currentUserId ?? "?"}\n\n` +
-        `Solo el creador o un Administrador/Supervisor puede editar.`
+      `• Creador (DefiUsuarioInic): ${owner}\n` +
+      `• Tu usuario (UsuaInterno): ${currentUserId ?? "?"}\n\n` +
+      `Solo el creador o un Administrador/Supervisor puede editar.`
     );
   };
 
@@ -416,7 +429,7 @@ export default function Multimedia() {
         const u = cleanUri(photo.uri);
         const info = await FileSystem.getInfoAsync(u);
         if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
-      } catch {}
+      } catch { }
     }
 
     setPhotos((prev) => {
@@ -439,24 +452,30 @@ export default function Multimedia() {
         const u = cleanUri(audio.uri);
         const info = await FileSystem.getInfoAsync(u);
         if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
-      } catch {}
+      } catch { }
     }
 
     setAudios((prev) => prev.filter((_, i) => i !== index));
     setIsDirty(true);
   };
 
-  const saveFileRecord = async ({ filename, slot, isAudio, photoData, codTablaReal, elementId, tipiId, defiUUID }) => {
+  const saveFileRecord = async ({ filename, slot, isAudio, mediaData, codTablaReal, elementId, tipiId, defiUUID }) => {
     const { tipo } = getElementoInfo();
+
     return await saveArchivoLocal({
       ArchInterno: null,
       ArchTipo: isAudio ? 0 : slot,
       ArchTabla: "Deficiencias",
       ArchCodTabla: codTablaReal,
       ArchNombre: filename,
-      ArchLatitud: photoData?.latUtm ?? null,
-      ArchLongitud: photoData?.lonUtm ?? null,
-      ArchFecha: photoData?.fechaISO ?? new Date().toISOString(),
+
+      // ✅ solo fotos tienen coordenadas
+      ArchLatitud: isAudio ? null : (mediaData?.latUtm ?? null),
+      ArchLongitud: isAudio ? null : (mediaData?.lonUtm ?? null),
+
+      // ✅ LA MISMA FECHA DE CAPTURA
+      ArchFecha: mediaData?.fechaISO ?? nowPeruISO(),
+
       ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
       ArchIdElemento: elementId,
       TipiInterno: tipiId,
@@ -465,6 +484,7 @@ export default function Multimedia() {
       DefiUUID: defiUUID
     });
   };
+
 
   const finalizar = async () => {
     if (!requireEditPermission()) return;
@@ -676,7 +696,12 @@ export default function Multimedia() {
 
         const cleanSrcUri = photo.uri.split("?")[0];
 
-        const { date, time } = getUniqueStampParts(i * 11);
+        const capturedAtMs = Number(photo?.capturedAtMs) || getUniqueNowMs();
+        const fechaISO = photo?.fechaISO ?? formatLocalISO(capturedAtMs);
+        const { date, time } = getStampPartsFromMs(capturedAtMs);
+
+
+
         const fname = buildMediaName({
           prefix: "FOT",
           sed: selectedSed?.SedCodigo,
@@ -705,15 +730,17 @@ export default function Multimedia() {
           filename: pathParaBD,
           slot: i + 1,
           isAudio: false,
-          photoData: photo,
+          mediaData: { ...photo, capturedAtMs, fechaISO },
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
           tipiId: currentTipiInterno,
           defiUUID: defiCodUnico,
         });
 
-        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch {}
-        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch {}
+
+
+        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
+        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
       }
 
       // 5) AUDIOS NUEVOS
@@ -723,17 +750,24 @@ export default function Multimedia() {
 
         const cleanSrcUri = audio.uri.split("?")[0];
 
-        const { date, time } = getUniqueStampParts(1000 + i * 11);
+        const capturedAtMs = Number(audio?.capturedAtMs) || getUniqueNowMs();
+        const fechaISO = audio?.fechaISO ?? formatLocalISO(capturedAtMs);
+        const { date, time } = getStampPartsFromMs(capturedAtMs);
+
+
+
         const fname = buildMediaName({
           prefix: "AUD",
           sed: selectedSed?.SedCodigo,
           codigo,
           def: defNameSegment,
-          suffix: 0,
+          suffix: i + 1, // ✅ para que nunca choque si grabas varios
           ext: "m4a",
           date,
           time
         });
+
+
 
         const destUri = carpetaBase + fname;
 
@@ -752,14 +786,17 @@ export default function Multimedia() {
           filename: pathParaBD,
           slot: 0,
           isAudio: true,
+          mediaData: { ...audio, capturedAtMs, fechaISO },
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
           tipiId: currentTipiInterno,
           defiUUID: defiCodUnico
         });
 
-        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch {}
-        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch {}
+
+
+        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
+        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
       }
 
       setLoading({ active: false, msg: "" });
@@ -803,7 +840,7 @@ export default function Multimedia() {
       try {
         const info = await FileSystem.getInfoAsync(u);
         if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
-      } catch {}
+      } catch { }
     }
 
     setPhotos(originalPhotos);
@@ -1006,10 +1043,10 @@ export default function Multimedia() {
                 onPress={
                   !audio?.uri
                     ? () =>
-                        Alert.alert(
-                          "Audio no disponible",
-                          "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
-                        )
+                      Alert.alert(
+                        "Audio no disponible",
+                        "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
+                      )
                     : undefined
                 }
                 onDelete={() => handleDeleteAudio(index)}
@@ -1066,7 +1103,7 @@ export default function Multimedia() {
                 const u = cleanUri(old.uri);
                 const info = await FileSystem.getInfoAsync(u);
                 if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
-              } catch {}
+              } catch { }
             }
           }
 
@@ -1091,10 +1128,14 @@ export default function Multimedia() {
       <ModalAudio
         visible={audioModal}
         onClose={() => setAudioModal(false)}
-        onAudioRecorded={(u) => {
-          setAudios((prev) => [...prev, { uri: u, title: `Nota ${prev.length + 1}` }]);
+        onAudioRecorded={({ uri, fechaISO, capturedAtMs }) => {
+          setAudios((prev) => [
+            ...prev,
+            { uri, title: `Nota ${prev.length + 1}`, fechaISO, capturedAtMs }
+          ]);
           setIsDirty(true);
         }}
+
       />
 
       <PhotoModal
@@ -1108,20 +1149,20 @@ export default function Multimedia() {
         onReplace={
           canEdit
             ? () => {
-                if (previewIndex == null) return;
-                setPreviewPhoto(null);
-                startReplacePhoto(previewIndex);
-              }
+              if (previewIndex == null) return;
+              setPreviewPhoto(null);
+              startReplacePhoto(previewIndex);
+            }
             : undefined
         }
         onDelete={
           canEdit
             ? async () => {
-                if (previewIndex == null) return;
-                await handleDeletePhoto(previewIndex);
-                setPreviewPhoto(null);
-                setPreviewIndex(null);
-              }
+              if (previewIndex == null) return;
+              await handleDeletePhoto(previewIndex);
+              setPreviewPhoto(null);
+              setPreviewIndex(null);
+            }
             : undefined
         }
       />

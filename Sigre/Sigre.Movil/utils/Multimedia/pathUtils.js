@@ -61,6 +61,7 @@ export const getDirFromRelative = (relPath) => {
 };
 
 const pad2 = (n) => String(n).padStart(2, "0");
+const pad3 = (n) => String(n).padStart(3, "0");
 
 const getStampParts = (d = new Date()) => {
   const y = d.getFullYear();
@@ -83,4 +84,30 @@ export const buildMediaName = ({ prefix, sed, codigo, def, suffix, ext, date, ti
   const sCod = safeSeg(codigo, "UNK");
   const sDef = safeSeg(def, "SINDEF");
   return `${prefix}-${sSed}-${sCod}-${sDef}-${date}-${time}-${suffix}.${ext}`;
+};
+
+
+
+// Convierte un ISO (ej: 2026-02-11T10:20:30.123-05:00) a { date:"YYYYMMDD", time:"HHMMSScc" }
+// cc = centésimas (00..99)
+export const getStampPartsFromISO = (iso, offsetMs = 0) => {
+  const s = iso ? String(iso).replace(" ", "T") : null;
+  const d = s ? new Date(s) : new Date();
+  return getStampPartsFromMs(d.getTime() + (offsetMs || 0));
+};
+
+// Partes para nombre de archivo usando HORA LOCAL del celular + ms
+export const getStampPartsFromMs = (ms) => {
+  const d = new Date(ms);
+
+  const y = d.getFullYear();
+  const mo = pad2(d.getMonth() + 1);
+  const da = pad2(d.getDate());
+
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
+  const mmm = pad3(d.getMilliseconds());
+
+  return { date: `${y}${mo}${da}`, time: `${hh}${mi}${ss}${mmm}` };
 };
