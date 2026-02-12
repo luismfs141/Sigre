@@ -81,10 +81,17 @@ const latLonToUTM = (lat, lon) => {
     };
 };
 /**
- * 1. PROCESAMIENTO DE IMAGEN (WATERMARK)
+ /**
+ * 1. PROCESAMIENTO DE IMAGEN CON MAPA OSM (Gratis) Y WATERMARK
  * Colocar esta función FUERA y ANTES del componente ImportacionMasivaFotos
  */
 const processImageWithWatermark = (file, meta) => {
+    
+    // --- 🌍 MATEMÁTICAS OSM (Slippy Map Tiles) ---
+    // Convierte Latitud/Longitud a coordenadas de Tile (x, y) y Píxel
+    const long2tile = (lon, zoom) => (lon + 180) / 360 * Math.pow(2, zoom);
+    const lat2tile = (lat, zoom) => (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom);
+    
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -98,59 +105,130 @@ const processImageWithWatermark = (file, meta) => {
                 canvas.width = img.width;
                 canvas.height = img.height;
 
+                // Dibujar foto original
                 ctx.drawImage(img, 0, 0);
 
                 const fontSize = Math.floor(img.height * 0.018);
                 const lineHeight = fontSize * 1.4;
-
-                ctx.font = `bold ${fontSize}px Arial`;
-                ctx.fillStyle = '#ffffff';
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = fontSize / 5;
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'bottom';
-
-                const drawText = (text, x, y) => {
-                    ctx.strokeText(text, x, y);
-                    ctx.fillText(text, x, y);
-                };
-
                 const padding = fontSize;
 
-                let dateFormatted = "SIN FECHA";
-                if (meta.dateStr) {
-                    let d = new Date(meta.dateStr);
-                    if (!isNaN(d.getTime())) {
-                        // Corrección de zona horaria para el texto visual en la foto
-                        const offsetMs = d.getTimezoneOffset() * 60000;
-                        d = new Date(d.getTime() - offsetMs);
+                // --- 🗺️ BLOQUE MAPA OPENSTREETMAP ---
+                const zoom = 16; // Zoom nivel calle
+                let mapLoadedPromise = Promise.resolve();
 
-                        const day = String(d.getDate()).padStart(2, '0');
-                        const month = String(d.getMonth() + 1).padStart(2, '0');
-                        const year = d.getFullYear();
-                        dateFormatted = `${day}/${month}/${year}`;
-                    } else {
-                        dateFormatted = "FECHA INVÁLIDA";
-                    }
+                if (meta.lat && meta.long) {
+                    mapLoadedPromise = new Promise((resolveMap) => {
+                        try {
+                            // 1. Calcular índices del Tile
+                            const tileXNum = long2tile(meta.long, zoom);
+                            const tileYNum = lat2tile(meta.lat, zoom);
+                            
+                            const tileX = Math.floor(tileXNum);
+                            const tileY = Math.floor(tileYNum);
+
+                            // 2. Calcular dónde cae el punto ROJO dentro de ese cuadro (0-256px)
+                            const offsetX = (tileXNum - tileX) * 256;
+                            const offsetY = (tileYNum - tileY) * 256;
+
+                            // 3. URL del Tile de OpenStreetMap (Servidor A, B o C)
+                            const osmUrl = `https://a.tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
+
+                            const mapImg = new Image();
+                            mapImg.crossOrigin = "Anonymous"; // Vital para evitar errores de seguridad
+                            
+                            mapImg.onload = () => {
+                                // Configurar tamaño y posición del mapa en la foto
+                                const mapSize = img.width * 0.25; // 25% del ancho de la foto
+                                const mapX = img.width - mapSize - padding;
+                                const mapY = img.height - mapSize - padding; // Arriba del texto
+
+                                // A. Dibujar fondo blanco y sombra
+                                ctx.save();
+                                ctx.shadowColor = "rgba(0,0,0,0.5)";
+                                ctx.shadowBlur = 10;
+                                ctx.fillStyle = "white";
+                                ctx.fillRect(mapX - 5, mapY - 5, mapSize + 10, mapSize + 10);
+                                ctx.restore();
+
+                                // B. Dibujar el mapa (escalado)
+                                ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
+
+                                // C. Dibujar el marcador ROJO en la posición exacta
+                                // Convertimos el offset del tile (0-256) al tamaño final en el canvas
+                                const scale = mapSize / 256; 
+                                const markerX = mapX + (offsetX * scale);
+                                const markerY = mapY + (offsetY * scale);
+
+                                ctx.beginPath();
+                                ctx.arc(markerX, markerY, 5 * scale * 2, 0, 2 * Math.PI); // Círculo
+                                ctx.fillStyle = "red";
+                                ctx.fill();
+                                ctx.strokeStyle = "white";
+                                ctx.lineWidth = 2;
+                                ctx.stroke();
+
+                                resolveMap();
+                            };
+                            
+                            mapImg.onerror = () => {
+                                console.warn("No se pudo cargar tile de OSM");
+                                resolveMap();
+                            };
+                            
+                            mapImg.src = osmUrl;
+
+                        } catch (e) {
+                            console.error("Error calculando mapa OSM", e);
+                            resolveMap();
+                        }
+                    });
                 }
 
-                // Asegúrate que latLonToUTM esté definida antes de esto
-                const utm = latLonToUTM(meta.lat, meta.long);
-                const utmText = `${utm.zone}${utm.letter} ${utm.easting}E ${utm.northing}N`;
-                const gpsText = `Lat: ${meta.lat} | Long: ${meta.long}`;
+                // Esperar a que cargue el mapa (o falle) y seguir
+                mapLoadedPromise.then(() => {
+                    // --- TEXTOS ---
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = fontSize / 5;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
 
-                // --- DIBUJAR ---
-                drawText(gpsText, padding, img.height - padding);
-                drawText(`UTM: ${utmText}`, padding, img.height - padding - lineHeight);
-                drawText(` ${dateFormatted}`, padding, img.height - padding - (lineHeight * 2));
+                    const drawText = (text, x, y) => {
+                        ctx.strokeText(text, x, y);
+                        ctx.fillText(text, x, y);
+                    };
 
-                canvas.toBlob((blob) => {
-                    const newFile = new File([blob], file.name, { type: 'image/jpeg' });
-                    resolve({
-                        fileObj: newFile,
-                        previewUrl: URL.createObjectURL(blob)
-                    });
-                }, 'image/jpeg', 0.95);
+                    // Fecha con corrección horaria
+                    let dateFormatted = "SIN FECHA";
+                    if (meta.dateStr) {
+                        let d = new Date(meta.dateStr);
+                        if (!isNaN(d.getTime())) {
+                            const offsetMs = d.getTimezoneOffset() * 60000;
+                            d = new Date(d.getTime() - offsetMs);
+                            const day = String(d.getDate()).padStart(2, '0');
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const year = d.getFullYear();
+                            dateFormatted = `${day}/${month}/${year}`;
+                        }
+                    }
+
+                    const utm = latLonToUTM(meta.lat, meta.long);
+                    const utmText = `${utm.zone}${utm.letter} ${utm.easting}E ${utm.northing}N`;
+                    const gpsText = `Lat: ${meta.lat} | Long: ${meta.long}`;
+
+                    drawText(gpsText, padding, img.height - padding);
+                    drawText(`UTM: ${utmText}`, padding, img.height - padding - lineHeight);
+                    drawText(` ${dateFormatted}`, padding, img.height - padding - (lineHeight * 2));
+
+                    canvas.toBlob((blob) => {
+                        const newFile = new File([blob], file.name, { type: 'image/jpeg' });
+                        resolve({
+                            fileObj: newFile,
+                            previewUrl: URL.createObjectURL(blob)
+                        });
+                    }, 'image/jpeg', 0.95); // Calidad JPEG
+                });
             };
         };
     });
