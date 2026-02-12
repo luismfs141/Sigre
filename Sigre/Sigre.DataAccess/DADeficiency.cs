@@ -859,7 +859,7 @@ namespace Sigre.DataAccess
                     existente.DefiDistVertical = input.DefiDistVertical;
                     existente.DefiAccesibilidad = input.DefiAccesibilidad;
                     existente.DefiTipoCruce = input.DefiTipoCruce;
-
+                    existente.DefiCol2 = input.DefiCol2;
                     // Actualizar ubicación solo si viene válida (distinta de 0)
                     if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
 
@@ -900,6 +900,10 @@ namespace Sigre.DataAccess
                     input.DefiFecModificacion = now;
                     input.DefiInspeccionado = true;
                     // Usuarios (Evitar NULLs)
+                    if (string.IsNullOrEmpty(input.DefiCol2))
+                    {
+                        input.DefiCol2 = "SEAL"; 
+                    }
                     if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
                     if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
 
@@ -1253,6 +1257,113 @@ namespace Sigre.DataAccess
             }
 
             return dt;
+        }
+        // EN DADeficiency.cs
+        public async Task<object> DADEFI_GetInfoTecnicaAsync(string codigo)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // PASO 1: Descubrir el TIPO consultando la tabla Deficiencias
+                // Buscamos cualquier registro asociado a ese código para ver qué es (POST o VANO)
+                var tipoElemento = await ctx.Deficiencias
+                                            .Where(d => d.DefiCodigoElemento == codigo)
+                                            .Select(d => d.DefiTipoElemento)
+                                            .FirstOrDefaultAsync();
+
+                // Si no existe en deficiencias, no podemos saber qué es (o retornamos null)
+                if (string.IsNullOrEmpty(tipoElemento)) return null;
+
+                // PASO 2: Consultar la tabla técnica correspondiente según el tipo descubierto
+                if (tipoElemento == "POST")
+                {
+                    return await ctx.Postes
+                        .Where(p => p.PostCodigoNodo == codigo)
+                        .Select(p => new
+                        {
+                            Material = p.PostMaterial,
+                            TipoRetenida = p.PostRetenidaTipo,
+                            Tercero = p.PostTerceros,
+                            Altura = p.PostAltura,
+                            Tipo = "POSTE"
+                        })
+                        .FirstOrDefaultAsync();
+                }
+                else if (tipoElemento == "VANO")
+                {
+                    return await ctx.Vanos
+                        .Where(v => v.VanoCodigo == codigo)
+                        .Select(v => new
+                        {
+                            // En Vanos usualmente no mostramos altura, pero sí nodos
+                            NodoInicial = v.VanoNodoInicial,
+                            NodoFinal = v.VanoNodoFinal,
+                            Material = v.VanoMaterial, // Si tienes esta columna
+                            Tercero = v.VanoTerceros,
+                            Tipo = "VANO"
+                        })
+                        .FirstOrDefaultAsync();
+                }
+
+                return null;
+            }
+        }
+        public async Task<bool> DADEFI_ActualizarFichaTecnicaAsync(UpdateFichaTecnicaDto datos)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Declaramos y obtenemos 'deficiencia' DENTRO del using
+                var deficiencia = await ctx.Deficiencias
+                    .Where(d => d.DefiInterno == datos.DefiInterno)
+                    .Select(d => new { d.DefiTipoElemento, d.DefiIdElemento })
+                    .FirstOrDefaultAsync();
+
+                // 2. Validamos que exista
+                if (deficiencia == null || deficiencia.DefiIdElemento == null) return false;
+
+                int filasAfectadas = 0;
+                int bitTercero = datos.EsTercero ? 1 : 0;
+
+                // 3. Lógica de seguridad para el ID de Retenida
+                int idRetenidaSeguro = 5;
+                if (datos.TipoRetenida.HasValue && datos.TipoRetenida.Value >= 1 && datos.TipoRetenida.Value <= 5)
+                {
+                    idRetenidaSeguro = datos.TipoRetenida.Value;
+                }
+
+                // 4. Usamos 'deficiencia' aquí (ahora sí existe en el contexto)
+                if (deficiencia.DefiTipoElemento == "POST")
+                {
+                    filasAfectadas = await ctx.Database.ExecuteSqlRawAsync(
+                        @"UPDATE Postes 
+                  SET POST_Material = {0}, 
+                      POST_Altura = {1}, 
+                      POST_RetenidaTipo = {2},  
+                      POST_Terceros = {3} 
+                  WHERE POST_Interno = {4}",
+                        datos.Material,
+                        datos.Altura,
+                        idRetenidaSeguro,
+                        bitTercero,
+                        deficiencia.DefiIdElemento
+                    );
+                }
+                else if (deficiencia.DefiTipoElemento == "VANO")
+                {
+                    filasAfectadas = await ctx.Database.ExecuteSqlRawAsync(
+                       @"UPDATE Vanos 
+                  SET VANO_Terceros = {0}, 
+                      VANO_NodoInicial = {1}, 
+                      VANO_NodoFinal = {2} 
+                  WHERE VANO_Interno = {3}",
+                       bitTercero,
+                       datos.NodoInicial,
+                       datos.NodoFinal,
+                       deficiencia.DefiIdElemento
+                   );
+                }
+
+                return filasAfectadas > 0;
+            }
         }
     }
 }

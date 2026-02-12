@@ -133,3 +133,16 @@ public class EstadoTerceroDto
     public int DefiInterno { get; set; } // El ID de la deficiencia seleccionada
     public bool EsTercero { get; set; }  // true = ELIMINAR (No existe), false = RESTAURAR (Existe)
 }
+public class UpdateFichaTecnicaDto
+{
+    public int DefiInterno { get; set; }
+    public bool EsTercero { get; set; }
+
+    public int? Material { get; set; }
+    public decimal? Altura { get; set; }
+    public int? TipoRetenida { get; set; }
+
+    // AGREGA EL '?' PARA PERMITIR NULL
+    public string? NodoInicial { get; set; }
+    public string? NodoFinal { get; set; }
+}
