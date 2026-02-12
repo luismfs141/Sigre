@@ -40,27 +40,37 @@ export default function DeficiencyForm({
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
 
+// =========================================================================
+    // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
     // =========================================================================
-    // 1. REGLA DE NEGOCIO: DETECTAR "SIN DEFICIENCIA" (S/D)
-    // =========================================================================
+    
+    // A. ¿Ya existe un registro "SIN DEFICIENCIA" (ID 0)?
+    // Si esto es true, NO se pueden agregar deficiencias reales.
     const hasCleanRecord = useMemo(() => {
-
         if (!formData.defiCodigoElemento) return false;
-
         const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
 
-        // Buscamos si existe ALGÚN registro activo para este código que sea S/D (tipiInterno 0)
-        const foundSD = existingDeficiencies.find(d =>
+        return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) === 0 // ID 0 es "Sin Deficiencia"
+            Number(d.tipiInterno) === 0 // ID 0 es S/D
         );
-
-        // Si estamos EDITANDO el propio registro S/D, también devolvemos true
-        // para mantener el bloqueo y obligar al usuario a borrarlo si quiere cambiarlo.
-        return !!foundSD;
-
     }, [formData.defiCodigoElemento, existingDeficiencies]);
+
+    // B. ¿Ya existen "DEFICIENCIAS REALES" (ID > 0)?
+    // Si esto es true, NO se puede crear un registro "Sin Deficiencia".
+    const hasRealDeficiencies = useMemo(() => {
+        if (!formData.defiCodigoElemento) return false;
+        const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
+
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) > 0 // Cualquier ID mayor a 0 es una falla real
+        );
+    }, [formData.defiCodigoElemento, existingDeficiencies]);
+
+    // Helper para saber si estamos editando el registro S/D actual
     const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
     // =========================================================================
     // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
@@ -289,20 +299,32 @@ const currentConfig = useMemo(() => {
     // =========================================================================
     // 6. GUARDADO
     // =========================================================================
-    const handleSubmit = () => {
+const handleSubmit = () => {
         setSubmitted(true);
+
+        // 1. Validaciones Básicas
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
         if (formData.tipiInterno === null || formData.tipiInterno === undefined) {
             alert("Falta Tipificación.");
             return;
         }
 
-        if (hasCleanRecord && (!deficiencyToEdit || Number(formData.tipiInterno) !== 0)) {
-            alert("No se puede guardar: El elemento tiene registro 'SIN DEFICIENCIA'.");
+        // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
+        // ¿El usuario está intentando guardar un registro "Sin Deficiencia" (ID 0)?
+        const isSavingSD = Number(formData.tipiInterno) === 0;
+
+        // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
+        if (isSavingSD && hasRealDeficiencies) {
+            alert("ACCIÓN BLOQUEADA:\nNo puede registrar 'SIN DEFICIENCIA' porque el elemento ya tiene fallas reportadas.\n\n>> Elimine las fallas existentes primero.");
             return;
         }
 
-        if (!validateDynamicForm()) return;
+        // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
+        // (Y no es que estemos editando ese mismo registro S/D)
+        if (!isSavingSD && hasCleanRecord && !isEditingSD) {
+            alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
+            return;
+        }
 
         const now = new Date();
         const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
