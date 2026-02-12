@@ -367,5 +367,54 @@ namespace Sigre.Server.Controllers
                 return BadRequest("Error interno: " + ex.Message);
             }
         }
+        [HttpGet("GetInfoTecnica")]
+        public async Task<IActionResult> GetInfoTecnica(string codigo) // <--- Solo recibe 'codigo'
+        {
+            // Validación básica
+            if (string.IsNullOrEmpty(codigo)) return BadRequest(new { msg = "Código requerido" });
+
+            var dao = new DADeficiency();
+            // Llamamos al método nuevo que solo pide código
+            var resultado = await dao.DADEFI_GetInfoTecnicaAsync(codigo);
+
+            if (resultado == null) return NotFound(new { msg = "Elemento no encontrado en GIS" });
+
+            return Ok(resultado);
+        }
+        [HttpPost("ActualizarFichaTecnica")]
+        public async Task<IActionResult> ActualizarFichaTecnica([FromBody] UpdateFichaTecnicaDto dto)
+        {
+            // 1. Validaciones básicas de entrada
+            if (dto == null || dto.DefiInterno <= 0)
+            {
+                return BadRequest(new { success = false, message = "Datos inválidos o incompletos." });
+            }
+
+            try
+            {
+                // 2. Instanciamos la capa de datos
+                var dao = new DADeficiency();
+
+                // 3. Ejecutamos la actualización unificada
+                bool resultado = await dao.DADEFI_ActualizarFichaTecnicaAsync(dto);
+
+                // 4. Respondemos según el resultado
+                if (resultado)
+                {
+                    return Ok(new { success = true, message = "Ficha técnica actualizada correctamente." });
+                }
+                else
+                {
+                    // Si devuelve false, es probable que la deficiencia no exista o no tenga elemento asociado
+                    return NotFound(new { success = false, message = "No se encontró el elemento asociado a la deficiencia." });
+                }
+            }
+            catch (Exception ex)
+            {
+                // 5. Manejo de errores no controlados (Logs)
+                // Console.WriteLine(ex.Message); // Descomentar si usas logs de consola
+                return StatusCode(500, new { success = false, message = "Error interno del servidor: " + ex.Message });
+            }
+        }
     }
 }

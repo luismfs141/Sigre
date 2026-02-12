@@ -40,36 +40,54 @@ export default function DeficiencyForm({
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
 
+// =========================================================================
+    // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
     // =========================================================================
-    // 1. REGLA DE NEGOCIO: DETECTAR "SIN DEFICIENCIA" (S/D)
-    // =========================================================================
+    
+    // A. ¿Ya existe un registro "SIN DEFICIENCIA" (ID 0)?
+    // Si esto es true, NO se pueden agregar deficiencias reales.
     const hasCleanRecord = useMemo(() => {
-
         if (!formData.defiCodigoElemento) return false;
-
         const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
 
-        // Buscamos si existe ALGÚN registro activo para este código que sea S/D (tipiInterno 0)
-        const foundSD = existingDeficiencies.find(d =>
+        return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) === 0 // ID 0 es "Sin Deficiencia"
+            Number(d.tipiInterno) === 0 // ID 0 es S/D
         );
-
-        // Si estamos EDITANDO el propio registro S/D, también devolvemos true
-        // para mantener el bloqueo y obligar al usuario a borrarlo si quiere cambiarlo.
-        return !!foundSD;
-
     }, [formData.defiCodigoElemento, existingDeficiencies]);
+
+    // B. ¿Ya existen "DEFICIENCIAS REALES" (ID > 0)?
+    // Si esto es true, NO se puede crear un registro "Sin Deficiencia".
+    const hasRealDeficiencies = useMemo(() => {
+        if (!formData.defiCodigoElemento) return false;
+        const currentCode = formData.defiCodigoElemento.trim().toUpperCase();
+
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) > 0 // Cualquier ID mayor a 0 es una falla real
+        );
+    }, [formData.defiCodigoElemento, existingDeficiencies]);
+
+    // Helper para saber si estamos editando el registro S/D actual
     const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
     // =========================================================================
     // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
     // =========================================================================
-    const currentConfig = useMemo(() => {
-        if (!formData.tipiInterno) return null;
+const currentConfig = useMemo(() => {
+        // Corrección: Validamos null/undefined explícitamente, permitiendo el 0
+        if (formData.tipiInterno === null || formData.tipiInterno === undefined) return null;
+        
+        // Si es 0, retornamos directo la config de SIN DEFICIENCIA
+        if (Number(formData.tipiInterno) === 0) return DEFICIENCY_FIELD_MAP["0"];
+
         const code = getCodeById(formData.tipiInterno);
         return DEFICIENCY_FIELD_MAP[code] || null;
     }, [formData.tipiInterno, getCodeById]);
+    
+    // Helper para saber si estamos en modo "Sin Deficiencia"
+    const isSinDeficiencia = Number(formData.tipiInterno) === 0;
 
     // =========================================================================
     // 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados + Mapeo ID)
@@ -97,6 +115,7 @@ export default function DeficiencyForm({
         // --- PASO B: FILTRAR LA LISTA ESTÁTICA ---
         const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
             // 1. Filtro Básico: ¿Es POSTE o VANO?
+            if (opt.code === "0") return true;
             if (opt.type !== 'BOTH' && opt.type !== formData.defiTipoElemento) return false;
 
             // 2. REGLA DE ORO: Evitar duplicados (Excepto la 7004)
@@ -109,6 +128,9 @@ export default function DeficiencyForm({
 
         // --- PASO C: CRUZAR CON BASE DE DATOS (Obtener IDs reales) ---
         return validOptions.map(staticOpt => {
+            if (staticOpt.code === "0") {
+                return { label: staticOpt.name, value: 0 };
+            }
             const matchInDb = masterTypifications.find(t =>
                 String(t.code || t.tipiCodigo) === String(staticOpt.code)
             );
@@ -170,7 +192,8 @@ export default function DeficiencyForm({
                     defiAccesibilidad: getValue('Accesibilidad'),
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
-                    defiUsuarioInic: getValue('UsuarioInic')
+                    defiUsuarioInic: getValue('UsuarioInic'),
+                    defiCol2: getValue('Col2') || '' 
                 });
             } else {
                 // --- MODO NUEVO ---
@@ -182,6 +205,7 @@ export default function DeficiencyForm({
                 let initialDate = new Date();
                 const dateRef = getRefValue('FecRegistro');
                 if (dateRef) initialDate = new Date(dateRef);
+                const initialCol2= getRefValue('Col2') || '';
 
                 setFormData({
                     defiCodigoElemento: initialCode,
@@ -193,7 +217,8 @@ export default function DeficiencyForm({
                     defiLongitud: Number(lngRaw),
                     defiObservacion: '',
                     defiComentario: '',
-                    defiEstadoCriticidad: 1
+                    defiEstadoCriticidad: 1,
+                    defiCol2: initialCol2
                 });
 
                 if (Number(latRaw) === 0 && navigator.geolocation) {
@@ -274,20 +299,32 @@ export default function DeficiencyForm({
     // =========================================================================
     // 6. GUARDADO
     // =========================================================================
-    const handleSubmit = () => {
+const handleSubmit = () => {
         setSubmitted(true);
+
+        // 1. Validaciones Básicas
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
         if (formData.tipiInterno === null || formData.tipiInterno === undefined) {
             alert("Falta Tipificación.");
             return;
         }
 
-        if (hasCleanRecord && (!deficiencyToEdit || Number(formData.tipiInterno) !== 0)) {
-            alert("No se puede guardar: El elemento tiene registro 'SIN DEFICIENCIA'.");
+        // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
+        // ¿El usuario está intentando guardar un registro "Sin Deficiencia" (ID 0)?
+        const isSavingSD = Number(formData.tipiInterno) === 0;
+
+        // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
+        if (isSavingSD && hasRealDeficiencies) {
+            alert("ACCIÓN BLOQUEADA:\nNo puede registrar 'SIN DEFICIENCIA' porque el elemento ya tiene fallas reportadas.\n\n>> Elimine las fallas existentes primero.");
             return;
         }
 
-        if (!validateDynamicForm()) return;
+        // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
+        // (Y no es que estemos editando ese mismo registro S/D)
+        if (!isSavingSD && hasCleanRecord && !isEditingSD) {
+            alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
+            return;
+        }
 
         const now = new Date();
         const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
@@ -316,7 +353,8 @@ export default function DeficiencyForm({
             defiObservacion: formData.defiObservacion ? String(formData.defiObservacion).trim() : '',
             defiComentario: formData.defiComentario ? String(formData.defiComentario).trim() : '',
             defiEstadoCriticidad: Number(formData.defiEstadoCriticidad),
-            defiActivo: true
+            defiActivo: true,
+            defiCol2: formData.defiCol2 ? String(formData.defiCol2).trim() : ''
         };
 
         onSave(cleanPayload);
@@ -420,13 +458,17 @@ export default function DeficiencyForm({
 
                 <div className="flex flex-col md:flex-row gap-8 min-h-[300px]">
                     {currentConfig ? (
-                        <>
+                        <>{/* COLUMNA IZQUIERDA: DATOS TÉCNICOS 
+                                (Se oculta si es Sin Deficiencia) */}
+                            {!isSinDeficiencia && (
+                        
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
                                 <div className="flex flex-col gap-1 w-full">
                                     {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
+                            )}
                             <Divider layout="vertical" className="hidden md:flex" />
                             <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider>
@@ -434,7 +476,10 @@ export default function DeficiencyForm({
                                     {currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}
                                 </div>
                             </div>
+                            
                         </>
+                        
+                        
                     ) : (
                         <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
                             <div className="text-center">
@@ -445,12 +490,33 @@ export default function DeficiencyForm({
                             </div>
                         </div>
                     )}
+
                 </div>
+                {/* SECCIÓN DE RESPONSABILIDAD (Estilo Compacto) */}
+<div className="bg-gray-100 p-3 rounded mt-2 border border-gray-200">
+    <div className="field mb-0 text-center">
+        <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase tracking-wider">
+            Responsabilidad
+        </label>
+        <Dropdown 
+            value={formData.defiCol2} 
+            options={[
+                { label: 'SEAL', value: 'SEAL' },
+                { label: 'TERCEROS', value: 'TERCEROS' }
+            ]} 
+            onChange={(e) => updateField('defiCol2', e.value)} 
+            placeholder="Seleccione Responsable"
+            className="w-full p-inputtext-sm text-center border border-gray-400 shadow-sm"
+            style={{ height: '34px' }}
+        />
+    </div>
+</div>
 
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">FECHA REGISTRO</label><Calendar value={formData.defiFecRegistro} onChange={(e) => updateField('defiFecRegistro', e.value)} showTime hourFormat="24" className="w-full p-inputtext-sm" inputClassName="text-center" /></div>
+                    
                 </div>
             </div>
         </Dialog>

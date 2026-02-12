@@ -23,7 +23,7 @@ import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
 
 // --- COMPONENTES ---
-import EvidenceGallery from './EvidenceGallery';
+import EvidenceView from './SEvidenceView';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
 import EstadoBadge from '../utils/estadoBadge';
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
@@ -75,6 +75,7 @@ export default function Subestaciones() {
         DefiTipoMaterial: { value: null, matchMode: FilterMatchMode.CONTAINS },
         DefiNodoInicial: { value: null, matchMode: FilterMatchMode.CONTAINS },
         DefiNodoFinal: { value: null, matchMode: FilterMatchMode.CONTAINS },
+        defiCol2: { value: null, matchMode: FilterMatchMode.EQUALS },
         DefiAmrmadoMaterial: { value: null, matchMode: FilterMatchMode.CONTAINS }
     };
 
@@ -297,7 +298,7 @@ export default function Subestaciones() {
     const confirmToggleTercero = (rowData) => {
         // Si actualmente esTercero es true, queremos pasarlo a false (Restaurar)
         const nuevoEstado = !rowData.esTercero;
-        
+
         const accionTexto = nuevoEstado ? "MARCAR COMO NO EXISTE" : "RESTAURAR A CAMPO";
         const icono = nuevoEstado ? "pi pi-times-circle" : "pi pi-check-circle";
 
@@ -315,10 +316,10 @@ export default function Subestaciones() {
                         esTercero: nuevoEstado            // true = Eliminar, false = Restaurar
                     });
 
-                    toast.current.show({ 
-                        severity: 'success', 
-                        summary: 'Actualizado', 
-                        detail: `Elemento ${nuevoEstado ? 'marcado como NO EXISTE' : 'RESTAURADO'} correctamente.` 
+                    toast.current.show({
+                        severity: 'success',
+                        summary: 'Actualizado',
+                        detail: `Elemento ${nuevoEstado ? 'marcado como NO EXISTE' : 'RESTAURADO'} correctamente.`
                     });
 
                     // IMPORTANTE: Recargamos la tabla para ver el cambio de color al instante
@@ -329,10 +330,10 @@ export default function Subestaciones() {
 
                 } catch (error) {
                     console.error("Error cambiando estado tercero:", error);
-                    toast.current.show({ 
-                        severity: 'error', 
-                        summary: 'Error', 
-                        detail: 'No se pudo cambiar el estado.' 
+                    toast.current.show({
+                        severity: 'error',
+                        summary: 'Error',
+                        detail: 'No se pudo cambiar el estado.'
                     });
                 }
             }
@@ -372,7 +373,33 @@ export default function Subestaciones() {
     const statusFilterTemplate = (options) => (
         <Dropdown value={options.value} options={[{ label: 'Todos', value: null }, { label: 'Activo', value: true }, { label: 'Eliminado', value: false }]} onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => option.value === null ? <span>Todos</span> : <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />} placeholder="Estado" className="p-column-filter" showClear />
     );
+    const responsabilidadTemplate = (rowData) => {
+        // CAMBIO CLAVE: Usar 'defiCol2' (d minúscula) para coincidir con el JSON
+        const valor = (rowData.defiCol2 || "").toString().trim().toUpperCase();
+        const esSeal = valor === 'SEAL';
 
+        return (
+            <Tag
+                value={esSeal ? 'SEAL' : 'TERCEROS'}
+                severity={esSeal ? 'success' : 'warning'}
+                style={{ fontSize: '10px', width: '90px', fontWeight: 'bold' }}
+            />
+        );
+    };
+    const responsabilidadFilterTemplate = (options) => (
+        <Dropdown
+            value={options.value}
+            options={[
+                { label: 'Todos', value: null },
+                { label: 'SEAL', value: 'SEAL' },
+                { label: 'TERCEROS', value: 'TERCEROS' }
+            ]}
+            onChange={(e) => options.filterApplyCallback(e.value)}
+            placeholder="Resp."
+            className="p-inputtext-sm border border-gray-400"
+            showClear
+        />
+    );
     const activeTemplate = (rowData) => <Tag value={(rowData.defiActivo === true || rowData.defiActivo === 1) ? 'ACTIVO' : 'ELIMINADO'} severity={(rowData.defiActivo === true || rowData.defiActivo === 1) ? 'success' : 'danger'} style={{ fontSize: '10px' }} />;
     const criticidadTemplate = (rowData) => { const conf = { 'LEVE': 'success', 'MEDIO': 'warning', 'CRÍTICO': 'danger', 'N/A': 'null' }; return <Tag value={rowData.criticidadLabel} severity={conf[rowData.criticidadLabel] || 'null'} style={{ fontSize: '10px' }} />; };
     const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
@@ -380,28 +407,28 @@ export default function Subestaciones() {
     const dateTemplate = (rowData) => rowData.defiFecRegistro ? new Date(rowData.defiFecRegistro).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-";
 
 
-// --- AGREGAR ESTE TEMPLATE NUEVO ---
-const terceroTemplate = (rowData) => {
-    // Convertimos la propiedad 'esTercero' (bool) al formato 0/1 que espera tu Badge
-    // true = No Existe (1), false = Existe (0)
-    const estadoNumerico = rowData.esTercero ? 1 : 0; 
-    return <EstadoBadge estado={estadoNumerico} />;
-};
-   const actionBodyTemplate = (rowData) => {
+    // --- AGREGAR ESTE TEMPLATE NUEVO ---
+    const terceroTemplate = (rowData) => {
+        // Convertimos la propiedad 'esTercero' (bool) al formato 0/1 que espera tu Badge
+        // true = No Existe (1), false = Existe (0)
+        const estadoNumerico = rowData.esTercero ? 1 : 0;
+        return <EstadoBadge estado={estadoNumerico} />;
+    };
+    const actionBodyTemplate = (rowData) => {
         // 1. Si la deficiencia está eliminada (Soft Delete), solo mostramos Restaurar Deficiencia
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
-        
+
         if (isDeleted) {
             return (
                 <div className="flex gap-1 justify-center">
-                    <Button 
-                        icon="pi pi-refresh" 
-                        rounded 
-                        text 
-                        severity="success" 
-                        size="small" 
-                        onClick={() => confirmRestoreDeficiency(rowData)} 
-                        tooltip="Restaurar Deficiencia" 
+                    <Button
+                        icon="pi pi-refresh"
+                        rounded
+                        text
+                        severity="success"
+                        size="small"
+                        onClick={() => confirmRestoreDeficiency(rowData)}
+                        tooltip="Restaurar Deficiencia"
                     />
                 </div>
             );
@@ -410,45 +437,47 @@ const terceroTemplate = (rowData) => {
         // 2. Lógica para el botón de "En Campo / Terceros"
         // Si esTercero es true (No existe) -> Botón VERDE para Restaurar
         // Si esTercero es false (Existe) -> Botón NARANJA para Eliminar de campo
+
+
         const isNoExiste = rowData.esTercero === true;
-        
+
         return (
             <div className="flex gap-1 justify-center">
                 {/* Botón Editar */}
-                <Button 
-                    icon="pi pi-pencil" 
-                    rounded 
-                    text 
-                    severity="info" 
-                    size="small" 
-                    onClick={() => openEdit(rowData)} 
-                    tooltip="Editar" 
+                <Button
+                    icon="pi pi-pencil"
+                    rounded
+                    text
+                    severity="info"
+                    size="small"
+                    onClick={() => openEdit(rowData)}
+                    tooltip="Editar"
                 />
 
                 {/* --- NUEVO BOTÓN: RESTAURAR O QUITAR DE CAMPO --- */}
-                <Button 
-                    icon={isNoExiste ? "pi pi-check-circle" : "pi pi-ban"} 
-                    rounded 
-                    text 
-                    severity={isNoExiste ? "success" : "warning"} 
-                    size="small" 
-                    onClick={() => confirmToggleTercero(rowData)} 
-                    tooltip={isNoExiste ? "Restaurar elemento a Campo" : "Marcar elemento como No Existe"} 
+                <Button
+                    icon={isNoExiste ? "pi pi-check-circle" : "pi pi-ban"}
+                    rounded
+                    text
+                    severity={isNoExiste ? "success" : "warning"}
+                    size="small"
+                    onClick={() => confirmToggleTercero(rowData)}
+                    tooltip={isNoExiste ? "Restaurar elemento a Campo" : "Marcar elemento como No Existe"}
                 />
 
                 {/* Botón Eliminar Deficiencia */}
-                <Button 
-                    icon="pi pi-trash" 
-                    rounded 
-                    text 
-                    severity="danger" 
-                    size="small" 
-                    onClick={() => confirmDeleteDeficiency(rowData)} 
-                    tooltip="Eliminar Deficiencia" 
+                <Button
+                    icon="pi pi-trash"
+                    rounded
+                    text
+                    severity="danger"
+                    size="small"
+                    onClick={() => confirmDeleteDeficiency(rowData)}
+                    tooltip="Eliminar Deficiencia"
                 />
             </div>
         );
-    
+
     };
 
     // -------------------------------------------------------------------
@@ -456,7 +485,7 @@ const terceroTemplate = (rowData) => {
     // -------------------------------------------------------------------
     return (
         <div className="flex flex-col h-screen bg-gray-100 p-2 overflow-hidden">
-            
+
             <style>{highContrastStyle}</style>
             <Toast ref={toast} />
             <ConfirmDialog />
@@ -502,7 +531,7 @@ const terceroTemplate = (rowData) => {
                 <Splitter style={{ height: '100%' }} layout="horizontal" className="border-0">
 
                     {/* PANEL IZQUIERDO: TABLA */}
-                    <SplitterPanel size={80} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
+                    <SplitterPanel size={70} minSize={50} className="overflow-auto flex flex-col" onClick={handleTableContainerClick}>
                         <DataTable
                             value={mappedDeficiencies}
                             loading={loadingDef}
@@ -528,25 +557,35 @@ const terceroTemplate = (rowData) => {
                             <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column field="defiNumSuministro" header="Num Suministro" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
-                        
+
 
                             <Column field="tipificacionLabel" header="Tipificación" body={typificationTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ textAlign: 'center', width: '130px' }} />
-                            
+
 
                             <Column body={(r) => selectedDeficiency?.defiInterno === r.defiInterno ? <i className="text-blue-600 font-bold"></i> : null} style={{ width: '40px' }} />
 
                             <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} sortable style={{ width: '100px' }} />
                             <Column field="defiActivo" header="Estado" body={activeTemplate} sortable style={{ width: '130px', textAlign: 'center' }} filter filterElement={statusFilterTemplate} showFilterMenu={false} />
                             <Column field="criticidadLabel" header="Crit." body={criticidadTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ width: '100px', textAlign: 'center' }} />
-                            <Column 
-    field="esTercero" 
-    header="En Campo" 
-    body={terceroTemplate} 
-    sortable 
-    style={{ textAlign: 'center', width: '110px' }} 
-/>
+                            <Column
+                                field="esTercero"
+                                header="En Campo"
+                                body={terceroTemplate}
+                                sortable
+                                style={{ textAlign: 'center', width: '110px' }}
+                            />
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
                             <Column field="inspectorLabel" header="Inspector" body={inspectorTemplate} sortable filter showFilterMenu={false} filterPlaceholder="Buscar..." style={{ minWidth: '150px' }} />
+                            <Column
+                                field="defiCol2"
+                                header="Responsabilidad"
+                                body={responsabilidadTemplate}
+                                sortable
+                                filter
+                                filterElement={responsabilidadFilterTemplate}
+                                showFilterMenu={false}
+                                style={{ minWidth: '150px', textAlign: 'center' }}
+                            />
                             <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
                             <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
                             <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
@@ -556,39 +595,26 @@ const terceroTemplate = (rowData) => {
 
                     {/* PANEL DERECHO: GALERÍA */}
                     {/* Quitamos bg-slate-50 y ponemos bg-white para evitar parches de color */}
-                    <SplitterPanel size={20} minSize={10} className="bg-white flex flex-col overflow-hidden">
-                    
-      
+                    {/* PANEL DERECHO: EVIDENCE VIEW (INFO + GALERÍA) */}
+                    <SplitterPanel size={40} minSize={20} className="bg-white flex flex-col overflow-hidden border-l border-gray-200">
 
-                        {/* CABECERA DEL PANEL (Con el contador) */}
-                        <div className="p-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center shrink-0 z-10">
-                            <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                                <i className="pi pi-images text-blue-600"></i>
-                                Evidencias
-                                {/* CONTEO DINÁMICO */}
-                                {selectedDeficiency && evidenceCount > 0 && (
-                                    <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1 shadow-sm">
-                                        {evidenceCount}
-                                    </span>
-                                )}
-                            </span>
-                        </div>
+                        {/* REEMPLAZAMOS <EvidenceGallery> POR <EvidenceView> */}
+                        <EvidenceView
+                            selectedDeficiency={selectedDeficiency}
+                            feeder={feederObject}
+                            sed={selectedSed}
+                            suministro={selectedDeficiency?.defiNumSuministro || "0000"}
+                            my7004Correlativo={correlativoInfo.myCorrelativo}
 
-                        {/* CUERPO DEL PANEL (Sin padding p-2, Sin gap, Sin flex-row extra) */}
-                        <div className="flex-grow w-full h-full overflow-hidden relative">
-                            {/* Renderizamos el componente DIRECTAMENTE para que llene el 100% */}
-                            <EvidenceGallery
-                                deficiency={selectedDeficiency}
-                                feeder={feederObject}
-                                sed={selectedSed}
-                                // CORRECCIÓN IMPORANTE: Usar 'onCountUpdate' para coincidir con el hijo
-                                onCountUpdate={setEvidenceCount}
-                                suministro={selectedDeficiency?.defiNumSuministro || "0000"}
-                                // 🔥 PASAMOS EL DATO CALCULADO 🔥
-                                element7004Count={correlativoInfo.totalCount}
-                                my7004Correlativo={correlativoInfo.myCorrelativo}
-                            />
-                        </div>
+                            // Este callback permite recargar la tabla si guardas cambios en la ficha técnica
+                            onUpdateDeficiency={() => {
+                                if (selectedSed) {
+                                    const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                                    fetchBySed(idSed);
+                                }
+                            }}
+                        />
+
                     </SplitterPanel>
 
                 </Splitter>

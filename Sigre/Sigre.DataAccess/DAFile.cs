@@ -320,58 +320,46 @@ namespace Sigre.DataAccess
         {
             using (SigreContext ctx = new SigreContext())
             {
+                // 1. Lógica para INSERTAR (Nuevo)
                 if (x_archivo.ArchInterno == 0)
                 {
-                    // === INSERTAR A LA FUERZA (BYPASS EF) ===
-                    // Usamos SQL directo para evitar que EF intente buscar columnas que no existen (DEFI_UUID)
-                    string sql = @"
-               INSERT INTO Archivos 
-                (
-                    ARCH_Nombre, 
-                    ARCH_Tipo, 
-                    ARCH_Tabla, 
-                    ARCH_CodTabla, 
-                    ARCH_Latitud, 
-                    ARCH_Longitud, 
-                    ARCH_Fecha, 
-                    ARCH_TipoElemento, 
-                    ARCH_IdElemento, 
-                    TIPI_Interno, 
-                    ARCH_Activo
-                ) 
-                VALUES 
-                ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10})";
+                    // === GENERACIÓN DE GUID ===
+                    // "Como se debe": Si no viene un UUID, generamos uno nuevo único.
+                    if (string.IsNullOrEmpty(x_archivo.DefiUUID))
+                    {
+                        x_archivo.DefiUUID = Guid.NewGuid().ToString().ToUpper();
+                    }
 
-                    ctx.Database.ExecuteSqlRaw(sql,
-                        x_archivo.ArchNombre ?? (object)DBNull.Value,
-                        x_archivo.ArchTipo ?? (object)DBNull.Value,
-                        "Deficiencias", // ArchTabla hardcodeado como en tu lógica
-                        x_archivo.ArchCodTabla,
-                        x_archivo.ArchLatitud,
-                        x_archivo.ArchLongitud,
-                        x_archivo.ArchFecha,
-                        x_archivo.ArchTipoElemento ?? (object)DBNull.Value,
-                        x_archivo.ArchIdElemento ?? (object)DBNull.Value,
-                        x_archivo.TipiInterno ?? (object)DBNull.Value,
-                        (x_archivo.ArchActivo == true) ? 1 : 0
-                    );
+                    // Datos por defecto obligatorios
+                    x_archivo.ArchActivo = true;
+                    if (x_archivo.ArchFecha == DateTime.MinValue) x_archivo.ArchFecha = DateTime.Now;
+
+                    // Al tener la columna en BD, Entity Framework ya no fallará aquí.
+                    ctx.Archivos.Add(x_archivo);
                 }
+                // 2. Lógica para ACTUALIZAR (Existente)
                 else
                 {
-                    // === UPDATE (Este suele fallar menos, pero si falla, avísame) ===
                     var original = ctx.Archivos.SingleOrDefault(a => a.ArchInterno == x_archivo.ArchInterno);
                     if (original != null)
                     {
                         original.ArchNombre = x_archivo.ArchNombre;
                         original.ArchTipo = x_archivo.ArchTipo;
                         original.ArchActivo = x_archivo.ArchActivo;
-                        if (x_archivo.ArchFecha > DateTime.MinValue) original.ArchFecha = x_archivo.ArchFecha;
                         original.ArchLatitud = x_archivo.ArchLatitud;
                         original.ArchLongitud = x_archivo.ArchLongitud;
 
-                        ctx.SaveChanges();
+                        if (x_archivo.ArchFecha > DateTime.MinValue)
+                            original.ArchFecha = x_archivo.ArchFecha;
+
+                        // Opcional: Si el original no tenía UUID, se lo generamos ahora
+                        if (string.IsNullOrEmpty(original.DefiUUID))
+                            original.DefiUUID = Guid.NewGuid().ToString().ToUpper();
                     }
                 }
+
+                // Guardamos cambios (Esto hará el INSERT o UPDATE automáticamente)
+                ctx.SaveChanges();
             }
         }
         public int ARCH_ExistPhoto(string ruta)
@@ -531,28 +519,34 @@ namespace Sigre.DataAccess
         {
             using (var ctx = new SigreContext())
             {
-                // TRUCO: En lugar de 'select a' (que trae todo, incluso errores),
-                // creamos un nuevo objeto Archivo y llenamos SOLO lo que existe.
+                // TRUCO: Proyección manual para evitar errores de EF y traer solo lo necesario
                 var query = ctx.Archivos
-                    .Where(a => a.ArchCodTabla == x_deficiency)
+                    .Where(a => a.ArchCodTabla == x_deficiency && a.ArchActivo == true) // Agregué && a.ArchActivo == true por seguridad
                     .Select(a => new Archivo
                     {
-                        // Copia aquí las propiedades tal cual se llaman en tu clase
+                        // === CAMPOS BÁSICOS ===
                         ArchInterno = a.ArchInterno,
                         ArchNombre = a.ArchNombre,
                         ArchTipo = a.ArchTipo,
                         ArchFecha = a.ArchFecha,
+
+                        // === RELACIONES ===
                         ArchIdElemento = a.ArchIdElemento,
-                        // Asegúrate de incluir estas coordenadas y datos clave
+                        ArchTipoElemento = a.ArchTipoElemento, // Importante recuperarlo si lo guardaste
+                        TipiInterno = a.TipiInterno,           // Importante recuperarlo si lo guardaste
+
+                        // === GEORREFERENCIA ===
                         ArchLatitud = a.ArchLatitud,
                         ArchLongitud = a.ArchLongitud,
 
+                        // === METADATOS ===
                         ArchCodTabla = a.ArchCodTabla,
                         ArchTabla = a.ArchTabla,
                         ArchActivo = a.ArchActivo,
 
-                        // IMPORTANTE: NO incluyas 'Deficiencia' aquí.
-                        // Al no ponerlo, EF no intenta buscar el UUID.
+                        // === 👇 LA NUEVA COLUMNA (CRUCIAL) 👇 ===
+                        // Asegúrate de que coincida con el nombre en tu clase Archivo.cs (DefiUUID)
+                        DefiUUID = a.DefiUUID
                     });
 
                 return query.ToList();
