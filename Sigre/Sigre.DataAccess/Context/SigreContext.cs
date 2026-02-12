@@ -78,10 +78,10 @@ public partial class SigreContext : DbContext
 
     => optionsBuilder.UseSqlServer("Server=localhost;Database=Sigre;User Id=sa;Password=1342;TrustServerCertificate=True;");
     //=> optionsBuilder.UseSqlServer(
-    //      "Server=tcp:serversigre.database.windows.net,1433;" +
-    //      "Database=Sigre;" +
-    //      "Authentication=Active Directory Managed Identity;" +
-    //      "Encrypt=True;");
+    //      "server=tcp:serversigre.database.windows.net,1433;" +
+    //      "database=sigre;" +
+    //      "authentication=active directory managed identity;" +
+    //      "encrypt=true;");
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
