@@ -217,7 +217,7 @@ const currentConfig = useMemo(() => {
                     defiLongitud: Number(lngRaw),
                     defiObservacion: '',
                     defiComentario: '',
-                    defiEstadoCriticidad: 1,
+                    defiEstadoCriticidad: 0,
                     defiCol2: initialCol2
                 });
 
