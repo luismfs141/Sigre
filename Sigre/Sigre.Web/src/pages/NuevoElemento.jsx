@@ -46,7 +46,7 @@ export default function NuevoElemento({ onSave }) {
 
     // Mapeo para el Dropdown de SEDs (Código - Etiqueta)
     const sedsOptions = (listaSeds || []).map(sed => ({
-        label: `${sed.sedCodigo} || ''}`,
+        label: `${sed.sedCodigo} `,
         value: sed.sedInterno
     }));
 
