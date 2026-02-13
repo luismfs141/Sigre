@@ -19,14 +19,12 @@ export default function NuevoElemento({ onSave }) {
         // Campos de Poste
         latitud: null, 
         longitud: null,
-        materialPoste: 1, // Default Concreto
-        altura: 8,        // Default 8m
+        materialPoste:2, // Default C.A.C.
         idRetenida: 5,    // Default Sin Retenida
 
         // Campos de Vano
         latitudIni: null, longitudIni: null, 
         latitudFin: null, longitudFin: null,
-        materialVano: 'ALU', // Default Aluminio
         nodoInicial: '', 
         nodoFinal: ''
     };
