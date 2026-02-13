@@ -57,11 +57,11 @@ export default function NuevoElemento({ onSave }) {
         { label: 'Metálico', value: 3 }, { label: 'Fibra de vidrio', value: 4 }
     ];
 
-    const MATERIAL_VANO_OPTIONS = [
-        { label: 'Aluminio (ALU)', value: 'ALU' }, 
-        { label: 'Cobre (CU)', value: 'CU' },
-        { label: 'Aleación', value: 'ALE' }
-    ];
+    // const MATERIAL_VANO_OPTIONS = [
+    //     { label: 'Aluminio (ALU)', value: 'ALU' }, 
+    //     { label: 'Cobre (CU)', value: 'CU' },
+    //     { label: 'Aleación', value: 'ALE' }
+    // ];
 
     const RETENIDA_OPTIONS = [
         { label: 'Retenida normal', value: 1 }, { label: 'Retenida contra punta', value: 2 },
