@@ -213,6 +213,81 @@ namespace Sigre.DataAccess
                 return query.ToList();
             }
         }
+        public int DAVANO_GuardarWeb(Vano x_vano)
+        {
+            try
+            {
+                using (var ctx = new SigreContext())
+                {
+                    // === 0. VALIDACIÓN DE DUPLICADOS ===
+                    if (!string.IsNullOrEmpty(x_vano.VanoCodigo))
+                    {
+                        bool yaExiste = ctx.Vanos.Any(v =>
+                            v.VanoCodigo == x_vano.VanoCodigo &&
+                            v.VanoInterno != x_vano.VanoInterno // Ignoramos al vano actual si estamos editando
+                        );
 
+                        if (yaExiste)
+                        {
+                            throw new Exception($"El Código GIS '{x_vano.VanoCodigo}' ya existe en la base de datos.");
+                        }
+                    }
+                    // CASO 1: INSERTAR (Nuevo)
+                    if (x_vano.VanoInterno == 0)
+                    {
+                        // Configuración inicial para nuevos
+                        x_vano.VanoInspeccionado = false;
+                        x_vano.VanoEsBt = true;
+                        x_vano.VanoEsMt = null;
+
+                        ctx.Vanos.Add(x_vano);
+                        ctx.SaveChanges();
+                        return x_vano.VanoInterno;
+                    }
+
+                    // CASO 2: ACTUALIZAR (Edición)
+                    else
+                    {
+                        // Buscamos el original en la BD
+                        var existente = ctx.Vanos.FirstOrDefault(v => v.VanoInterno == x_vano.VanoInterno);
+
+                        if (existente == null)
+                            throw new Exception($"El Vano con ID {x_vano.VanoInterno} no existe para editar.");
+
+                        // Mapeo Manual (Más seguro que automapper aquí):
+                        // Solo actualizamos lo que el formulario permite cambiar.
+
+                        existente.VanoEtiqueta = x_vano.VanoEtiqueta;
+                        existente.VanoCodigo = x_vano.VanoCodigo;
+
+                        // Geometría
+                        existente.VanoLatitudIni = x_vano.VanoLatitudIni;
+                        existente.VanoLongitudIni = x_vano.VanoLongitudIni;
+                        existente.VanoLatitudFin = x_vano.VanoLatitudFin;
+                        existente.VanoLongitudFin = x_vano.VanoLongitudFin;
+
+                        // Relaciones
+                        existente.AlimInterno = x_vano.AlimInterno;
+                        existente.VanoSubestacion = x_vano.VanoSubestacion;
+
+                        // Datos Técnicos
+                        existente.VanoTerceros = x_vano.VanoTerceros;
+                        existente.VanoMaterial = x_vano.VanoMaterial;
+                        existente.VanoNodoInicial = x_vano.VanoNodoInicial;
+                        existente.VanoNodoFinal = x_vano.VanoNodoFinal;
+
+                        // NO TOCAMOS: VanoInspeccionado (para no perder si ya se inspeccionó)
+
+                        ctx.SaveChanges();
+                        return existente.VanoInterno;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var mensaje = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                throw new Exception($"ERROR SQL VANO: {mensaje}");
+            }
+        }
     }
 }

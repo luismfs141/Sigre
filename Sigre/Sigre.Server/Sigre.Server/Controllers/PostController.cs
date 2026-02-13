@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
+using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Entities.SyncData;
@@ -12,7 +13,7 @@ namespace Sigre.Server.Controllers
     public class PostController : ControllerBase
     {
         [HttpGet("GetStructByFeeder")]
-        public List<ElementStruct> GetStructByFeeder( int x_feeder_id)
+        public List<ElementStruct> GetStructByFeeder(int x_feeder_id)
         {
             DAPost dAPost = new DAPost();
             return dAPost.DAPOST_GetStructByFeeder(x_feeder_id);
@@ -39,6 +40,26 @@ namespace Sigre.Server.Controllers
                 serverId = r.serverId
             }));
         }
+        [HttpPost("GuardarPosteWeb")] // Nombre genérico
+        public IActionResult GuardarPosteWeb([FromBody] Poste x_poste)
+        {
+            try
+            {
+                var da = new DAPost(); // Tu clase de acceso a datos
 
+                // El método decide automáticamente si crea o edita
+                int idResultante = da.DAPOST_GuardarWeb(x_poste);
+
+                return Ok(idResultante);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al procesar el Poste",
+                    detalleTecnico = ex.Message
+                });
+            }
+        }
     }
 }

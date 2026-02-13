@@ -13,7 +13,7 @@ import DashboardHome from './pages/DashboardHome';
 import Mapas from './pages/Mapas';
 import Reportes from './pages/Reportes';
 import AuditFileElectrical from './pages/WebInspectionManager';
-import AuditElectrical from './pages/ModificacionMultimedia';
+import NuevoElemento from './pages/NuevoElemento';
 import ImportData from './pages/ImportData';
 import Subestaciones from './pages/Subestaciones';
 import ImportacionMasivaFotos from './pages/ImportacionMasivaFotos';
@@ -35,7 +35,7 @@ function App() {
           <Route path="/mapas" element={<Mapas />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/subestaciones" element={<Subestaciones />} />
-          <Route path="/auditoria-electrica" element={<AuditElectrical />} />
+          <Route path="/nuevo-elemento" element={<NuevoElemento />} />
           <Route path="/auditoria-archivo" element={<AuditFileElectrical />} />
           <Route path="/importar-datos" element={<ImportData />} />
           <Route path="/importacion-masiva-fotos" element={<ImportacionMasivaFotos />} />

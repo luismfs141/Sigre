@@ -8,7 +8,7 @@ public partial class Poste
 {
     [Key]
     public int PostInterno { get; set; }
-
+    
     public string PostEtiqueta { get; set; } = null!;
 
     public double? PostLatitud { get; set; }

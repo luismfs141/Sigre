@@ -20,7 +20,7 @@ const navItems = [
   { title: 'Mapas', href: '/mapas', icon: MapIcon },
   { title: 'Reportes', href: '/reportes', icon: FileText },
   { title: 'Deficiencias por Subestaciones', href: '/subestaciones', icon: Building2 },
-  { title: 'Auditoría Eléctrica', href: '/auditoria-electrica', icon: ClipboardCheck },
+  { title: 'Nuevo Elemento', href: '/nuevo-elemento', icon: ClipboardCheck },
   { title: 'Edicion de Multimedia', href: '/auditoria-archivo', icon: FileSearch },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },

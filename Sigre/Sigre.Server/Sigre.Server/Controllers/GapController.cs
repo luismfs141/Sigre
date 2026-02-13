@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Sigre.DataAccess;
+using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
 using Sigre.Entities.Entities.SyncData;
@@ -12,7 +13,8 @@ namespace Sigre.Server.Controllers
     public class GapController : Controller
     {
         [HttpGet("GetByFeeder")]
-        public List<Vano> ObtenerGap(int x_feeder_id) {
+        public List<Vano> ObtenerGap(int x_feeder_id)
+        {
             DAGap dAGap = new DAGap();
             return dAGap.DAGAP_GetByFeeder(x_feeder_id);
         }
@@ -62,6 +64,26 @@ namespace Sigre.Server.Controllers
             catch (System.Exception ex)
             {
                 return StatusCode(500, new { message = "Error: " + ex.Message });
+            }
+        }
+        [HttpPost("GuardarVanoWeb")] // Nombre genérico
+        public IActionResult GuardarVanoWeb([FromBody] Vano x_vano)
+        {
+            try
+            {
+                var da = new DAGap();
+                // El método decide si es Insert o Update según el ID
+                int idResultante = da.DAVANO_GuardarWeb(x_vano);
+
+                return Ok(idResultante);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al procesar Vano",
+                    detalleTecnico = ex.Message
+                });
             }
         }
     }
