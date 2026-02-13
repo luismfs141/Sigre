@@ -78,10 +78,10 @@ public partial class SigreContext : DbContext
 
     => optionsBuilder.UseSqlServer("Server=localhost;Database=Sigre;User Id=sa;Password=1342;TrustServerCertificate=True;");
     //=> optionsBuilder.UseSqlServer(
-    //      "Server=tcp:serversigre.database.windows.net,1433;" +
-    //      "Database=Sigre;" +
-    //      "Authentication=Active Directory Managed Identity;" +
-    //      "Encrypt=True;");
+    //      "server=tcp:serversigre.database.windows.net,1433;" +
+    //      "database=sigre;" +
+    //      "authentication=active directory managed identity;" +
+    //      "encrypt=true;");
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -190,7 +190,13 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(500)
                 .IsUnicode(false)
                 .HasColumnName("CODI_Deficiencia");
+
             entity.Property(e => e.CompInterno).HasColumnName("COMP_Interno");
+
+            entity.Property(e => e.CodiComentarioEstandar)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("CODI_ComentarioEstandar");
 
             entity.HasOne(d => d.CompInternoNavigation).WithMany(p => p.Codigos)
                 .HasForeignKey(d => d.CompInterno)

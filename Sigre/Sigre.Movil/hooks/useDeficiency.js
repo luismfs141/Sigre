@@ -12,6 +12,7 @@ import { useDatos } from "../context/DatosContext";
 import {
   deleteDeficiencyById,
   fetchDeficienciesForFlatList,
+  getComentarioEstandarByTypificationIdLocal,
   getDeficienciesByElement,
   getDeficienciesByElementAndTypi,
   getDeficienciesPendientes,
@@ -25,7 +26,8 @@ import {
   getPinInspeccionadoByIdOriginalLocal,
   updatePinInspeccionadoByIdOriginalLocal,
 } from "../database/offlineDB/pins";
-import { nowPeruISO } from "../utils/dateUtils";
+import { formatLocalISO, getUniqueNowMs } from "../utils/dateUtils";
+
 import { useConnectivity } from "./useConnectivity";
 
 export const useDeficiency = () => {
@@ -204,82 +206,105 @@ export const useDeficiency = () => {
     }
   };
 
-  // ------------------- NORMALIZAR ANTES DE GUARDAR -------------------
-const normalizeDeficiencyBeforeSave = (deficiency, userId) => {
-  const now = nowPeruISO?.() ?? new Date().toISOString();
-  const isNew = !deficiency?.DefiInterno;
+  // ------------------
 
-  const base = deficiency ?? {};
 
-  return {
-    ...base,
+  const fetchComentarioEstandarTipiLocal = async (typificationId) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return "";
 
-    // ✅ defaults para columnas nuevas
-    DefiCol3: base?.DefiCol3 ?? generateUUID(),
-    DefiCol2: base?.DefiCol2 ?? "",
-    DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
-    DefiTipoCruce: base?.DefiTipoCruce ?? "",
-
-    ...(isNew && {
-      DefiEstado: base?.DefiEstado || "N",
-      DefiFechaCreacion: now,
-      DefiFecRegistro: now,
-      DefiUsuarioInic: userId,
-      DefiLatitud: base?.DefiLatitud ?? 0,
-      DefiLongitud: base?.DefiLongitud ?? 0,
-      DefiInspeccionado: base?.DefiInspeccionado ?? 0,
-    }),
-
-    DefiUsuarioMod: userId,
-    DefiFecModificacion: now,
+    try {
+      return await getComentarioEstandarByTypificationIdLocal(typificationId);
+    } catch (err) {
+      console.error("❌ Error fetchComentarioEstandarTipiLocal:", err);
+      return "";
+    }
   };
-};
 
 
-  
+  // ------------------- NORMALIZAR ANTES DE GUARDAR -------------------
+  const isBlank = (v) => v === null || v === undefined || String(v).trim() === "";
+
+  const normalizeDeficiencyBeforeSave = (deficiency, userId, nowIso) => {
+    const base = deficiency ?? {};
+    const isNew = !base?.DefiInterno;
+
+    // ✅ Para nuevas: NO sobreescribir si ya viene fecha (de createEmptyDeficiency)
+    const fechaCreacion = isBlank(base?.DefiFechaCreacion) ? nowIso : base.DefiFechaCreacion;
+    const fecRegistro = isBlank(base?.DefiFecRegistro) ? nowIso : base.DefiFecRegistro;
+
+    return {
+      ...base,
+
+      // ✅ defaults
+      DefiCol3: base?.DefiCol3 ?? generateUUID(),
+      DefiCol2: base?.DefiCol2 ?? "",
+      DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
+      DefiTipoCruce: base?.DefiTipoCruce ?? "",
+
+      ...(isNew && {
+        DefiEstado: base?.DefiEstado || "N",
+        DefiFechaCreacion: fechaCreacion,
+        DefiFecRegistro: fecRegistro,
+        DefiUsuarioInic: isBlank(base?.DefiUsuarioInic) ? userId : base.DefiUsuarioInic,
+        DefiLatitud: base?.DefiLatitud ?? 0,
+        DefiLongitud: base?.DefiLongitud ?? 0,
+        DefiInspeccionado: base?.DefiInspeccionado ?? 0,
+      }),
+
+      // ✅ modificación siempre con 1 solo stamp por guardado
+      DefiUsuarioMod: userId,
+      DefiFecModificacion: nowIso,
+    };
+  };
+
+
+
+
 
   // ------------------- NORMALIZE PARA SYNC -------------------
-const normalizeDeficiencyForSync = (def) => {
-  const nowIso = new Date().toISOString();
-  const base = def ?? {};
+  const normalizeDeficiencyForSync = (def) => {
+    const nowIso = formatLocalISO(getUniqueNowMs());
 
-  const fecRegistro =
-    normalizeDate(base?.DefiFecRegistro) ||
-    normalizeDate(base?.DefiFechaCreacion) ||
-    nowIso;
+    const base = def ?? {};
 
-  const fecMod = normalizeDate(base?.DefiFecModificacion) || nowIso;
+    const fecRegistro =
+      normalizeDate(base?.DefiFecRegistro) ||
+      normalizeDate(base?.DefiFechaCreacion) ||
+      nowIso;
 
-  return {
-    ...base,
+    const fecMod = normalizeDate(base?.DefiFecModificacion) || nowIso;
 
-    // 🔹 STRINGS (compatibilidad server)
-    DefiUsuarioInic: base?.DefiUsuarioInic != null ? String(base.DefiUsuarioInic) : null,
-    DefiUsuarioMod: base?.DefiUsuarioMod != null ? String(base.DefiUsuarioMod) : null,
-    DefiUsuCre: base?.DefiUsuCre != null ? String(base.DefiUsuCre) : null,
-    DefiUsuNpc: base?.DefiUsuNpc != null ? String(base.DefiUsuNpc) : null,
+    return {
+      ...base,
 
-    DefiObservacion: base?.DefiObservacion ?? "",
-    DefiComentario: base?.DefiComentario ?? "",
+      // 🔹 STRINGS (compatibilidad server)
+      DefiUsuarioInic: base?.DefiUsuarioInic != null ? String(base.DefiUsuarioInic) : null,
+      DefiUsuarioMod: base?.DefiUsuarioMod != null ? String(base.DefiUsuarioMod) : null,
+      DefiUsuCre: base?.DefiUsuCre != null ? String(base.DefiUsuCre) : null,
+      DefiUsuNpc: base?.DefiUsuNpc != null ? String(base.DefiUsuNpc) : null,
 
-    // 🔹 BOOLEANS
-    DefiActivo: Boolean(base?.DefiActivo),
-    DefiInspeccionado: Boolean(base?.DefiInspeccionado),
-    DefiResponsable: Boolean(base?.DefiResponsable),
+      DefiObservacion: base?.DefiObservacion ?? "",
+      DefiComentario: base?.DefiComentario ?? "",
 
-    // 🔹 FECHAS ISO
-    DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
-    DefiFecModificacion: normalizeSqlServerDate(fecMod),
-    DefiFechaCreacion: normalizeSqlServerDate(base?.DefiFechaCreacion),
-    DefiFechaDenuncia: normalizeSqlServerDate(base?.DefiFechaDenuncia),
-    DefiFechaInspeccion: normalizeSqlServerDate(base?.DefiFechaInspeccion),
-    DefiFechaSubsanacion: normalizeSqlServerDate(base?.DefiFechaSubsanacion),
+      // 🔹 BOOLEANS
+      DefiActivo: Boolean(base?.DefiActivo),
+      DefiInspeccionado: Boolean(base?.DefiInspeccionado),
+      DefiResponsable: Boolean(base?.DefiResponsable),
 
-    // 🔹 IDENTIFICADOR ÚNICO
-    DefiCol3: base?.DefiCol3 ?? null,
-    DefiCol2: base?.DefiCol2 ?? null,
+      // 🔹 FECHAS ISO
+      DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
+      DefiFecModificacion: normalizeSqlServerDate(fecMod),
+      DefiFechaCreacion: normalizeSqlServerDate(base?.DefiFechaCreacion),
+      DefiFechaDenuncia: normalizeSqlServerDate(base?.DefiFechaDenuncia),
+      DefiFechaInspeccion: normalizeSqlServerDate(base?.DefiFechaInspeccion),
+      DefiFechaSubsanacion: normalizeSqlServerDate(base?.DefiFechaSubsanacion),
+
+      // 🔹 IDENTIFICADOR ÚNICO
+      DefiCol3: base?.DefiCol3 ?? null,
+      DefiCol2: base?.DefiCol2 ?? null,
+    };
   };
-};
 
 
 
@@ -365,7 +390,11 @@ const normalizeDeficiencyForSync = (def) => {
       const isNew = !(deficiency?.DefiInterno ?? deficiency?.defiInterno);
 
       // ✅ Normalizar (pero OJO: aún no guardamos)
-      const normalized = normalizeDeficiencyBeforeSave(deficiency, userId);
+      const capturedAtMs = getUniqueNowMs();
+      const nowIso = formatLocalISO(capturedAtMs);
+
+      const normalized = normalizeDeficiencyBeforeSave(deficiency, userId, nowIso);
+
 
       // ✅ ID/TIPO del elemento (robusto)
       const idOriginalRaw =
@@ -852,6 +881,8 @@ const normalizeDeficiencyForSync = (def) => {
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
     deficienciesForFlatList,
+    fetchComentarioEstandarTipiLocal,
+
   };
 
 

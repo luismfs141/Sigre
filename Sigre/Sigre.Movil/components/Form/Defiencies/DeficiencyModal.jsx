@@ -25,6 +25,95 @@ import DeficiencyField from "../Defiencies/DeficiencyField";
 
 
 const RESPONSABILIDAD = "DefiCol2";
+const TIPI_COMENTARIO_ESTANDAR = "TipiComentarioEstandar";
+
+const buildComentarioEstandarField = () => ({
+  key: TIPI_COMENTARIO_ESTANDAR,
+  label: "Comentario estándar",
+  type: "text",        // ✅ importante: NO textarea
+  readonly: true,
+  required: false,
+  placeholder: "",
+});
+
+
+const pickComentarioEstandarFromProp = (deficiencyProp) => {
+  // soporta: deficiency.data.comentarioEstandar (si pasas item.data),
+  // o deficiency.comentarioEstandar (si pasas el objeto directo)
+  const v =
+    deficiencyProp?.comentarioEstandar ??
+    deficiencyProp?.ComentarioEstandar ??
+    deficiencyProp?.data?.comentarioEstandar ??
+    deficiencyProp?.data?.ComentarioEstandar ??
+    "";
+
+  return String(v ?? "").trim();
+};
+
+const ensureComentarioEstandarAsync = async (def, deficiencyProp, fetchComentarioFn) => {
+  const base = def ?? {};
+
+  // 1) Si ya vino por props (raro en tu caso), úsalo
+  const fromProp = pickComentarioEstandarFromProp(deficiencyProp);
+  if (fromProp) {
+    return { ...base, [TIPI_COMENTARIO_ESTANDAR]: fromProp };
+  }
+
+  // 2) Si no vino, buscar por TipiInterno / typificationId en SQLite
+  const typiId =
+    base?.TipiInterno ??
+    base?.typificationId ??
+    deficiencyProp?.typificationId ??
+    deficiencyProp?.data?.typificationId ??
+    null;
+
+  if (!typiId) {
+    return { ...base, [TIPI_COMENTARIO_ESTANDAR]: "" };
+  }
+
+  const comentario = await fetchComentarioFn?.(typiId);
+  return { ...base, [TIPI_COMENTARIO_ESTANDAR]: String(comentario ?? "").trim() };
+};
+
+
+const injectComentarioEstandarBeforeComentarios = (baseFields) => {
+  const fields = Array.isArray(baseFields) ? baseFields : [];
+
+  // si ya existe, no duplicar
+  if (fields.some(f => f?.key === TIPI_COMENTARIO_ESTANDAR)) return fields;
+
+  const comentarioStdField = buildComentarioEstandarField();
+
+  // insertar antes del campo Comentarios (DefiComentario)
+  const idx = fields.findIndex(f => {
+    const k = String(f?.key ?? "").toUpperCase();
+    const l = String(f?.label ?? "").toUpperCase();
+
+    // match por key exacta o label que contenga COMENT (pero no "ESTANDAR")
+    return (
+      k === "DEFICOMENTARIO" ||
+      (l.includes("COMENT") && !l.includes("ESTANDAR") && !l.includes("ESTÁNDAR"))
+    );
+  });
+
+  if (idx === -1) return [...fields, comentarioStdField];
+
+  return [
+    ...fields.slice(0, idx),
+    comentarioStdField,
+    ...fields.slice(idx),
+  ];
+};
+
+const sanitizeDefForSave = (def) => {
+  if (!def || typeof def !== "object") return def;
+  const copy = { ...def };
+
+  // ✅ NO se guarda ni se sincroniza al server
+  delete copy[TIPI_COMENTARIO_ESTANDAR];
+
+  return copy;
+};
 
 
 
@@ -88,8 +177,10 @@ export default function DeficiencyModal({
   const {
     fetchDeficiencyByIdLocal,
     fetchDeficiencyByTypificationElement,
+    fetchComentarioEstandarTipiLocal, // ✅ NUEVO
     saveDeficiency
   } = useDeficiency();
+
 
   // --------------------------------------------------
   // LIMPIAR CAMPOS
@@ -144,13 +235,19 @@ export default function DeficiencyModal({
       if (deficiency.defiInterno) {
         const def = await fetchDeficiencyByIdLocal(deficiency.defiInterno);
         if (def) {
-          setLocalDef(
-            ensureResponsabilidadDefault({
-              ...def,
-              typificationCode: deficiency.typificationCode,
-              typificationId: deficiency.typificationId,
-            })
+          const baseDef = ensureResponsabilidadDefault({
+            ...def,
+            typificationCode: deficiency.typificationCode,
+            typificationId: deficiency.typificationId,
+          });
+
+          const withStd = await ensureComentarioEstandarAsync(
+            baseDef,
+            deficiency,
+            fetchComentarioEstandarTipiLocal
           );
+
+          setLocalDef(withStd);
           return;
         }
       }
@@ -163,7 +260,21 @@ export default function DeficiencyModal({
           selectedItem
         });
 
-        setLocalDef(ensureResponsabilidadDefault(empty));
+        // por si createEmptyDeficiency no setea TipiInterno
+        const baseDef = ensureResponsabilidadDefault({
+          ...empty,
+          TipiInterno: empty?.TipiInterno ?? deficiency?.typificationId ?? null,
+          typificationCode: empty?.typificationCode ?? deficiency?.typificationCode,
+          typificationId: empty?.typificationId ?? deficiency?.typificationId,
+        });
+
+        const withStd = await ensureComentarioEstandarAsync(
+          baseDef,
+          deficiency,
+          fetchComentarioEstandarTipiLocal
+        );
+
+        setLocalDef(withStd);
         return;
       }
 
@@ -175,7 +286,19 @@ export default function DeficiencyModal({
       );
 
       if (result?.length) {
-        setLocalDef(ensureResponsabilidadDefault(result[0]));
+        const baseDef = ensureResponsabilidadDefault({
+          ...result[0],
+          typificationCode: result[0]?.typificationCode ?? deficiency?.typificationCode,
+          typificationId: result[0]?.typificationId ?? deficiency?.typificationId,
+        });
+
+        const withStd = await ensureComentarioEstandarAsync(
+          baseDef,
+          deficiency,
+          fetchComentarioEstandarTipiLocal
+        );
+
+        setLocalDef(withStd);
       } else {
         const empty = createEmptyDeficiency({
           ...deficiency,
@@ -183,9 +306,23 @@ export default function DeficiencyModal({
           selectedItem
         });
 
-        setLocalDef(ensureResponsabilidadDefault(empty));
+        const baseDef = ensureResponsabilidadDefault({
+          ...empty,
+          TipiInterno: empty?.TipiInterno ?? deficiency?.typificationId ?? null,
+          typificationCode: empty?.typificationCode ?? deficiency?.typificationCode,
+          typificationId: empty?.typificationId ?? deficiency?.typificationId,
+        });
+
+        const withStd = await ensureComentarioEstandarAsync(
+          baseDef,
+          deficiency,
+          fetchComentarioEstandarTipiLocal
+        );
+
+        setLocalDef(withStd);
       }
     };
+
 
     load();
   }, [deficiency]);
@@ -196,7 +333,10 @@ export default function DeficiencyModal({
 
   const code = String(localDef.typificationCode);
   const baseFields = getDeficiencyFields(code);
-  const fields = injectResponsabilidadAfterCriticidad(baseFields);
+  const fields = injectComentarioEstandarBeforeComentarios(
+    injectResponsabilidadAfterCriticidad(baseFields)
+  );
+
 
 
 
@@ -286,22 +426,25 @@ export default function DeficiencyModal({
         return;
       }
 
-      const payload = ensureResponsabilidadDefault({
-        ...localDef,
+      const payload = sanitizeDefForSave(
+        ensureResponsabilidadDefault({
+          ...localDef,
 
-        DefiIdElemento:
-          localDef?.DefiIdElemento ??
-          deficiency?.elementId ??
-          localDef?.elementId,
+          DefiIdElemento:
+            localDef?.DefiIdElemento ??
+            deficiency?.elementId ??
+            localDef?.elementId,
 
-        DefiTipoElemento:
-          localDef?.DefiTipoElemento ??
-          deficiency?.typeElement ??
-          localDef?.typeElement,
+          DefiTipoElemento:
+            localDef?.DefiTipoElemento ??
+            deficiency?.typeElement ??
+            localDef?.typeElement,
 
-        elementId: localDef?.elementId ?? deficiency?.elementId,
-        typeElement: localDef?.typeElement ?? deficiency?.typeElement,
-      });
+          elementId: localDef?.elementId ?? deficiency?.elementId,
+          typeElement: localDef?.typeElement ?? deficiency?.typeElement,
+        })
+      );
+
 
 
 

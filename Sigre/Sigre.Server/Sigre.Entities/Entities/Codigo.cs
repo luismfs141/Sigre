@@ -14,6 +14,7 @@ public partial class Codigo
     public string CodiDeficiencia { get; set; } = null!;
 
     public int CompInterno { get; set; }
+    public string CodiComentarioEstandar { get; set; } = null!;
 
     public virtual Componente CompInternoNavigation { get; set; } = null!;
 

@@ -11,12 +11,14 @@ import {
   View
 } from "react-native";
 import { fromLatLon } from "utm";
-import { nowPeruISO } from "../../utils/dateUtils";
+
+import { formatLocalISO, getUniqueNowMs } from "../../utils/dateUtils";
+
 
 export default function ModalCamera({
   visible,
   onClose,
-  onPhoto = () => {},
+  onPhoto = () => { },
 }) {
   // ✅ 1. LAZY LOADING EXTREMO
   // Si el modal no es visible, no renderizamos NADA.
@@ -24,10 +26,10 @@ export default function ModalCamera({
   if (!visible) return null;
 
   return (
-    <ModalCameraContent 
-      visible={visible} 
-      onClose={onClose} 
-      onPhoto={onPhoto} 
+    <ModalCameraContent
+      visible={visible}
+      onClose={onClose}
+      onPhoto={onPhoto}
     />
   );
 }
@@ -37,7 +39,7 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isReady, setIsReady] = useState(false);
-  
+
   // ✅ 2. ESTADO PARA LA FOTO TEMPORAL (PREVIEW)
   const [tempPhoto, setTempPhoto] = useState(null);
   const [processing, setProcessing] = useState(false);
@@ -84,80 +86,49 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
     };
   };
 
-  /* ======================
-     📸 TOMA DE FOTO (MODIFICADO)
-  ====================== */
-  // const takePhoto = async () => {
-  //   if (!cameraRef.current || processing) return;
-  //   setProcessing(true);
-
-  //   try {
-  //     const photo = await cameraRef.current.takePictureAsync({
-  //       quality: 0.7,
-  //       skipProcessing: false,
-  //     });
-
-  //     if (!photo?.uri) return;
-
-  //     const coords = await getCurrentLocation();
-  //     let utm = null;
-
-  //     if (coords) {
-  //       utm = convertToUTM(coords.latitude, coords.longitude);
-  //     }
-
-  //     // ✅ EN LUGAR DE CERRAR, GUARDAMOS EN TEMPORAL PARA MOSTRAR PREVIEW
-  //     setTempPhoto({
-  //       uri: photo.uri,
-  //       latUtm: utm?.utmY ?? null,
-  //       lonUtm: utm?.utmX ?? null,
-  //       utmZone: utm?.zone ?? null,
-  //       fechaISO: nowPeruISO(),
-  //     });
-      
-  //   } catch (e) {
-  //     console.error("❌ Error cámara:", e);
-  //   } finally {
-  //     setProcessing(false);
-  //   }
-  // };
 
   const takePhoto = async () => {
-  if (!cameraRef.current || processing) return;
-  setProcessing(true);
+    if (!cameraRef.current || processing) return;
+    setProcessing(true);
 
-  try {
-    const photo = await cameraRef.current.takePictureAsync({
-      quality: 0.7,
-      skipProcessing: false,
-    });
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.7,
+        skipProcessing: false,
+      });
 
-    if (!photo?.uri) return;
+      if (!photo?.uri) return;
 
-    const coords = await getCurrentLocation();
-    let utm = null;
+      const coords = await getCurrentLocation();
+      let utm = null;
 
-    if (coords) {
-      utm = convertToUTM(coords.latitude, coords.longitude);
+      if (coords) {
+        utm = convertToUTM(coords.latitude, coords.longitude);
+      }
+
+
+      const capturedAtMs = getUniqueNowMs();
+
+      const temp = {
+        uri: photo.uri,
+        latUtm: utm?.utmY ?? null,
+        lonUtm: utm?.utmX ?? null,
+        utmZone: utm?.zone ?? null,
+
+        // ✅ UN SOLO ORIGEN
+        capturedAtMs,
+        fechaISO: formatLocalISO(capturedAtMs),
+      };
+
+      setTempPhoto(temp);
+
+
+    } catch (e) {
+      console.error("❌ Error cámara:", e);
+    } finally {
+      setProcessing(false);
     }
-
-    // Guardamos en temporal para mostrar preview
-    const temp = {
-      uri: photo.uri,
-      latUtm: utm?.utmY ?? null,
-      lonUtm: utm?.utmX ?? null,
-      utmZone: utm?.zone ?? null,
-      fechaISO: nowPeruISO(),
-    };
-
-    setTempPhoto(temp);
-    
-  } catch (e) {
-    console.error("❌ Error cámara:", e);
-  } finally {
-    setProcessing(false);
-  }
-};
+  };
 
 
   /* ======================
@@ -178,7 +149,7 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   /* ======================
      PERMISOS UI
   ====================== */
-  if (!permission) return <View style={{flex:1, backgroundColor:'black'}} />;
+  if (!permission) return <View style={{ flex: 1, backgroundColor: 'black' }} />;
 
   if (!permission.granted) {
     return (
@@ -191,7 +162,7 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
             <Text style={styles.btnText}>Permitir cámara</Text>
           </Pressable>
           <Pressable onPress={onClose}>
-            <Text style={[styles.cancelText, {color: 'black'}]}>Cancelar</Text>
+            <Text style={[styles.cancelText, { color: 'black' }]}>Cancelar</Text>
           </Pressable>
         </View>
       </Modal>
@@ -204,13 +175,13 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'black' }}>
-        
+
         {/* === CONDICIONAL: ¿HAY FOTO TOMADA? === */}
         {tempPhoto ? (
           // --- VISTA PREVIA (GUARDAR O REPETIR) ---
           <View style={styles.previewContainer}>
             <Image source={{ uri: tempPhoto.uri }} style={styles.previewImage} />
-            
+
             {/* ✅ BOTONES SUBIDOS PARA NO TAPAR CON NAV BAR */}
             <View style={styles.previewControls}>
               <Pressable style={styles.btnRetake} onPress={handleRetake}>
@@ -256,7 +227,7 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
                   onPress={takePhoto}
                 />
               )}
-              <Pressable onPress={onClose} style={{marginTop: 10}}>
+              <Pressable onPress={onClose} style={{ marginTop: 10 }}>
                 <Text style={styles.cancelText}>Cancelar</Text>
               </Pressable>
             </View>
@@ -290,7 +261,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB",
     borderRadius: 8,
   },
-  
+
   // --- ESTILOS CÁMARA ---
   controls: {
     position: "absolute",
@@ -323,7 +294,7 @@ const styles = StyleSheet.create({
   zoomBtn: { padding: 6 },
   zoomBtnText: { color: "#fff", fontSize: 22, fontWeight: "700" },
   zoomBtnValue: { color: "#fff", fontSize: 12, marginVertical: 4 },
-  
+
   // --- NUEVOS ESTILOS PREVIEW ---
   previewContainer: {
     flex: 1,
@@ -336,7 +307,7 @@ const styles = StyleSheet.create({
   previewControls: {
     position: "absolute",
     // ✅ AQUÍ ESTÁ EL MARGEN DE SEGURIDAD PARA LAS TECLAS DE NAVEGACIÓN
-    bottom: 60, 
+    bottom: 60,
     left: 0,
     right: 0,
     flexDirection: "row",

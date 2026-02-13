@@ -26,6 +26,7 @@ namespace Sigre.Entities.Structs
         public string Deficiency { get; set; }
         public string Code { get; set; }
         public string Typification { get; set; }
+        public string ComentarioEstandar { get; set; }
         [Key]
         public int TypificationId { get; set; }
     }

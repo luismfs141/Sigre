@@ -1,3 +1,4 @@
+import { formatLocalISO, getUniqueNowMs } from "../../utils/dateUtils";
 
 
 
@@ -10,9 +11,9 @@ export const getDeficiencyByIdLocal = async (defiInterno) => {
   try {
     const rows = await runQuery(
       `SELECT *
-       FROM Deficiencias
-       WHERE DefiInterno = ?
-       LIMIT 1`,
+          FROM Deficiencias
+          WHERE DefiInterno = ?
+          LIMIT 1`,
       [defiInterno]
     );
 
@@ -32,15 +33,16 @@ export const updateDefiInspeccionadoLocal = async (
   nowIso = null
 ) => {
   try {
-    const now = nowIso ?? new Date().toISOString();
+    const now = nowIso ?? formatLocalISO(getUniqueNowMs());
+
 
     await runQuery(
       `UPDATE Deficiencias
-       SET DefiInspeccionado = ?,
-           DefiUsuarioMod = COALESCE(?, DefiUsuarioMod),
-           DefiFecModificacion = ?,
-           EstadoOffLine = CASE WHEN EstadoOffLine = 2 THEN 2 ELSE 1 END
-       WHERE DefiInterno = ?`,
+          SET DefiInspeccionado = ?,
+              DefiUsuarioMod = COALESCE(?, DefiUsuarioMod),
+              DefiFecModificacion = ?,
+              EstadoOffLine = CASE WHEN EstadoOffLine = 2 THEN 2 ELSE 1 END
+          WHERE DefiInterno = ?`,
       [
         Number(inspeccionado) ? 1 : 0,
         usuarioId != null ? String(usuarioId) : null,
@@ -83,8 +85,8 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
   try {
     const deficiency = await runQuery(
       `SELECT *
-       FROM Deficiencias d
-       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno = ? AND d.DefiActivo = 1`,
+          FROM Deficiencias d
+          WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.TipiInterno = ? AND d.DefiActivo = 1`,
       [idElement, typeElement, idTypification]
     );
 
@@ -104,8 +106,8 @@ export const getDeficienciesByElement = async (idElement, typeElement) => {
   try {
     const deficiency = await runQuery(
       `SELECT *
-       FROM Deficiencias d
-       WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
+          FROM Deficiencias d
+          WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
       [idElement, typeElement]
     );
 
@@ -171,10 +173,10 @@ export const saveOrUpdateDeficiency = async (def) => {
       const estado = def.EstadoOffLine == null ? 1 : def.EstadoOffLine;
 
       const updateQuery = `
-        UPDATE Deficiencias
-        SET ${updateFields.map(f => `${f} = ?`).join(", ")}
-        WHERE DefiInterno = ?
-      `;
+            UPDATE Deficiencias
+            SET ${updateFields.map(f => `${f} = ?`).join(", ")}
+            WHERE DefiInterno = ?
+          `;
 
       const updateValues = [
         ...updateFields.map(f =>
@@ -191,9 +193,9 @@ export const saveOrUpdateDeficiency = async (def) => {
     const insertFields = allFields.filter(f => f !== "DefiInterno");
 
     const insertQuery = `
-      INSERT INTO Deficiencias (${insertFields.join(", ")})
-      VALUES (${insertFields.map(() => "?").join(", ")})
-    `;
+          INSERT INTO Deficiencias (${insertFields.join(", ")})
+          VALUES (${insertFields.map(() => "?").join(", ")})
+        `;
 
     const insertValues = insertFields.map(f =>
       f === "EstadoOffLine" ? 2 : def[f] ?? null
@@ -211,11 +213,11 @@ export const saveOrUpdateDeficiency = async (def) => {
 
 export const deleteDeficiencyById = async (defiInterno) => {
   await runQuery(`
-    UPDATE Deficiencias
-    SET DefiActivo = 0,
-        EstadoOffLine = 3
-    WHERE DefiInterno = ?
-  `, [defiInterno]);
+        UPDATE Deficiencias
+        SET DefiActivo = 0,
+            EstadoOffLine = 3
+        WHERE DefiInterno = ?
+      `, [defiInterno]);
 
   return true;
 };
@@ -223,28 +225,28 @@ export const deleteDeficiencyById = async (defiInterno) => {
 
 export const getDeficienciesPendientes = async () => {
   return await runQuery(`
-    SELECT *
-    FROM Deficiencias
-    WHERE EstadoOffLine IN (1, 2, 3)
-  `);
+        SELECT *
+        FROM Deficiencias
+        WHERE EstadoOffLine IN (1, 2, 3)
+      `);
 };
 
 export const markDeficiencyAsSynced = async (defiInterno) => {
   const query = `
-    UPDATE Deficiencias
-    SET EstadoOffLine = NULL
-    WHERE DefiInterno = ?
-  `;
+        UPDATE Deficiencias
+        SET EstadoOffLine = NULL
+        WHERE DefiInterno = ?
+      `;
   await runQuery(query, [defiInterno]);
 };
 
 export const updateDeficiencyIdAfterSync = async (localId, serverId) => {
   const query = `
-    UPDATE Deficiencias
-    SET DefiServerId = ?, 
-        EstadoOffLine = NULL
-    WHERE DefiInterno = ? 
-  `;
+        UPDATE Deficiencias
+        SET DefiServerId = ?, 
+            EstadoOffLine = NULL
+        WHERE DefiInterno = ? 
+      `;
   await runQuery(query, [serverId, localId]);
 };
 
@@ -252,11 +254,11 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
   try {
     const deficiencias = await runQuery(
       `SELECT *
-       FROM Deficiencias
-       WHERE DefiIdElemento = ?
-         AND DefiTipoElemento = ?
-         AND TipiInterno = ?
-         AND DefiActivo = 1`,
+          FROM Deficiencias
+          WHERE DefiIdElemento = ?
+            AND DefiTipoElemento = ?
+            AND TipiInterno = ?
+            AND DefiActivo = 1`,
       [idElement, typeElement, tipiInterno]
     );
 
@@ -269,6 +271,27 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
   } catch (error) {
     console.error(`❌ Error al obtener deficiencias:`, error);
     return [];
+  }
+};
+
+export const getComentarioEstandarByTypificationIdLocal = async (typificationId) => {
+  try {
+    const id = Number(typificationId);
+    if (!Number.isFinite(id) || id <= 0) return "";
+
+    const rows = await runQuery(
+      `SELECT ComentarioEstandar
+          FROM Tipificaciones
+          WHERE TypificationId = ?
+          LIMIT 1`,
+      [id]
+    );
+
+    const v = rows?.[0]?.ComentarioEstandar ?? "";
+    return String(v ?? "").trim();
+  } catch (error) {
+    console.error("❌ Error obteniendo ComentarioEstandar (Tipificaciones):", error);
+    return "";
   }
 };
 
@@ -305,30 +328,30 @@ export const getDeficienciesByElementAndTypi = async (idElement, typeElement, ti
 export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
   try {
     const query = `
-      SELECT 
-        d.DefiInterno,
-        d.TablInterno,
-        d.DefiIdElemento,
-        d.DefiTipoElemento,
-        d.DefiNumSuministro,
-        d.DefiUsuarioInic,
-        d.DefiObservacion,
-        d.DefiComentario,
-        d.DefiDistVertical,
-        d.DefiDistHorizontal,
-        t.TypificationId AS TipiInterno,
-        t.Code,
-        t.Component,
-        t.Deficiency,
-        t.Typification
-      FROM Deficiencias d
-      LEFT JOIN Tipificaciones t
-        ON d.TipiInterno = t.TypificationId
-      WHERE d.DefiIdElemento = ?
-        AND d.DefiTipoElemento = ?
-        AND d.DefiActivo = 1
-      ORDER BY d.DefiInterno ASC;
-    `;
+          SELECT 
+            d.DefiInterno,
+            d.TablInterno,
+            d.DefiIdElemento,
+            d.DefiTipoElemento,
+            d.DefiNumSuministro,
+            d.DefiUsuarioInic,
+            d.DefiObservacion,
+            d.DefiComentario,
+            d.DefiDistVertical,
+            d.DefiDistHorizontal,
+            t.TypificationId AS TipiInterno,
+            t.Code,
+            t.Component,
+            t.Deficiency,
+            t.Typification
+          FROM Deficiencias d
+          LEFT JOIN Tipificaciones t
+            ON d.TipiInterno = t.TypificationId
+          WHERE d.DefiIdElemento = ?
+            AND d.DefiTipoElemento = ?
+            AND d.DefiActivo = 1
+          ORDER BY d.DefiInterno ASC;
+        `;
 
     const results = await runQuery(query, [elementId, typeElement]);
     return results;
@@ -342,10 +365,10 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
 export const markDeficiencyAsSyncing = async (defiInterno) => {
   await runQuery(
     `
-    UPDATE Deficiencias
-    SET EstadoOffLine = 4
-    WHERE DefiInterno = ?
-    `,
+        UPDATE Deficiencias
+        SET EstadoOffLine = 4
+        WHERE DefiInterno = ?
+        `,
     [defiInterno]
   );
 
@@ -354,22 +377,22 @@ export const markDeficiencyAsSyncing = async (defiInterno) => {
 
 export const getDeficienciesPendientesReanudables = async () => {
   return await runQuery(`
-    SELECT *
-    FROM Deficiencias
-    WHERE EstadoOffLine IN (1, 2, 3, 4)
-    ORDER BY DefiInterno
-  `);
+        SELECT *
+        FROM Deficiencias
+        WHERE EstadoOffLine IN (1, 2, 3, 4)
+        ORDER BY DefiInterno
+      `);
 };
 
 export const setServerIdToDeficiency = async (localId, serverId) => {
   try {
     await runQuery(
       `
-      UPDATE Deficiencias
-      SET DefiServerId = ?,
-          EstadoOffLine = NULL
-      WHERE DefiInterno = ?
-      `,
+          UPDATE Deficiencias
+          SET DefiServerId = ?,
+              EstadoOffLine = NULL
+          WHERE DefiInterno = ?
+          `,
       [serverId, localId]
     );
 

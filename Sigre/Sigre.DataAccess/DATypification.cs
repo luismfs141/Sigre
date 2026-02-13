@@ -29,6 +29,7 @@ namespace Sigre.DataAccess
                         Code = cd.CodiCodigo,
                         Typification = ti.TipoDescripcion,
                         TypificationId = ti.TipiInterno,
+                        ComentarioEstandar = cd.CodiComentarioEstandar,
                     }
                 )
                 );
@@ -72,6 +73,7 @@ namespace Sigre.DataAccess
                     Code = cd.CodiCodigo,
                     Typification = ti.TipoDescripcion,
                     TypificationId = ti.TipiInterno,
+                    ComentarioEstandar = cd.CodiComentarioEstandar,
                 }
             );
 
@@ -98,6 +100,7 @@ namespace Sigre.DataAccess
                     Typification = ti.TipoDescripcion,
                     TypificationId = ti.TipiInterno,
                     Deficiency = cd.CodiDeficiencia,
+                    ComentarioEstandar = cd.CodiComentarioEstandar,
                 };
 
             return query.ToList();

@@ -76,6 +76,7 @@ export default function Sync() {
   //───────────────────────────────────────────────
   // CARGAR ALIMENTADORES
   //───────────────────────────────────────────────
+  
   useEffect(() => {
     if (user?.id) {
       //console.log("👤 Cargando alimentadores del usuario:", user.id);
