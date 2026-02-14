@@ -289,5 +289,136 @@ namespace Sigre.DataAccess
                 throw new Exception($"ERROR SQL VANO: {mensaje}");
             }
         }
+        public List<Vano> DAVano_GetByFeederWeb(int x_feeder_id)
+        {
+            // 1. Usar 'using' para cerrar la conexión inmediatamente al terminar
+            using (SigreContext ctx = new SigreContext())
+            {
+                var vanos = ctx.Vanos
+                    .AsNoTracking() // 2. Indispensable para lectura rápida (sin cache de EF)
+                    .Where(v => v.AlimInterno == x_feeder_id)
+                    .Select(van => new Vano()
+                    {
+                        // Identificadores
+                        VanoInterno = van.VanoInterno,
+                        VanoCodigo = van.VanoCodigo,
+                        VanoEtiqueta = van.VanoEtiqueta,
+                        AlimInterno = van.AlimInterno,
+
+                        // 🔥 CRÍTICO: ELIMINAMOS 'AlimInternoNavigation'
+                        // Esta línea obligaba a traer toda la info del alimentador repetida miles de veces.
+                        // AlimInternoNavigation = van.AlimInternoNavigation, 
+
+                        // Geometría
+                        VanoLatitudIni = van.VanoLatitudIni,
+                        VanoLongitudIni = van.VanoLongitudIni,
+                        VanoLatitudFin = van.VanoLatitudFin,
+                        VanoLongitudFin = van.VanoLongitudFin,
+
+                        // Topología
+                        VanoNodoInicial = van.VanoNodoInicial,
+                        VanoNodoFinal = van.VanoNodoFinal,
+
+                        // Datos Técnicos
+                        // Usamos '??' que es más limpio para nulos
+                        VanoMaterial = van.VanoMaterial ?? "ALU",
+                        VanoTerceros = van.VanoTerceros,
+                        VanoInspeccionado = van.VanoInspeccionado,
+                        VanoTramo = van.VanoTramo,
+
+                        // Agrega Subestación si tu modelo lo tiene y lo usas en el Front
+                        // VanoSubestacion = van.VanoSubestacion
+                    })
+                    .ToList();
+
+                return vanos;
+            }
+        }
+        public List<Vano> DAGAP_GetBySedWeb(int idSed)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var vanos = ctx.Vanos
+                    
+                    .Where(v => v.VanoSubestacion == idSed) // Filtro por SED
+                    .Select(v => new Vano()
+                    {
+                        VanoInterno = v.VanoInterno,
+                        VanoCodigo = v.VanoCodigo,
+                        VanoEtiqueta = v.VanoEtiqueta,
+                        AlimInterno = v.AlimInterno,
+                        VanoSubestacion = v.VanoSubestacion,
+
+                        // Geometría
+                        VanoLatitudIni = v.VanoLatitudIni,
+                        VanoLongitudIni = v.VanoLongitudIni,
+                        VanoLatitudFin = v.VanoLatitudFin,
+                        VanoLongitudFin = v.VanoLongitudFin,
+
+                        // Topología
+                        VanoNodoInicial = v.VanoNodoInicial,
+                        VanoNodoFinal = v.VanoNodoFinal,
+
+                        // Detalles
+                        VanoMaterial = v.VanoMaterial ?? "ALU",
+                        VanoTerceros = v.VanoTerceros,
+                        VanoEsBt = v.VanoEsBt
+                    })
+                    .ToList();
+
+                return vanos;
+            }
+        }
+        // Asegúrate de tener la clase PagedResult<T> definida en tu proyecto (la que creamos antes).
+
+        // EN TU CLASE DE ACCESO A DATOS (DAL)
+        public PagedResult<Vano> DAGAP_GetPaginado(int skip, int take, string busqueda = "")
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                ctx.ChangeTracker.LazyLoadingEnabled = false;
+                ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+                // 1. VALIDACIÓN
+                if (take <= 0) take = 5000;
+                if (take > 5000) take = 5000;
+
+                var query = ctx.Vanos.AsNoTracking().AsQueryable();
+
+                // 2. FILTRO (CRÍTICO: ANTES DEL SKIP/TAKE)
+                if (!string.IsNullOrEmpty(busqueda))
+                {
+                    busqueda = busqueda.Trim();
+                    query = query.Where(v => v.VanoCodigo.Contains(busqueda) ||
+                                             v.VanoNodoInicial.Contains(busqueda) ||
+                                             v.VanoNodoFinal.Contains(busqueda));
+                }
+
+                // 3. PAGINACIÓN
+                int totalRecords = query.Count();
+
+                var data = query
+                    .OrderBy(v => v.VanoInterno)
+                    .Skip(skip)
+                    .Take(take)
+                    .Select(v => new Vano
+                    {
+                        // PROYECCIÓN SOLO LO NECESARIO
+                        VanoInterno = v.VanoInterno,
+                        VanoCodigo = v.VanoCodigo,
+                        VanoEtiqueta = v.VanoEtiqueta,
+                        VanoNodoInicial = v.VanoNodoInicial,
+                        VanoNodoFinal = v.VanoNodoFinal,
+                        VanoLatitudIni = v.VanoLatitudIni,
+                        VanoLongitudIni = v.VanoLongitudIni,
+                        VanoLatitudFin = v.VanoLatitudFin,
+                        VanoLongitudFin = v.VanoLongitudFin,
+                        VanoMaterial = v.VanoMaterial
+                    })
+                    .ToList();
+
+                return new PagedResult<Vano> { TotalRecords = totalRecords, Data = data };
+            }
+        }
     }
 }

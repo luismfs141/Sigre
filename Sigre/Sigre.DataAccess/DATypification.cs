@@ -29,7 +29,7 @@ namespace Sigre.DataAccess
                         Code = cd.CodiCodigo,
                         Typification = ti.TipoDescripcion,
                         TypificationId = ti.TipiInterno,
-                        ComentarioEstandar = cd.CodiComentarioEstandar,
+                        ComentarioEstandar = cd.CodiComentarioEstandar ?? ""
                     }
                 )
                 );

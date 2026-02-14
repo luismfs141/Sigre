@@ -1,128 +1,66 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import api from '../api/apiConfig';
 
-export const useElement = () => {
+export const useElements = () => {
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
 
-    const createElement = async (formData, selectedFeeder, selectedSed) => {
+    // Función genérica
+    const fetchBloque = useCallback(async (endpoint, skip, take, busqueda = "") => {
         setLoading(true);
-        setError(null);
-        
         try {
-            // 1. Validaciones previas básicas
-            if (!selectedFeeder) throw new Error("El Alimentador es obligatorio");
-            if (!formData.etiqueta) throw new Error("La etiqueta es obligatoria");
+            const params = {
+                skip: skip,
+                take: take,
+                busqueda: busqueda // <--- Enviamos el filtro al backend
+            };
 
-            // 2. Extraer IDs de forma segura
-            const feederId = (selectedFeeder && typeof selectedFeeder === 'object') ? selectedFeeder.value : selectedFeeder;
-            const sedId = (selectedSed && typeof selectedSed === 'object') ? selectedSed.value : selectedSed;
-
-            // 3. Determinar Tipo
-            const isPoste = formData.tipoElemento === 'POST';
-            
-            // IMPORTANTE: Ajusta estos endpoints a como se llamen en tu Controller C#
-            const endpoint = isPoste ? '/Post/GuardarPosteWeb' : '/Gap/GuardarVanoWeb'; 
-
-            // 4. Construir Payload (Backend Pasivo: El Front manda todo)
-            let payload = {};
-
-            if (isPoste) {
-                payload = {
-                    // --- Identificación ---
-                    PostInterno: 0, // 0 = Crear Nuevo
-                    PostEtiqueta: formData.etiqueta,
-                    PostCodigoNodo: formData.codigo,
-                    
-                    // --- Ubicación y Red ---
-                    PostLatitud: formData.latitud,
-                    PostLongitud: formData.longitud,
-                    AlimInterno: feederId,
-                    PostSubestacion: sedId, // Puede ser null
-
-                    // --- Características (Usuario) ---
-                    
-                    PostMaterial: formData.materialPoste, // ID del material
-                    PostAltura: formData.altura,
-                    PostRetenidaTipo: formData.idRetenida || 5, // 5 = Sin retenida (o el default que uses)
-
-                    // --- Valores Técnicos (Defaults) ---
-                    PostTerceros: false,
-                    PostEsBT: true,
-                    PostInspeccionado: false,
-                    PostEsMt: null,
-                    PostRetenidaMaterial: null,
-                    PostArmadoTipo: null,
-                    PostArmadoMaterial: null,
-                    PostTramo: null
-                };
-            } else {
-                payload = {
-                    // --- Identificación ---
-                    VanoInterno: 0, // 0 = Crear Nuevo
-                    VanoEtiqueta: formData.etiqueta,
-                    VanoCodigo: formData.codigo,
-                    AlimInterno: feederId,
-                    VanoSubestacion: sedId,
-
-                    // --- Geometría ---
-                    VanoLatitudIni: formData.latitudIni,
-                    VanoLongitudIni: formData.longitudIni,
-                    VanoLatitudFin: formData.latitudFin,
-                    VanoLongitudFin: formData.longitudFin,
-
-                    // --- Características (Usuario) ---
-                    
-                    
-                    
-                    // --- Topología ---
-                    VanoNodoInicial: formData.nodoInicial,
-                    VanoNodoFinal: formData.nodoFinal,
-
-                    // --- Valores Técnicos ---
-                    VanoEsBT: true,
-                    VanoTerceros: false,
-                    VanoInspeccionado: false,
-                    VanoEsMt: null,
-                    VanoMaterial: null,
-                };
-            }
-
-            console.log("🚀 Enviando Payload:", payload);
-            
-            const response = await api.post(endpoint, payload);
-            return response.data; // Retorna el ID generado
+            const response = await api.get(endpoint, { params });
+            // Esperamos { totalRecords: 0, data: [] }
+            return response.data; 
 
         } catch (err) {
-            console.error("❌ Error en useElement:", err);
-            
-            // Lógica para extraer el mensaje exacto del Backend (.NET)
-            let mensajeError = "Error al guardar el elemento.";
-            
-            if (err.response && err.response.data) {
-                // Si el backend mandó { mensaje: "...", detalleTecnico: "..." }
-                if (err.response.data.detalleTecnico) {
-                    mensajeError = err.response.data.detalleTecnico;
-                } else if (err.response.data.mensaje) {
-                    mensajeError = err.response.data.mensaje;
-                } else if (err.response.data.errors) {
-                    // Errores de validación automáticos de .NET (ej: campos requeridos)
-                    mensajeError = JSON.stringify(err.response.data.errors);
-                }
-            } else if (err.message) {
-                mensajeError = err.message;
-            }
+            console.error(`Error en ${endpoint}:`, err);
+            return { totalRecords: 0, data: [] };
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-            // Guardamos el error formateado en el estado
-            setError(mensajeError);
-            
-            // Lanzamos el error formateado para que el componente lo muestre en el alert
-            throw new Error(mensajeError);
-            
+    // Wrappers específicos
+    const fetchPostesChunk = (skip, take, busqueda) => fetchBloque('/Post/GetPaginado', skip, take, busqueda);
+    const fetchVanosChunk = (skip, take, busqueda) => fetchBloque('/Gap/GetPaginado', skip, take, busqueda);
+
+    // --- SAVE ---
+    const saveElement = async (formData) => {
+        setLoading(true);
+        try {
+            const isPoste = formData.tipoElemento === 'POSTE';
+            const endpoint = isPoste ? '/Post/GuardarPosteWeb' : '/Gap/GuardarVanoWeb';
+            const response = await api.post(endpoint, formData);
+            return { success: true, data: response.data };
+        } catch (err) {
+            return { success: false, message: "Error al guardar" };
         } finally {
             setLoading(false);
         }
     };
 
-    return { createElement, loading, error };
+    // --- DELETE ---
+    const deleteElement = async (id, tipoElemento) => {
+        try {
+            const endpoint = tipoElemento === 'POSTE' ? '/Post/EliminarPosteWeb' : '/Gap/EliminarVanoWeb';
+            await api.post(endpoint, { id });
+            return true;
+        } catch (err) {
+            return false;
+        }
+    };
+
+    return { 
+        loading, 
+        fetchPostesChunk, 
+        fetchVanosChunk, 
+        saveElement, 
+        deleteElement 
+    };
 };

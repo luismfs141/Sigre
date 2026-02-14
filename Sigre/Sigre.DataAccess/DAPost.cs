@@ -269,5 +269,138 @@ namespace Sigre.DataAccess
                 throw new Exception($"ERROR SQL POSTE: {mensajeSQL}");
             }
         }
+        public List<Poste> DAPoste_GetByFeeder(int x_feeder_id)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // 1. Deshabilitar el rastreo de cambios (Aumenta mucho la velocidad en lectura)
+                ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+                var postes = ctx.Postes
+                    .Where(p => p.AlimInterno == x_feeder_id)
+                    // 2. Select EXPLÍCITO: Solo mapeamos datos primitivos, NADA de objetos anidados (Navigation)
+                    .Select(p => new Poste()
+                    {
+                        PostInterno = p.PostInterno,
+                        PostEtiqueta = p.PostEtiqueta,
+                        PostCodigoNodo = p.PostCodigoNodo,
+                        PostLatitud = p.PostLatitud,
+                        PostLongitud = p.PostLongitud,
+                        AlimInterno = p.AlimInterno,
+                        // NO incluyas p.AlimInternoNavigation aquí
+
+                        PostSubestacion = p.PostSubestacion,
+                        PostMaterial = p.PostMaterial,
+                        PostAltura = p.PostAltura,
+                        PostTramo = p.PostTramo,
+
+                        PostArmadoTipo = p.PostArmadoTipo,
+                        PostArmadoMaterial = p.PostArmadoMaterial,
+                        PostRetenidaTipo = p.PostRetenidaTipo,
+                        PostRetenidaMaterial = p.PostRetenidaMaterial,
+
+                        PostTerceros = p.PostTerceros,
+                        PostInspeccionado = p.PostInspeccionado,
+                        PostEsBt = p.PostEsBt, // Cuidado con mayúsculas/minúsculas exactas de tu modelo
+                        PostEsMt = p.PostEsMt // Si existe en tu modelo
+                    })
+                    .ToList(); // La consulta se ejecuta aquí
+
+                return postes;
+            }
+        }
+        public List<Poste> DAPoste_GetBySedWeb(int idSed)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // 🔥 OPTIMIZACIÓN: AsNoTracking + Select Manual para evitar JSON gigante
+                var postes = ctx.Postes
+                    
+                    .Where(p => p.PostSubestacion == idSed) // Filtro por SED
+                    .Select(p => new Poste()
+                    {
+                        PostInterno = p.PostInterno,
+                        PostEtiqueta = p.PostEtiqueta,
+                        PostCodigoNodo = p.PostCodigoNodo,
+                        PostLatitud = p.PostLatitud,
+                        PostLongitud = p.PostLongitud,
+                        AlimInterno = p.AlimInterno,
+                        PostSubestacion = p.PostSubestacion, // Importante retornar esto
+
+                        // Detalles físicos
+                        PostMaterial = p.PostMaterial,
+                        PostAltura = p.PostAltura,
+                        PostTramo = p.PostTramo,
+                        PostRetenidaTipo = p.PostRetenidaTipo,
+
+                        // Estados
+                        PostTerceros = p.PostTerceros,
+                        PostInspeccionado = p.PostInspeccionado,
+                        PostEsBt = p.PostEsBt,
+                    })
+                    .ToList();
+
+                return postes;
+            }
+        }
+        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string busqueda = "")
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // --- SOLUCIÓN ERROR CS1061 (EF Core) ---
+                // Usamos ChangeTracker en lugar de Configuration
+                ctx.ChangeTracker.LazyLoadingEnabled = false;
+                ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+                // 1. Iniciamos la consulta base
+                var query = ctx.Postes.AsNoTracking().AsQueryable();
+
+                // 2. FILTRO OPCIONAL: Solo si el usuario escribió algo
+                if (!string.IsNullOrEmpty(busqueda))
+                {
+                    busqueda = busqueda.Trim();
+                    // Filtramos por Código o Etiqueta
+                    query = query.Where(p => p.PostCodigoNodo.Contains(busqueda) ||
+                                             (p.PostEtiqueta != null && p.PostEtiqueta.Contains(busqueda)));
+                }
+
+                // 3. Contar (Count):
+                // Si hay búsqueda, cuenta los filtrados. Si no, cuenta el total de la tabla.
+                int totalRecords = query.Count();
+
+                // 4. Paginación (Chunk):
+                // Esto evita que el navegador se crashee por "Out of Memory"
+                var data = query
+                    .OrderBy(p => p.PostCodigoNodo) // Orden obligatorio para paginar
+                    .Skip(skip)
+                    .Take(take)
+                    .Select(p => new Poste()
+                    {
+                        PostInterno = p.PostInterno,
+                        PostEtiqueta = p.PostEtiqueta,
+                        PostCodigoNodo = p.PostCodigoNodo,
+                        PostLatitud = p.PostLatitud,
+                        PostLongitud = p.PostLongitud,
+                        AlimInterno = p.AlimInterno,
+                        PostSubestacion = p.PostSubestacion,
+
+                        // Detalles físicos
+                        PostMaterial = p.PostMaterial,
+                        PostAltura = p.PostAltura,
+                        PostTramo = p.PostTramo,
+                        PostRetenidaTipo = p.PostRetenidaTipo,
+
+                        // Estados
+                        PostTerceros = p.PostTerceros,
+                        PostInspeccionado = p.PostInspeccionado,
+                        PostEsBt = p.PostEsBt,
+                    })
+            .ToList();
+
+                // Retornamos el chunk de datos y el total para el paginador
+                return new PagedResult<Poste> { TotalRecords = totalRecords, Data = data };
+            }
+        }
+
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
@@ -84,6 +85,66 @@ namespace Sigre.Server.Controllers
                     mensaje = "Error al procesar Vano",
                     detalleTecnico = ex.Message
                 });
+            }
+        }
+        [HttpGet("GetByFeederWeb")]
+        public IActionResult GetByFeederWeb(int x_feeder_id)
+        {
+            try
+            {
+                if (x_feeder_id <= 0)
+                {
+                    return BadRequest("El ID del alimentador no es válido.");
+                }
+
+                DAGap da = new DAGap();
+
+                // Llamada al método optimizado
+                List<Vano> listaVanos = da.DAVano_GetByFeederWeb(x_feeder_id);
+
+                return Ok(listaVanos);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno al obtener los vanos.",
+                    detalle = ex.Message
+                });
+            }
+        }
+        [HttpGet("GetBySedWeb")]
+        public IActionResult GetBySedWeb(int idSed)
+        {
+            try
+            {
+                if (idSed <= 0) return BadRequest("ID de SED inválido.");
+
+                DAGap da = new DAGap();
+                var result = da.DAGAP_GetBySedWeb(idSed);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+        [HttpGet("GetPaginado")]
+        public IActionResult GetPaginado(int skip, int take, string busqueda = "")
+        {
+            try
+            {
+                // Instancia tu capa de datos
+                DAGap da = new DAGap();
+
+                // LLAMA AL MÉTODO DE ARRIBA (No repitas el código SQL aquí)
+                var result = da.DAGAP_GetPaginado(skip, take, busqueda);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error", error = ex.Message });
             }
         }
     }

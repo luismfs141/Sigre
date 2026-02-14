@@ -5,7 +5,7 @@ import { Button } from 'primereact/button';
 import { InputNumber } from 'primereact/inputnumber';
 import { InputSwitch } from 'primereact/inputswitch'; // Asegúrate de tener esto instalado
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
-import { useElement } from '../hooks/useElement'; // IMPORTAMOS EL HOOK PERSONALIZADO
+import { useElements } from '../hooks/useElement'; // IMPORTAMOS EL HOOK PERSONALIZADO
 
 export default function NuevoElemento({ onSave }) {
 
@@ -49,7 +49,7 @@ export default function NuevoElemento({ onSave }) {
     }));
 
     // === 4. HOOK DE CREACIÓN ===
-    const { createElement, loading: saving } = useElement();
+    const { createElement, loading: saving } = useElements();
 
     // === 5. LISTAS ESTÁTICAS ===
     const MATERIAL_POSTE_OPTIONS = [
