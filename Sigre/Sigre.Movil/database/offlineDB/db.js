@@ -38,7 +38,7 @@ export const closeDatabase = async () => {
   if (!db) return;
   db = null;
   await new Promise((r) => setTimeout(r, 80));
-  console.log("🟡 closeDatabase -> referencia liberada");
+  //console.log("🟡 closeDatabase -> referencia liberada");
 };
 
 export const isDatabaseAvailable = async (dbName) => {

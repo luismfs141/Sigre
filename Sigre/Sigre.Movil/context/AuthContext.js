@@ -75,7 +75,6 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json();
-      console.log("Respuesta del servidor:", data);
 
       const loggedUser = {
         id: data.usuaInterno,
