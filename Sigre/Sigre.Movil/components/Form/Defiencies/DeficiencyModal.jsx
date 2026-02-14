@@ -171,6 +171,8 @@ export default function DeficiencyModal({
   const [activeLocationField, setActiveLocationField] = useState(null);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
 
   const isEmpty = v => v === null || v === undefined || v === "";
 
@@ -192,6 +194,8 @@ export default function DeficiencyModal({
       setShowLocationModal(false);
       setActiveLocationField(null);
       setIsSaving(false);
+      setIsDirty(false);
+
     }
   }, [visible]);
 
@@ -248,6 +252,8 @@ export default function DeficiencyModal({
           );
 
           setLocalDef(withStd);
+          setIsDirty(false);
+
           return;
         }
       }
@@ -275,6 +281,8 @@ export default function DeficiencyModal({
         );
 
         setLocalDef(withStd);
+        setIsDirty(false);
+
         return;
       }
 
@@ -299,6 +307,9 @@ export default function DeficiencyModal({
         );
 
         setLocalDef(withStd);
+
+        setIsDirty(false);
+
       } else {
         const empty = createEmptyDeficiency({
           ...deficiency,
@@ -320,6 +331,8 @@ export default function DeficiencyModal({
         );
 
         setLocalDef(withStd);
+        setIsDirty(false);
+
       }
     };
 
@@ -328,6 +341,18 @@ export default function DeficiencyModal({
   }, [deficiency]);
 
 
+  const setFieldValue = (key, val) => {
+    setLocalDef(prev => {
+      const prevVal = prev?.[key];
+      const nextVal = val;
+
+      // marca dirty solo si cambia realmente
+      const changed = String(prevVal ?? "") !== String(nextVal ?? "");
+      if (changed) setIsDirty(true);
+
+      return { ...prev, [key]: nextVal };
+    });
+  };
 
   if (!visible || !localDef) return null;
 
@@ -566,12 +591,8 @@ export default function DeficiencyModal({
                         key={`${formKey}-${field.key}`}
                         field={field}
                         value={value}
-                        onChange={val =>
-                          setLocalDef(prev => ({
-                            ...prev,
-                            [field.key]: val
-                          }))
-                        }
+                        onChange={(val) => setFieldValue(field.key, val)}
+
                       />
                     );
                   })}
@@ -583,10 +604,11 @@ export default function DeficiencyModal({
                 <TouchableOpacity
                   style={[
                     styles.btnSave,
-                    isSaving && { opacity: 0.5, backgroundColor: "#888" }
+                    (isSaving || !isDirty) && { opacity: 0.5, backgroundColor: "#888" }
                   ]}
                   onPress={handleSave}
-                  disabled={isSaving}
+                  disabled={isSaving || !isDirty}
+
                 >
                   <Text style={styles.btnText}>
                     {isSaving ? "Guardando..." : "Guardar"}
@@ -602,12 +624,8 @@ export default function DeficiencyModal({
                 labelKey={selectConfig?.labelKey}
                 valueKey={selectConfig?.valueKey}
                 selectedValue={selectConfig ? localDef?.[selectConfig.field] : null}
-                onSelect={val =>
-                  setLocalDef(prev => ({
-                    ...prev,
-                    [selectConfig.field]: val
-                  }))
-                }
+                onSelect={(val) => setFieldValue(selectConfig.field, val)}
+
                 onClose={() => setSelectConfig(null)}
               />
 
@@ -617,11 +635,9 @@ export default function DeficiencyModal({
                 onClose={() => setShowLocationModal(false)}
                 onConfirm={coords => {
                   if (activeLocationField) {
-                    setLocalDef(prev => ({
-                      ...prev,
-                      [activeLocationField]:
-                        coords[activeLocationField === "DefiLatitud" ? "latitude" : "longitude"]
-                    }));
+                    const v = coords[activeLocationField === "DefiLatitud" ? "latitude" : "longitude"];
+                    setFieldValue(activeLocationField, v);
+
                   }
                   setShowLocationModal(false);
                 }}

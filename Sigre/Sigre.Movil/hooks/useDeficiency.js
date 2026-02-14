@@ -26,7 +26,9 @@ import {
   getPinInspeccionadoByIdOriginalLocal,
   updatePinInspeccionadoByIdOriginalLocal,
 } from "../database/offlineDB/pins";
-import { formatLocalISO, getUniqueNowMs } from "../utils/dateUtils";
+import { formatLocalISO, getUniqueNowMs, roundMsForSqlDatetime } from "../utils/dateUtils";
+
+
 
 import { useConnectivity } from "./useConnectivity";
 
@@ -143,11 +145,14 @@ export const useDeficiency = () => {
   const normalizeDate = (value) => {
     if (value === null || value === undefined || value === "") return null;
 
-    // Si viene como número (timestamp)
+    // number => epoch (ms o seg)
     if (typeof value === "number") {
-      const ms = value > 1e12 ? value : value * 1000; // heurística ms/seg
+      const ms = value > 1e12 ? value : value * 1000;
       const d = new Date(ms);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+      if (Number.isNaN(d.getTime())) return null;
+
+      const rounded = roundMsForSqlDatetime(d.getTime());
+      return formatLocalISO(rounded); // ✅ LOCAL SIN Z
     }
 
     if (typeof value !== "string") return null;
@@ -155,14 +160,16 @@ export const useDeficiency = () => {
     let s = value.trim();
     if (!s) return null;
 
-    // "YYYY-MM-DD HH:mm:ss" -> "YYYY-MM-DDTHH:mm:ss"
+    // "YYYY-MM-DD HH:mm:ss(.mmm)" -> "YYYY-MM-DDTHH:mm:ss(.mmm)"
     if (s.includes(" ") && !s.includes("T")) s = s.replace(" ", "T");
 
     const d = new Date(s);
     if (Number.isNaN(d.getTime())) return null;
 
-    return d.toISOString();
+    const rounded = roundMsForSqlDatetime(d.getTime());
+    return formatLocalISO(rounded); // ✅ LOCAL SIN Z
   };
+
 
   const normalizeSqlServerDate = (value) => {
     if (!value || typeof value !== "string") return value;
@@ -229,34 +236,45 @@ export const useDeficiency = () => {
     const base = deficiency ?? {};
     const isNew = !base?.DefiInterno;
 
-    // ✅ Para nuevas: NO sobreescribir si ya viene fecha (de createEmptyDeficiency)
-    const fechaCreacion = isBlank(base?.DefiFechaCreacion) ? nowIso : base.DefiFechaCreacion;
-    const fecRegistro = isBlank(base?.DefiFecRegistro) ? nowIso : base.DefiFecRegistro;
-
-    return {
+    // ✅ defaults
+    const normalized = {
       ...base,
 
-      // ✅ defaults
       DefiCol3: base?.DefiCol3 ?? generateUUID(),
       DefiCol2: base?.DefiCol2 ?? "",
       DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
       DefiTipoCruce: base?.DefiTipoCruce ?? "",
 
-      ...(isNew && {
-        DefiEstado: base?.DefiEstado || "N",
-        DefiFechaCreacion: fechaCreacion,
-        DefiFecRegistro: fecRegistro,
-        DefiUsuarioInic: isBlank(base?.DefiUsuarioInic) ? userId : base.DefiUsuarioInic,
-        DefiLatitud: base?.DefiLatitud ?? 0,
-        DefiLongitud: base?.DefiLongitud ?? 0,
-        DefiInspeccionado: base?.DefiInspeccionado ?? 0,
-      }),
-
-      // ✅ modificación siempre con 1 solo stamp por guardado
-      DefiUsuarioMod: userId,
+      // ✅ SIEMPRE se actualiza al guardar
+      DefiUsuarioMod: userId != null ? String(userId) : null,
       DefiFecModificacion: nowIso,
     };
+
+    if (isNew) {
+      // ✅ CREACIÓN: se estampa al Guardar/Finalizar (NO al abrir modal)
+      normalized.DefiEstado = base?.DefiEstado || "N";
+      normalized.DefiFechaCreacion = nowIso;
+      normalized.DefiFecRegistro = nowIso;
+
+      // ✅ en creación: modificacion == creacion (mismo stamp)
+      normalized.DefiFecModificacion = nowIso;
+
+      normalized.DefiUsuarioInic = isBlank(base?.DefiUsuarioInic)
+        ? (userId != null ? String(userId) : null)
+        : String(base.DefiUsuarioInic);
+
+      normalized.DefiLatitud = base?.DefiLatitud ?? 0;
+      normalized.DefiLongitud = base?.DefiLongitud ?? 0;
+      normalized.DefiInspeccionado = base?.DefiInspeccionado ?? 0;
+    } else {
+      // ✅ UPDATE: NO tocar creación (solo asegurar que no quede en blanco)
+      if (isBlank(base?.DefiFechaCreacion)) normalized.DefiFechaCreacion = nowIso;
+      if (isBlank(base?.DefiFecRegistro)) normalized.DefiFecRegistro = nowIso;
+    }
+
+    return normalized;
   };
+
 
 
 
@@ -264,7 +282,10 @@ export const useDeficiency = () => {
 
   // ------------------- NORMALIZE PARA SYNC -------------------
   const normalizeDeficiencyForSync = (def) => {
-    const nowIso = formatLocalISO(getUniqueNowMs());
+    const msRaw = getUniqueNowMs();
+    const ms = roundMsForSqlDatetime(msRaw);
+    const nowIso = formatLocalISO(ms);
+
 
     const base = def ?? {};
 
@@ -390,8 +411,10 @@ export const useDeficiency = () => {
       const isNew = !(deficiency?.DefiInterno ?? deficiency?.defiInterno);
 
       // ✅ Normalizar (pero OJO: aún no guardamos)
-      const capturedAtMs = getUniqueNowMs();
+      const capturedAtMsRaw = getUniqueNowMs();
+      const capturedAtMs = roundMsForSqlDatetime(capturedAtMsRaw);
       const nowIso = formatLocalISO(capturedAtMs);
+
 
       const normalized = normalizeDeficiencyBeforeSave(deficiency, userId, nowIso);
 
