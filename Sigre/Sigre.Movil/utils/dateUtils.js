@@ -25,3 +25,23 @@ export const formatLocalISO = (ms = Date.now()) => {
 
 // Mantén el nombre para no romper imports existentes
 export const nowPeruISO = () => formatLocalISO(getUniqueNowMs());
+
+
+
+
+// Redondeo compatible con SQL Server DATETIME (0,3,7 dentro de cada 10ms)
+export const roundMsForSqlDatetime = (msEpoch) => {
+  const t = Math.trunc(Number(msEpoch) || 0);
+  const ms = ((t % 1000) + 1000) % 1000; // 0..999
+  const r = ms % 10;
+
+  let targetR;
+  if (r <= 1) targetR = 0;        // 0,1 -> 0
+  else if (r <= 4) targetR = 3;   // 2,3,4 -> 3
+  else if (r <= 8) targetR = 7;   // 5,6,7,8 -> 7
+  else targetR = 10;              // 9 -> 10 (carry)
+
+  const msRounded = (ms - r) + targetR;      // puede ser 1000
+  const delta = msRounded - ms;              // -..+1
+  return t + delta;
+};
