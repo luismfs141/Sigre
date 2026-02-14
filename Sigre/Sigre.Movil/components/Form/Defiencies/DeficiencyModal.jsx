@@ -176,7 +176,7 @@ export default function DeficiencyModal({
 
   const isEmpty = v => v === null || v === undefined || v === "";
 
-  
+
   const {
     fetchDeficiencyByIdLocal,
     fetchDeficiencyByTypificationElement,
@@ -477,7 +477,7 @@ export default function DeficiencyModal({
 
       const res = await saveDeficiency(payload, userId);
 
-      console.log("🧾 SAVE RESULT =>", res);
+      //console.log("🧾 SAVE RESULT =>", res);
 
       if (!res?.ok) {
         Alert.alert("Error", "No se pudo guardar la deficiencia. Intente nuevamente.");
