@@ -36,7 +36,6 @@ import { styles } from "../../styles/MultimediaStyles";
 
 
 
-console.log("✅ STYLES KEYS:", Object.keys(styles || {}));
 
 
 import {
@@ -136,11 +135,9 @@ export default function Multimedia() {
   const [defOwnerId, setDefOwnerId] = useState(null);
   const [canEdit, setCanEdit] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("👤 PERFIL:", { dbReady, dbName, isAdmin, isSupervisor, isInspector, currentUserId, canEdit, defOwnerId });
-    }, [dbReady, dbName, isAdmin, isSupervisor, isInspector, currentUserId, canEdit, defOwnerId])
-  );
+
+
+  
 
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;

@@ -12,6 +12,8 @@ DECLARE @CODIGO VARCHAR(20) = '111434'
 --  DEFICIENCIAS DE UN ELEMETNO
 ------------------------------------------------------------
 
+
+
 SELECT	D.DEFI_Interno,
 		D.DEFI_Activo,
 		D.DEFI_TipoElemento,
@@ -59,6 +61,8 @@ LEFT JOIN Usuarios AS US2
 	ON D.DEFI_UsuarioMod = US2.USUA_Interno
 WHERE D.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR D.DEFI_CodigoElemento = @CODIGO
+
+
 
 
 

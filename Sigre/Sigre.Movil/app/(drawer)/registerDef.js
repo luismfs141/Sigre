@@ -276,7 +276,6 @@ export const Map = () => {
       } else if (!item.Type && item.VanoCodigo) {
         tipoElemento = "Vano";
 
-        //console.log("⚠️ Error: ", item);
 
         codigoElemento = item.VanoCodigo;
         codigoEtiqueta = item.VanoEtiqueta;

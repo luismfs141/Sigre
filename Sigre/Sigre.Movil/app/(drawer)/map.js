@@ -364,7 +364,7 @@ const Map = () => {
     label?.replace(/\r?\n|\r/g, " - ").trim() || "";
 
   const onMarkerPress = async (item) => {
-    console.log(item);
+    //console.log(item);
     try {
       let tipoElemento = "";
       let codigoElemento = "";

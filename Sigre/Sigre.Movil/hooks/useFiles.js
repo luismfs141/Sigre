@@ -59,99 +59,81 @@ export function useFiles() {
   }, []);
 
   // ===============================
-// 🔹 NORMALIZAR PARA SYNC (API)
-// ===============================
-const normalizeArchivoForSync = (arch) => {
-  const activoNum = toNum(arch.ArchActivo ?? 1, 1);
+  // 🔹 NORMALIZAR PARA SYNC (API)
+  // ===============================
+  const normalizeArchivoForSync = (arch) => {
+    const activoNum = toNum(arch.ArchActivo ?? 1, 1);
 
-  return {
-    ArchInterno: arch.ArchInterno,
-    ArchServerId: arch.ArchServerId ?? null,
+    return {
+      ArchInterno: arch.ArchInterno,
+      ArchServerId: arch.ArchServerId ?? null,
 
-    ArchTabla: arch.ArchTabla ?? "Deficiencias",
-    ArchCodTabla: arch.ArchCodTabla ?? null,
+      ArchTabla: arch.ArchTabla ?? "Deficiencias",
+      ArchCodTabla: arch.ArchCodTabla ?? null,
 
-    ArchTipo: String(arch.ArchTipo),
-    ArchNombre: arch.ArchNombre ?? arch.ARCH_NOMBRE ?? arch.archNombre ?? null,
+      ArchTipo: String(arch.ArchTipo),
+      ArchNombre: arch.ArchNombre ?? arch.ARCH_NOMBRE ?? arch.archNombre ?? null,
 
-    ArchLatitud: arch.ArchLatitud ?? null,
-    ArchLongitud: arch.ArchLongitud ?? null,
+      ArchLatitud: arch.ArchLatitud ?? null,
+      ArchLongitud: arch.ArchLongitud ?? null,
 
-    ArchFecha: arch.ArchFecha
-      ? String(arch.ArchFecha).replace(" ", "T")
-      : nowPeruISO(),
+      ArchFecha: arch.ArchFecha
+        ? String(arch.ArchFecha).replace(" ", "T")
+        : nowPeruISO(),
 
-    ArchTipoElemento: arch.ArchTipoElemento ?? null,
-    ArchIdElemento: arch.ArchIdElemento ?? null,
-    TipiInterno: arch.TipiInterno ?? null,
+      ArchTipoElemento: arch.ArchTipoElemento ?? null,
+      ArchIdElemento: arch.ArchIdElemento ?? null,
+      TipiInterno: arch.TipiInterno ?? null,
 
-    DefiServerId: arch.DefiServerId ?? null,
+      DefiServerId: arch.DefiServerId ?? null,
 
-    // ✅ ÚNICO NOMBRE
-    DefiUUID: arch.DefiUUID ?? null,
+      // ✅ ÚNICO NOMBRE
+      DefiUUID: arch.DefiUUID ?? null,
 
-    ArchActivo: activoNum === 1,
-    EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
+      ArchActivo: activoNum === 1,
+      EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
+    };
   };
-};
 
 
 
 
+// ===============================
+// 🔄 AUTO SYNC
+// ===============================
+const autoSyncArchivo = useCallback(async (archInternoLocal) => {
+  if (syncingRef.current) return;
+  syncingRef.current = true;
 
-  // ===============================
-  // 🔄 AUTO SYNC
-  // ===============================
-  const autoSyncArchivo = useCallback(async (archInternoLocal) => {
-    console.log("🔄 [autoSyncArchivo] START →", archInternoLocal);
+  try {
+    // 🔐 CLAVE: garantizar DB
+    const dbOk = await checkDatabase();
+    if (!dbOk) return;
 
-    if (syncingRef.current) return;
-    syncingRef.current = true;
+    const online = await isOnline();
+    if (!online) return;
 
-    try {
-      // 🔐 CLAVE: garantizar DB
-      const dbOk = await checkDatabase();
-      if (!dbOk) return;
+    const arch = await getArchivoByIdLocal(archInternoLocal);
+    if (!arch) return;
 
-      const online = await isOnline();
-      if (!online) return;
+    const payload = [normalizeArchivoForSync(arch)];
 
-      const arch = await getArchivoByIdLocal(archInternoLocal);
-      if (!arch) return;
+    const response = await client.post("/File/SyncFromSQLite", payload, {
+      timeout: 15000,
+    });
 
+    const map = response.data?.[0];
+    if (!map) return;
 
-
-      const payload = [normalizeArchivoForSync(arch)];
-
-
-
-      console.log("🌐 baseURL:", client?.defaults?.baseURL);
-console.log("📤 payload[0].DefiUuid:", payload?.[0]?.DefiUuid);
-console.log("📤 payload[0].DefiUUID:", payload?.[0]?.DefiUUID);
-console.log("📤 payload[0] completo:", payload?.[0]);
-
-      const response = await client.post(
-        "/File/SyncFromSQLite",
-        payload,
-        { timeout: 15000 }
-      );
-
-      const map = response.data?.[0];
-      if (!map) return;
-
-      if (map.localId !== map.serverId) {
-        await updateArchivoIdAfterSync(map.localId, map.serverId);
-      } 
-      
-      console.log("✅ Archivo sincronizado");
-    } catch (err) {
-      console.error("❌ [autoSyncArchivo]", err?.response?.data || err.message);
-    } finally {
-      syncingRef.current = false;
-      console.log("🔓 [autoSyncArchivo] END");
+    if (map.localId !== map.serverId) {
+      await updateArchivoIdAfterSync(map.localId, map.serverId);
     }
-  }, [checkDatabase, isOnline, client]);
-
+  } catch (err) {
+    console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
+  } finally {
+    syncingRef.current = false;
+  }
+}, [checkDatabase, isOnline, client]);
 
   // ===============================
   // 💾 SAVE / UPDATE (SQLite)
@@ -160,7 +142,7 @@ console.log("📤 payload[0] completo:", payload?.[0]);
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
-    console.log("💾 saveArchivoLocal - data:", data);
+    //console.log("💾 saveArchivoLocal - data:", data);
     const normalized = normalizeArchivoBeforeSave(data);
 
     const archivoForDB = {
@@ -185,7 +167,7 @@ console.log("📤 payload[0] completo:", payload?.[0]);
       DefiServerId: data.DefiServerId ?? null
     };
 
-    console.log("💾 saveOrUpdateArchivoLocal:", archivoForDB);
+    //console.log("💾 saveOrUpdateArchivoLocal:", archivoForDB);
 
     const localId = await saveOrUpdateArchivoLocal(archivoForDB);
 
@@ -276,60 +258,6 @@ console.log("📤 payload[0] completo:", payload?.[0]);
       if (!aSincronizar.length) return { ok: true, synced: 0 };
 
       const payload = aSincronizar.map(normalizeArchivoForSync);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      
-
-
-      console.log("🌐 baseURL:", client?.defaults?.baseURL);
-console.log("📤 payload[0].DefiUuid:", payload?.[0]?.DefiUuid);
-console.log("📤 payload[0].DefiUUID:", payload?.[0]?.DefiUUID);
-console.log("📤 payload[0] completo:", payload?.[0]);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
