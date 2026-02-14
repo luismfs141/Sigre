@@ -176,6 +176,7 @@ export default function DeficiencyModal({
 
   const isEmpty = v => v === null || v === undefined || v === "";
 
+  
   const {
     fetchDeficiencyByIdLocal,
     fetchDeficiencyByTypificationElement,
