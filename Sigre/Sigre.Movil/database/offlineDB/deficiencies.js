@@ -1,4 +1,5 @@
-import { formatLocalISO, getUniqueNowMs } from "../../utils/dateUtils";
+import { formatLocalISO, getUniqueNowMs, roundMsForSqlDatetime } from "../../utils/dateUtils";
+
 
 
 
@@ -33,8 +34,13 @@ export const updateDefiInspeccionadoLocal = async (
   nowIso = null
 ) => {
   try {
-    const now = nowIso ?? formatLocalISO(getUniqueNowMs());
-
+    const now =
+      nowIso ??
+      (() => {
+        const msRaw = getUniqueNowMs();
+        const ms = roundMsForSqlDatetime(msRaw);
+        return formatLocalISO(ms);
+      })();
 
     await runQuery(
       `UPDATE Deficiencias
@@ -57,6 +63,7 @@ export const updateDefiInspeccionadoLocal = async (
     return false;
   }
 };
+
 
 
 
