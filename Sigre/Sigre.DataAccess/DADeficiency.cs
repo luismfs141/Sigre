@@ -470,8 +470,7 @@ namespace Sigre.DataAccess
             }
         }
 
-        public List<(int localId, int serverId)> DADefi_SyncFromSQLite(
-    List<DeficienciaSyncDto> deficienciasOffline)
+        public List<(int localId, int serverId)> DADefi_SyncFromSQLite(List<DeficienciaSyncDto> deficienciasOffline)
         {
             using var ctx = new SigreContext();
             var resultado = new List<(int, int)>();
@@ -504,7 +503,9 @@ namespace Sigre.DataAccess
                     existente.DefiLongitud = dto.DefiLongitud;
                     existente.DefiInspeccionado = dto.DefiInspeccionado;
                     existente.DefiUsuarioMod = dto.DefiUsuarioMod;
-                    existente.DefiFecModificacion = DateTime.Now;
+
+
+                    existente.DefiFecModificacion = dto.DefiFecModificacion;
 
                     existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                     existente.DefiTipoCruce = dto.DefiTipoCruce;

@@ -1,4 +1,4 @@
-
+//components/Map/CustomMarker.js
 
 import { Image } from "react-native";
 import { Marker } from "react-native-maps";
