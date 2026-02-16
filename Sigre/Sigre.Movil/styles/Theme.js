@@ -13,4 +13,4 @@ const themeStyles = StyleSheet.create({
     }
 });
 
-export { themeStyles }
+export { themeStyles };
