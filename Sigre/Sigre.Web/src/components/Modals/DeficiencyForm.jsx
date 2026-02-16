@@ -9,8 +9,10 @@ import { Divider } from 'primereact/divider';
 import { classNames } from 'primereact/utils';
 import { Message } from 'primereact/message';
 import { Calendar } from 'primereact/calendar';
+import { AutoComplete } from 'primereact/autocomplete';
 
 import { useTypification } from '../../hooks/useTypification';
+import { useElements } from '../../hooks/useElement'; 
 import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
@@ -37,8 +39,12 @@ export default function DeficiencyForm({
     const [submitted, setSubmitted] = useState(false);
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
+    const [suggestions, setSuggestions] = useState([]);
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
+    const { fetchPostesChunk } = useElements();
+    const {fetchVanosChunk} = useElements();
+    
 
 // =========================================================================
     // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
@@ -156,6 +162,7 @@ const currentConfig = useMemo(() => {
         if (deficiencyToEdit) return ALL_CRITICIDAD_OPTIONS;
         return ALL_CRITICIDAD_OPTIONS.filter(opt => opt.value !== 2);
     }, [deficiencyToEdit]);
+    
 
     // =========================================================================
     // 4. INICIALIZACIÓN (CARGA DE DATOS)
@@ -232,6 +239,80 @@ const currentConfig = useMemo(() => {
             setSubmitted(false);
         }
     }, [visible, deficiencyToEdit, sedId, referenceSelection]);
+
+    // --- BÚSQUEDA HÍBRIDA (POSTES Y VANOS) ---
+    const searchNetworkElement = async (event) => {
+        const query = event.query.toLowerCase();
+        
+        // 1. Buscar Postes (Backend)
+        const responsePostes = await fetchPostesChunk(0, 15, query);
+        
+        // 2. Buscar Vanos (Backend - Asumiendo que tienes una función similar, si no, usa solo postes por ahora)
+        const responseVanos = await fetchVanosChunk(0, 15, query); 
+        
+        const resultados = [];
+
+        // A. Procesar Postes
+        if (responsePostes.data) {
+            resultados.push(...responsePostes.data.map(p => ({
+                ...p,
+                _tipo: 'POSTE',
+                // 🔥 MAPEAMOS EL CÓDIGO AQUÍ PARA QUE SEA LA CLAVE PRINCIPAL
+                codigo: p.postCodigoNodo, 
+                label: p.postEtiqueta || 'S/N',
+                lat: p.postLatitud,
+                lng: p.postLongitud
+            })));
+        }
+
+        // B. Procesar Vanos (Ejemplo si tuvieras la data)
+        if (responseVanos.data) {
+            resultados.push(...responseVanos.data.map(v => ({
+                ...v,
+                _tipo: 'VANO',
+                codigo: v.vanoCodigo, // 🔥 CÓDIGO DEL VANO
+                label: v.vanoEtiqueta || 'S/N',
+                lat: v.vanoLatitudIni,
+                lng: v.vanoLongitudIni
+            })));
+        } 
+        
+
+        setSuggestions(resultados);
+    };
+    const itemTemplate = (item) => {
+        const esPoste = item._tipo === 'POSTE';
+        
+        return (
+            <div className="flex flex-col border-b border-gray-100 p-2 hover:bg-blue-50 cursor-pointer">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        {/* ICONO */}
+                        <div className={`w-7 h-7 flex items-center justify-center rounded-full ${esPoste ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                            <i className={`pi ${esPoste ? 'pi-bolt' : 'pi-arrows-h'} text-sm`}></i>
+                        </div>
+                        
+                        {/* DATOS: PRIORIDAD AL CÓDIGO */}
+                        <div className="flex flex-col">
+                            {/* CÓDIGO EN GRANDE */}
+                            <span className="font-extrabold text-sm text-gray-800">
+                                {item.codigo}
+                            </span>
+                            {/* Etiqueta / Tipo en pequeño */}
+                            <span className="text-[10px] text-gray-500 font-medium">
+                                {esPoste ? `POSTE: ${item.label}` : `VANO: ${item.label}`}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Badge lateral */}
+                    <span className={`text-[9px] px-1.5 rounded border ${esPoste ? 'border-blue-200 text-blue-600' : 'border-green-200 text-green-600'}`}>
+                        {item._tipo}
+                    </span>
+                </div>
+            </div>
+        );
+    };
 
     // =========================================================================
     // 5. MANEJO DE CAMBIOS Y VALIDACIÓN INDIVIDUAL
@@ -311,18 +392,28 @@ const handleSubmit = () => {
 
         // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
         // ¿El usuario está intentando guardar un registro "Sin Deficiencia" (ID 0)?
+       // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
         const isSavingSD = Number(formData.tipiInterno) === 0;
+
+        // 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
+        // Si intento crear un S/D y YA existe uno, detener inmediatamente.
+        if (isSavingSD && hasCleanRecord && !isEditingSD) {
+            alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
+            setSubmitted(false); 
+            return;
+        }
 
         // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
         if (isSavingSD && hasRealDeficiencies) {
             alert("ACCIÓN BLOQUEADA:\nNo puede registrar 'SIN DEFICIENCIA' porque el elemento ya tiene fallas reportadas.\n\n>> Elimine las fallas existentes primero.");
+            setSubmitted(false);
             return;
         }
 
         // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
-        // (Y no es que estemos editando ese mismo registro S/D)
         if (!isSavingSD && hasCleanRecord && !isEditingSD) {
             alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
+            setSubmitted(false);
             return;
         }
 
@@ -427,9 +518,41 @@ const handleSubmit = () => {
                             <Dropdown value={formData.defiTipoElemento} options={TIPO_ELEMENTO_OPTIONS} onChange={(e) => updateField('defiTipoElemento', e.value)} disabled={!!deficiencyToEdit} />
                         </div>
                         <div className="field">
-                            <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
-                            <InputText value={formData.defiCodigoElemento} onChange={(e) => updateField('defiCodigoElemento', e.target.value)} required placeholder="Ingrese código" disabled={!!deficiencyToEdit} />
-                        </div>
+    <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
+    
+    {/* CONDICIONAL: Si es NUEVO (!deficiencyToEdit) mostramos el Buscador */}
+    {!deficiencyToEdit ? (
+        <AutoComplete 
+            value={formData.defiCodigoElemento} 
+            suggestions={suggestions} 
+            completeMethod={searchNetworkElement} 
+            field="codigo"  // Muestra el código en el input al seleccionar
+            itemTemplate={itemTemplate} // Tu diseño con iconos
+            
+            // 1. AL SELECCIONAR: Autocompletar Tipo y Coordenadas
+            onSelect={(e) => {
+                const item = e.value;
+                const tipoParaDropdown = item._tipo === 'POSTE' ? 'POST' : 'VANO';
+                setFormData(prev => ({
+                    ...prev,
+                    defiCodigoElemento: item.codigo,
+                    defiTipoElemento: tipoParaDropdown,
+                    defiLatitud: item.lat,        
+                    defiLongitud: item.lng
+                }));
+            }}
+            
+           
+        />
+    ) : (
+        // CONDICIONAL: Si es EDICIÓN, mostramos el Input bloqueado (tu código original)
+        <InputText 
+            value={formData.defiCodigoElemento} 
+            disabled={!!deficiencyToEdit}
+            className="w-full p-inputtext-sm bg-gray-100 font-bold text-gray-700"
+        />
+    )}
+</div>
                     </div>
 
                     {hasCleanRecord && (
@@ -513,8 +636,8 @@ const handleSubmit = () => {
 </div>
 
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">
-                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
-                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={6} maxFractionDigits={8} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
+                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={8} maxFractionDigits={12} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
+                    <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={8} maxFractionDigits={12} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">FECHA REGISTRO</label><Calendar value={formData.defiFecRegistro} onChange={(e) => updateField('defiFecRegistro', e.value)} showTime hourFormat="24" className="w-full p-inputtext-sm" inputClassName="text-center" /></div>
                     
                 </div>

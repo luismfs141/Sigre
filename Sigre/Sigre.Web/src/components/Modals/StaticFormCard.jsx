@@ -130,30 +130,92 @@ const handleSaveWrapper = () => {
         
 
     // ... (Resto de funciones: searchPoste, itemTemplate, handleSelectPoste) ...
-    const searchPoste = async (event) => {
-        const result = await fetchPostesChunk(0, 15, event.query);
-        setSuggestions(result.data || []);
+// --- BÚSQUEDA UNIFICADA (POSTES + SEDS) ---
+    const searchNode = async (event) => {
+        const query = event.query.toLowerCase();
+
+        // 1. Buscar Postes (Backend)
+        const postesPromise = fetchPostesChunk(0, 15, query);
+        
+        // 2. Buscar SEDs (Local) - MEJORADO
+        // Buscamos si el texto coincide con el Label ("1887 - ...") o el Código Interno ("1887")
+        const sedsFiltradas = seds.filter(sed => {
+            const labelStr = (sed.label || "").toLowerCase();
+            const codigoStr = (sed.sedCodigo || "").toLowerCase(); // Asegúrate de tener esta prop
+            const internoStr = String(sed.sedInterno || "");
+            
+            return labelStr.includes(query) || codigoStr.includes(query) || internoStr.includes(query);
+        }).map(sed => ({
+            ...sed, 
+            _tipo: 'SED', // Marca vital
+            
+            // Normalización para visualización
+            postCodigoNodo: sed.label, // Mostramos "1887 - CHACHANI" como título
+            postEtiqueta: 'SUBESTACIÓN', // Subtítulo fijo
+            
+            // Coordenadas (Mapea las props reales de tu objeto SED)
+            postLatitud: sed.sedLatitud || sed.latitud || 0,
+            postLongitud: sed.sedLongitud || sed.longitud || 0
+        }));
+
+        // 3. Ejecutar y Combinar
+        const resPostes = await postesPromise;
+        const postesNormalizados = (resPostes.data || []).map(p => ({ ...p, _tipo: 'POSTE' }));
+
+        // SEDs primero (Naranja), luego Postes (Azul)
+        setSuggestions([...sedsFiltradas, ...postesNormalizados]);
     };
 
-    const itemTemplate = (item) => (
-        <div className="flex flex-col border-b border-gray-100 p-1">
-            <span className="font-bold text-sm text-gray-800">{item.postEtiqueta || item.postCodigoNodo}</span>
-            {item.postEtiqueta && <span className="text-[10px] text-blue-500 font-mono">GIS: {item.postCodigoNodo}</span>}
-        </div>
-    );
+const itemTemplate = (item) => {
+        const esSed = item._tipo === 'SED';
+        
+        return (
+            <div className={`flex flex-col border-b border-gray-100 p-2 ${esSed ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-gray-50'}`}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {/* ÍCONO: Edificio para SED, Rayo para Poste */}
+                        <i className={`pi ${esSed ? 'pi-building text-orange-600' : 'pi-bolt text-blue-600'} text-sm`}></i>
+                        
+                        <div className="flex flex-col">
+                            <span className={`font-bold text-xs ${esSed ? 'text-orange-800' : 'text-gray-700'}`}>
+                                {esSed ? item.label : (item.postEtiqueta || "S/N")}
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-mono">
+                                {esSed ? "SUBESTACIÓN (SED)" : `GIS: ${item.postCodigoNodo}`}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Badge lateral opcional */}
+                    {esSed && <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded">SED</span>}
+                </div>
+            </div>
+        );
+    };
 
-    const handleSelectPoste = (e, campoBase) => {
-        const p = e.value;
-        const valorParaGuardar = p.postEtiqueta || p.postCodigoNodo;
+    const handleSelectNode = (e, campoBase) => {
+        const item = e.value;
         const isInicio = campoBase === 'nodoInicial';
+        
+        // Determinamos el valor a guardar en el input de texto
+        // Si es SED, guardamos su código/nombre. Si es Poste, su etiqueta o código.
+        const valorTexto = item._tipo === 'SED' 
+            ? item.label // O item.sedCodigo
+            : (item.postEtiqueta || item.postCodigoNodo);
+
+        // Obtenemos coordenadas (Asegúrate que tu objeto SED tenga lat/lon)
+        // En la búsqueda (paso 1) ya mapeamos las coords de la SED a postLatitud/postLongitud para facilitar esto,
+        // pero si tu objeto original es distinto, ajusta aquí.
+        const lat = item.postLatitud || item.sedLatitud || item.latitud;
+        const lon = item.postLongitud || item.sedLongitud || item.longitud;
+
         setFormData(prev => ({
             ...prev,
-            [campoBase]: valorParaGuardar,
-            [isInicio ? 'latitudIni' : 'latitudFin']: p.postLatitud,
-            [isInicio ? 'longitudIni' : 'longitudFin']: p.postLongitud
+            [campoBase]: valorTexto,
+            [isInicio ? 'latitudIni' : 'latitudFin']: lat,
+            [isInicio ? 'longitudIni' : 'longitudFin']: lon
         }));
     };
-
     const isEdit = !!formData.id;
     const inputBorderClass = "border border-gray-300 rounded shadow-sm hover:border-blue-400 focus:border-blue-500 transition-colors";
     const MATERIAL_OPTIONS = [{label:'Madera', value:1}, {label:'Concreto', value:2}, {label:'Metal', value:3}, {label:'Fibra', value:4}];
@@ -296,15 +358,24 @@ const handleSaveWrapper = () => {
                                 <div className="absolute -top-2.5 left-3 bg-white px-2 text-[10px] font-bold text-blue-600 border border-blue-200 rounded-full shadow-sm">NODO INICIAL</div>
                                 <div className="flex flex-row gap-4 mt-1">
                                     <div className="w-1/2">
-                                        <label className="font-bold text-blue-600 block mb-1.5 text-[11px]">POSTE O ETIQUETA</label>
-                                        <AutoComplete 
-                                            value={formData.nodoInicial} suggestions={suggestions} completeMethod={searchPoste} 
-                                            itemTemplate={itemTemplate} field="postCodigoNodo" 
-                                            onSelect={(e) => handleSelectPoste(e, 'nodoInicial')} 
-                                            onChange={(e) => setFormData({...formData, nodoInicial: e.value.postEtiqueta || e.value.postCodigoNodo || e.value})}
-                                            className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="w-full h-9 font-bold border-none" placeholder="Buscar..."
-                                        />
-                                    </div>
+    <label className="font-bold text-blue-600 block mb-1.5 text-[11px]">POSTE, SED O ETIQUETA</label>
+    <AutoComplete 
+        value={formData.nodoInicial} 
+        suggestions={suggestions} 
+        completeMethod={searchNode} // <--- CAMBIO AQUÍ
+        itemTemplate={itemTemplate} 
+        field="postCodigoNodo" 
+        onSelect={(e) => handleSelectNode(e, 'nodoInicial')} // <--- CAMBIO AQUÍ
+        onChange={(e) => {
+            // Manejo manual si el usuario escribe
+            const val = e.value.postEtiqueta || e.value.postCodigoNodo || e.value.label || e.value;
+            setFormData({...formData, nodoInicial: val});
+        }}
+        className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
+        inputClassName="w-full h-9 font-bold border-none" 
+        placeholder="Buscar Poste o SED..."
+    />
+</div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LATITUD</label><InputNumber value={formData.latitudIni} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LONGITUD</label><InputNumber value={formData.longitudIni} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>
                                 </div>
@@ -314,15 +385,23 @@ const handleSaveWrapper = () => {
                                 <div className="absolute -top-2.5 left-3 bg-white px-2 text-[10px] font-bold text-green-600 border border-green-200 rounded-full shadow-sm">NODO FINAL</div>
                                 <div className="flex flex-row gap-4 mt-1">
                                     <div className="w-1/2">
-                                        <label className="font-bold text-green-600 block mb-1.5 text-[11px]">POSTE O ETIQUETA</label>
-                                        <AutoComplete 
-                                            value={formData.nodoFinal} suggestions={suggestions} completeMethod={searchPoste} 
-                                            itemTemplate={itemTemplate} field="postCodigoNodo" 
-                                            onSelect={(e) => handleSelectPoste(e, 'nodoFinal')} 
-                                            onChange={(e) => setFormData({...formData, nodoFinal: e.value.postEtiqueta || e.value.postCodigoNodo || e.value})}
-                                            className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="w-full h-9 font-bold border-none" placeholder="Buscar..."
-                                        />
-                                    </div>
+    <label className="font-bold text-green-600 block mb-1.5 text-[11px]">POSTE, SED O ETIQUETA</label>
+    <AutoComplete 
+        value={formData.nodoFinal} 
+        suggestions={suggestions} 
+        completeMethod={searchNode} 
+        itemTemplate={itemTemplate} 
+        field="postCodigoNodo" 
+        onSelect={(e) => handleSelectNode(e, 'nodoFinal')} 
+        onChange={(e) => {
+            const val = e.value.postEtiqueta || e.value.postCodigoNodo || e.value.label || e.value;
+            setFormData({...formData, nodoFinal: val});
+        }}
+        className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
+        inputClassName="w-full h-9 font-bold border-none" 
+        placeholder="Buscar Poste o SED..."
+    />
+</div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LATITUD</label><InputNumber value={formData.latitudFin} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LONGITUD</label><InputNumber value={formData.longitudFin} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>
                                 </div>
