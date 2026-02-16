@@ -28,6 +28,7 @@ export const useElements = () => {
 
     // Wrappers específicos
     const fetchPostesChunk = (skip, take, busqueda) => fetchBloque('/Post/GetPaginado', skip, take, busqueda);
+    
     const fetchVanosChunk = (skip, take, busqueda) => fetchBloque('/Gap/GetPaginado', skip, take, busqueda);
 
     // --- SAVE ---
@@ -39,7 +40,7 @@ export const useElements = () => {
             const response = await api.post(endpoint, formData);
             return { success: true, data: response.data };
         } catch (err) {
-            return { success: false, message: "Error al guardar" };
+            return { success: false, message: Error. };
         } finally {
             setLoading(false);
         }

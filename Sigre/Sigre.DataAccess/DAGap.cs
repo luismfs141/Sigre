@@ -413,7 +413,9 @@ namespace Sigre.DataAccess
                         VanoLongitudIni = v.VanoLongitudIni,
                         VanoLatitudFin = v.VanoLatitudFin,
                         VanoLongitudFin = v.VanoLongitudFin,
-                        VanoMaterial = v.VanoMaterial
+                        VanoMaterial = v.VanoMaterial,
+                        AlimInterno = v.AlimInterno,
+                        VanoSubestacion = v.VanoSubestacion,
                     })
                     .ToList();
 
