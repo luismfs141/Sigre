@@ -67,7 +67,7 @@ export default function Elementos() {
                 setSelectedVano(null); 
             }
         } else {
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo guardar' });
+            toast.current.show({ severity: 'error', summary: 'Error', detail: res.message });
         }
     };
 

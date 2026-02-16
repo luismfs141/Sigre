@@ -253,6 +253,7 @@ namespace Sigre.DataAccess
                         existente.PostMaterial = x_poste.PostMaterial;
                         existente.PostAltura = x_poste.PostAltura;
                         existente.PostRetenidaTipo = x_poste.PostRetenidaTipo;
+                        existente.PostTerceros= x_poste.PostTerceros; 
 
                         // NOTA: No actualizamos 'PostInspeccionado' para no borrar el trabajo de campo si ya se hizo.
 

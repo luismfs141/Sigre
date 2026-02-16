@@ -275,6 +275,7 @@ namespace Sigre.DataAccess
                         existente.VanoMaterial = x_vano.VanoMaterial;
                         existente.VanoNodoInicial = x_vano.VanoNodoInicial;
                         existente.VanoNodoFinal = x_vano.VanoNodoFinal;
+                        existente.VanoTerceros = x_vano.VanoTerceros;
 
                         // NO TOCAMOS: VanoInspeccionado (para no perder si ya se inspeccionó)
 

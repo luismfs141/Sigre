@@ -40,12 +40,58 @@ export const useElements = () => {
             const response = await api.post(endpoint, formData);
             return { success: true, data: response.data };
         } catch (err) {
-            return { success: false, message: Error. };
+        console.error("Error en saveElement:", err);
+
+            // 2. CAPTURA DE ERROR DEL BACKEND
+            // Intentamos leer la respuesta del servidor si existe
+let serverMsg = "Error desconocido al guardar";
+
+            if (err.response && err.response.data) {
+                const data = err.response.data;
+
+                // 1. Errores de Negocio (Tu 'detalleTecnico')
+                if (data.detalleTecnico) {
+                    serverMsg = data.detalleTecnico;
+                }
+                // 2. Errores de Validación (.NET 400)
+                else if (data.errors) {
+                    const errorKeys = Object.keys(data.errors);
+                    
+                    // 🔥 CORRECCIÓN:
+                    // Buscamos cualquier llave que NO sea el nombre genérico del parámetro ('x_vano').
+                    // Aceptamos las que empiezan con '$' (como $.VanoLatitudIni) porque ahí está el error real.
+                    const specificKey = errorKeys.find(key => key !== 'x_vano') || errorKeys[0];
+
+                    if (specificKey) {
+                        // Limpiamos el nombre: quitamos "$." o "$" del inicio para que se vea limpio
+                        const nombreLimpio = specificKey.replace(/^\$\.?/, '');
+                        
+                        // Obtenemos el mensaje de error
+                        const mensajeError = data.errors[specificKey][0];
+
+                        // Resultado: "VanoLatitudIni: The JSON value could not be converted..."
+                        serverMsg = `${nombreLimpio}: ${mensajeError}`;
+                    } else {
+                        serverMsg = "Error de validación en los datos enviados.";
+                    }
+                }
+                // 3. Otros mensajes
+                else if (data.mensaje) {
+                    serverMsg = data.mensaje;
+                } else if (data.title) {
+                    serverMsg = data.title;
+                }
+            } else if (err.message) {
+                serverMsg = err.message;
+            }
+
+            return { success: false, message: serverMsg };
+        
+
         } finally {
             setLoading(false);
         }
     };
-
     // --- DELETE ---
     const deleteElement = async (id, tipoElemento) => {
         try {

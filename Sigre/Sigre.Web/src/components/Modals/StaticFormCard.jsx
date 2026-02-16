@@ -16,7 +16,7 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
         alimentadorId: null, sedId: null, 
         latitud: null, longitud: null, materialPoste: 2, altura: null, idRetenida: null,
         nodoInicial: '', nodoFinal: '',
-        latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
+        latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null,terceros: false
     };
 
     const [formData, setFormData] = useState(initialState);
@@ -43,7 +43,8 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
                     altura: elementToEdit.postAltura || elementToEdit.altura ,
                     materialPoste: elementToEdit.postMaterial || elementToEdit.materialPoste || 2,
                     idRetenida: elementToEdit.postRetenidaTipo || elementToEdit.idRetenida,
-                    nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
+                    nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null,
+                    terceros: elementToEdit.postTerceros || false,
                 });
             } else {
                 setFormData({
@@ -59,7 +60,7 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
                     longitudIni: elementToEdit.vanoLongitudIni || elementToEdit.longitudIni,
                     latitudFin: elementToEdit.vanoLatitudFin || elementToEdit.latitudFin,
                     longitudFin: elementToEdit.vanoLongitudFin || elementToEdit.longitudFin,
-                    latitud: null, longitud: null, altura: null, materialPoste: 2
+                    latitud: null, longitud: null, altura: null, materialPoste: 2, terceros: elementToEdit.vanoTerceros || false
                 });
             }
         } else {
@@ -89,7 +90,8 @@ const handleSaveWrapper = () => {
                 postLongitud: formData.longitud,
                 postMaterial: formData.materialPoste,
                 postAltura: formData.altura,
-                postRetenidaTipo: formData.idRetenida || 5
+                postRetenidaTipo: formData.idRetenida || 5,
+                postTerceros: formData.terceros,
             };
         } else {
             payloadToSend = {
@@ -98,7 +100,7 @@ const handleSaveWrapper = () => {
 
                 VanoInterno: formData.id,
                 VanoCodigo: formData.codigo,
-                VanoEtiqueta: formData.etiqueta,
+                VanoEtiqueta: formData.etiqueta || ".",
                 AlimInterno: formData.alimentadorId,
                 VanoSubestacion: formData.sedId,
                 
@@ -112,7 +114,7 @@ const handleSaveWrapper = () => {
                 VanoEsBt: true, 
                 VanoEsMt: false,
                 VanoInspeccionado: false,
-                VanoTerceros: false,
+                VanoTerceros: formData.terceros,
                 VanoMaterial: null
             };
         }
@@ -159,7 +161,7 @@ const handleSaveWrapper = () => {
 
     return (
         <div className="w-full max-w-4xl mx-auto h-full"> 
-            <div className={`flex flex-col bg-white border-t-4 ${typeMode === 'POSTE' ? 'border-blue-500' : 'border-green-500'} shadow-md rounded-lg h-[550px]`}>
+            <div className={`flex flex-col bg-white border-t-4 ${typeMode === 'POSTE' ? 'border-blue-500' : 'border-green-500'} shadow-md rounded-lg h-[470px]`}>
                 
                 {/* === CABECERA === */}
                 <div className="flex justify-between items-center px-6 py-3 border-b border-gray-100 bg-gray-50/50 flex-none">
@@ -200,10 +202,6 @@ const handleSaveWrapper = () => {
                         <InputText value={formData.codigo} onChange={(e)=>setFormData({...formData, codigo:e.target.value})} className={`w-full p-inputtext-sm h-9 font-bold text-gray-700 ${inputBorderClass}`}/>
                     </div>
                     <div className="col-span-1">
-                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">ETIQUETA</label>
-                        <InputText value={formData.etiqueta} onChange={(e)=>setFormData({...formData, etiqueta:e.target.value})} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`}/>
-                    </div>
-                    <div className="col-span-1">
                         <label className="font-bold text-gray-600 block mb-1.5 ml-1">ALIMENTADOR *</label>
                         <Dropdown 
                             value={formData.alimentadorId} 
@@ -233,12 +231,34 @@ const handleSaveWrapper = () => {
                             emptyMessage="Seleccione Alimentador primero"
                         />
                     </div>
+{/* ESTADO DEL CAMPO (SOLO VISIBLE AL EDITAR) */}
+{isEdit && (
+    <div className="col-span-1 flex items-end">
+        <div className={`w-full flex items-center justify-between p-1.5 rounded border border-gray-300 shadow-sm transition-colors ${formData.terceros ? 'bg-orange-50 border-orange-300' : 'bg-green-50 border-green-300'}`} style={{height: '36px'}}>
+            <div className="flex flex-row items-center gap-2 pl-2">
+                <span className="text-[9px] font-bold text-gray-500 uppercase">EXISTE:</span>
+                <span className={`text-[10px] font-extrabold ${formData.terceros ? 'text-orange-600' : 'text-green-600'}`}>
+                    {formData.terceros ? "NO" : "SI"}
+                </span>
+            </div>
+            <Button 
+                icon={formData.terceros ? "pi pi-times" : "pi pi-check-circle"} 
+                className={`p-button-rounded p-button-xs w-6 h-6 mr-1 ${formData.terceros ? 'p-button-warning' : 'p-button-success'}`}
+                onClick={() => setFormData({...formData, terceros: !formData.terceros})}
+                tooltip={formData.terceros ? "Cambiar que existe" : "Marcar como no existe"}
+            />
+        </div>
+    </div>
+)}
 
                     {/* --- CAMPOS ESPECÍFICOS: POSTE --- */}
                     {typeMode === 'POSTE' && (
                         <>
                             <div className="col-span-2 border-t border-gray-100 my-1"></div>
-                            
+                                                <div className="col-span-1">
+                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">ETIQUETA</label>
+                        <InputText value={formData.etiqueta} onChange={(e)=>setFormData({...formData, etiqueta:e.target.value})} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`}/>
+                    </div>
                             <div className="col-span-1">
                                 <label className="font-bold text-gray-600 block mb-1.5 ml-1">LATITUD</label>
                                 <InputNumber value={formData.latitud} onValueChange={(e)=>setFormData({...formData, latitud:e.value})} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="py-2"/>
