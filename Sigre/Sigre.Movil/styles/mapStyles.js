@@ -1,7 +1,113 @@
 // styles/mapStyles.js
 import { StyleSheet } from "react-native";
 
-export default StyleSheet.create({
+// ==========================
+// MAPVIEW (contenedor mapa)
+// ==========================
+export const mapStyles = StyleSheet.create({
+  mapContainer: {
+    width: "100%",
+    height: "92.9%",
+  },
+});
+
+// ==========================
+// PINS / MARKERS
+// ==========================
+export const pinStyles = StyleSheet.create({
+  // Wrapper del icono (tamaño real del icono)
+  iconWrapper: {
+    width: 25,
+    height: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  iconWrapperSE: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Bounding box REAL del icono (Android)
+  iconCanvas: {
+    width: 32,
+    height: 32,
+    //backgroundColor: "rgba(0,255,0,0.3)", // 🟢 debug
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  iconCanvasSE: {
+    //backgroundColor: "rgba(0,255,0,0.3)", // 🟢 debug
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  // ICONO
+  pinIcon: {
+    resizeMode: "contain",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+
+  pinIconSE: {
+    width: 40,
+    height: 40,
+    resizeMode: "contain",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+
+  markerCanvas: {
+    position: "relative",
+    backgroundColor: "rgba(255,0,0,0.25)", // 🔴 debug
+  },
+
+  // Globo real (contenido)
+  labelBox: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    alignSelf: "center",
+    justifyContent: "center",
+    paddingVertical: 2,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderRadius: 4,
+  },
+
+  // Bounding box REAL del marker (Android)
+  labelCanvas: {
+    width: 32,
+    height: 40,
+    //backgroundColor: "rgba(255,0,0,0.3)", // 🔴 debug
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  labelWrapperBox: {
+    width: 60,
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+    backgroundColor: "transparent",
+  },
+
+  labelText: {
+    color: "#00FFFF",
+    fontSize: 8,
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+});
+
+// ==========================
+// UI del screen (botones, modales, búsqueda)
+// ==========================
+const styles = StyleSheet.create({
   floatBtn: {
     position: "absolute",
     top: "2%",
@@ -166,3 +272,5 @@ export default StyleSheet.create({
     fontSize: 13,
   },
 });
+
+export default styles;

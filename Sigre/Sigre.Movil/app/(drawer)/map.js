@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
-import { mapStyles, pinStyles } from "../../assets/styles/Map.js";
+
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
 import { AuthContext } from "../../context/AuthContext";
@@ -24,7 +24,8 @@ import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
 
-import styles from "../../styles/mapStyles";
+import styles, { mapStyles, pinStyles } from "../../styles/mapStyles";
+
 
 import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
@@ -205,7 +206,7 @@ const Map = () => {
             timeInterval: 1000,
             distanceInterval: 1,
           },
-          () => {},
+          () => { },
         );
       } catch (err) {
         console.warn("Error GPS:", err);
