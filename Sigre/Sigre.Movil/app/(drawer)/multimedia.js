@@ -18,10 +18,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useDatos } from "../../context/DatosContext";
 import { useDeficiency } from "../../hooks/useDeficiency";
-import { useFeeder } from "../../hooks/useFeeder";
 import { useFiles } from "../../hooks/useFiles";
 
-import { formatLocalISO, getUniqueNowMs, nowPeruISO } from "../../utils/dateUtils";
+import { formatLocalISO, getUniqueNowMs, nowPeruISO, roundMsForSqlDatetime } from "../../utils/dateUtils";
+
 
 
 import AudioCard from "../../components/Multimedia/AudioCard";
@@ -36,7 +36,6 @@ import { styles } from "../../styles/MultimediaStyles";
 
 
 
-console.log("✅ STYLES KEYS:", Object.keys(styles || {}));
 
 
 import {
@@ -99,13 +98,14 @@ export default function Multimedia() {
     isInspector = false,
     currentUserId,
     dbName,
-    dbReady
+    dbReady,
+    alimEtiquetaLocal
   } = useDatos();
 
   const isElevated = isAdmin || isSupervisor;
   const canGeneratePlaceholders = isAdmin || isSupervisor || isInspector;
 
-  const { findFeederById } = useFeeder();
+  //const { findFeederById } = useFeeder();
   const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted, markArchivoAsInactive } = useFiles();
 
   const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, recalcularPinInspeccionadoParaElemento } = useDeficiency();
@@ -135,11 +135,9 @@ export default function Multimedia() {
   const [defOwnerId, setDefOwnerId] = useState(null);
   const [canEdit, setCanEdit] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("👤 PERFIL:", { dbReady, dbName, isAdmin, isSupervisor, isInspector, currentUserId, canEdit, defOwnerId });
-    }, [dbReady, dbName, isAdmin, isSupervisor, isInspector, currentUserId, canEdit, defOwnerId])
-  );
+
+
+  
 
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;
@@ -500,9 +498,9 @@ export default function Multimedia() {
       const currentElementId = selectedDeficiency.elementId || selectedItem.PostInterno || selectedItem.VanoInterno || 0;
 
       const { tipo, codigo } = getElementoInfo();
-      const feeder = await findFeederById(selectedItem.AlimInterno);
 
-      const sAlim = safeSeg(feeder.alimEtiqueta);
+      const sAlim = safeSeg(alimEtiquetaLocal, "UNK");
+
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "VANO" : "POSTE";
       const sCod = safeSeg(codigo);
@@ -696,9 +694,12 @@ export default function Multimedia() {
 
         const cleanSrcUri = photo.uri.split("?")[0];
 
-        const capturedAtMs = Number(photo?.capturedAtMs) || getUniqueNowMs();
-        const fechaISO = photo?.fechaISO ?? formatLocalISO(capturedAtMs);
+        const capturedAtMsRaw = Number(photo?.capturedAtMs) || getUniqueNowMs();
+        const capturedAtMs = roundMsForSqlDatetime(capturedAtMsRaw);
+
+        const fechaISO = formatLocalISO(capturedAtMs);
         const { date, time } = getStampPartsFromMs(capturedAtMs);
+
 
 
 
@@ -750,9 +751,12 @@ export default function Multimedia() {
 
         const cleanSrcUri = audio.uri.split("?")[0];
 
-        const capturedAtMs = Number(audio?.capturedAtMs) || getUniqueNowMs();
-        const fechaISO = audio?.fechaISO ?? formatLocalISO(capturedAtMs);
+        const capturedAtMsRaw = Number(audio?.capturedAtMs) || getUniqueNowMs();
+        const capturedAtMs = roundMsForSqlDatetime(capturedAtMsRaw);
+
+        const fechaISO = formatLocalISO(capturedAtMs);
         const { date, time } = getStampPartsFromMs(capturedAtMs);
+
 
 
 
@@ -1128,13 +1132,18 @@ export default function Multimedia() {
       <ModalAudio
         visible={audioModal}
         onClose={() => setAudioModal(false)}
-        onAudioRecorded={({ uri, fechaISO, capturedAtMs }) => {
+        onAudioRecorded={({ uri, capturedAtMs }) => {
+          const raw = Number(capturedAtMs) || getUniqueNowMs();
+          const ms = roundMsForSqlDatetime(raw);
+
           setAudios((prev) => [
             ...prev,
-            { uri, title: `Nota ${prev.length + 1}`, fechaISO, capturedAtMs }
+            { uri, title: `Nota ${prev.length + 1}`, fechaISO: formatLocalISO(ms), capturedAtMs: ms }
           ]);
           setIsDirty(true);
         }}
+
+
 
       />
 

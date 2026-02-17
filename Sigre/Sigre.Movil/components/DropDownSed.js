@@ -22,7 +22,7 @@ export const DropDownSed = ({ onSelectSed }) => {
   const [loading, setLoading] = useState(false);
 
   const openModal = async () => {
-    console.log("🟡 DropDownSed -> openModal");
+    //console.log("🟡 DropDownSed -> openModal");
 
     // 🔹 Validar y asegurar DB abierta
     const dbOk = await checkDatabase();
@@ -35,18 +35,18 @@ export const DropDownSed = ({ onSelectSed }) => {
     setLoading(true);
 
     try {
-      console.log("📦 DropDownSed -> Cargando SEDs desde hook...");
+      //console.log("📦 DropDownSed -> Cargando SEDs desde hook...");
       const localSeds = await fetchAllSedsLocal(); // 👈 desde el hook
 
       if (!localSeds || localSeds.length === 0) {
-        console.warn("⚠ DropDownSed -> No se encontraron SEDs");
+        //console.warn("⚠ DropDownSed -> No se encontraron SEDs");
         setSeds([]);
       } else {
-        console.log("✅ DropDownSed -> SEDs recibidas:", localSeds.length);
+        //console.log("✅ DropDownSed -> SEDs recibidas:", localSeds.length);
         setSeds(localSeds);
       }
     } catch (err) {
-      console.error("❌ DropDownSed -> Error cargando SEDs:", err);
+      //console.error("❌ DropDownSed -> Error cargando SEDs:", err);
       setSeds([]);
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ export const DropDownSed = ({ onSelectSed }) => {
   };
 
   const handleSelect = (sed) => {
-    console.log("📌 DropDownSed -> SED seleccionada:", sed?.SedInterno);
+    //console.log("📌 DropDownSed -> SED seleccionada:", sed?.SedInterno);
     onSelectSed(sed);
     setModalVisible(false);
   };

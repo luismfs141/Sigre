@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import * as FileSystem from "expo-file-system/legacy";
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
 import DataGeneralModal from "../../components/Form/GeneralData/DataGeneralModal";
@@ -24,7 +23,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext";
 import { useDeficiency } from "../../hooks/useDeficiency";
 
-const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
+//const APP_MEDIA_DIR = FileSystem.documentDirectory + "SigreMedios/";
 
 export default function Inspection() {
   const { selectedItem, setSelectedDeficiency, isAdmin, isSupervisor, isInspector, currentUserId } = useDatos();
@@ -184,26 +183,26 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
-  /* =======================
-      LIMPIEZA FÍSICA
-     ======================= */
-  const cleanPhysicalFiles = async (defId) => {
-    if (!defId) return;
+  // /* =======================
+  //     LIMPIEZA FÍSICA
+  //    ======================= */
+  // const cleanPhysicalFiles = async (defId) => {
+  //   if (!defId) return;
 
-    try {
-      const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
-      const targetString = `_DEF_${defId}`;
-      const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
+  //   try {
+  //     const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
+  //     const targetString = `_DEF_${defId}`;
+  //     const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
 
-      await Promise.all(
-        filesToDelete.map(file =>
-          FileSystem.deleteAsync(APP_MEDIA_DIR + file, { idempotent: true })
-        )
-      );
-    } catch (error) {
-      console.warn("⚠️ Error menor limpiando archivos físicos:", error);
-    }
-  };
+  //     await Promise.all(
+  //       filesToDelete.map(file =>
+  //         FileSystem.deleteAsync(APP_MEDIA_DIR + file, { idempotent: true })
+  //       )
+  //     );
+  //   } catch (error) {
+  //     console.warn("⚠️ Error menor limpiando archivos físicos:", error);
+  //   }
+  // };
 
   /* =======================
       ELIMINAR DEFICIENCIA
@@ -228,7 +227,7 @@ export default function Inspection() {
           style: "destructive",
           onPress: async () => {
             try {
-              await cleanPhysicalFiles(itemToDelete.defId);
+              //await cleanPhysicalFiles(itemToDelete.defId);
               const delRes = await deleteDeficiency(itemToDelete.defId);
 
               if (delRes?.pinMsg) {

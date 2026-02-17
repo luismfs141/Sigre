@@ -1,7 +1,8 @@
-import { styles } from "../assets/styles/Multimedia";
-import { useNavigation } from '@react-navigation/native'
+import { styles } from "../styles/Multimedia";
+
+import { useNavigation } from '@react-navigation/native';
+import { Image, Text, View } from "react-native";
 import { TouchableOpacity } from "react-native-gesture-handler";
-import { View, Text, Image} from "react-native";
 import { useDispatch } from 'react-redux';
 import { setPhoto } from "../context/actions/Actions";
 

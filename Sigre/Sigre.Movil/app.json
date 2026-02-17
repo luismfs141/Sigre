@@ -3,7 +3,7 @@
   "expo": {
     "name": "SigreMovil",
     "slug": "SigreMovil",
-    "version": "11.2.2",
+    "version": "11.5.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sigremovil",
@@ -16,6 +16,7 @@
 
     "android": {
       "package": "com.luisfoco141.SigreMovil",
+      "versionCode": 110503,
       "softwareKeyboardLayoutMode": "resize",
 
       "permissions": [

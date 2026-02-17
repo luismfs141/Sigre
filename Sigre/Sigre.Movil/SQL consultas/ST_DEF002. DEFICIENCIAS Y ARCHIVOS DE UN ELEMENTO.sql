@@ -1,10 +1,18 @@
 
+/*==============================================================================
+  DEFICIENCIAS Y ARCHIVOS DE UN ELEMENTO
+  (opcional) Descripción corta / objetivo
+==============================================================================*/
 
-------------------------------------------------------------------
--- DEFICIENCIAS POR ALIMENTADOR ----------------------------------
-------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = '111434'
 
-DECLARE @CODIGO VARCHAR(20) = 'PTO000001044'
+
+
+------------------------------------------------------------
+--  DEFICIENCIAS DE UN ELEMETNO
+------------------------------------------------------------
+
+
 
 SELECT	D.DEFI_Interno,
 		D.DEFI_Activo,
@@ -41,7 +49,7 @@ SELECT	D.DEFI_Interno,
 		D.DEFI_Latitud,
 		D.DEFI_Longitud,
 		[***] = '',
-		*
+		D.*
 FROM Deficiencias AS D
 LEFT JOIN Tipificaciones AS TI
 	ON D.DEFI_Interno = TI.TIPI_Interno
@@ -56,9 +64,11 @@ WHERE D.DEFI_CodigoElemento LIKE '%'+@CODIGO
 
 
 
-------------------------------------------------------------------
--- BUSCA ARCHIVOS POR ETIQUETA DE ELEMENTO ----------------------
-------------------------------------------------------------------
+
+
+------------------------------------------------------------
+--  ARCHIVOS DEL ELEMENTO
+------------------------------------------------------------
 
 
 ;WITH Q AS
