@@ -72,7 +72,6 @@ const Map = () => {
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
 
-  const [heading, setHeading] = useState(0);
   const [loadingLocation, setLoadingLocation] = useState(false);
 
   const [showGapSelector, setShowGapSelector] = useState(false);
@@ -136,12 +135,10 @@ const Map = () => {
 
       pinsRef.current = pinsLoaded;
 
-      if (keepView) {
-        const visible = getPinsVisibleInRegion(pinsLoaded, regionRef.current);
-        setPins(visible);
-      } else {
-        setPins(pinsLoaded);
-      }
+      // ✅ SIEMPRE solo visibles (tu criterio original)
+      const visible = getPinsVisibleInRegion(pinsLoaded, regionRef.current);
+      setPins(visible);
+
 
       if (recenter && pinsLoaded.length > 0) {
         if (user?.proyecto === 1) setRegionByFeeder(pinsLoaded);
@@ -178,50 +175,29 @@ const Map = () => {
     loadMapData({ recenter: true, keepView: false });
   }, [user?.proyecto, selectedFeeder?.AlimInterno, selectedSed?.SedInterno]);
 
-  // GPS
+  // GPS (solo permisos 1 vez; NO watcher)
   useEffect(() => {
-    let subscription;
-    const initLocation = async () => {
+    let mounted = true;
+
+    (async () => {
       try {
         setLoadingLocation(true);
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!mounted) return;
         if (status !== "granted") return;
-
-        subscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 1000,
-            distanceInterval: 1,
-          },
-          () => { },
-        );
       } catch (err) {
-        console.warn("Error GPS:", err);
+        console.warn("Error GPS permission:", err);
       } finally {
-        setLoadingLocation(false);
+        if (mounted) setLoadingLocation(false);
       }
-    };
+    })();
 
-    initLocation();
-    return () => subscription && subscription.remove();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Heading
-  useEffect(() => {
-    let headingSub;
-    const initHeading = async () => {
-      try {
-        headingSub = await Location.watchHeadingAsync((e) =>
-          setHeading(e.trueHeading || 0),
-        );
-      } catch (err) {
-        console.warn("Error heading:", err);
-      }
-    };
 
-    initHeading();
-    return () => headingSub && headingSub.remove();
-  }, []);
 
   const goToUserLocation = async () => {
     try {
@@ -491,7 +467,7 @@ const Map = () => {
 
           // LABEL (POSTE) — offset abajo del icono SIN usar centerOffset
           //const labelOffset = iconSize / 6*2; // 16 = separación fija (tu LABEL_GAP actual)
-          const labelOffset = iconSize / 8*2
+          const labelOffset = iconSize / 8 * 2
 
           console.log(
             `[POST LABEL] pin=${pin?.Id ?? i} type=${pin?.Type} iconSize=${iconSize} labelOffset=${labelOffset}`
@@ -561,7 +537,6 @@ const Map = () => {
                 <Marker
                   coordinate={coordinate}
                   anchor={{ x: 0.5, y: labelAnchorY }}
-
                   tracksViewChanges={true}
                   zIndex={999}
                   tappable

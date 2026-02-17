@@ -2,6 +2,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //name del proyecto 
 import { useDatos } from "../context/DatosContext";
+import { ZOOM_THRESHOLD } from "../utils/map/mapUtils";
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,10 +76,11 @@ export const useMap = () => {
     if (!Array.isArray(totalPins)) return setPins([]);
 
     // Si el zoom no es suficiente → no mostrar pines
-    if (region.latitudeDelta > 0.008) {
+    if (region.latitudeDelta > ZOOM_THRESHOLD) {
       setPins([]);
       return;
     }
+
 
 
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
