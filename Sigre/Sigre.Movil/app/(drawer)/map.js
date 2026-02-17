@@ -31,73 +31,60 @@ const DEBUG_MARKER_LIFECYCLE = false; // ponlo true para test
 
 
 
-
 const PostWithLabel = memo(function PostWithLabel({
   pin,
+  pinKey,
   iconSize,
   coordinate,
   onMarkerPress,
   hideIcon,
-  hideLabel, }) {
+  hideLabel,
+  onDragEndPin,
+}) {
   const [tracks, setTracks] = useState(true);
+  const draggingRef = useRef(false); // ✅ evita que al soltar el drag se dispare onPress
 
   const cleanLabel = useMemo(() => {
-    // ✅ usa tu forma actual, pero con fallback por si Label viene vacío
     const raw = pin?.Label ?? getCleanLabel(pin) ?? "";
     return formatLabel(raw);
   }, [pin]);
 
   const showLabel = cleanLabel.length > 0;
 
-  // ✅ mismo cálculo que tienes
   const labelOffset = (iconSize / 8) * 2;
-
-
-
-
-
-
-
-
-
-  const markerId = useMemo(
-    () =>
-      String(
-        pin?.IdOriginal ??
-        pin?.Id ??
-        pin?.ElementCode ??
-        `${pin?.Type}-${pin?.Latitude}-${pin?.Longitude}`
-      ),
-    [pin]
-  );
+  const labelCanvasH = 32; // debe coincidir con pinStyles.labelCanvas.height
+  const labelAnchorY = -labelOffset / labelCanvasH;
 
   useEffect(() => {
     if (!DEBUG_MARKER_LIFECYCLE) return;
+    console.log(`[MARKER MOUNT] ${pinKey}`);
+    return () => console.log(`[MARKER UNMOUNT] ${pinKey}`);
+  }, [pinKey]);
 
-    console.log(`[MARKER MOUNT] ${markerId}`);
-    return () => console.log(`[MARKER UNMOUNT] ${markerId}`);
-  }, [markerId]);
-
-
-
-
-
-
-
-
-
-
-
-
-  const labelCanvasH = 32; // debe coincidir con tu pinStyles.labelCanvas.height
-  const labelAnchorY = -labelOffset / labelCanvasH;
-
-  // ✅ freeze: reduce lag heavy en Android
   useEffect(() => {
     setTracks(true);
     const t = setTimeout(() => setTracks(false), 250);
     return () => clearTimeout(t);
   }, [iconSize, hideIcon, hideLabel, pin?.Type]);
+
+  const handlePress = () => {
+    if (draggingRef.current) return;
+    onMarkerPress(pin);
+  };
+
+  const handleDragStart = () => {
+    draggingRef.current = true;
+  };
+
+  const handleDragEnd = (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    onDragEndPin?.(pinKey, { latitude, longitude });
+
+    // evita click fantasma al soltar
+    setTimeout(() => {
+      draggingRef.current = false;
+    }, 200);
+  };
 
   return (
     <Fragment>
@@ -106,8 +93,11 @@ const PostWithLabel = memo(function PostWithLabel({
         coordinate={coordinate}
         anchor={{ x: 0.5, y: 0.5 }}
         tracksViewChanges={tracks}
-        onPress={() => onMarkerPress(pin)}
+        onPress={handlePress}
         zIndex={10}
+        draggable={true}                 // ✅ SIEMPRE draggable (long-press + drag)
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
       >
         <View style={pinStyles.iconCanvas} collapsable={false}>
           <View style={pinStyles.iconWrapper}>
@@ -130,7 +120,10 @@ const PostWithLabel = memo(function PostWithLabel({
           tracksViewChanges={tracks}
           zIndex={999}
           tappable
-          onPress={() => onMarkerPress(pin)}
+          onPress={handlePress}
+          draggable={true}               // ✅ también draggable desde el label
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
           <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
             {!hideLabel && (
@@ -144,6 +137,8 @@ const PostWithLabel = memo(function PostWithLabel({
     </Fragment>
   );
 });
+
+
 
 
 
@@ -200,6 +195,12 @@ const Map = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedSearchResult, setSelectedSearchResult] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const [movedPins, setMovedPins] = useState({});   // { pinKey: {latitude, longitude} }
+  const [movedGaps, setMovedGaps] = useState({});   // { gapKey: {VanoLatitudIni,...} }
+  const [movingPinKey, setMovingPinKey] = useState(null);
+  const [movingGapKey, setMovingGapKey] = useState(null);
+
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
@@ -272,49 +273,16 @@ const Map = () => {
   const handleRefreshMap = async () => {
     console.log("[REFRESH] tap");
 
-    if (user?.proyecto === 1 && !selectedFeeder) return;
-    if (user?.proyecto === 0 && !selectedSed) return;
+    // ✅ reset de moves visuales
+    setMovedPins({});
+    setMovedGaps({});
+    setMovingGapKey(null);
 
-    setLoadingPins(true);
-    setLoadingGaps(true);
-
-    try {
-      let pinsLoaded = [];
-
-      if (user?.proyecto === 1) {
-        const feederId = selectedFeeder.AlimInterno;
-
-        const result = await Promise.all([
-          getPinsByFeeder(feederId),
-          getGapsByFeeder(feederId),
-        ]);
-
-        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
-      } else {
-        const sedId = selectedSed.SedInterno;
-
-        const result = await Promise.all([
-          getPinsBySed(sedId),
-          getGapsBySed(sedId),
-        ]);
-
-        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
-      }
-
-      // universo búsqueda
-      pinsRef.current = pinsLoaded;
-
-      // ✅ recalcula visibles con pins recién cargados y FORZADO (aunque sean los mismos IDs)
-      getPinsByRegion(regionRef.current, pinsLoaded, { force: true });
-
-      console.log(`[REFRESH] pinsLoaded=${pinsLoaded.length}`);
-    } catch (e) {
-      console.error("❌ Error refresh mapa:", e);
-    } finally {
-      setLoadingPins(false);
-      setLoadingGaps(false);
-    }
+    // ✅ recarga desde SQLite (actualiza colores)
+    await loadMapData({ recenter: false, keepView: true });
   };
+
+
 
 
   // cambio selección => carga con recenter
@@ -413,6 +381,129 @@ const Map = () => {
 
   const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
 
+  const getPinKey = (p) =>
+    String(
+      p?.IdOriginal ??
+      p?.Id ??
+      p?.ElementCode ??
+      `${p?.Type}-${p?.Latitude}-${p?.Longitude}`
+    );
+
+  const getGapKey = (g) =>
+    String(
+      g?.VanoInterno ??
+      g?.VanoCodigo ??
+      `${g?.VanoLatitudIni}-${g?.VanoLongitudIni}-${g?.VanoLatitudFin}-${g?.VanoLongitudFin}`
+    );
+
+  const getPinCoord = (pin) => {
+    const key = getPinKey(pin);
+    const moved = movedPins[key];
+    return moved
+      ? moved
+      : { latitude: pin.Latitude, longitude: pin.Longitude };
+  };
+
+  const renderGaps = useMemo(() => {
+    return memoGaps.map((g) => {
+      const key = getGapKey(g);
+      const ov = movedGaps[key];
+      return ov ? { ...g, ...ov } : g;
+    });
+  }, [memoGaps, movedGaps]);
+
+  const handlePinMoveEnd = (pinKey, coord) => {
+    setMovedPins((prev) => ({ ...prev, [pinKey]: coord }));
+    setMovingPinKey(null);
+  };
+
+  const handleGapHandleDragEnd = (gapKey, gap, e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+
+    const midLat = (gap.VanoLatitudIni + gap.VanoLatitudFin) / 2;
+    const midLng = (gap.VanoLongitudIni + gap.VanoLongitudFin) / 2;
+
+    const dLat = latitude - midLat;
+    const dLng = longitude - midLng;
+
+    setMovedGaps((prev) => ({
+      ...prev,
+      [gapKey]: {
+        VanoLatitudIni: gap.VanoLatitudIni + dLat,
+        VanoLongitudIni: gap.VanoLongitudIni + dLng,
+        VanoLatitudFin: gap.VanoLatitudFin + dLat,
+        VanoLongitudFin: gap.VanoLongitudFin + dLng,
+      },
+    }));
+
+    setMovingGapKey(null);
+  };
+
+
+  // ------------------------------
+  // LONG PRESS: detectar vano cercano
+  // ------------------------------
+  const distPointToSegmentSq = (p, a, b) => {
+    // p,a,b: {x,y}  (x=lng, y=lat)
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const wx = p.x - a.x;
+    const wy = p.y - a.y;
+
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) {
+      const dx = p.x - a.x;
+      const dy = p.y - a.y;
+      return dx * dx + dy * dy;
+    }
+
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      const dx = p.x - b.x;
+      const dy = p.y - b.y;
+      return dx * dx + dy * dy;
+    }
+
+    const t = c1 / c2;
+    const projx = a.x + t * vx;
+    const projy = a.y + t * vy;
+
+    const dx = p.x - projx;
+    const dy = p.y - projy;
+    return dx * dx + dy * dy;
+  };
+
+  const findNearestGapKey = (coord) => {
+    if (!renderGaps?.length) return null;
+
+    const p = { x: coord.longitude, y: coord.latitude };
+
+    let bestKey = null;
+    let bestGap = null;
+    let bestD = Infinity;
+
+    for (const g of renderGaps) {
+      const key = getGapKey(g);
+      const a = { x: g.VanoLongitudIni, y: g.VanoLatitudIni };
+      const b = { x: g.VanoLongitudFin, y: g.VanoLatitudFin };
+
+      const d = distPointToSegmentSq(p, a, b);
+      if (d < bestD) {
+        bestD = d;
+        bestKey = key;
+        bestGap = g;
+      }
+    }
+
+    // tolerancia depende del zoom (ajústala si quieres más/menos sensible)
+    const latDelta = regionRef.current?.latitudeDelta ?? 0.01;
+    const tol = latDelta * 0.015; // 1.5% aprox del alto visible
+    if (bestKey && bestD <= tol * tol) return { bestKey, bestGap };
+
+    return null;
+  };
+
+
   const onMarkerPress = async (item) => {
     try {
       let tipoElemento = "";
@@ -420,28 +511,36 @@ const Map = () => {
       let datoElemento = null;
       let codigoEtiqueta = null;
 
-      if (item.Type === 5) {
+      const isPinPost = item?.Type === 5;
+      const isGap = !item?.Type && item?.VanoCodigo;
+
+      const pinKey = isPinPost ? getPinKey(item) : null;
+      const gapKey = isGap ? getGapKey(item) : null;
+
+      if (isPinPost) {
         const data = await getPostData(item.IdOriginal);
         datoElemento = data;
         tipoElemento = "Poste";
-        codigoElemento = datoElemento.PostCodigoNodo;
-        codigoEtiqueta = datoElemento.PostEtiqueta;
-      } else if (!item.Type && item.VanoCodigo) {
+        codigoElemento = datoElemento?.PostCodigoNodo ?? "";
+        codigoEtiqueta = datoElemento?.PostEtiqueta ?? "";
+      } else if (isGap) {
         tipoElemento = "Vano";
         codigoElemento = item.VanoCodigo;
         codigoEtiqueta = item.VanoEtiqueta;
         datoElemento = item;
       } else {
         tipoElemento = "Desconocido";
-        codigoElemento = "";
         datoElemento = item;
       }
 
       Alert.alert(
         "Elemento seleccionado",
-        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta}`,
+        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta ?? ""}`,
         [
           { text: "Cancelar", style: "cancel" },
+
+
+
           {
             text: "Inspeccionar",
             onPress: () => {
@@ -449,12 +548,13 @@ const Map = () => {
               router.push("inspection");
             },
           },
-        ],
+        ]
       );
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
     }
   };
+
 
   // placeholder
   if (
@@ -578,9 +678,24 @@ const Map = () => {
         showsUserLocation={true}
         followsUserLocation={false}
         showsMyLocationButton={false}
+
+        onPress={() => {
+          // ✅ un toque en mapa cancela el modo mover vano
+          if (movingGapKey) setMovingGapKey(null);
+        }}
+
+        onLongPress={(e) => {
+          // ✅ long press cerca de una línea -> activa mover ese vano
+          const hit = findNearestGapKey(e.nativeEvent.coordinate);
+          if (hit?.bestKey) {
+            setMovingGapKey(hit.bestKey);
+          } else {
+            setMovingGapKey(null);
+          }
+        }}
+
         onRegionChangeComplete={(reg) => {
           const now = Date.now();
-
           if (now - lastRegionTickRef.current < 160) return;
           lastRegionTickRef.current = now;
 
@@ -599,57 +714,92 @@ const Map = () => {
           setRegion(reg);
           getPinsByRegion(reg);
         }}
-
       >
+
         {/* GAPS */}
-        {memoGaps.map((gap, i) => (
-          <Polyline
-            key={`gap-${i}`}
-            coordinates={[
-              { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
-            ]}
-            strokeWidth={3}
-            strokeColor={getGapColorByInspected(gap)}
-            tappable
-            onPress={() => {
-              const overlapped = findOverlappedGaps(gap, memoGaps);
+        {renderGaps.map((gap, i) => {
+          const gapKey = getGapKey(gap);
 
-              if (overlapped.length === 1) {
-                onMarkerPress(overlapped[0]);
-              } else if (overlapped.length > 1) {
-                setOverlappedGaps(overlapped);
-                setShowGapSelector(true);
-              }
-            }}
-          />
-        ))}
-
-        {/* POSTES: ICONO + LABEL */}
-        {pinsPost.map((pin, i) => {
-          const iconSize = getIconSizeByType(pin.Type);
-
-          const coordinate = {
-            latitude: pin.Latitude,
-            longitude: pin.Longitude,
+          const mid = {
+            latitude: (gap.VanoLatitudIni + gap.VanoLatitudFin) / 2,
+            longitude: (gap.VanoLongitudIni + gap.VanoLongitudFin) / 2,
           };
 
-          const stableKey = pin?.IdOriginal ?? pin?.Id ?? pin?.ElementCode ?? i;
+          return (
+            <Fragment key={`gap-${gapKey}`}>
+              <Polyline
+                coordinates={[
+                  { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
+                  { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
+                ]}
+                strokeWidth={3}
+                strokeColor={getGapColorByInspected(gap)}
+                tappable
+                onPress={() => {
+                  const overlapped = findOverlappedGaps(gap, renderGaps);
+
+                  if (overlapped.length === 1) {
+                    onMarkerPress(overlapped[0]);
+                  } else if (overlapped.length > 1) {
+                    setOverlappedGaps(overlapped);
+                    setShowGapSelector(true);
+                  }
+                }}
+              />
+
+              {/* HANDLE para mover vano (solo cuando eliges "Mover (visual)") */}
+              {movingGapKey === gapKey && (
+                <Marker
+                  coordinate={mid}
+                  draggable
+                  tappable={false}
+                  zIndex={5000}
+                  onDragEnd={(e) => handleGapHandleDragEnd(gapKey, gap, e)}
 
 
+                >
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: "#00c853",
+                      borderWidth: 2,
+                      borderColor: "#fff",
+                    }}
+                  />
+                </Marker>
+              )}
+            </Fragment>
+          );
+        })}
+
+
+        {/* POSTES: ICONO + LABEL */}
+        {pinsPost.map((pin) => {
+          const iconSize = getIconSizeByType(pin.Type);
+
+          const pinKey = getPinKey(pin);        // ✅ define aquí
+          const coordinate = getPinCoord(pin);  // ✅ aplica el override si fue movido
 
           return (
             <PostWithLabel
-              key={`pin-post-${stableKey}`}
+              key={`pin-post-${pinKey}`}
               pin={pin}
+              pinKey={pinKey}
               iconSize={iconSize}
               coordinate={coordinate}
               onMarkerPress={onMarkerPress}
               hideIcon={HIDE_POST_ICON}
               hideLabel={HIDE_POST_LABEL}
+              onDragEndPin={handlePinMoveEnd}
             />
           );
         })}
+
+
+
+
 
 
 
