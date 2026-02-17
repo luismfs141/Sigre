@@ -177,7 +177,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
         await LocalFileStore.save(fileName, dataToSave.file);
 
-        const payload = { archInterno: 0, archTipo: String(dataToSave.tipo), archNombre: dbPath.substring(0, 255), archTabla: "Deficiencias", archCodTabla: Number(getValue('Interno')), archLatitud: parseFloat(dataToSave.lat)||0, archLongitud: parseFloat(dataToSave.long)||0, archFecha: toLocalISOString(dataToSave.date), archTipoElemento: tipoElemRaw, archIdElemento: Number(getValue('IdElemento')), tipiInterno: Number(deficiency.tipiInterno), archActivo: true };
+        const payload = { archTabla: "Deficiencias",archInterno: 0, archTipo: String(dataToSave.tipo), archNombre: dbPath.substring(0, 255), archTabla: "Deficiencias", archCodTabla: Number(getValue('Interno')), archLatitud: parseFloat(dataToSave.lat)||0, archLongitud: parseFloat(dataToSave.long)||0, archFecha: toLocalISOString(dataToSave.date), archTipoElemento: tipoElemRaw, archIdElemento: Number(getValue('IdElemento')), tipiInterno: Number(deficiency.tipiInterno), archActivo: true };
         if (await addFile(payload)) { toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada' }); setModalVisible(false); loadFiles(deficiency.defiInterno); } 
         else toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
     };

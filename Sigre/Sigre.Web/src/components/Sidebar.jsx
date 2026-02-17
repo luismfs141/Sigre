@@ -22,7 +22,7 @@ const navItems = [
   {title: 'Elementos', href: '/elemento', icon: FileText },
   { title: 'Deficiencias por Subestaciones', href: '/subestaciones', icon: Building2 },
   { title: 'Nuevo Elemento', href: '/nuevo-elemento', icon: ClipboardCheck },
-  { title: 'Edicion de Multimedia', href: '/auditoria-archivo', icon: FileSearch },
+  { title: 'Archivos', href: '/auditoria-archivo', icon: FileSearch },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
 ];

@@ -47,32 +47,7 @@ export const useFiles = () => {
         }
     };
 
-    // 4. ACTUALIZAR COD TABLA
-    const updateCodTablaBySed = useCallback(async (codigoSed) => {
-        if (!codigoSed) throw new Error('Código de SED inválido');
-        try {
-            const response = await api.post('/File/UpdateCodTablaBySed', null, { params: { codigoSed } });
-            return response.data?.mensaje || 'Proceso finalizado correctamente';
-        } catch (error) {
-            console.error('Error al actualizar código de tabla:', error);
-            const backendMessage = error.response?.data?.mensaje || 'Error al actualizar código de tabla';
-            throw new Error(backendMessage);
-        }
-    }, []);
 
-    // 5. 🆕 BUSCAR POR NOMBRE EXACTO (Para Importación Masiva)
-    const getFileByExactName = useCallback(async (fileName) => {
-        if (!fileName) return null;
-        try {
-            // Llama a tu nuevo endpoint del backend
-            const response = await api.get('/File/GetByExactName', {
-                params: { fileName }
-            });
-            return response.data; // Devuelve el objeto Archivo (Lat, Long, Fecha)
-        } catch (error) {
-            return null; // Si no existe, retornamos null
-        }
-    }, []);
 
     return { 
         files, 
@@ -80,7 +55,5 @@ export const useFiles = () => {
         loadFiles, 
         deleteFile, 
         addFile, 
-        updateCodTablaBySed,
-        getFileByExactName // ✅ Exportado
     };
 };

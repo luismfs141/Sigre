@@ -12,7 +12,7 @@ import Login from './pages/Login';
 import DashboardHome from './pages/DashboardHome';
 import Mapas from './pages/Mapas';
 import Reportes from './pages/Reportes';
-import AuditFileElectrical from './pages/WebInspectionManager';
+import AuditFileElectrical from './pages/FWebInspectionManager';
 import NuevoElemento from './pages/NuevoElemento';
 import ImportData from './pages/ImportData';
 import Subestaciones from './pages/Subestaciones';
