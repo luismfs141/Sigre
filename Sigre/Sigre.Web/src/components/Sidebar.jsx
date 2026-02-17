@@ -20,7 +20,7 @@ const navItems = [
   { title: 'Mapas', href: '/mapas', icon: MapIcon },
   { title: 'Reportes', href: '/reportes', icon: FileText },
   {title: 'Elementos', href: '/elemento', icon: FileText },
-  { title: 'Deficiencias por Subestaciones', href: '/subestaciones', icon: Building2 },
+  { title: 'Deficiencias ', href: '/subestaciones', icon: Building2 },
   { title: 'Nuevo Elemento', href: '/nuevo-elemento', icon: ClipboardCheck },
   { title: 'Archivos', href: '/auditoria-archivo', icon: FileSearch },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
