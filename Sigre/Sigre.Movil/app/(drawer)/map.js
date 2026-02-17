@@ -283,6 +283,9 @@ const Map = () => {
   const [movedPins, setMovedPins] = useState({});
   const [movedGaps, setMovedGaps] = useState({});
 
+  const [sedsAll, setSedsAll] = useState([]); // ✅ SED visibles SIEMPRE (no dependen del zoom)
+
+
   const [isDraggingGap, setIsDraggingGap] = useState(false);
   const gapDragRef = useRef(null);
   // gapDragRef.current = { gapKey, startTouch:{lat,lng}, startGap:{...coords} }
@@ -313,6 +316,7 @@ const Map = () => {
       pinsRef.current = [];
       setPins([]);
       setGaps([]);
+      setSedsAll([]); // ✅
       return;
     }
 
@@ -320,8 +324,10 @@ const Map = () => {
       pinsRef.current = [];
       setPins([]);
       setGaps([]);
+      setSedsAll([]); // ✅
       return;
     }
+
 
     setLoadingPins(true);
     setLoadingGaps(true);
@@ -348,6 +354,15 @@ const Map = () => {
 
         pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
       }
+
+      // ✅ SED SIEMPRE disponibles aunque pins visibles se recorten por zoom/región
+      setSedsAll(
+        (Array.isArray(pinsLoaded) ? pinsLoaded : [])
+          .filter((p) => isSedType(p?.Type) && p?.Latitude != null && p?.Longitude != null)
+          .map((p) => ({ ...p, Latitude: Number(p.Latitude), Longitude: Number(p.Longitude) }))
+          .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude))
+      );
+
 
       pinsRef.current = pinsLoaded;
 
@@ -470,7 +485,8 @@ const Map = () => {
       .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
   }, [pins]);
 
-  const pinsSed = useMemo(() => memoPins.filter((p) => isSedType(p.Type)), [memoPins]);
+  const pinsSed = useMemo(() => sedsAll, [sedsAll]);
+
 
   const pinsPost = useMemo(() => {
     if (!shouldShowPins) return [];
