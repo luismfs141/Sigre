@@ -19,6 +19,7 @@ const navItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
   { title: 'Mapas', href: '/mapas', icon: MapIcon },
   { title: 'Reportes', href: '/reportes', icon: FileText },
+  {title: 'Elementos', href: '/elemento', icon: FileText },
   { title: 'Deficiencias por Subestaciones', href: '/subestaciones', icon: Building2 },
   { title: 'Nuevo Elemento', href: '/nuevo-elemento', icon: ClipboardCheck },
   { title: 'Edicion de Multimedia', href: '/auditoria-archivo', icon: FileSearch },

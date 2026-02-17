@@ -52,3 +52,9 @@ public partial class Poste
 
     public virtual RetenidaTipo? PostRetenidaTipoNavigation { get; set; }
 }
+// Puedes poner esto en un archivo llamado "PagedResult.cs" o al inicio de tu DAPost.cs
+public class PagedResult<T>
+{
+    public int TotalRecords { get; set; }
+    public List<T> Data { get; set; }
+}

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
@@ -59,6 +60,71 @@ namespace Sigre.Server.Controllers
                     mensaje = "Error al procesar el Poste",
                     detalleTecnico = ex.Message
                 });
+            }
+        }
+        [HttpGet("GetByFeederWeb")]
+        public IActionResult GetByFeederWeb(int x_feeder_id)
+        {
+            try
+            {
+                // 1. Validación básica
+                if (x_feeder_id <= 0)
+                {
+                    return BadRequest("El ID del alimentador no es válido.");
+                }
+
+                // 2. Instancia de la capa de datos
+                DAPost da = new DAPost();
+
+                // 3. Llamada al método optimizado (sin Navigation properties)
+                List<Poste> listaPostes = da.DAPoste_GetByFeeder(x_feeder_id);
+
+                // 4. Retorno exitoso (200 OK)
+                return Ok(listaPostes);
+            }
+            catch (Exception ex)
+            {
+                // 5. Manejo de errores (500 Internal Server Error)
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno al obtener los postes.",
+                    detalle = ex.Message
+                });
+            }
+        }
+        [HttpGet("GetBySedWebWeb")]
+        public IActionResult GetBySedWeb(int idSed)
+        {
+            try
+            {
+                if (idSed <= 0) return BadRequest("ID de SED inválido.");
+
+                DAPost da = new DAPost();
+                var result = da.DAPoste_GetBySedWeb(idSed);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+        [HttpGet("GetPaginado")]
+        public IActionResult GetPaginado(int skip, int take, string busqueda = "")
+        {
+            try
+            {
+                // 1. Instanciamos al cocinero
+                DAPost da = new DAPost();
+
+                // 2. Le pasamos el pedido (¡NO REPETIMOS LÓGICA AQUÍ!)
+                var resultado = da.DAPoste_GetPaginado(skip, take, busqueda);
+
+                // 3. Entregamos el plato
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
             }
         }
     }

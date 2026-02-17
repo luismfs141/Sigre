@@ -17,7 +17,7 @@ import NuevoElemento from './pages/NuevoElemento';
 import ImportData from './pages/ImportData';
 import Subestaciones from './pages/Subestaciones';
 import ImportacionMasivaFotos from './pages/ImportacionMasivaFotos';
-
+import Elementos from './pages/Elementos';
 function App() {
   return (
     // 4. ENVUELVE TODO EL CONTENIDO CON EL PROVIDER
@@ -39,7 +39,7 @@ function App() {
           <Route path="/auditoria-archivo" element={<AuditFileElectrical />} />
           <Route path="/importar-datos" element={<ImportData />} />
           <Route path="/importacion-masiva-fotos" element={<ImportacionMasivaFotos />} />
-          
+          <Route path="/elemento" element={<Elementos/>} />
           <Route path="/configuracion" element={<div>Página de Configuración</div>} />
           
         </Route>
