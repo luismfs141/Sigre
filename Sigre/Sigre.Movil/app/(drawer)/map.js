@@ -2,7 +2,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
+
 import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { DropDown } from "../../components/DropDown.js";
@@ -25,17 +26,133 @@ import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/uti
 const HIDE_POST_ICON = false; // <-- ponlo en false para volver a verlo
 const HIDE_POST_LABEL = false; // false para volver a ver el globo+texto
 
+const DEBUG_MARKER_LIFECYCLE = false; // ponlo true para test
 
 
 
 
 
+const PostWithLabel = memo(function PostWithLabel({
+  pin,
+  iconSize,
+  coordinate,
+  onMarkerPress,
+  hideIcon,
+  hideLabel, }) {
+  const [tracks, setTracks] = useState(true);
+
+  const cleanLabel = useMemo(() => {
+    // ✅ usa tu forma actual, pero con fallback por si Label viene vacío
+    const raw = pin?.Label ?? getCleanLabel(pin) ?? "";
+    return formatLabel(raw);
+  }, [pin]);
+
+  const showLabel = cleanLabel.length > 0;
+
+  // ✅ mismo cálculo que tienes
+  const labelOffset = (iconSize / 8) * 2;
+
+
+
+
+
+
+
+
+
+  const markerId = useMemo(
+    () =>
+      String(
+        pin?.IdOriginal ??
+        pin?.Id ??
+        pin?.ElementCode ??
+        `${pin?.Type}-${pin?.Latitude}-${pin?.Longitude}`
+      ),
+    [pin]
+  );
+
+  useEffect(() => {
+    if (!DEBUG_MARKER_LIFECYCLE) return;
+
+    console.log(`[MARKER MOUNT] ${markerId}`);
+    return () => console.log(`[MARKER UNMOUNT] ${markerId}`);
+  }, [markerId]);
+
+
+
+
+
+
+
+
+
+
+
+
+  const labelCanvasH = 32; // debe coincidir con tu pinStyles.labelCanvas.height
+  const labelAnchorY = -labelOffset / labelCanvasH;
+
+  // ✅ freeze: reduce lag heavy en Android
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 250);
+    return () => clearTimeout(t);
+  }, [iconSize, hideIcon, hideLabel, pin?.Type]);
+
+  return (
+    <Fragment>
+      {/* ICONO */}
+      <Marker
+        coordinate={coordinate}
+        anchor={{ x: 0.5, y: 0.5 }}
+        tracksViewChanges={tracks}
+        onPress={() => onMarkerPress(pin)}
+        zIndex={10}
+      >
+        <View style={pinStyles.iconCanvas} collapsable={false}>
+          <View style={pinStyles.iconWrapper}>
+            <Image
+              source={getSourceImageFromType2(pin)}
+              style={[
+                pinStyles.pinIcon,
+                { width: iconSize, height: iconSize, opacity: hideIcon ? 0 : 1 },
+              ]}
+            />
+          </View>
+        </View>
+      </Marker>
+
+      {/* LABEL */}
+      {showLabel && (
+        <Marker
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: labelAnchorY }}
+          tracksViewChanges={tracks}
+          zIndex={999}
+          tappable
+          onPress={() => onMarkerPress(pin)}
+        >
+          <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+            {!hideLabel && (
+              <View style={pinStyles.labelBox}>
+                <Text style={pinStyles.labelText}>{cleanLabel}</Text>
+              </View>
+            )}
+          </View>
+        </Marker>
+      )}
+    </Fragment>
+  );
+});
 
 
 
 const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
+  const lastRegionSentRef = useRef(null);
+  const lastRegionTickRef = useRef(0);
+
 
   // universo completo para búsqueda
   const pinsRef = useRef([]);
@@ -153,8 +270,52 @@ const Map = () => {
   };
 
   const handleRefreshMap = async () => {
-    await loadMapData({ recenter: false, keepView: true });
+    console.log("[REFRESH] tap");
+
+    if (user?.proyecto === 1 && !selectedFeeder) return;
+    if (user?.proyecto === 0 && !selectedSed) return;
+
+    setLoadingPins(true);
+    setLoadingGaps(true);
+
+    try {
+      let pinsLoaded = [];
+
+      if (user?.proyecto === 1) {
+        const feederId = selectedFeeder.AlimInterno;
+
+        const result = await Promise.all([
+          getPinsByFeeder(feederId),
+          getGapsByFeeder(feederId),
+        ]);
+
+        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
+      } else {
+        const sedId = selectedSed.SedInterno;
+
+        const result = await Promise.all([
+          getPinsBySed(sedId),
+          getGapsBySed(sedId),
+        ]);
+
+        pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
+      }
+
+      // universo búsqueda
+      pinsRef.current = pinsLoaded;
+
+      // ✅ recalcula visibles con pins recién cargados y FORZADO (aunque sean los mismos IDs)
+      getPinsByRegion(regionRef.current, pinsLoaded, { force: true });
+
+      console.log(`[REFRESH] pinsLoaded=${pinsLoaded.length}`);
+    } catch (e) {
+      console.error("❌ Error refresh mapa:", e);
+    } finally {
+      setLoadingPins(false);
+      setLoadingGaps(false);
+    }
   };
+
 
   // cambio selección => carga con recenter
   useEffect(() => {
@@ -418,9 +579,27 @@ const Map = () => {
         followsUserLocation={false}
         showsMyLocationButton={false}
         onRegionChangeComplete={(reg) => {
+          const now = Date.now();
+
+          if (now - lastRegionTickRef.current < 160) return;
+          lastRegionTickRef.current = now;
+
+          const prev = lastRegionSentRef.current;
+          if (prev) {
+            const same =
+              Math.abs(prev.latitude - reg.latitude) < 1e-6 &&
+              Math.abs(prev.longitude - reg.longitude) < 1e-6 &&
+              Math.abs(prev.latitudeDelta - reg.latitudeDelta) < 1e-7 &&
+              Math.abs(prev.longitudeDelta - reg.longitudeDelta) < 1e-7;
+
+            if (same) return;
+          }
+
+          lastRegionSentRef.current = reg;
           setRegion(reg);
           getPinsByRegion(reg);
         }}
+
       >
         {/* GAPS */}
         {memoGaps.map((gap, i) => (
@@ -449,128 +628,29 @@ const Map = () => {
         {/* POSTES: ICONO + LABEL */}
         {pinsPost.map((pin, i) => {
           const iconSize = getIconSizeByType(pin.Type);
-          const cleanLabel = formatLabel(pin.Label);
-          const showLabel = cleanLabel.length > 0;
 
           const coordinate = {
             latitude: pin.Latitude,
             longitude: pin.Longitude,
           };
 
-
-
-
-
-
-
-
-
-          // LABEL (POSTE) — offset abajo del icono SIN usar centerOffset
-          //const labelOffset = iconSize / 6*2; // 16 = separación fija (tu LABEL_GAP actual)
-          const labelOffset = iconSize / 8 * 2
-
-          console.log(
-            `[POST LABEL] pin=${pin?.Id ?? i} type=${pin?.Type} iconSize=${iconSize} labelOffset=${labelOffset}`
-          );
-
-
-          const labelCanvasH = 32; // DEBE coincidir con pinStyles.labelCanvas.height
-          const labelAnchorY = -labelOffset / labelCanvasH; // negativo => baja el label en px aprox
-
-
-
-
-
-
-
-
+          const stableKey = pin?.IdOriginal ?? pin?.Id ?? pin?.ElementCode ?? i;
 
 
 
           return (
-            <Fragment key={`pin-post-${pin.Id || i}`}>
-              <Marker
-                coordinate={coordinate}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={true}
-                onPress={() => onMarkerPress(pin)}
-                zIndex={10}
-              >
-                <View style={pinStyles.iconCanvas} collapsable={false}>
-                  <View style={pinStyles.iconWrapper}>
-
-
-
-
-                    {/* <Image
-                      source={getSourceImageFromType2(pin)}
-                      style={[
-                        pinStyles.pinIcon,
-                        { width: iconSize, height: iconSize },
-                      ]}
-                    /> */}
-
-                    <Image
-                      source={getSourceImageFromType2(pin)}
-                      style={[
-                        pinStyles.pinIcon,
-                        { width: iconSize, height: iconSize, opacity: HIDE_POST_ICON ? 0 : 1 },
-                      ]}
-                    />
-
-
-
-
-
-
-                  </View>
-                </View>
-              </Marker>
-
-
-
-
-
-
-
-              {showLabel && (
-                <Marker
-                  coordinate={coordinate}
-                  anchor={{ x: 0.5, y: labelAnchorY }}
-                  tracksViewChanges={true}
-                  zIndex={999}
-                  tappable
-                  onPress={() => onMarkerPress(pin)}
-                >
-
-
-
-
-
-                  {/* <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
-                    <View style={pinStyles.labelBox}>
-                      <Text style={pinStyles.labelText}>{cleanLabel}</Text>
-                    </View>
-                  </View> */}
-
-
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
-                    {!HIDE_POST_LABEL && (
-                      <View style={pinStyles.labelBox}>
-                        <Text style={pinStyles.labelText}>{cleanLabel}</Text>
-                      </View>
-                    )}
-                  </View>
-
-
-
-
-
-                </Marker>
-              )}
-            </Fragment>
+            <PostWithLabel
+              key={`pin-post-${stableKey}`}
+              pin={pin}
+              iconSize={iconSize}
+              coordinate={coordinate}
+              onMarkerPress={onMarkerPress}
+              hideIcon={HIDE_POST_ICON}
+              hideLabel={HIDE_POST_LABEL}
+            />
           );
         })}
+
 
 
 
