@@ -41,7 +41,11 @@ const PostWithLabel = memo(function PostWithLabel({
   hideIcon,
   hideLabel,
   onDragEndPin,
+  canDrag,
+  onDragStartPin,
+  onDragFinishPin,
 }) {
+
   const [tracks, setTracks] = useState(true);
   const draggingRef = useRef(false); // ✅ evita que al soltar el drag se dispare onPress
 
@@ -77,12 +81,18 @@ const PostWithLabel = memo(function PostWithLabel({
 
 
   const handleDragStart = () => {
+    if (!canDrag) return;
+    const ok = onDragStartPin?.(pinKey);
+    if (ok === false) return;
     draggingRef.current = true;
   };
+
 
   const handleDragEnd = (e) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
     onDragEndPin?.(pinKey, { latitude, longitude });
+    onDragFinishPin?.(pinKey);
+
 
     // evita click fantasma al soltar
     setTimeout(() => {
@@ -99,7 +109,7 @@ const PostWithLabel = memo(function PostWithLabel({
         tracksViewChanges={tracks}
         onPress={handlePress}
         zIndex={10}
-        draggable={true}                 // ✅ SIEMPRE draggable (long-press + drag)
+        draggable={!!canDrag}                 // ✅ SIEMPRE draggable (long-press + drag)
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -125,7 +135,7 @@ const PostWithLabel = memo(function PostWithLabel({
           zIndex={999}
           tappable
           onPress={handlePress}
-          draggable={true}               // ✅ también draggable desde el label
+          draggable={!!canDrag}               // ✅ también draggable desde el label
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
@@ -143,6 +153,76 @@ const PostWithLabel = memo(function PostWithLabel({
 });
 
 
+const SedWithLabel = memo(function SedWithLabel({
+  pin,
+  pinKey,
+  coordinate,
+  label,
+  canDrag,
+  onDragStartPin,
+  onDragFinishPin,
+  onDragEndPin,
+}) {
+  const [tracks, setTracks] = useState(true);
+
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 250);
+    return () => clearTimeout(t);
+  }, [pinKey, coordinate?.latitude, coordinate?.longitude]);
+
+  const handleDragStart = () => {
+    if (!canDrag) return;
+    const ok = onDragStartPin?.(pinKey);
+    if (ok === false) return;
+  };
+
+  const handleDragEnd = (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    onDragEndPin?.(pinKey, { latitude, longitude });
+    onDragFinishPin?.(pinKey);
+  };
+
+  return (
+    <Fragment>
+      {/* ICONO */}
+      <Marker
+        coordinate={coordinate}
+        anchor={{ x: 0.5, y: 1.5 }}
+        tracksViewChanges={tracks}     // ✅ ahora sí se “captura” el icono y luego no parpadea
+        zIndex={2000}
+        draggable={!!canDrag}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <View collapsable={false}>
+          <Image
+            source={getSourceImageFromType2(pin)}
+            style={{ width: 35, height: 35, resizeMode: "contain" }}
+          />
+        </View>
+      </Marker>
+
+      {/* LABEL */}
+      {label !== "" && (
+        <Marker
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: 1.9 }}
+          centerOffset={{ x: 0, y: 30 }}
+          tracksViewChanges={tracks}   // ✅ mismo truco para el label
+          zIndex={2001}
+          tappable={false}
+        >
+          <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+            <View style={pinStyles.labelBox}>
+              <Text style={pinStyles.labelText}>{label}</Text>
+            </View>
+          </View>
+        </Marker>
+      )}
+    </Fragment>
+  );
+});
 
 
 
@@ -402,13 +482,17 @@ const Map = () => {
 
   const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
 
-  const getPinKey = (p) =>
-    String(
+  const getPinKey = (p) => {
+    const base =
       p?.IdOriginal ??
       p?.Id ??
       p?.ElementCode ??
-      `${p?.Type}-${p?.Latitude}-${p?.Longitude}`
-    );
+      `${p?.Latitude}-${p?.Longitude}`;
+
+    // ✅ incluye Type SIEMPRE para evitar colisiones entre tablas (POST vs SED)
+    return String(`${p?.Type ?? "X"}-${base}`);
+  };
+
 
   const getGapKey = (g) =>
     String(
@@ -595,6 +679,35 @@ const Map = () => {
     setMovingGapKey(null);
   };
 
+  // ------------------------------
+  // ✅ LOCK: solo 1 elemento se mueve a la vez (PIN o VANO)
+  // ------------------------------
+  const activeDragPinRef = useRef(null); // guarda pinKey activo
+
+  const canDragPin = (pinKey) =>
+    !activeDragPinRef.current || activeDragPinRef.current === pinKey;
+
+  const beginPinDrag = (pinKey) => {
+    if (activeDragPinRef.current && activeDragPinRef.current !== pinKey) return false;
+
+    activeDragPinRef.current = pinKey;
+
+    // cancela intento de mover vano si estaba en hold/drag
+    gapHoldActiveRef.current = false;
+    if (gapHoldTimerRef.current) {
+      clearTimeout(gapHoldTimerRef.current);
+      gapHoldTimerRef.current = null;
+    }
+    if (gapDragRef.current) endDragGap();
+
+    return true;
+  };
+
+  const endPinDrag = (pinKey) => {
+    if (activeDragPinRef.current === pinKey) activeDragPinRef.current = null;
+  };
+
+
   // ✅ mover vano con 1 dedo usando onTouchMove (x,y -> lat/lng)
   const gapDragMovePtRef = useRef(null);
   const gapDragMoveRafRef = useRef(false);
@@ -631,8 +744,9 @@ const Map = () => {
   };
 
   const startGapHold = (e) => {
-    // si ya estás moviendo un vano, ignora
+    if (activeDragPinRef.current) return; // ✅ si estás moviendo un PIN, no intentes mover vano
     if (gapDragRef.current) return;
+
 
     const x = e?.nativeEvent?.locationX;
     const y = e?.nativeEvent?.locationY;
@@ -662,7 +776,9 @@ const Map = () => {
 
 
   const moveGapHold = (e) => {
+    if (activeDragPinRef.current) return; // ✅ si estás moviendo un PIN, ignora touch del mapa
     const x = e?.nativeEvent?.locationX;
+
     const y = e?.nativeEvent?.locationY;
     if (typeof x !== "number" || typeof y !== "number") return;
 
@@ -912,7 +1028,7 @@ const Map = () => {
         onTouchEnd={endGapHold}
         onTouchCancel={endGapHold}
 
-     
+
 
 
         onPress={() => {
@@ -1009,7 +1125,11 @@ const Map = () => {
               hideIcon={HIDE_POST_ICON}
               hideLabel={HIDE_POST_LABEL}
               onDragEndPin={handlePinMoveEnd}
+              canDrag={canDragPin(pinKey)}
+              onDragStartPin={beginPinDrag}
+              onDragFinishPin={endPinDrag}
             />
+
           );
         })}
 
@@ -1021,49 +1141,26 @@ const Map = () => {
 
 
         {/* SED: ICONO + LABEL */}
-        {pinsSed.map((pin, i) => {
-          const coordinate = {
-            latitude: pin.Latitude,
-            longitude: pin.Longitude,
-          };
+        {pinsSed.map((pin) => {
+          const pinKey = getPinKey(pin);
+          const coordinate = getPinCoord(pin);
           const label = getCleanLabel(pin);
 
           return (
-            <Fragment key={`pin-sed-${pin.Id || i}`}>
-              <Marker
-                coordinate={coordinate}
-                anchor={{ x: 0.5, y: 1.5 }}
-                tracksViewChanges={true}
-                zIndex={2000}
-                onPress={() => onMarkerPress(pin)}
-              >
-                <View collapsable={false}>
-                  <Image
-                    source={getSourceImageFromType2(pin)}
-                    style={{ width: 35, height: 35, resizeMode: "contain" }}
-                  />
-                </View>
-              </Marker>
-
-              {label !== "" && (
-                <Marker
-                  coordinate={coordinate}
-                  anchor={{ x: 0.5, y: 1.9 }}
-                  centerOffset={{ x: 0, y: 30 }}
-                  tracksViewChanges={true}
-                  zIndex={2001}
-                  tappable={false}
-                >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
-                    <View style={pinStyles.labelBox}>
-                      <Text style={pinStyles.labelText}>{label}</Text>
-                    </View>
-                  </View>
-                </Marker>
-              )}
-            </Fragment>
+            <SedWithLabel
+              key={`pin-sed-${pinKey}`}
+              pin={pin}
+              pinKey={pinKey}
+              coordinate={coordinate}
+              label={label}
+              canDrag={canDragPin(pinKey)}
+              onDragStartPin={beginPinDrag}
+              onDragFinishPin={endPinDrag}
+              onDragEndPin={handlePinMoveEnd}
+            />
           );
         })}
+
       </MapView>
 
       <GapSelectorModal
