@@ -108,7 +108,7 @@ export default function Elementos() {
                             value={globalFilter}
                             onChange={(e) => setGlobalFilter(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && triggerSearch()}
-                            placeholder="Buscar Código GIS..." 
+                            placeholder="Buscar Código GIS, etiqueta..." 
                             className="p-inputtext-sm w-full pl-10" 
                         />
                         {searchTerm && <i className="pi pi-times cursor-pointer absolute right-3 top-3 text-red-400" onClick={() => {setGlobalFilter(""); setSearchTerm("")}}/>}
