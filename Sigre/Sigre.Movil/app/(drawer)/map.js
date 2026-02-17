@@ -311,6 +311,33 @@ const Map = () => {
     regionRef.current = region;
   }, [region]);
 
+
+  const buildRegionFromPins = (pinsArr) => {
+    const pts = (Array.isArray(pinsArr) ? pinsArr : [])
+      .map((p) => ({ lat: Number(p?.Latitude), lng: Number(p?.Longitude) }))
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+    if (!pts.length) return null;
+
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const p of pts) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+
+    const latitude = (minLat + maxLat) / 2;
+    const longitude = (minLng + maxLng) / 2;
+
+    // padding + mínimos para que no quede ultra-zoom
+    const latitudeDelta = Math.max((maxLat - minLat) * 1.6, 0.01);
+    const longitudeDelta = Math.max((maxLng - minLng) * 1.6, 0.01);
+
+    return { latitude, longitude, latitudeDelta, longitudeDelta };
+  };
+
+
   const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
     if (user?.proyecto === 1 && !selectedFeeder) {
       pinsRef.current = [];
@@ -372,9 +399,13 @@ const Map = () => {
 
 
       if (recenter && pinsLoaded.length > 0) {
-        if (user?.proyecto === 1) setRegionByFeeder(pinsLoaded);
-        else setRegionBySed(pinsLoaded, selectedSed);
+        const newReg = buildRegionFromPins(pinsLoaded);
+        if (newReg) {
+          mapRef.current?.animateToRegion(newReg, 600);
+          setRegion(newReg); // ✅ sigues actualizando tu state para filtros/zoom
+        }
       }
+
     } catch (error) {
       console.error("❌ Error al cargar/refresh datos del mapa:", error);
     } finally {
@@ -1025,7 +1056,6 @@ const Map = () => {
       <MapView
         ref={mapRef}
         style={mapStyles.mapContainer}
-        region={region}
         initialRegion={region}
         mapType="satellite"
         showsUserLocation={true}
