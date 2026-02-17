@@ -172,19 +172,31 @@ export const useDeficiency = () => {
 
 
   const normalizeSqlServerDate = (value) => {
-    if (!value || typeof value !== "string") return value;
+    if (value === null || value === undefined) return null;
 
-    // Detecta exactamente: "2026-02-01 23:41:00"
-    const sqlServerFormat = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+    // si viene vacío -> null (evita error DateTime? en ASP.NET)
+    if (typeof value === "string") {
+      let s = value.trim();
+      if (!s) return null;
 
-    if (!sqlServerFormat.test(value)) {
-      // No es el formato problemático → no toca nada
-      return value;
+      // si viene "YYYY-MM-DD HH:mm:ss(.fff...)" -> cámbialo a ISO con T
+      if (s.includes(" ") && !s.includes("T")) {
+        s = s.replace(" ", "T");
+      }
+
+      return s;
     }
 
-    // Normaliza: "YYYY-MM-DD HH:mm:ss" → "YYYY-MM-DDTHH:mm:ss"
-    return value.replace(" ", "T");
+    // number => epoch (ms o seg) -> ISO local con milis (redondeado)
+    if (typeof value === "number") {
+      const ms = value > 1e12 ? value : value * 1000;
+      const rounded = roundMsForSqlDatetime(ms);
+      return formatLocalISO(rounded);
+    }
+
+    return null;
   };
+
 
   // ------------------- GET BY ID LOCAL -------------------
   const fetchDeficiencyByIdLocal = async (defiInterno) => {
@@ -316,6 +328,8 @@ export const useDeficiency = () => {
       // 🔹 FECHAS ISO
       DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
       DefiFecModificacion: normalizeSqlServerDate(fecMod),
+
+      
       DefiFechaCreacion: normalizeSqlServerDate(base?.DefiFechaCreacion),
       DefiFechaDenuncia: normalizeSqlServerDate(base?.DefiFechaDenuncia),
       DefiFechaInspeccion: normalizeSqlServerDate(base?.DefiFechaInspeccion),

@@ -185,7 +185,7 @@ export const DatosProvider = ({ children }) => {
   // Cambiar a nueva base descargada
   // -------------------------------------------------------
   const setNewDatabase = async (newName) => {
-    console.log("🔄 setNewDatabase ejecutado:", newName);
+    //console.log("🔄 setNewDatabase ejecutado:", newName);
 
     // 🔥 fuerza "flip" de estado (evita que el perfil se cargue antes de abrir DB)
     setDbReady(false);
@@ -262,7 +262,7 @@ export const DatosProvider = ({ children }) => {
 
   // 🔐 Setter que guarda también en AsyncStorage
   const setSelectedFeederPersist = (feeder) => {
-    console.log("[DatosContext] setSelectedFeeder:", feeder);
+    //console.log("[DatosContext] setSelectedFeeder:", feeder);
     _setSelectedFeeder(feeder);
 
     (async () => {

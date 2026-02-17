@@ -1,8 +1,9 @@
 import { useNavigation } from '@react-navigation/native';
 import { Text, View } from 'react-native';
 import { Callout } from 'react-native-maps';
-import { calloutStyles } from '../assets/styles/PinCallout';
-import { themeStyles } from '../assets/styles/Theme';
+import { calloutStyles } from "../styles/PinCalloutStyles";
+
+import { themeStyles } from '../styles/Theme';
 import { getElementNameFromType, mustRegisterDeficiency } from '../utils/utils';
 
 export const PinCallout = ({ pin }) => {

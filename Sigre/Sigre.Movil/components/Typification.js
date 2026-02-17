@@ -1,6 +1,7 @@
+import { Image, Text, View } from "react-native";
 import { TouchableOpacity } from "react-native-gesture-handler";
-import { View, Text, Image} from "react-native";
-import { styles } from '../assets/styles/Typification';
+import { styles } from '../styles/Typification';
+
 
 
 export const Typification =( {object, onPress} ) =>{

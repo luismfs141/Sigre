@@ -130,7 +130,7 @@ export default function Sync() {
 
       if (user?.proyecto === 0) {
         const sedsIds = selectedSubstations.map((s) => parseInt(s.id, 10));
-        console.log("📥 SEDs a descargar:", sedsIds);
+        //console.log("📥 SEDs a descargar:", sedsIds);
 
         const fileUri = await downloadDatabase(user.id, sedsIds, 0, nombreBase);
         if (!fileUri) throw new Error("Descarga fallida");
@@ -285,7 +285,7 @@ export default function Sync() {
     };
 
     if (user?.proyecto === 0) {
-      console.log("➕ Alimentador seleccionado:", obj);
+      //console.log("➕ Alimentador seleccionado:", obj);
       setSelectedFeeder(obj);
       setSelectedFeeders([obj]);
       await AsyncStorage.setItem("selectedFeeders", JSON.stringify([obj]));
@@ -320,7 +320,7 @@ export default function Sync() {
   //───────────────────────────────────────────────
   const toggleSubstation = (item) => {
     const exists = selectedSubstations.some(s => s.id === item.sedInterno);
-    console.log("🔁 Toggle SED:", item.sedInterno, "exists:", exists);
+    //console.log("🔁 Toggle SED:", item.sedInterno, "exists:", exists);
 
     if (exists) {
       setSelectedSubstations(prev => prev.filter(s => s.id !== item.sedInterno));
@@ -336,7 +336,7 @@ export default function Sync() {
     if (!selectedFeeder)
       return Alert.alert("Selecciona un alimentador");
 
-    console.log("🏢 Abriendo modal SED del feeder:", selectedFeeder.id);
+    //console.log("🏢 Abriendo modal SED del feeder:", selectedFeeder.id);
     const data = await fetchSedsByFeeder(selectedFeeder.id);
     setSubstationsByFeeder(Array.isArray(data) ? data : []);
     setSearchSed("");
