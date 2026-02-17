@@ -15,6 +15,17 @@ export const mapStyles = StyleSheet.create({
 // PINS / MARKERS
 // ==========================
 export const pinStyles = StyleSheet.create({
+  // POSTE (centro real del Marker del ÍCONO) — punto rojo
+  iconCenterDot: {
+    position: "absolute",
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,0,0,0.9)",
+  },
+
+
+
   // Wrapper del icono (tamaño real del icono)
   iconWrapper: {
     width: 25,
@@ -28,15 +39,20 @@ export const pinStyles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Bounding box REAL del icono (Android)
+  // POSTE (Marker del ÍCONO) — fondo verde debug ----------------------------------------------------
   iconCanvas: {
-    width: 32,
+    width: 32, 
     height: 32,
-    //backgroundColor: "rgba(0,255,0,0.3)", // 🟢 debug
+    backgroundColor: "rgba(0,255,0,0.25)", // 🟢 debug
+
+    borderWidth: 1,
+    borderColor: "rgba(0,255,0,0.85)",
+
     alignItems: "center",
     justifyContent: "center",
-    overflow: "visible",
+    overflow: "hidden",
   },
+
 
   iconCanvasSE: {
     //backgroundColor: "rgba(0,255,0,0.3)", // 🟢 debug
@@ -78,14 +94,17 @@ export const pinStyles = StyleSheet.create({
     borderRadius: 4,
   },
 
-  // Bounding box REAL del marker (Android)
+  // POSTE (Marker del LABEL/TEXTO) — fondo rojo debug
   labelCanvas: {
     width: 32,
-    height: 40,
-    //backgroundColor: "rgba(255,0,0,0.3)", // 🔴 debug
+    height: 32,
+    backgroundColor: "rgba(255,0,0,0.25)", // 🔴 debug
+    borderWidth: 1,
+    borderColor: "rgba(255,0,0,0.85)",
     alignItems: "center",
     justifyContent: "center",
   },
+
 
   labelWrapperBox: {
     width: 60,

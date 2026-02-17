@@ -1,50 +1,37 @@
 // maps app
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
-
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
-
-import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-
-
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
+import { GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
-
 import styles, { mapStyles, pinStyles } from "../../styles/mapStyles";
-
-
+import {
+  ZOOM_THRESHOLD, buildSearchResults, centerMap, findOverlappedGaps, formatLabel, getCleanLabel, getIconSizeByType,
+  getPinsVisibleInRegion, isPostType, isSedType, normalizeText,
+} from "../../utils/map/mapUtils";
 import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
-import {
-  ZOOM_THRESHOLD,
-  buildSearchResults,
-  centerMap,
-  findOverlappedGaps,
-  formatLabel,
-  getCleanLabel,
-  getIconSizeByType,
-  getLabelOffsetByType,
-  getPinsVisibleInRegion,
-  isPostType,
-  isSedType,
-  normalizeText,
-} from "../../utils/map/mapUtils";
 
-import { GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
+
+const HIDE_POST_ICON = false; // <-- ponlo en false para volver a verlo
+const HIDE_POST_LABEL = false; // false para volver a ver el globo+texto
+
+
+
+
+
+
+
+
 
 const Map = () => {
   const router = useRouter();
@@ -281,6 +268,9 @@ const Map = () => {
 
   const pinsPost = useMemo(() => {
     if (!shouldShowPins) return [];
+
+
+
     return memoPins.filter((p) => isPostType(p.Type));
   }, [memoPins, shouldShowPins]);
 
@@ -491,6 +481,36 @@ const Map = () => {
             longitude: pin.Longitude,
           };
 
+
+
+
+
+
+
+
+
+          // LABEL (POSTE) — offset abajo del icono SIN usar centerOffset
+          //const labelOffset = iconSize / 6*2; // 16 = separación fija (tu LABEL_GAP actual)
+          const labelOffset = iconSize / 8*2
+
+          console.log(
+            `[POST LABEL] pin=${pin?.Id ?? i} type=${pin?.Type} iconSize=${iconSize} labelOffset=${labelOffset}`
+          );
+
+
+          const labelCanvasH = 32; // DEBE coincidir con pinStyles.labelCanvas.height
+          const labelAnchorY = -labelOffset / labelCanvasH; // negativo => baja el label en px aprox
+
+
+
+
+
+
+
+
+
+
+
           return (
             <Fragment key={`pin-post-${pin.Id || i}`}>
               <Marker
@@ -502,37 +522,82 @@ const Map = () => {
               >
                 <View style={pinStyles.iconCanvas} collapsable={false}>
                   <View style={pinStyles.iconWrapper}>
-                    <Image
+
+
+
+
+                    {/* <Image
                       source={getSourceImageFromType2(pin)}
                       style={[
                         pinStyles.pinIcon,
                         { width: iconSize, height: iconSize },
                       ]}
+                    /> */}
+
+                    <Image
+                      source={getSourceImageFromType2(pin)}
+                      style={[
+                        pinStyles.pinIcon,
+                        { width: iconSize, height: iconSize, opacity: HIDE_POST_ICON ? 0 : 1 },
+                      ]}
                     />
+
+
+
+
+
+
                   </View>
                 </View>
               </Marker>
 
+
+
+
+
+
+
               {showLabel && (
                 <Marker
                   coordinate={coordinate}
-                  anchor={{ x: 0.5, y: 0.0 }}
-                  centerOffset={{ x: 0, y: getLabelOffsetByType(pin.Type) }}
+                  anchor={{ x: 0.5, y: labelAnchorY }}
+
                   tracksViewChanges={true}
                   zIndex={999}
                   tappable
                   onPress={() => onMarkerPress(pin)}
                 >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+
+
+
+
+
+                  {/* <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
                     <View style={pinStyles.labelBox}>
                       <Text style={pinStyles.labelText}>{cleanLabel}</Text>
                     </View>
+                  </View> */}
+
+
+                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+                    {!HIDE_POST_LABEL && (
+                      <View style={pinStyles.labelBox}>
+                        <Text style={pinStyles.labelText}>{cleanLabel}</Text>
+                      </View>
+                    )}
                   </View>
+
+
+
+
+
                 </Marker>
               )}
             </Fragment>
           );
         })}
+
+
 
         {/* SED: ICONO + LABEL */}
         {pinsSed.map((pin, i) => {
