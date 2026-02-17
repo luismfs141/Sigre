@@ -1,54 +1,233 @@
 // maps app
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
-
-import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-
-
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
+import { GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
-
 import styles, { mapStyles, pinStyles } from "../../styles/mapStyles";
-
-
+import {
+  ZOOM_THRESHOLD, buildSearchResults, centerMap, findOverlappedGaps, formatLabel, getCleanLabel, getIconSizeByType,
+  getPinsVisibleInRegion, isPostType, isSedType, normalizeText,
+} from "../../utils/map/mapUtils";
 import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
-import {
-  ZOOM_THRESHOLD,
-  buildSearchResults,
-  centerMap,
-  findOverlappedGaps,
-  formatLabel,
-  getCleanLabel,
-  getIconSizeByType,
-  getLabelOffsetByType,
-  getPinsVisibleInRegion,
-  isPostType,
-  isSedType,
-  normalizeText,
-} from "../../utils/map/mapUtils";
+const HIDE_POST_ICON = false; // <-- ponlo en false para volver a verlo
+const HIDE_POST_LABEL = false; // false para volver a ver el globo+texto
 
-import { GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
+const DEBUG_MARKER_LIFECYCLE = false; // ponlo true para test
+
+const GAP_HANDLE_DEBUG = false; // true = se ven los “handles” para test
+
+const PostWithLabel = memo(function PostWithLabel({
+  pin,
+  pinKey,
+  iconSize,
+  coordinate,
+  onMarkerPress,
+  hideIcon,
+  hideLabel,
+  onDragEndPin,
+  canDrag,
+  onDragStartPin,
+  onDragFinishPin,
+}) {
+
+  const [tracks, setTracks] = useState(true);
+  const draggingRef = useRef(false); // ✅ evita que al soltar el drag se dispare onPress
+
+  const cleanLabel = useMemo(() => {
+    const raw = pin?.Label ?? getCleanLabel(pin) ?? "";
+    return formatLabel(raw);
+  }, [pin]);
+
+  const showLabel = cleanLabel.length > 0;
+
+  const labelOffset = (iconSize / 8) * 2;
+  const labelCanvasH = 32; // debe coincidir con pinStyles.labelCanvas.height
+  const labelAnchorY = -labelOffset / labelCanvasH;
+
+  useEffect(() => {
+    if (!DEBUG_MARKER_LIFECYCLE) return;
+    console.log(`[MARKER MOUNT] ${pinKey}`);
+    return () => console.log(`[MARKER UNMOUNT] ${pinKey}`);
+  }, [pinKey]);
+
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 250);
+    return () => clearTimeout(t);
+  }, [iconSize, hideIcon, hideLabel, pin?.Type]);
+
+  const handlePress = (e) => {
+    e?.stopPropagation?.(); // ✅ evita que el mapa “agarre” el toque
+    if (draggingRef.current) return;
+    onMarkerPress(pin);
+  };
+
+
+
+  const handleDragStart = () => {
+    if (!canDrag) return;
+    const ok = onDragStartPin?.(pinKey);
+    if (ok === false) return;
+    draggingRef.current = true;
+  };
+
+
+  const handleDragEnd = (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    onDragEndPin?.(pinKey, { latitude, longitude });
+    onDragFinishPin?.(pinKey);
+
+
+    // evita click fantasma al soltar
+    setTimeout(() => {
+      draggingRef.current = false;
+    }, 200);
+  };
+
+  return (
+    <Fragment>
+      {/* ICONO */}
+      <Marker
+        coordinate={coordinate}
+        anchor={{ x: 0.5, y: 0.5 }}
+        tracksViewChanges={tracks}
+        onPress={handlePress}
+        zIndex={10}
+        draggable={!!canDrag}                 // ✅ SIEMPRE draggable (long-press + drag)
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <View style={pinStyles.iconCanvas} collapsable={false}>
+          <View style={pinStyles.iconWrapper}>
+            <Image
+              source={getSourceImageFromType2(pin)}
+              style={[
+                pinStyles.pinIcon,
+                { width: iconSize, height: iconSize, opacity: hideIcon ? 0 : 1 },
+              ]}
+            />
+          </View>
+        </View>
+      </Marker>
+
+      {/* LABEL */}
+      {showLabel && (
+        <Marker
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: labelAnchorY }}
+          tracksViewChanges={tracks}
+          zIndex={999}
+          tappable
+          onPress={handlePress}
+          draggable={!!canDrag}               // ✅ también draggable desde el label
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+            {!hideLabel && (
+              <View style={pinStyles.labelBox}>
+                <Text style={pinStyles.labelText}>{cleanLabel}</Text>
+              </View>
+            )}
+          </View>
+        </Marker>
+      )}
+    </Fragment>
+  );
+});
+
+
+const SedWithLabel = memo(function SedWithLabel({
+  pin,
+  pinKey,
+  coordinate,
+  label,
+  canDrag,
+  onDragStartPin,
+  onDragFinishPin,
+  onDragEndPin,
+}) {
+  const [tracks, setTracks] = useState(true);
+
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 250);
+    return () => clearTimeout(t);
+  }, [pinKey, coordinate?.latitude, coordinate?.longitude]);
+
+  const handleDragStart = () => {
+    if (!canDrag) return;
+    const ok = onDragStartPin?.(pinKey);
+    if (ok === false) return;
+  };
+
+  const handleDragEnd = (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    onDragEndPin?.(pinKey, { latitude, longitude });
+    onDragFinishPin?.(pinKey);
+  };
+
+  return (
+    <Fragment>
+      {/* ICONO */}
+      <Marker
+        coordinate={coordinate}
+        anchor={{ x: 0.5, y: 1.5 }}
+        tracksViewChanges={tracks}     // ✅ ahora sí se “captura” el icono y luego no parpadea
+        zIndex={2000}
+        draggable={!!canDrag}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <View collapsable={false}>
+          <Image
+            source={getSourceImageFromType2(pin)}
+            style={{ width: 35, height: 35, resizeMode: "contain" }}
+          />
+        </View>
+      </Marker>
+
+      {/* LABEL */}
+      {label !== "" && (
+        <Marker
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: 1.9 }}
+          centerOffset={{ x: 0, y: 30 }}
+          tracksViewChanges={tracks}   // ✅ mismo truco para el label
+          zIndex={2001}
+          tappable={false}
+        >
+          <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
+            <View style={pinStyles.labelBox}>
+              <Text style={pinStyles.labelText}>{label}</Text>
+            </View>
+          </View>
+        </Marker>
+      )}
+    </Fragment>
+  );
+});
+
+
 
 const Map = () => {
   const router = useRouter();
   const mapRef = useRef(null);
+  const lastRegionSentRef = useRef(null);
+  const lastRegionTickRef = useRef(0);
+
 
   // universo completo para búsqueda
   const pinsRef = useRef([]);
@@ -85,7 +264,6 @@ const Map = () => {
   const [loadingPins, setLoadingPins] = useState(false);
   const [loadingGaps, setLoadingGaps] = useState(false);
 
-  const [heading, setHeading] = useState(0);
   const [loadingLocation, setLoadingLocation] = useState(false);
 
   const [showGapSelector, setShowGapSelector] = useState(false);
@@ -98,6 +276,27 @@ const Map = () => {
   const [selectedSearchResult, setSelectedSearchResult] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  const [movedPins, setMovedPins] = useState({});
+  const [movedGaps, setMovedGaps] = useState({});
+
+  const [sedsAll, setSedsAll] = useState([]); // ✅ SED visibles SIEMPRE (no dependen del zoom)
+
+
+  const [isDraggingGap, setIsDraggingGap] = useState(false);
+  const gapDragRef = useRef(null);
+  // gapDragRef.current = { gapKey, startTouch:{lat,lng}, startGap:{...coords} }
+
+  const [movingGapKey, setMovingGapKey] = useState(null); // solo para "highlight" opcional
+
+
+  const GAP_HOLD_MS = 350;      // Tiempo para detectar movel elemento
+  const GAP_CANCEL_PX = 10;      // ✅ tolerancia de movimiento en pixeles
+
+  const gapHoldTimerRef = useRef(null);
+  const gapHoldActiveRef = useRef(false);
+  const gapHoldStartPtRef = useRef(null); // {x,y}
+  const gapHoldLastPtRef = useRef(null);  // {x,y}
+
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
   // refresh sin mover cámara
@@ -106,11 +305,40 @@ const Map = () => {
     regionRef.current = region;
   }, [region]);
 
+
+  const buildRegionFromPins = (pinsArr) => {
+    const pts = (Array.isArray(pinsArr) ? pinsArr : [])
+      .map((p) => ({ lat: Number(p?.Latitude), lng: Number(p?.Longitude) }))
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+    if (!pts.length) return null;
+
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const p of pts) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+
+    const latitude = (minLat + maxLat) / 2;
+    const longitude = (minLng + maxLng) / 2;
+
+    // padding + mínimos para que no quede ultra-zoom
+    const latitudeDelta = Math.max((maxLat - minLat) * 1.6, 0.01);
+    const longitudeDelta = Math.max((maxLng - minLng) * 1.6, 0.01);
+
+    return { latitude, longitude, latitudeDelta, longitudeDelta };
+  };
+
+ 
+
   const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
     if (user?.proyecto === 1 && !selectedFeeder) {
       pinsRef.current = [];
       setPins([]);
       setGaps([]);
+      setSedsAll([]); // ✅
       return;
     }
 
@@ -118,8 +346,10 @@ const Map = () => {
       pinsRef.current = [];
       setPins([]);
       setGaps([]);
+      setSedsAll([]); // ✅
       return;
     }
+
 
     setLoadingPins(true);
     setLoadingGaps(true);
@@ -147,19 +377,52 @@ const Map = () => {
         pinsLoaded = Array.isArray(result[0]) ? result[0] : [];
       }
 
+      // ✅ SED SIEMPRE disponibles aunque pins visibles se recorten por zoom/región
+      setSedsAll(
+        (Array.isArray(pinsLoaded) ? pinsLoaded : [])
+          .filter((p) => isSedType(p?.Type) && p?.Latitude != null && p?.Longitude != null)
+          .map((p) => ({ ...p, Latitude: Number(p.Latitude), Longitude: Number(p.Longitude) }))
+          .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude))
+      );
+
+
       pinsRef.current = pinsLoaded;
 
-      if (keepView) {
-        const visible = getPinsVisibleInRegion(pinsLoaded, regionRef.current);
-        setPins(visible);
-      } else {
-        setPins(pinsLoaded);
-      }
+      // ✅ SIEMPRE solo visibles (tu criterio original)
+      const visible = getPinsVisibleInRegion(pinsLoaded, regionRef.current);
+      setPins(visible);
+
+
+
+
+
+
+
+
+
+
+
 
       if (recenter && pinsLoaded.length > 0) {
-        if (user?.proyecto === 1) setRegionByFeeder(pinsLoaded);
-        else setRegionBySed(pinsLoaded, selectedSed);
+        const newReg = buildRegionFromPins(pinsLoaded);
+        if (newReg) {
+          mapRef.current?.animateToRegion(newReg, 600);
+          setRegion(newReg); // ✅ sigues actualizando tu state para filtros/zoom
+        }
       }
+
+
+
+
+
+
+
+
+
+
+
+
+
     } catch (error) {
       console.error("❌ Error al cargar/refresh datos del mapa:", error);
     } finally {
@@ -169,8 +432,22 @@ const Map = () => {
   };
 
   const handleRefreshMap = async () => {
+    console.log("[REFRESH] tap");
+
+    endDragGap();
+
+
+    // ✅ reset de moves visuales
+    setMovedPins({});
+    setMovedGaps({});
+    setMovingGapKey(null);
+
+    // ✅ recarga desde SQLite (actualiza colores)
     await loadMapData({ recenter: false, keepView: true });
   };
+
+
+
 
   // cambio selección => carga con recenter
   useEffect(() => {
@@ -191,50 +468,29 @@ const Map = () => {
     loadMapData({ recenter: true, keepView: false });
   }, [user?.proyecto, selectedFeeder?.AlimInterno, selectedSed?.SedInterno]);
 
-  // GPS
+  // GPS (solo permisos 1 vez; NO watcher)
   useEffect(() => {
-    let subscription;
-    const initLocation = async () => {
+    let mounted = true;
+
+    (async () => {
       try {
         setLoadingLocation(true);
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!mounted) return;
         if (status !== "granted") return;
-
-        subscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 1000,
-            distanceInterval: 1,
-          },
-          () => { },
-        );
       } catch (err) {
-        console.warn("Error GPS:", err);
+        console.warn("Error GPS permission:", err);
       } finally {
-        setLoadingLocation(false);
+        if (mounted) setLoadingLocation(false);
       }
-    };
+    })();
 
-    initLocation();
-    return () => subscription && subscription.remove();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Heading
-  useEffect(() => {
-    let headingSub;
-    const initHeading = async () => {
-      try {
-        headingSub = await Location.watchHeadingAsync((e) =>
-          setHeading(e.trueHeading || 0),
-        );
-      } catch (err) {
-        console.warn("Error heading:", err);
-      }
-    };
 
-    initHeading();
-    return () => headingSub && headingSub.remove();
-  }, []);
 
   const goToUserLocation = async () => {
     try {
@@ -277,14 +533,373 @@ const Map = () => {
       .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude));
   }, [pins]);
 
-  const pinsSed = useMemo(() => memoPins.filter((p) => isSedType(p.Type)), [memoPins]);
+  const pinsSed = useMemo(() => sedsAll, [sedsAll]);
+
 
   const pinsPost = useMemo(() => {
     if (!shouldShowPins) return [];
+
+
+
     return memoPins.filter((p) => isPostType(p.Type));
   }, [memoPins, shouldShowPins]);
 
   const memoGaps = useMemo(() => (Array.isArray(gaps) ? gaps : []), [gaps]);
+
+  const getPinKey = (p) => {
+    const base =
+      p?.IdOriginal ??
+      p?.Id ??
+      p?.ElementCode ??
+      `${p?.Latitude}-${p?.Longitude}`;
+
+    // ✅ incluye Type SIEMPRE para evitar colisiones entre tablas (POST vs SED)
+    return String(`${p?.Type ?? "X"}-${base}`);
+  };
+
+
+  const getGapKey = (g) =>
+    String(
+      g?.VanoInterno ??
+      g?.VanoCodigo ??
+      `${g?.VanoLatitudIni}-${g?.VanoLongitudIni}-${g?.VanoLatitudFin}-${g?.VanoLongitudFin}`
+    );
+
+  const getPinCoord = (pin) => {
+    const key = getPinKey(pin);
+    const moved = movedPins[key];
+    return moved
+      ? moved
+      : { latitude: pin.Latitude, longitude: pin.Longitude };
+  };
+
+  const renderGaps = useMemo(() => {
+    return memoGaps.map((g) => {
+      const key = getGapKey(g);
+      const ov = movedGaps[key];
+      return ov ? { ...g, ...ov } : g;
+    });
+  }, [memoGaps, movedGaps]);
+
+  const handlePinMoveEnd = (pinKey, coord) => {
+    setMovedPins((prev) => ({ ...prev, [pinKey]: coord }));
+  };
+
+
+  const handleGapHandleDragEnd = (gapKey, gap, e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+
+    const midLat = (gap.VanoLatitudIni + gap.VanoLatitudFin) / 2;
+    const midLng = (gap.VanoLongitudIni + gap.VanoLongitudFin) / 2;
+
+    const dLat = latitude - midLat;
+    const dLng = longitude - midLng;
+
+    setMovedGaps((prev) => ({
+      ...prev,
+      [gapKey]: {
+        VanoLatitudIni: gap.VanoLatitudIni + dLat,
+        VanoLongitudIni: gap.VanoLongitudIni + dLng,
+        VanoLatitudFin: gap.VanoLatitudFin + dLat,
+        VanoLongitudFin: gap.VanoLongitudFin + dLng,
+      },
+    }));
+
+    setMovingGapKey(null);
+  };
+
+  // ------------------------------
+  // Elegir el vano más cercano a un punto (tap/hold sobre el mapa)
+  // ------------------------------
+  const distPointToSegmentSq = (p, a, b) => {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const wx = p.x - a.x;
+    const wy = p.y - a.y;
+
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) {
+      const dx = p.x - a.x;
+      const dy = p.y - a.y;
+      return dx * dx + dy * dy;
+    }
+
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      const dx = p.x - b.x;
+      const dy = p.y - b.y;
+      return dx * dx + dy * dy;
+    }
+
+    const t = c1 / c2;
+    const projx = a.x + t * vx;
+    const projy = a.y + t * vy;
+
+    const dx = p.x - projx;
+    const dy = p.y - projy;
+    return dx * dx + dy * dy;
+  };
+
+  const findNearestGapAtCoordinate = (coord) => {
+    if (!renderGaps?.length) return null;
+
+    const p = { x: coord.longitude, y: coord.latitude };
+
+    let bestGap = null;
+    let bestKey = null;
+    let bestD = Infinity;
+
+    for (const g of renderGaps) {
+      const key = getGapKey(g);
+      const a = { x: g.VanoLongitudIni, y: g.VanoLatitudIni };
+      const b = { x: g.VanoLongitudFin, y: g.VanoLatitudFin };
+
+      const d = distPointToSegmentSq(p, a, b);
+      if (d < bestD) {
+        bestD = d;
+        bestGap = g;
+        bestKey = key;
+      }
+    }
+
+    // tolerancia según zoom
+    const latDelta = regionRef.current?.latitudeDelta ?? 0.01;
+    const tol = latDelta * 0.015;
+    if (bestKey && bestD <= tol * tol) return { gapKey: bestKey, gap: bestGap };
+
+    return null;
+  };
+
+  const startDragGapAtCoordinate = (coord) => {
+    const hit = findNearestGapAtCoordinate(coord);
+    if (!hit?.gapKey || !hit?.gap) return;
+
+    // usa tu mismo mecanismo de arranque de drag
+    startDragGapFromHandle(hit.gapKey, hit.gap, coord);
+  };
+
+
+
+
+  // ------------------------------
+  // DRAG VANOS (long-press + drag) usando handles invisibles (Markers draggable)
+  // ------------------------------
+  const startDragGapFromHandle = (gapKey, gap, startCoord) => {
+    // gap ya viene de renderGaps (incluye movedGaps si ya se movió)
+    gapDragRef.current = {
+      gapKey,
+      startTouch: {
+        latitude: startCoord.latitude,
+        longitude: startCoord.longitude,
+      },
+      startGap: {
+        VanoLatitudIni: gap.VanoLatitudIni,
+        VanoLongitudIni: gap.VanoLongitudIni,
+        VanoLatitudFin: gap.VanoLatitudFin,
+        VanoLongitudFin: gap.VanoLongitudFin,
+      },
+    };
+
+    setIsDraggingGap(true);
+    setMovingGapKey(gapKey);
+
+    // (opcional) aseguras entry inicial
+    setMovedGaps((prev) => ({
+      ...prev,
+      [gapKey]: {
+        VanoLatitudIni: gap.VanoLatitudIni,
+        VanoLongitudIni: gap.VanoLongitudIni,
+        VanoLatitudFin: gap.VanoLatitudFin,
+        VanoLongitudFin: gap.VanoLongitudFin,
+      },
+    }));
+  };
+
+  const updateDragGap = (coord) => {
+    const st = gapDragRef.current;
+    if (!st) return;
+
+    const dLat = coord.latitude - st.startTouch.latitude;
+    const dLng = coord.longitude - st.startTouch.longitude;
+
+    setMovedGaps((prev) => ({
+      ...prev,
+      [st.gapKey]: {
+        VanoLatitudIni: st.startGap.VanoLatitudIni + dLat,
+        VanoLongitudIni: st.startGap.VanoLongitudIni + dLng,
+        VanoLatitudFin: st.startGap.VanoLatitudFin + dLat,
+        VanoLongitudFin: st.startGap.VanoLongitudFin + dLng,
+      },
+    }));
+  };
+
+  const endDragGap = () => {
+    setIsDraggingGap(false);
+    gapDragRef.current = null;
+    setMovingGapKey(null);
+  };
+
+  // ------------------------------
+  // ✅ LOCK: solo 1 elemento se mueve a la vez (PIN o VANO)
+  // ------------------------------
+  const activeDragPinRef = useRef(null); // guarda pinKey activo
+
+  const canDragPin = (pinKey) =>
+    !activeDragPinRef.current || activeDragPinRef.current === pinKey;
+
+  const beginPinDrag = (pinKey) => {
+    if (activeDragPinRef.current && activeDragPinRef.current !== pinKey) return false;
+
+    activeDragPinRef.current = pinKey;
+
+    // cancela intento de mover vano si estaba en hold/drag
+    gapHoldActiveRef.current = false;
+    if (gapHoldTimerRef.current) {
+      clearTimeout(gapHoldTimerRef.current);
+      gapHoldTimerRef.current = null;
+    }
+    if (gapDragRef.current) endDragGap();
+
+    return true;
+  };
+
+  const endPinDrag = (pinKey) => {
+    if (activeDragPinRef.current === pinKey) activeDragPinRef.current = null;
+  };
+
+
+  // ✅ mover vano con 1 dedo usando onTouchMove (x,y -> lat/lng)
+  const gapDragMovePtRef = useRef(null);
+  const gapDragMoveRafRef = useRef(false);
+
+  const updateDragGapFromPoint = (pt) => {
+    gapDragMovePtRef.current = pt;
+    if (gapDragMoveRafRef.current) return;
+
+    gapDragMoveRafRef.current = true;
+
+    requestAnimationFrame(async () => {
+      gapDragMoveRafRef.current = false;
+
+      // si ya no hay drag activo, no hagas nada
+      if (!gapDragRef.current) return;
+
+      const p = gapDragMovePtRef.current;
+      if (!p) return;
+
+      try {
+        const coord = await mapRef.current?.coordinateForPoint({ x: p.x, y: p.y });
+        if (!coord) return;
+
+        updateDragGap(coord);
+      } catch (_) { }
+    });
+  };
+
+  const clearGapHoldTimer = () => {
+    if (gapHoldTimerRef.current) {
+      clearTimeout(gapHoldTimerRef.current);
+      gapHoldTimerRef.current = null;
+    }
+  };
+
+  const startGapHold = (e) => {
+    if (activeDragPinRef.current) return; // ✅ si estás moviendo un PIN, no intentes mover vano
+    if (gapDragRef.current) return;
+
+
+    const x = e?.nativeEvent?.locationX;
+    const y = e?.nativeEvent?.locationY;
+    if (typeof x !== "number" || typeof y !== "number") return;
+
+    gapHoldActiveRef.current = true;
+    gapHoldStartPtRef.current = { x, y };
+    gapHoldLastPtRef.current = { x, y };
+
+    clearGapHoldTimer();
+
+    gapHoldTimerRef.current = setTimeout(async () => {
+      if (!gapHoldActiveRef.current) return;
+
+      const pt = gapHoldLastPtRef.current || gapHoldStartPtRef.current;
+
+      try {
+        const coord = await mapRef.current?.coordinateForPoint({ x: pt.x, y: pt.y });
+        if (!coord) return;
+        if (!gapHoldActiveRef.current) return;
+
+        // ✅ recién aquí se activa el movimiento del vano
+        startDragGapAtCoordinate(coord);
+      } catch (_) { }
+    }, GAP_HOLD_MS);
+  };
+
+
+  const moveGapHold = (e) => {
+    if (activeDragPinRef.current) return; // ✅ si estás moviendo un PIN, ignora touch del mapa
+    const x = e?.nativeEvent?.locationX;
+
+    const y = e?.nativeEvent?.locationY;
+    if (typeof x !== "number" || typeof y !== "number") return;
+
+    // ✅ si ya estás moviendo un vano, aquí lo mueves con 1 dedo
+    if (gapDragRef.current) {
+      updateDragGapFromPoint({ x, y });
+      return;
+    }
+
+    // --- modo "esperando hold" ---
+    if (!gapHoldActiveRef.current) return;
+
+    gapHoldLastPtRef.current = { x, y };
+
+    // si se movió antes del hold => cancela (para que sea pan normal)
+    const st = gapHoldStartPtRef.current;
+    if (!st) return;
+
+    const dx = x - st.x;
+    const dy = y - st.y;
+
+    if (dx * dx + dy * dy > GAP_CANCEL_PX * GAP_CANCEL_PX) {
+      gapHoldActiveRef.current = false;
+      clearGapHoldTimer();
+    }
+  };
+
+  const endGapHold = () => {
+    gapHoldActiveRef.current = false;
+    clearGapHoldTimer();
+
+    // ✅ si había drag activo, lo terminas al soltar
+    if (gapDragRef.current) endDragGap();
+  };
+
+
+
+  const handleGapDrag = (e) => {
+    if (!gapDragRef.current) return;
+    updateDragGap(e.nativeEvent.coordinate);
+  };
+
+  const handleGapDragEnd = (e) => {
+    if (!gapDragRef.current) return;
+    updateDragGap(e.nativeEvent.coordinate); // última actualización
+    endDragGap();
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const onMarkerPress = async (item) => {
     try {
@@ -293,28 +908,36 @@ const Map = () => {
       let datoElemento = null;
       let codigoEtiqueta = null;
 
-      if (item.Type === 5) {
+      const isPinPost = item?.Type === 5;
+      const isGap = !item?.Type && item?.VanoCodigo;
+
+      const pinKey = isPinPost ? getPinKey(item) : null;
+      const gapKey = isGap ? getGapKey(item) : null;
+
+      if (isPinPost) {
         const data = await getPostData(item.IdOriginal);
         datoElemento = data;
         tipoElemento = "Poste";
-        codigoElemento = datoElemento.PostCodigoNodo;
-        codigoEtiqueta = datoElemento.PostEtiqueta;
-      } else if (!item.Type && item.VanoCodigo) {
+        codigoElemento = datoElemento?.PostCodigoNodo ?? "";
+        codigoEtiqueta = datoElemento?.PostEtiqueta ?? "";
+      } else if (isGap) {
         tipoElemento = "Vano";
         codigoElemento = item.VanoCodigo;
         codigoEtiqueta = item.VanoEtiqueta;
         datoElemento = item;
       } else {
         tipoElemento = "Desconocido";
-        codigoElemento = "";
         datoElemento = item;
       }
 
       Alert.alert(
         "Elemento seleccionado",
-        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta}`,
+        `Tipo: ${tipoElemento}\nCódigo: ${codigoElemento}\nEtiqueta: ${codigoEtiqueta ?? ""}`,
         [
           { text: "Cancelar", style: "cancel" },
+
+
+
           {
             text: "Inspeccionar",
             onPress: () => {
@@ -322,12 +945,13 @@ const Map = () => {
               router.push("inspection");
             },
           },
-        ],
+        ]
       );
     } catch (err) {
       console.warn("Error al seleccionar marker:", err);
     }
   };
+
 
   // placeholder
   if (
@@ -445,139 +1069,157 @@ const Map = () => {
       <MapView
         ref={mapRef}
         style={mapStyles.mapContainer}
-        region={region}
         initialRegion={region}
         mapType="satellite"
         showsUserLocation={true}
         followsUserLocation={false}
         showsMyLocationButton={false}
+
+        moveOnMarkerPress={false}
+
+        scrollEnabled={!isDraggingGap}
+        zoomEnabled={!isDraggingGap}
+        rotateEnabled={!isDraggingGap}
+        pitchEnabled={!isDraggingGap}
+
+        onTouchStart={startGapHold}
+        onTouchMove={moveGapHold}
+        onTouchEnd={endGapHold}
+        onTouchCancel={endGapHold}
+
+
+
+
+        onPress={() => {
+          // toque normal cancela drag si está activo
+          if (isDraggingGap) endDragGap();
+        }}
+
+
+
+
         onRegionChangeComplete={(reg) => {
+          if (isDraggingGap) return;
+
+          const now = Date.now();
+          if (now - lastRegionTickRef.current < 160) return;
+          lastRegionTickRef.current = now;
+
+          const prev = lastRegionSentRef.current;
+          if (prev) {
+            const same =
+              Math.abs(prev.latitude - reg.latitude) < 1e-6 &&
+              Math.abs(prev.longitude - reg.longitude) < 1e-6 &&
+              Math.abs(prev.latitudeDelta - reg.latitudeDelta) < 1e-7 &&
+              Math.abs(prev.longitudeDelta - reg.longitudeDelta) < 1e-7;
+
+            if (same) return;
+          }
+
+          lastRegionSentRef.current = reg;
           setRegion(reg);
           getPinsByRegion(reg);
         }}
       >
+
         {/* GAPS */}
-        {memoGaps.map((gap, i) => (
-          <Polyline
-            key={`gap-${i}`}
-            coordinates={[
-              { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
-              { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
-            ]}
-            strokeWidth={3}
-            strokeColor={getGapColorByInspected(gap)}
-            tappable
-            onPress={() => {
-              const overlapped = findOverlappedGaps(gap, memoGaps);
+        {renderGaps.map((gap, i) => {
+          const gapKey = getGapKey(gap);
 
-              if (overlapped.length === 1) {
-                onMarkerPress(overlapped[0]);
-              } else if (overlapped.length > 1) {
-                setOverlappedGaps(overlapped);
-                setShowGapSelector(true);
-              }
-            }}
-          />
-        ))}
-
-        {/* POSTES: ICONO + LABEL */}
-        {pinsPost.map((pin, i) => {
-          const iconSize = getIconSizeByType(pin.Type);
-          const cleanLabel = formatLabel(pin.Label);
-          const showLabel = cleanLabel.length > 0;
-
-          const coordinate = {
-            latitude: pin.Latitude,
-            longitude: pin.Longitude,
+          const mid = {
+            latitude: (gap.VanoLatitudIni + gap.VanoLatitudFin) / 2,
+            longitude: (gap.VanoLongitudIni + gap.VanoLongitudFin) / 2,
           };
 
           return (
-            <Fragment key={`pin-post-${pin.Id || i}`}>
-              <Marker
-                coordinate={coordinate}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={true}
-                onPress={() => onMarkerPress(pin)}
-                zIndex={10}
-              >
-                <View style={pinStyles.iconCanvas} collapsable={false}>
-                  <View style={pinStyles.iconWrapper}>
-                    <Image
-                      source={getSourceImageFromType2(pin)}
-                      style={[
-                        pinStyles.pinIcon,
-                        { width: iconSize, height: iconSize },
-                      ]}
-                    />
-                  </View>
-                </View>
-              </Marker>
+            <Fragment key={`gap-${gapKey}`}>
+              <Polyline
+                coordinates={[
+                  { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
+                  { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
+                ]}
+                strokeWidth={movingGapKey === gapKey ? 6 : 3}
+                strokeColor={getGapColorByInspected(gap)}
+                tappable
+                onPress={() => {
+                  if (isDraggingGap) return;
+                  const overlapped = findOverlappedGaps(gap, renderGaps);
 
-              {showLabel && (
-                <Marker
-                  coordinate={coordinate}
-                  anchor={{ x: 0.5, y: 0.0 }}
-                  centerOffset={{ x: 0, y: getLabelOffsetByType(pin.Type) }}
-                  tracksViewChanges={true}
-                  zIndex={999}
-                  tappable
-                  onPress={() => onMarkerPress(pin)}
-                >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
-                    <View style={pinStyles.labelBox}>
-                      <Text style={pinStyles.labelText}>{cleanLabel}</Text>
-                    </View>
-                  </View>
-                </Marker>
-              )}
+                  if (overlapped.length === 1) {
+                    onMarkerPress(overlapped[0]);
+                  } else if (overlapped.length > 1) {
+                    setOverlappedGaps(overlapped);
+                    setShowGapSelector(true);
+                  }
+                }}
+              />
+
+
+
+
+
+
+
+
             </Fragment>
           );
         })}
 
+
+        {/* POSTES: ICONO + LABEL */}
+        {pinsPost.map((pin) => {
+          const iconSize = getIconSizeByType(pin.Type);
+
+          const pinKey = getPinKey(pin);        // ✅ define aquí
+          const coordinate = getPinCoord(pin);  // ✅ aplica el override si fue movido
+
+          return (
+            <PostWithLabel
+              key={`pin-post-${pinKey}`}
+              pin={pin}
+              pinKey={pinKey}
+              iconSize={iconSize}
+              coordinate={coordinate}
+              onMarkerPress={onMarkerPress}
+              hideIcon={HIDE_POST_ICON}
+              hideLabel={HIDE_POST_LABEL}
+              onDragEndPin={handlePinMoveEnd}
+              canDrag={canDragPin(pinKey)}
+              onDragStartPin={beginPinDrag}
+              onDragFinishPin={endPinDrag}
+            />
+
+          );
+        })}
+
+
+
+
+
+
+
+
         {/* SED: ICONO + LABEL */}
-        {pinsSed.map((pin, i) => {
-          const coordinate = {
-            latitude: pin.Latitude,
-            longitude: pin.Longitude,
-          };
+        {pinsSed.map((pin) => {
+          const pinKey = getPinKey(pin);
+          const coordinate = getPinCoord(pin);
           const label = getCleanLabel(pin);
 
           return (
-            <Fragment key={`pin-sed-${pin.Id || i}`}>
-              <Marker
-                coordinate={coordinate}
-                anchor={{ x: 0.5, y: 1.5 }}
-                tracksViewChanges={true}
-                zIndex={2000}
-                onPress={() => onMarkerPress(pin)}
-              >
-                <View collapsable={false}>
-                  <Image
-                    source={getSourceImageFromType2(pin)}
-                    style={{ width: 35, height: 35, resizeMode: "contain" }}
-                  />
-                </View>
-              </Marker>
-
-              {label !== "" && (
-                <Marker
-                  coordinate={coordinate}
-                  anchor={{ x: 0.5, y: 1.9 }}
-                  centerOffset={{ x: 0, y: 30 }}
-                  tracksViewChanges={true}
-                  zIndex={2001}
-                  tappable={false}
-                >
-                  <View style={pinStyles.labelCanvas} collapsable={false} pointerEvents="none">
-                    <View style={pinStyles.labelBox}>
-                      <Text style={pinStyles.labelText}>{label}</Text>
-                    </View>
-                  </View>
-                </Marker>
-              )}
-            </Fragment>
+            <SedWithLabel
+              key={`pin-sed-${pinKey}`}
+              pin={pin}
+              pinKey={pinKey}
+              coordinate={coordinate}
+              label={label}
+              canDrag={canDragPin(pinKey)}
+              onDragStartPin={beginPinDrag}
+              onDragFinishPin={endPinDrag}
+              onDragEndPin={handlePinMoveEnd}
+            />
           );
         })}
+
       </MapView>
 
       <GapSelectorModal

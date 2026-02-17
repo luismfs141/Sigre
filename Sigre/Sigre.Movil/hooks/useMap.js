@@ -1,7 +1,12 @@
 // useMap.js
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //name del proyecto 
+import { useRef } from "react";
 import { useDatos } from "../context/DatosContext";
+import { ZOOM_THRESHOLD } from "../utils/map/mapUtils";
+
+
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,17 +74,47 @@ export const useMap = () => {
   };
 
   // --------------------------------------------------------------
-  // MOSTRAR SOLO LOS PINS EN LA REGION VISIBLE
+  // MOSTRAR SOLO LOS PINS EN LA REGION VISIBLE + LOG DIFF
   // --------------------------------------------------------------
-  const getPinsByRegion = (region) => {
-    if (!Array.isArray(totalPins)) return setPins([]);
+  const DEBUG_VISIBLE_PINS = true;     // <-- ponlo false cuando termines
+  const DEBUG_LOG_LIMIT = 20;         // <-- cuantos IDs muestra
 
-    // Si el zoom no es suficiente → no mostrar pines
-    if (region.latitudeDelta > 0.008) {
-      setPins([]);
+  const getPinKey = (p) =>
+    String(
+      p?.IdOriginal ??
+      p?.Id ??
+      p?.ElementCode ??
+      `${p?.Type}-${p?.Latitude}-${p?.Longitude}`
+    );
+
+  const prevVisibleIdsRef = useRef(new Set());
+
+  const getPinsByRegion = (region, pinsOverride = null, options = {}) => {
+    const { force = false } = options;
+
+    const basePins = Array.isArray(pinsOverride) ? pinsOverride : totalPins;
+
+    if (!Array.isArray(basePins)) {
+      if (prevVisibleIdsRef.current.size !== 0) {
+        prevVisibleIdsRef.current.clear();
+        setPins([]);
+      }
       return;
     }
 
+    // Si el zoom no es suficiente → no mostrar pines
+    if (region.latitudeDelta > ZOOM_THRESHOLD) {
+      if (prevVisibleIdsRef.current.size !== 0) {
+        if (DEBUG_VISIBLE_PINS) {
+          console.log(
+            `[PINS][ZOOM OUT] visible->0 (prev=${prevVisibleIdsRef.current.size})`
+          );
+        }
+        prevVisibleIdsRef.current.clear();
+        setPins([]);
+      }
+      return;
+    }
 
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
 
@@ -88,15 +123,50 @@ export const useMap = () => {
     const minLng = longitude - longitudeDelta * 0.6;
     const maxLng = longitude + longitudeDelta * 0.6;
 
-    const visiblePins = totalPins.filter(p =>
-      p.Latitude >= minLat &&
-      p.Latitude <= maxLat &&
-      p.Longitude >= minLng &&
-      p.Longitude <= maxLng
+    const visiblePins = basePins.filter(
+      (p) =>
+        p.Latitude >= minLat &&
+        p.Latitude <= maxLat &&
+        p.Longitude >= minLng &&
+        p.Longitude <= maxLng
     );
 
+    const nextIds = new Set(visiblePins.map(getPinKey));
+    const prevIds = prevVisibleIdsRef.current;
+
+    // --- diff: added / removed ---
+    const added = [];
+    for (const id of nextIds) if (!prevIds.has(id)) added.push(id);
+
+    const removed = [];
+    for (const id of prevIds) if (!nextIds.has(id)) removed.push(id);
+
+    // --- si NO cambió el set y NO es force, no hacemos setPins ---
+    if (!force && prevIds.size === nextIds.size) {
+      let same = true;
+      for (const id of nextIds) {
+        if (!prevIds.has(id)) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return;
+    }
+
+    if (DEBUG_VISIBLE_PINS) {
+      console.log(
+        `[PINS][DIFF${force ? " FORCE" : ""}] visible=${nextIds.size} (+${added.length} / -${removed.length})`
+      );
+      if (added.length) console.log(`[PINS][ADD]`, added.slice(0, DEBUG_LOG_LIMIT));
+      if (removed.length) console.log(`[PINS][REMOVE]`, removed.slice(0, DEBUG_LOG_LIMIT));
+    }
+
+    prevVisibleIdsRef.current = nextIds;
     setPins(visiblePins);
   };
+
+
+
 
 
   // --------------------------------------------------------------
