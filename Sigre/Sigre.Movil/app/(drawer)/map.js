@@ -28,6 +28,7 @@ const HIDE_POST_LABEL = false; // false para volver a ver el globo+texto
 
 const DEBUG_MARKER_LIFECYCLE = false; // ponlo true para test
 
+const GAP_HANDLE_DEBUG = false; // true = se ven los “handles” para test
 
 
 
@@ -196,10 +197,15 @@ const Map = () => {
   const [selectedSearchResult, setSelectedSearchResult] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const [movedPins, setMovedPins] = useState({});   // { pinKey: {latitude, longitude} }
-  const [movedGaps, setMovedGaps] = useState({});   // { gapKey: {VanoLatitudIni,...} }
-  const [movingPinKey, setMovingPinKey] = useState(null);
-  const [movingGapKey, setMovingGapKey] = useState(null);
+  const [movedPins, setMovedPins] = useState({});
+  const [movedGaps, setMovedGaps] = useState({});
+
+  const [isDraggingGap, setIsDraggingGap] = useState(false);
+  const gapDragRef = useRef(null);
+  // gapDragRef.current = { gapKey, startTouch:{lat,lng}, startGap:{...coords} }
+
+  const [movingGapKey, setMovingGapKey] = useState(null); // solo para "highlight" opcional
+
 
 
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
@@ -272,6 +278,9 @@ const Map = () => {
 
   const handleRefreshMap = async () => {
     console.log("[REFRESH] tap");
+
+    endDragGap();
+
 
     // ✅ reset de moves visuales
     setMovedPins({});
@@ -414,8 +423,8 @@ const Map = () => {
 
   const handlePinMoveEnd = (pinKey, coord) => {
     setMovedPins((prev) => ({ ...prev, [pinKey]: coord }));
-    setMovingPinKey(null);
   };
+
 
   const handleGapHandleDragEnd = (gapKey, gap, e) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -440,68 +449,94 @@ const Map = () => {
   };
 
 
+
+
+
+
+
+
+
   // ------------------------------
-  // LONG PRESS: detectar vano cercano
+  // DRAG VANOS (long-press + drag) usando handles invisibles (Markers draggable)
   // ------------------------------
-  const distPointToSegmentSq = (p, a, b) => {
-    // p,a,b: {x,y}  (x=lng, y=lat)
-    const vx = b.x - a.x;
-    const vy = b.y - a.y;
-    const wx = p.x - a.x;
-    const wy = p.y - a.y;
+  const startDragGapFromHandle = (gapKey, gap, startCoord) => {
+    // gap ya viene de renderGaps (incluye movedGaps si ya se movió)
+    gapDragRef.current = {
+      gapKey,
+      startTouch: {
+        latitude: startCoord.latitude,
+        longitude: startCoord.longitude,
+      },
+      startGap: {
+        VanoLatitudIni: gap.VanoLatitudIni,
+        VanoLongitudIni: gap.VanoLongitudIni,
+        VanoLatitudFin: gap.VanoLatitudFin,
+        VanoLongitudFin: gap.VanoLongitudFin,
+      },
+    };
 
-    const c1 = vx * wx + vy * wy;
-    if (c1 <= 0) {
-      const dx = p.x - a.x;
-      const dy = p.y - a.y;
-      return dx * dx + dy * dy;
-    }
+    setIsDraggingGap(true);
+    setMovingGapKey(gapKey);
 
-    const c2 = vx * vx + vy * vy;
-    if (c2 <= c1) {
-      const dx = p.x - b.x;
-      const dy = p.y - b.y;
-      return dx * dx + dy * dy;
-    }
-
-    const t = c1 / c2;
-    const projx = a.x + t * vx;
-    const projy = a.y + t * vy;
-
-    const dx = p.x - projx;
-    const dy = p.y - projy;
-    return dx * dx + dy * dy;
+    // (opcional) aseguras entry inicial
+    setMovedGaps((prev) => ({
+      ...prev,
+      [gapKey]: {
+        VanoLatitudIni: gap.VanoLatitudIni,
+        VanoLongitudIni: gap.VanoLongitudIni,
+        VanoLatitudFin: gap.VanoLatitudFin,
+        VanoLongitudFin: gap.VanoLongitudFin,
+      },
+    }));
   };
 
-  const findNearestGapKey = (coord) => {
-    if (!renderGaps?.length) return null;
+  const updateDragGap = (coord) => {
+    const st = gapDragRef.current;
+    if (!st) return;
 
-    const p = { x: coord.longitude, y: coord.latitude };
+    const dLat = coord.latitude - st.startTouch.latitude;
+    const dLng = coord.longitude - st.startTouch.longitude;
 
-    let bestKey = null;
-    let bestGap = null;
-    let bestD = Infinity;
-
-    for (const g of renderGaps) {
-      const key = getGapKey(g);
-      const a = { x: g.VanoLongitudIni, y: g.VanoLatitudIni };
-      const b = { x: g.VanoLongitudFin, y: g.VanoLatitudFin };
-
-      const d = distPointToSegmentSq(p, a, b);
-      if (d < bestD) {
-        bestD = d;
-        bestKey = key;
-        bestGap = g;
-      }
-    }
-
-    // tolerancia depende del zoom (ajústala si quieres más/menos sensible)
-    const latDelta = regionRef.current?.latitudeDelta ?? 0.01;
-    const tol = latDelta * 0.015; // 1.5% aprox del alto visible
-    if (bestKey && bestD <= tol * tol) return { bestKey, bestGap };
-
-    return null;
+    setMovedGaps((prev) => ({
+      ...prev,
+      [st.gapKey]: {
+        VanoLatitudIni: st.startGap.VanoLatitudIni + dLat,
+        VanoLongitudIni: st.startGap.VanoLongitudIni + dLng,
+        VanoLatitudFin: st.startGap.VanoLatitudFin + dLat,
+        VanoLongitudFin: st.startGap.VanoLongitudFin + dLng,
+      },
+    }));
   };
+
+  const endDragGap = () => {
+    setIsDraggingGap(false);
+    gapDragRef.current = null;
+    setMovingGapKey(null);
+  };
+
+  const handleGapDrag = (e) => {
+    if (!gapDragRef.current) return;
+    updateDragGap(e.nativeEvent.coordinate);
+  };
+
+  const handleGapDragEnd = (e) => {
+    if (!gapDragRef.current) return;
+    updateDragGap(e.nativeEvent.coordinate); // última actualización
+    endDragGap();
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   const onMarkerPress = async (item) => {
@@ -679,22 +714,23 @@ const Map = () => {
         followsUserLocation={false}
         showsMyLocationButton={false}
 
+        scrollEnabled={true}
+        zoomEnabled={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
+
+
         onPress={() => {
-          // ✅ un toque en mapa cancela el modo mover vano
-          if (movingGapKey) setMovingGapKey(null);
+          // toque normal cancela drag si está activo
+          if (isDraggingGap) endDragGap();
         }}
 
-        onLongPress={(e) => {
-          // ✅ long press cerca de una línea -> activa mover ese vano
-          const hit = findNearestGapKey(e.nativeEvent.coordinate);
-          if (hit?.bestKey) {
-            setMovingGapKey(hit.bestKey);
-          } else {
-            setMovingGapKey(null);
-          }
-        }}
+
+
 
         onRegionChangeComplete={(reg) => {
+          if (isDraggingGap) return;
+
           const now = Date.now();
           if (now - lastRegionTickRef.current < 160) return;
           lastRegionTickRef.current = now;
@@ -732,10 +768,11 @@ const Map = () => {
                   { latitude: gap.VanoLatitudIni, longitude: gap.VanoLongitudIni },
                   { latitude: gap.VanoLatitudFin, longitude: gap.VanoLongitudFin },
                 ]}
-                strokeWidth={3}
+                strokeWidth={movingGapKey === gapKey ? 6 : 3}
                 strokeColor={getGapColorByInspected(gap)}
                 tappable
                 onPress={() => {
+                  if (isDraggingGap) return;
                   const overlapped = findOverlappedGaps(gap, renderGaps);
 
                   if (overlapped.length === 1) {
@@ -747,29 +784,50 @@ const Map = () => {
                 }}
               />
 
-              {/* HANDLE para mover vano (solo cuando eliges "Mover (visual)") */}
-              {movingGapKey === gapKey && (
-                <Marker
-                  coordinate={mid}
-                  draggable
-                  tappable={false}
-                  zIndex={5000}
-                  onDragEnd={(e) => handleGapHandleDragEnd(gapKey, gap, e)}
+              {/* HANDLES INVISIBLES para mover el vano (long-press + drag) */}
+              {(() => {
+                // 5 puntos a lo largo de la línea (más “desde cualquier parte”)
+                const TS = [0.15, 0.35, 0.5, 0.65, 0.85];
+
+                return TS.map((t, idx) => {
+                  const pt = {
+                    latitude: gap.VanoLatitudIni + (gap.VanoLatitudFin - gap.VanoLatitudIni) * t,
+                    longitude: gap.VanoLongitudIni + (gap.VanoLongitudFin - gap.VanoLongitudIni) * t,
+                  };
+
+                  return (
+                    <Marker
+                      key={`gap-handle-${gapKey}-${idx}`}
+                      coordinate={pt}
+                      draggable
+                      tracksViewChanges={false}
+                      zIndex={6000}
+                      onDragStart={(e) => startDragGapFromHandle(gapKey, gap, e.nativeEvent.coordinate)}
+                      onDrag={handleGapDrag}
+                      onDragEnd={handleGapDragEnd}
+                    >
+                      <View
+                        style={{
+                          width: 70,
+                          height: 70,
+                          borderRadius: 35,
+                          backgroundColor: GAP_HANDLE_DEBUG
+                            ? "rgba(0,200,83,0.25)"
+                            : "rgba(0,0,0,0.01)", // casi invisible pero “captura”
+                          borderWidth: GAP_HANDLE_DEBUG ? 2 : 0,
+                          borderColor: GAP_HANDLE_DEBUG ? "#00c853" : "transparent",
+                        }}
+                      />
+                    </Marker>
+                  );
+                });
+              })()}
 
 
-                >
-                  <View
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: "#00c853",
-                      borderWidth: 2,
-                      borderColor: "#fff",
-                    }}
-                  />
-                </Marker>
-              )}
+
+
+
+
             </Fragment>
           );
         })}
