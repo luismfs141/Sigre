@@ -21,16 +21,12 @@ import {
 } from "../../utils/map/mapUtils";
 import { getGapColorByInspected, getSourceImageFromType2 } from "../../utils/utils.js";
 
-
-
 const HIDE_POST_ICON = false; // <-- ponlo en false para volver a verlo
 const HIDE_POST_LABEL = false; // false para volver a ver el globo+texto
 
 const DEBUG_MARKER_LIFECYCLE = false; // ponlo true para test
 
 const GAP_HANDLE_DEBUG = false; // true = se ven los “handles” para test
-
-
 
 const PostWithLabel = memo(function PostWithLabel({
   pin,
@@ -301,8 +297,6 @@ const Map = () => {
   const gapHoldStartPtRef = useRef(null); // {x,y}
   const gapHoldLastPtRef = useRef(null);  // {x,y}
 
-
-
   const shouldShowPins = region?.latitudeDelta < ZOOM_THRESHOLD;
 
   // refresh sin mover cámara
@@ -337,6 +331,7 @@ const Map = () => {
     return { latitude, longitude, latitudeDelta, longitudeDelta };
   };
 
+ 
 
   const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
     if (user?.proyecto === 1 && !selectedFeeder) {
@@ -398,6 +393,16 @@ const Map = () => {
       setPins(visible);
 
 
+
+
+
+
+
+
+
+
+
+
       if (recenter && pinsLoaded.length > 0) {
         const newReg = buildRegionFromPins(pinsLoaded);
         if (newReg) {
@@ -405,6 +410,18 @@ const Map = () => {
           setRegion(newReg); // ✅ sigues actualizando tu state para filtros/zoom
         }
       }
+
+
+
+
+
+
+
+
+
+
+
+
 
     } catch (error) {
       console.error("❌ Error al cargar/refresh datos del mapa:", error);
@@ -590,10 +607,6 @@ const Map = () => {
 
     setMovingGapKey(null);
   };
-
-
-
-
 
   // ------------------------------
   // Elegir el vano más cercano a un punto (tap/hold sobre el mapa)
