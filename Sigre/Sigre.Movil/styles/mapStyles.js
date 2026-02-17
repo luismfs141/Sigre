@@ -43,10 +43,10 @@ export const pinStyles = StyleSheet.create({
   iconCanvas: {
     width: 32, 
     height: 32,
-    backgroundColor: "rgba(0,255,0,0.25)", // 🟢 debug
+    //backgroundColor: "rgba(0,255,0,0.25)", // 🟢 debug
 
-    borderWidth: 1,
-    borderColor: "rgba(0,255,0,0.85)",
+    //borderWidth: 1,
+    //borderColor: "rgba(0,255,0,0.85)",
 
     alignItems: "center",
     justifyContent: "center",
@@ -98,9 +98,9 @@ export const pinStyles = StyleSheet.create({
   labelCanvas: {
     width: 32,
     height: 32,
-    backgroundColor: "rgba(255,0,0,0.25)", // 🔴 debug
-    borderWidth: 1,
-    borderColor: "rgba(255,0,0,0.85)",
+    //backgroundColor: "rgba(255,0,0,0.25)", // 🔴 debug
+    //borderWidth: 1,
+    //borderColor: "rgba(255,0,0,0.85)",
     alignItems: "center",
     justifyContent: "center",
   },

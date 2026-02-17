@@ -68,10 +68,13 @@ const PostWithLabel = memo(function PostWithLabel({
     return () => clearTimeout(t);
   }, [iconSize, hideIcon, hideLabel, pin?.Type]);
 
-  const handlePress = () => {
+  const handlePress = (e) => {
+    e?.stopPropagation?.(); // ✅ evita que el mapa “agarre” el toque
     if (draggingRef.current) return;
     onMarkerPress(pin);
   };
+
+
 
   const handleDragStart = () => {
     draggingRef.current = true;
@@ -205,6 +208,15 @@ const Map = () => {
   // gapDragRef.current = { gapKey, startTouch:{lat,lng}, startGap:{...coords} }
 
   const [movingGapKey, setMovingGapKey] = useState(null); // solo para "highlight" opcional
+
+
+  const GAP_HOLD_MS = 350;      // Tiempo para detectar movel elemento
+  const GAP_CANCEL_PX = 10;      // ✅ tolerancia de movimiento en pixeles
+
+  const gapHoldTimerRef = useRef(null);
+  const gapHoldActiveRef = useRef(false);
+  const gapHoldStartPtRef = useRef(null); // {x,y}
+  const gapHoldLastPtRef = useRef(null);  // {x,y}
 
 
 
@@ -452,6 +464,75 @@ const Map = () => {
 
 
 
+  // ------------------------------
+  // Elegir el vano más cercano a un punto (tap/hold sobre el mapa)
+  // ------------------------------
+  const distPointToSegmentSq = (p, a, b) => {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const wx = p.x - a.x;
+    const wy = p.y - a.y;
+
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) {
+      const dx = p.x - a.x;
+      const dy = p.y - a.y;
+      return dx * dx + dy * dy;
+    }
+
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      const dx = p.x - b.x;
+      const dy = p.y - b.y;
+      return dx * dx + dy * dy;
+    }
+
+    const t = c1 / c2;
+    const projx = a.x + t * vx;
+    const projy = a.y + t * vy;
+
+    const dx = p.x - projx;
+    const dy = p.y - projy;
+    return dx * dx + dy * dy;
+  };
+
+  const findNearestGapAtCoordinate = (coord) => {
+    if (!renderGaps?.length) return null;
+
+    const p = { x: coord.longitude, y: coord.latitude };
+
+    let bestGap = null;
+    let bestKey = null;
+    let bestD = Infinity;
+
+    for (const g of renderGaps) {
+      const key = getGapKey(g);
+      const a = { x: g.VanoLongitudIni, y: g.VanoLatitudIni };
+      const b = { x: g.VanoLongitudFin, y: g.VanoLatitudFin };
+
+      const d = distPointToSegmentSq(p, a, b);
+      if (d < bestD) {
+        bestD = d;
+        bestGap = g;
+        bestKey = key;
+      }
+    }
+
+    // tolerancia según zoom
+    const latDelta = regionRef.current?.latitudeDelta ?? 0.01;
+    const tol = latDelta * 0.015;
+    if (bestKey && bestD <= tol * tol) return { gapKey: bestKey, gap: bestGap };
+
+    return null;
+  };
+
+  const startDragGapAtCoordinate = (coord) => {
+    const hit = findNearestGapAtCoordinate(coord);
+    if (!hit?.gapKey || !hit?.gap) return;
+
+    // usa tu mismo mecanismo de arranque de drag
+    startDragGapFromHandle(hit.gapKey, hit.gap, coord);
+  };
 
 
 
@@ -513,6 +594,111 @@ const Map = () => {
     gapDragRef.current = null;
     setMovingGapKey(null);
   };
+
+  // ✅ mover vano con 1 dedo usando onTouchMove (x,y -> lat/lng)
+  const gapDragMovePtRef = useRef(null);
+  const gapDragMoveRafRef = useRef(false);
+
+  const updateDragGapFromPoint = (pt) => {
+    gapDragMovePtRef.current = pt;
+    if (gapDragMoveRafRef.current) return;
+
+    gapDragMoveRafRef.current = true;
+
+    requestAnimationFrame(async () => {
+      gapDragMoveRafRef.current = false;
+
+      // si ya no hay drag activo, no hagas nada
+      if (!gapDragRef.current) return;
+
+      const p = gapDragMovePtRef.current;
+      if (!p) return;
+
+      try {
+        const coord = await mapRef.current?.coordinateForPoint({ x: p.x, y: p.y });
+        if (!coord) return;
+
+        updateDragGap(coord);
+      } catch (_) { }
+    });
+  };
+
+  const clearGapHoldTimer = () => {
+    if (gapHoldTimerRef.current) {
+      clearTimeout(gapHoldTimerRef.current);
+      gapHoldTimerRef.current = null;
+    }
+  };
+
+  const startGapHold = (e) => {
+    // si ya estás moviendo un vano, ignora
+    if (gapDragRef.current) return;
+
+    const x = e?.nativeEvent?.locationX;
+    const y = e?.nativeEvent?.locationY;
+    if (typeof x !== "number" || typeof y !== "number") return;
+
+    gapHoldActiveRef.current = true;
+    gapHoldStartPtRef.current = { x, y };
+    gapHoldLastPtRef.current = { x, y };
+
+    clearGapHoldTimer();
+
+    gapHoldTimerRef.current = setTimeout(async () => {
+      if (!gapHoldActiveRef.current) return;
+
+      const pt = gapHoldLastPtRef.current || gapHoldStartPtRef.current;
+
+      try {
+        const coord = await mapRef.current?.coordinateForPoint({ x: pt.x, y: pt.y });
+        if (!coord) return;
+        if (!gapHoldActiveRef.current) return;
+
+        // ✅ recién aquí se activa el movimiento del vano
+        startDragGapAtCoordinate(coord);
+      } catch (_) { }
+    }, GAP_HOLD_MS);
+  };
+
+
+  const moveGapHold = (e) => {
+    const x = e?.nativeEvent?.locationX;
+    const y = e?.nativeEvent?.locationY;
+    if (typeof x !== "number" || typeof y !== "number") return;
+
+    // ✅ si ya estás moviendo un vano, aquí lo mueves con 1 dedo
+    if (gapDragRef.current) {
+      updateDragGapFromPoint({ x, y });
+      return;
+    }
+
+    // --- modo "esperando hold" ---
+    if (!gapHoldActiveRef.current) return;
+
+    gapHoldLastPtRef.current = { x, y };
+
+    // si se movió antes del hold => cancela (para que sea pan normal)
+    const st = gapHoldStartPtRef.current;
+    if (!st) return;
+
+    const dx = x - st.x;
+    const dy = y - st.y;
+
+    if (dx * dx + dy * dy > GAP_CANCEL_PX * GAP_CANCEL_PX) {
+      gapHoldActiveRef.current = false;
+      clearGapHoldTimer();
+    }
+  };
+
+  const endGapHold = () => {
+    gapHoldActiveRef.current = false;
+    clearGapHoldTimer();
+
+    // ✅ si había drag activo, lo terminas al soltar
+    if (gapDragRef.current) endDragGap();
+  };
+
+
 
   const handleGapDrag = (e) => {
     if (!gapDragRef.current) return;
@@ -714,10 +900,19 @@ const Map = () => {
         followsUserLocation={false}
         showsMyLocationButton={false}
 
-        scrollEnabled={true}
-        zoomEnabled={true}
-        rotateEnabled={true}
-        pitchEnabled={true}
+        moveOnMarkerPress={false}
+
+        scrollEnabled={!isDraggingGap}
+        zoomEnabled={!isDraggingGap}
+        rotateEnabled={!isDraggingGap}
+        pitchEnabled={!isDraggingGap}
+
+        onTouchStart={startGapHold}
+        onTouchMove={moveGapHold}
+        onTouchEnd={endGapHold}
+        onTouchCancel={endGapHold}
+
+     
 
 
         onPress={() => {
@@ -784,44 +979,7 @@ const Map = () => {
                 }}
               />
 
-              {/* HANDLES INVISIBLES para mover el vano (long-press + drag) */}
-              {(() => {
-                // 5 puntos a lo largo de la línea (más “desde cualquier parte”)
-                const TS = [0.15, 0.35, 0.5, 0.65, 0.85];
 
-                return TS.map((t, idx) => {
-                  const pt = {
-                    latitude: gap.VanoLatitudIni + (gap.VanoLatitudFin - gap.VanoLatitudIni) * t,
-                    longitude: gap.VanoLongitudIni + (gap.VanoLongitudFin - gap.VanoLongitudIni) * t,
-                  };
-
-                  return (
-                    <Marker
-                      key={`gap-handle-${gapKey}-${idx}`}
-                      coordinate={pt}
-                      draggable
-                      tracksViewChanges={false}
-                      zIndex={6000}
-                      onDragStart={(e) => startDragGapFromHandle(gapKey, gap, e.nativeEvent.coordinate)}
-                      onDrag={handleGapDrag}
-                      onDragEnd={handleGapDragEnd}
-                    >
-                      <View
-                        style={{
-                          width: 70,
-                          height: 70,
-                          borderRadius: 35,
-                          backgroundColor: GAP_HANDLE_DEBUG
-                            ? "rgba(0,200,83,0.25)"
-                            : "rgba(0,0,0,0.01)", // casi invisible pero “captura”
-                          borderWidth: GAP_HANDLE_DEBUG ? 2 : 0,
-                          borderColor: GAP_HANDLE_DEBUG ? "#00c853" : "transparent",
-                        }}
-                      />
-                    </Marker>
-                  );
-                });
-              })()}
 
 
 
