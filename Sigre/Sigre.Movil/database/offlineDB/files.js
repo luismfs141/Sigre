@@ -399,3 +399,94 @@ export const getArchivoByIdLocal = async (archInterno) => {
     return null;
   }
 };
+
+
+export const getMediosByDefiUUIDLocal = async (defiUUID) => {
+  try {
+    const uuid = String(defiUUID ?? "").trim();
+    if (!uuid) return [];
+
+    const rows = await runQuery(
+      `
+      SELECT *
+      FROM Archivos
+      WHERE ArchTabla = 'Deficiencias'
+        AND DefiUUID = ?
+        AND ArchActivo = 1
+      ORDER BY ArchInterno ASC;
+      `,
+      [uuid]
+    );
+
+    return rows || [];
+  } catch (error) {
+    console.error("❌ Error en getMediosByDefiUUIDLocal:", error);
+    return [];
+  }
+};
+
+export const markArchivosByDefiRefsInactiveLocal = async ({
+  defiInterno = null,
+  defiServerId = null,
+  defiUUID = null,
+} = {}) => {
+  try {
+    const where = [];
+    const params = [];
+
+    const uuid = String(defiUUID ?? "").trim();
+    if (uuid) {
+      where.push("DefiUUID = ?");
+      params.push(uuid);
+    }
+
+    const localId = Number(defiInterno);
+    if (Number.isFinite(localId) && localId > 0) {
+      where.push("ArchCodTabla = ?");
+      params.push(localId);
+    }
+
+    const serverId = Number(defiServerId);
+    if (Number.isFinite(serverId) && serverId > 0) {
+      where.push("ArchCodTabla = ?");
+      params.push(serverId);
+    }
+
+    if (!where.length) return [];
+
+    const whereSql = `(${where.join(" OR ")})`;
+
+    // 1) UPDATE masivo: bajar activo y setear EstadoOffLine inteligente
+    await runQuery(
+      `
+      UPDATE Archivos
+      SET ArchActivo = 0,
+          EstadoOffLine = CASE
+            -- ✅ si era INSERT local (2) y aún NO tiene serverId => NO sync (queda null)
+            WHEN EstadoOffLine = 2 AND (DefiServerId IS NULL OR DefiServerId = 0) THEN NULL
+            ELSE 3
+          END
+      WHERE ArchTabla = 'Deficiencias'
+        AND ${whereSql};
+      `,
+      params
+    );
+
+    // 2) devolver SOLO los que sí deben sincronizarse (EstadoOffLine=3)
+    const rowsToSync = await runQuery(
+      `
+      SELECT ArchInterno
+      FROM Archivos
+      WHERE ArchTabla = 'Deficiencias'
+        AND ${whereSql}
+        AND EstadoOffLine = 3;
+      `,
+      params
+    );
+
+    return (rowsToSync || []).map(r => r.ArchInterno).filter(Boolean);
+  } catch (error) {
+    console.error("❌ Error en markArchivosByDefiRefsInactiveLocal:", error);
+    return [];
+  }
+};

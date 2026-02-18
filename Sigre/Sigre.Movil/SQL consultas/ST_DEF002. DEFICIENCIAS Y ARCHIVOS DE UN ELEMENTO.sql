@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = '111434'
+DECLARE @CODIGO VARCHAR(20) = '0111434'
 
 
 
@@ -18,7 +18,7 @@ SELECT	D.DEFI_Interno,
 		D.DEFI_Activo,
 		D.DEFI_TipoElemento,
 		D.DEFI_CodigoElemento,
-		CO.CODI_Codigo,
+		D.TIPI_Interno,
 		
 		CASE
 			WHEN D.DEFI_EstadoCriticidad = 1 THEN 'Leve'
@@ -52,7 +52,7 @@ SELECT	D.DEFI_Interno,
 		D.*
 FROM Deficiencias AS D
 LEFT JOIN Tipificaciones AS TI
-	ON D.DEFI_Interno = TI.TIPI_Interno
+	ON D.TIPI_Interno = TI.TIPI_Interno
 LEFT JOIN Codigos AS CO
 	ON TI.CODI_Interno = CO.CODI_Interno
 LEFT JOIN Usuarios AS US
@@ -61,8 +61,6 @@ LEFT JOIN Usuarios AS US2
 	ON D.DEFI_UsuarioMod = US2.USUA_Interno
 WHERE D.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR D.DEFI_CodigoElemento = @CODIGO
-
-
 
 
 
@@ -98,3 +96,5 @@ WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR Q.DEFI_CodigoElemento = @CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
 GO
+
+

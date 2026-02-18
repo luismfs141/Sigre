@@ -1,5 +1,26 @@
 import { formatLocalISO, getUniqueNowMs, roundMsForSqlDatetime } from "../../utils/dateUtils";
 
+import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
+
+import { KEY_MUSIC_DIR, KEY_PICTURES_DIR } from "../../utils/Multimedia/constants";
+import { ensureDirExists } from "../../utils/Multimedia/fsUtils";
+
+import {
+  basenameFromAnyPath,
+  getDirFromRelative,
+  normalizeRelativePath,
+  toTrashRelativePath,
+} from "../../utils/Multimedia/pathUtils";
+
+import {
+  SAF,
+  getOrRequestPublicDir,
+  safDirForRelativeFile,
+  safNameMatches,
+  safTrashDirForRelativeFile,
+  writeFileIntoSafDir,
+} from "../../utils/Multimedia/safUtils";
 
 
 
@@ -218,16 +239,188 @@ export const saveOrUpdateDeficiency = async (def) => {
   }
 };
 
-export const deleteDeficiencyById = async (defiInterno) => {
-  await runQuery(`
-        UPDATE Deficiencias
-        SET DefiActivo = 0,
-            EstadoOffLine = 3
-        WHERE DefiInterno = ?
-      `, [defiInterno]);
+export const deleteDeficiencyById = async (
+  defiInterno,
+  usuarioId = null,
+  nowIso = null
+) => {
+  try {
+    // 0) Leer deficiencia (para DefiUUID)
+    const defRow = await getDeficiencyByIdLocal(defiInterno);
+    if (!defRow) return false;
 
-  return true;
+    const defiUUID = String(defRow.DefiCol3 ?? "").trim(); // tu UUID
+    if (!defiUUID) {
+      console.warn("⚠ deleteDeficiencyById: DefiCol3 (DefiUUID) vacío.");
+    }
+
+    const now =
+      nowIso ??
+      (() => {
+        const msRaw = getUniqueNowMs();
+        const ms = roundMsForSqlDatetime(msRaw);
+        return formatLocalISO(ms);
+      })();
+
+    // 1) Traer archivos activos asociados (por UUID)
+    const archivos = defiUUID
+      ? await runQuery(
+        `
+          SELECT ArchInterno, ArchNombre, ArchTipo, EstadoOffLine
+          FROM Archivos
+          WHERE ArchTabla = 'Deficiencias'
+            AND DefiUUID = ?
+            AND ArchActivo = 1
+        `,
+        [defiUUID]
+      )
+      : [];
+
+    const hasPhotos = (archivos ?? []).some((a) => Number(a?.ArchTipo) > 0);
+    const hasAudios = (archivos ?? []).some((a) => Number(a?.ArchTipo) === 0);
+
+    // 2) Preparar roots SAF (Android)
+    let picturesRoot = null;
+    let musicRoot = null;
+
+    if (Platform.OS === "android") {
+      if (hasPhotos) picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+      if (hasAudios) musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
+      // si no hay root, igual seguimos (BD se marca), pero no se podrá mover físico
+      if (hasPhotos && !picturesRoot) console.warn("⚠ No hay PicturesRoot SAF, no se moverán fotos físicas.");
+      if (hasAudios && !musicRoot) console.warn("⚠ No hay MusicRoot SAF, no se moverán audios físicos.");
+    }
+
+    const movePublicToTrashSaf = async ({ rootUri, oldRel, mimeType }) => {
+      if (!rootUri) return false;
+
+      const fileName = basenameFromAnyPath(oldRel);
+      if (!fileName) return false;
+
+      const srcDir = await safDirForRelativeFile(rootUri, oldRel);
+      const dstDir = await safTrashDirForRelativeFile(rootUri, oldRel);
+      if (!srcDir || !dstDir) return false;
+
+      // intentar mover desde pública
+      try {
+        const files = (await SAF.readDirectoryAsync(srcDir)) ?? [];
+        const oldSafFile = files.find((u) => safNameMatches(u, fileName));
+
+        if (oldSafFile) {
+          await writeFileIntoSafDir({
+            dirUri: dstDir,
+            fileName,
+            mimeType,
+            sourceFileUri: oldSafFile,
+          });
+          await SAF.deleteAsync(oldSafFile);
+          return true;
+        }
+      } catch { }
+
+      // fallback: si existe en privado (por si acaso), lo copiamos a trash pública
+      const oldLocalUri = FileSystem.documentDirectory + oldRel;
+      try {
+        const info = await FileSystem.getInfoAsync(oldLocalUri);
+        if (info.exists) {
+          await writeFileIntoSafDir({
+            dirUri: dstDir,
+            fileName,
+            mimeType,
+            sourceFileUri: oldLocalUri,
+          });
+          try { await FileSystem.deleteAsync(oldLocalUri, { idempotent: true }); } catch { }
+          return true;
+        }
+      } catch { }
+
+      return false;
+    };
+
+    const movePrivateToTrash = async (oldRel) => {
+      const trashRel = toTrashRelativePath(oldRel);
+      const oldUri = FileSystem.documentDirectory + oldRel;
+      const trashUri = FileSystem.documentDirectory + trashRel;
+
+      try {
+        const info = await FileSystem.getInfoAsync(oldUri);
+        if (!info.exists) return false;
+
+        const trashDir = FileSystem.documentDirectory + getDirFromRelative(trashRel);
+        await ensureDirExists(trashDir);
+
+        await FileSystem.moveAsync({ from: oldUri, to: trashUri });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // 3) Mover físico + actualizar BD de Archivos (ArchActivo=0 + ruta a ELIMINADOS)
+    for (const a of archivos ?? []) {
+      const oldRel = normalizeRelativePath(a.ArchNombre);
+      const trashRel = toTrashRelativePath(oldRel);
+      const tipo = Number(a?.ArchTipo);
+
+      // mover físico
+      try {
+        if (Platform.OS === "android") {
+          if (tipo === 0) {
+            await movePublicToTrashSaf({ rootUri: musicRoot, oldRel, mimeType: "audio/mp4" });
+          } else {
+            await movePublicToTrashSaf({ rootUri: picturesRoot, oldRel, mimeType: "image/jpeg" });
+          }
+        } else {
+          // iOS: todo está en privado
+          await movePrivateToTrash(oldRel);
+        }
+      } catch (e) {
+        console.warn("⚠ move file to trash error:", e?.message ?? e);
+      }
+
+      // marcar registro como eliminado en SQLITE
+      await runQuery(
+        `
+        UPDATE Archivos
+        SET ArchActivo = 0,
+            ArchNombre = ?,
+            EstadoOffLine = CASE
+              WHEN EstadoOffLine = 2 THEN NULL
+              ELSE 3
+            END
+        WHERE ArchInterno = ?
+        `,
+        [trashRel, a.ArchInterno]
+      );
+    }
+
+    // 4) Soft-delete deficiencia
+    await runQuery(
+      `
+      UPDATE Deficiencias
+      SET DefiActivo = 0,
+          DefiInspeccionado = 0,
+          DefiUsuarioMod = COALESCE(?, DefiUsuarioMod),
+          DefiFecModificacion = ?,
+          EstadoOffLine = CASE
+            WHEN EstadoOffLine = 2 AND (DefiServerId IS NULL OR DefiServerId = 0) THEN NULL
+            ELSE 3
+          END
+      WHERE DefiInterno = ?
+      `,
+      [usuarioId != null ? String(usuarioId) : null, now, defiInterno]
+    );
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error eliminando deficiencia (deleteDeficiencyById):", error);
+    return false;
+  }
 };
+
+
+
+
 
 
 export const getDeficienciesPendientes = async () => {

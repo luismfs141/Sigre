@@ -1,4 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
+import Loading from "../../components/LoadingOverlay";
+
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
   Alert,
@@ -31,6 +33,9 @@ export default function Inspection() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useContext(AuthContext);
+
+  const [loading, setLoading] = useState({ active: false, msg: "" });
+
 
   const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
 
@@ -183,33 +188,16 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
-  // /* =======================
-  //     LIMPIEZA FÍSICA
-  //    ======================= */
-  // const cleanPhysicalFiles = async (defId) => {
-  //   if (!defId) return;
-
-  //   try {
-  //     const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
-  //     const targetString = `_DEF_${defId}`;
-  //     const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
-
-  //     await Promise.all(
-  //       filesToDelete.map(file =>
-  //         FileSystem.deleteAsync(APP_MEDIA_DIR + file, { idempotent: true })
-  //       )
-  //     );
-  //   } catch (error) {
-  //     console.warn("⚠️ Error menor limpiando archivos físicos:", error);
-  //   }
-  // };
-
   /* =======================
       ELIMINAR DEFICIENCIA
      ======================= */
   const handleLocalDelete = async (itemToDelete) => {
     if (!itemToDelete) return;
-    // ✅ PERMISOS: bloquear ANTES del alert y antes de borrar fotos
+
+    // ✅ Evitar doble click / re-entradas
+    if (loading.active) return;
+
+    // ✅ PERMISOS
     if (!canDeleteItem(itemToDelete)) {
       Alert.alert(
         "No permitido",
@@ -217,6 +205,7 @@ export default function Inspection() {
       );
       return;
     }
+
     Alert.alert(
       "Eliminar tipificación",
       "⚠️ Está a punto de eliminar esta tipificación y todos los archivos asociados. ¿Desea continuar?",
@@ -226,8 +215,9 @@ export default function Inspection() {
           text: "Eliminar",
           style: "destructive",
           onPress: async () => {
+            setLoading({ active: true, msg: "Eliminando deficiencia..." });
+
             try {
-              //await cleanPhysicalFiles(itemToDelete.defId);
               const delRes = await deleteDeficiency(itemToDelete.defId);
 
               if (delRes?.pinMsg) {
@@ -235,20 +225,28 @@ export default function Inspection() {
               }
 
               setModalDeficiencyVisible(false);
-              refreshList();
 
-              if (Platform.OS === 'android') {
-                ToastAndroid.show("Deficiencia eliminada correctamente", ToastAndroid.SHORT);
+              // ✅ IMPORTANTE: espera el refresh antes de soltar el loading
+              await refreshList();
+
+              if (Platform.OS === "android") {
+                ToastAndroid.show(
+                  "Deficiencia eliminada correctamente",
+                  ToastAndroid.SHORT
+                );
               }
             } catch (err) {
               console.error("❌ Error eliminando deficiencia:", err);
               Alert.alert("Error", "No se pudo eliminar la deficiencia.");
+            } finally {
+              setLoading({ active: false, msg: "" });
             }
           }
         }
       ]
     );
   };
+
 
   /* =======================
       SELECCIONAR TIPIFICACIÓN
@@ -388,6 +386,9 @@ export default function Inspection() {
         onSelect={handleSelectTypification}
         onClose={() => setNewDefModalVisible(false)}
       />
+
+      <Loading visible={loading.active} text={loading.msg} />
+
     </SafeAreaView>
   );
 }
