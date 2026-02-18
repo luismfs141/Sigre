@@ -9,13 +9,14 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
 import { Card } from 'primereact/card';
-import { Calendar } from 'primereact/calendar'; // 🔥 IMPORTANTE
+import { Calendar } from 'primereact/calendar'; 
 
 // Hooks
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useTypification } from '../hooks/useTypification';
 import { useFiles } from '../hooks/useFiles';
+import { useElements } from '../hooks/useElement';
 
 import FilesTableEditor from './FilesTableEditor'; 
 
@@ -43,9 +44,12 @@ export default function WebInspectionManager() {
     const [globalDate, setGlobalDate] = useState(null);
     const [globalLat, setGlobalLat] = useState('');
     const [globalLon, setGlobalLon] = useState('');
+    const [suggestions, setSuggestions] = useState([]);     // La lista de resultados
 
     const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
     const { getCodeById, fetchTypificationsByTypeElement, masterTypifications } = useTypification();
+    const { fetchPostesChunk } = useElements();
+    const {fetchVanosChunk} = useElements();
 
     useEffect(() => {
         if (masterTypifications.length > 0) fetchTypificationsByTypeElement(structureType === 'Poste' ? 8 : 9);
@@ -101,6 +105,79 @@ export default function WebInspectionManager() {
             loadFiles(def.defiInterno);
         }
     };
+    // --- BÚSQUEDA HÍBRIDA (POSTES Y VANOS) ---
+    const searchNetworkElement = async (event) => {
+        const query = event.query.toLowerCase();
+        
+        // 1. Buscar Postes (Backend)
+        const responsePostes = await fetchPostesChunk(0, 15, query);
+        
+        // 2. Buscar Vanos (Backend - Asumiendo que tienes una función similar, si no, usa solo postes por ahora)
+        const responseVanos = await fetchVanosChunk(0, 15, query); 
+        
+        const resultados = [];
+
+        // A. Procesar Postes
+        if (responsePostes.data) {
+            resultados.push(...responsePostes.data.map(p => ({
+                ...p,
+                _tipo: 'POSTE',
+                // 🔥 MAPEAMOS EL CÓDIGO AQUÍ PARA QUE SEA LA CLAVE PRINCIPAL
+                codigo: p.postCodigoNodo, 
+                label: p.postEtiqueta || 'S/N',
+                lat: p.postLatitud,
+                lng: p.postLongitud
+            })));
+        }
+
+        // B. Procesar Vanos (Ejemplo si tuvieras la data)
+        if (responseVanos.data) {
+            resultados.push(...responseVanos.data.map(v => ({
+                ...v,
+                _tipo: 'VANO',
+                codigo: v.vanoCodigo, // 🔥 CÓDIGO DEL VANO
+                label: v.vanoEtiqueta || 'S/N',
+                lat: v.vanoLatitudIni,
+                lng: v.vanoLongitudIni
+            })));
+        } 
+        
+
+        setSuggestions(resultados);
+    };
+    const itemTemplate = (item) => {
+        const esPoste = item._tipo === 'POSTE';
+        
+        return (
+            <div className="flex flex-col border-b border-gray-100 p-2 hover:bg-blue-50 cursor-pointer">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        {/* ICONO */}
+                        <div className={`w-7 h-7 flex items-center justify-center rounded-full ${esPoste ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                            <i className={`pi ${esPoste ? 'pi-bolt' : 'pi-arrows-h'} text-sm`}></i>
+                        </div>
+                        
+                        {/* DATOS: PRIORIDAD AL CÓDIGO */}
+                        <div className="flex flex-col">
+                            {/* CÓDIGO EN GRANDE */}
+                            <span className="font-extrabold text-sm text-gray-800">
+                                {item.codigo}
+                            </span>
+                            {/* Etiqueta / Tipo en pequeño */}
+                            <span className="text-[10px] text-gray-500 font-medium">
+                                {esPoste ? `POSTE: ${item.label}` : `VANO: ${item.label}`}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Badge lateral */}
+                    <span className={`text-[9px] px-1.5 rounded border ${esPoste ? 'border-blue-200 text-blue-600' : 'border-green-200 text-green-600'}`}>
+                        {item._tipo}
+                    </span>
+                </div>
+            </div>
+        );
+    };
 
     // Templates
     const dateTemplate = (r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-';
@@ -118,22 +195,56 @@ export default function WebInspectionManager() {
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* 1. BUSCADOR */}
-            <div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
-                <div className="flex flex-col w-full max-w-lg">
-                    <label className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">Búsqueda por Código GIS</label>
-                    <div className="p-inputgroup">
-                        <InputText 
-                            value={structureCode} 
-                            onChange={(e) => setStructureCode(e.target.value.toUpperCase())} 
-                            placeholder="Ej: PTO000055182" 
-                            className="p-inputtext-lg font-bold text-blue-900" 
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
-                        />
-                        <Button icon="pi pi-search" onClick={handleSearch} loading={searchLoading} label="Buscar" />
-                    </div>
-                </div>
-            </div>
+            
+
+{/* CONTENEDOR DE BÚSQUEDA */}
+<div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
+    <div className="flex flex-col w-full max-w-lg">
+        <label className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">Búsqueda por Código GIS</label>
+        
+        <div className="p-inputgroup">
+            {/* --- INICIO DEL AUTOCOMPLETE --- */}
+            <AutoComplete 
+                // 1. Vinculamos al estado de tu buscador
+                value={structureCode} 
+                
+                // 2. Propiedades de búsqueda (Asumiendo que tienes estas funciones en este archivo)
+                suggestions={suggestions} 
+                completeMethod={searchNetworkElement} 
+                field="codigo"
+                itemTemplate={itemTemplate} 
+                
+                // 3. LOGICA DE ESCRITURA (Tu corrección aplicada)
+                onChange={(e) => {
+                    // Si es objeto sacamos el código, si es texto lo usamos directo
+                    const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
+                    
+                    // Convertimos a Mayúsculas para mantener consistencia
+                    setStructureCode(String(valor).toUpperCase());
+                }}
+
+                // 4. LOGICA DE SELECCIÓN
+                onSelect={(e) => {
+                    const item = e.value;
+                    // Al hacer click, fijamos el código en el input
+                    setStructureCode(item.codigo);
+                    
+                    // OPCIONAL: Si quieres que se ejecute la búsqueda automáticamente al seleccionar:
+                    // handleSearch(); 
+                }}
+                
+                // 5. Estilos y Eventos (Heredados de tu InputText anterior)
+                placeholder="Ej: PTO000055182"
+                className="w-full"
+                inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase" // Mismos estilos que tenías
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            {/* --- FIN DEL AUTOCOMPLETE --- */}
+
+            <Button icon="pi pi-search" onClick={handleSearch} loading={searchLoading} label="Buscar" />
+        </div>
+    </div>
+</div>
 
             {/* 2. TABLA HISTÓRICA */}
             {historicalData.length > 0 && (
