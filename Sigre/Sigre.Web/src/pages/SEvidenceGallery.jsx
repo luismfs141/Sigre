@@ -107,7 +107,7 @@ const latLonToUTM = (lat, lon) => {
 };
 
 // --- COMPONENTE IMAGEN ---
-const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode }) => {
+const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode,onDelete }) => {
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
     const generateCandidates = (rawPath) => {
         if (!rawPath) return [];
@@ -151,6 +151,24 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
     return (
         <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all" onClick={() => onImageClick(index)}>
             <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
+            {/* 🔴 BOTÓN DE ELIMINAR AÑADIDO */}
+            <button 
+                onClick={(e) => {
+                    e.stopPropagation(); // Evita que se abra el Lightbox al borrar
+                    onDelete(file);
+                }}
+                // SE HAN HECHO LOS SIGUIENTES CAMBIOS PARA RESALTARLO:
+                // 1. !bg-red-600 y hover:!bg-red-700: El signo '!' fuerza el color rojo intenso.
+                // 2. w-7 h-7: Se aumentó el tamaño (antes era w-6 h-6).
+                // 3. border-2 border-white: Se añade un borde blanco para contraste.
+                // 4. shadow-md: Añade una pequeña sombra para que "flote".
+                // 5. z-20: Aseguramos que esté por encima de todo.
+                className="absolute top-0 right-0 !bg-red-600 text-white w-7 h-7 border-2 border-white flex items-center justify-center rounded-bl-md shadow-md hover:!bg-red-700 transition-all z-20"
+                title="Eliminar foto"
+            >
+                {/* Se aumentó ligeramente el tamaño del icono (de text-[10px] a text-xs) */}
+                <i className="pi pi-trash text-xs font-bold"></i>
+            </button>
             <div className="absolute bottom-0 w-full bg-black/70 text-white text-[9px] font-bold text-center py-0.5 uppercase tracking-tighter">{typeName}</div>
         </div>
     );
@@ -159,7 +177,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
 // --- COMPONENTE PRINCIPAL ---
 export default function EvidenceGallery({ deficiency, feeder, sed, suministro, element7004Count, my7004Correlativo }) {
     const toast = useRef(null);
-    const { files, loadFiles, addFile } = useFiles();
+    const { files, loadFiles, addFile,deleteFile } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
     const resolvedUrlsRef = useRef({}); 
@@ -263,6 +281,25 @@ const handleUploadSave = async (dataToSave) => {
         } 
         else {
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
+        }
+    };
+    const handleDeleteImage = async (file) => {
+        // Confirmación simple del navegador (puedes usar confirmDialog de PrimeReact si prefieres)
+        if (!window.confirm("¿Estás seguro de que deseas eliminar esta evidencia?")) return;
+
+        const idToDelete = file.archInterno || file.ARCH_Interno;
+        if (!idToDelete) {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se puede eliminar una imagen sin ID' });
+            return;
+        }
+
+        const success = await deleteFile(idToDelete);
+        
+        if (success) {
+            toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Evidencia eliminada correctamente' });
+            // No necesitas recargar manualmente si tu useFiles ya hace setFiles filter
+        } else {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar la imagen' });
         }
     };
 
@@ -381,6 +418,7 @@ const handleUploadSave = async (dataToSave) => {
                         <ResilientImage 
                             key={f.archInterno ? f.archInterno : `temp-${i}-${currentSupply}`}
                             index={i} file={f} 
+                            onDelete={handleDeleteImage}
                             onImageClick={openLightbox} onUrlResolved={handleUrlResolved} 
                             typeName={getPhotoTypeName(parseInt(f.archTipo || f.ARCH_Tipo, 10))}
                             currentSupply={currentSupply} defCode={defCode}
