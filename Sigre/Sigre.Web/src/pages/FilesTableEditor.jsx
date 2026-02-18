@@ -5,12 +5,14 @@ import { Button } from 'primereact/button';
 import { Image } from 'primereact/image';
 import { Card } from 'primereact/card';
 import { Toolbar } from 'primereact/toolbar';
-import { confirmPopup } from 'primereact/confirmpopup';
+import { confirmPopup, ConfirmPopup } from 'primereact/confirmpopup';
 // 🔥 IMPORTACIONES FALTANTES AGREGADAS
 import { InputText } from 'primereact/inputtext';
 import { Calendar } from 'primereact/calendar';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+
+
 
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
@@ -191,16 +193,36 @@ export default function FilesTableEditor({
         ));
     };
 
-    const handleRemoveRequest = (event, row) => {
+const handleRemoveRequest = (event, row) => {
+        // Esta función confirmPopup NO funcionará si no está el componente <ConfirmPopup /> renderizado abajo
         confirmPopup({
-            target: event.currentTarget, message: '¿Eliminar archivo?', icon: 'pi pi-exclamation-triangle', acceptLabel: 'Sí, eliminar',
+            target: event.currentTarget,
+            message: '¿Eliminar archivo permanentemente?',
+            icon: 'pi pi-exclamation-triangle',
+            acceptLabel: 'Sí, eliminar',
+            rejectLabel: 'Cancelar',
+            acceptClassName: 'p-button-danger',
             accept: async () => {
-                const success = await onDeleteDbFile(row.archInterno);
+                let success = false;
+
+                // CASO A: Archivo de Base de Datos
+                if (row.archInterno && row.archInterno > 0) {
+                    if (onDeleteDbFile) {
+                        success = await onDeleteDbFile(row.archInterno);
+                    } else {
+                        console.error("onDeleteDbFile prop no está definida");
+                    }
+                } 
+                // CASO B: Archivo Local (recién agregado)
+                else {
+                    success = true;
+                }
+
                 if (success) {
-                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Archivo desactivado.' });
+                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Archivo eliminado.' });
                     setFileRows(prev => prev.filter(r => r.tempId !== row.tempId));
                 } else {
-                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar.' });
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar de la BD.' });
                 }
             }
         });
@@ -307,6 +329,7 @@ export default function FilesTableEditor({
 
     return (
         <Card title="Editor de Archivos (Files)" className="mt-4 shadow-sm">
+            <ConfirmPopup />
             <Toolbar className="mb-4 p-2 border-none bg-transparent"
                 left={
                     <div className="flex gap-2">
