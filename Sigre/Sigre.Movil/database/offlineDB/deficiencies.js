@@ -605,3 +605,69 @@ export const setServerIdToDeficiency = async (localId, serverId) => {
     return false;
   }
 };
+
+
+// ✅ Recalcula si el ELEMENTO (POST/VANO) está inspeccionado según sus deficiencias activas.
+// Regla: si NO hay deficiencias activas => inspeccionado = 0
+export const recalcElementoInspeccionadoLocal = async (elementId, typeElement) => {
+  try {
+    const eid = Number(elementId);
+    const te = String(typeElement || "").trim().toUpperCase();
+
+    if (!Number.isFinite(eid) || eid <= 0) {
+      return { ok: false, reason: "elementId inválido", inspected: 0, total: 0, done: 0 };
+    }
+
+    if (te !== "POST" && te !== "VANO") {
+      return { ok: false, reason: "typeElement inválido", inspected: 0, total: 0, done: 0 };
+    }
+
+    const rowsTotal = await runQuery(
+      `SELECT COUNT(*) AS c
+       FROM Deficiencias
+       WHERE DefiActivo = 1
+         AND DefiIdElemento = ?
+         AND DefiTipoElemento = ?`,
+      [eid, te]
+    );
+
+    const total = Number(rowsTotal?.[0]?.c ?? 0);
+
+    const rowsDone = await runQuery(
+      `SELECT COUNT(*) AS c
+       FROM Deficiencias
+       WHERE DefiActivo = 1
+         AND DefiIdElemento = ?
+         AND DefiTipoElemento = ?
+         AND DefiInspeccionado = 1`,
+      [eid, te]
+    );
+
+    const done = Number(rowsDone?.[0]?.c ?? 0);
+
+    // ✅ regla pedida: todas las activas deben tener DefiInspeccionado=1
+    // ✅ si no hay activas => 0
+    const inspected = total > 0 && done === total ? 1 : 0;
+
+    if (te === "POST") {
+      await runQuery(
+        `UPDATE Postes
+         SET PostInspeccionado = ?
+         WHERE PostInterno = ?`,
+        [inspected, eid]
+      );
+    } else {
+      await runQuery(
+        `UPDATE Vanos
+         SET VanoInspeccionado = ?
+         WHERE VanoInterno = ?`,
+        [inspected, eid]
+      );
+    }
+
+    return { ok: true, inspected, total, done };
+  } catch (e) {
+    console.error("❌ recalcElementoInspeccionadoLocal error:", e);
+    return { ok: false, reason: String(e?.message ?? e), inspected: 0, total: 0, done: 0 };
+  }
+};

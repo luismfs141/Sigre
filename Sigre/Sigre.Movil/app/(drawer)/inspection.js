@@ -1,17 +1,24 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import Loading from "../../components/LoadingOverlay";
+import { recalcElementoInspeccionadoLocal } from "../../database/offlineDB/deficiencies";
+import { useGap } from "../../hooks/useGap";
+import { usePost } from "../../hooks/usePost";
 
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   BackHandler,
   Button,
   FlatList,
+  Modal,
   Platform,
   StyleSheet,
+  Text,
   ToastAndroid,
   View
 } from "react-native";
+
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 
@@ -38,6 +45,9 @@ export default function Inspection() {
 
 
   const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
+  const { getPostData, savePost } = usePost();
+const { fetchVanoById, saveVano } = useGap();
+
 
   const [items, setItems] = useState([]);
   const [modalGeneralVisible, setModalGeneralVisible] = useState(false);
@@ -45,6 +55,164 @@ export default function Inspection() {
   const [newDefModalVisible, setNewDefModalVisible] = useState(false);
   const [currentItem, setCurrentItem] = useState(null);
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
+
+  const [busy, setBusy] = useState({ active: false, msg: "" });
+
+  const getElementoTarget = useCallback(() => {
+    if (!selectedItem) return { elementId: null, typeElement: null };
+
+    const elementId =
+      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? null;
+
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+        ? "VANO"
+        : null;
+
+    return { elementId, typeElement };
+  }, [selectedItem]);
+
+  const pickVanoCodigo = (src) =>
+  src?.VanoCodigo ?? src?.Vano_Codigo ?? src?.VANO_Codigo ?? "";
+
+const ensureVanoEtiqueta = (src) => {
+  const et = (src?.VanoEtiqueta ?? src?.VANO_Etiqueta ?? "").toString().trim();
+  if (et) return et;
+
+  const cod = String(pickVanoCodigo(src) ?? "").trim();
+  if (cod) return cod;
+
+  return "SIN ETIQUETA";
+};
+
+const syncElementoInspeccionadoToServer = useCallback(
+  async ({ elementId, typeElement, inspected, showUI }) => {
+    const eid = Number(elementId);
+    const te = String(typeElement || "").trim().toUpperCase();
+
+    try {
+      if (te === "POST") {
+        const post = await getPostData(eid);
+        if (!post) return { ok: false, reason: "No se encontró el poste en SQLite" };
+
+        // ✅ nos aseguramos que el campo esté set (igual ya lo actualizaste en SQLite)
+        const payload = {
+          ...post,
+          PostInspeccionado: Number(inspected) ? 1 : 0,
+
+          // ✅ normalizaciones que tu savePost normalmente espera
+          PostTerceros:
+            post?.PostTerceros == null || post?.PostTerceros === ""
+              ? null
+              : Number(post.PostTerceros),
+
+          PostAltura:
+            post?.PostAltura == null || post?.PostAltura === ""
+              ? null
+              : Number(post.PostAltura),
+        };
+
+        await savePost(payload);
+        return { ok: true };
+      }
+
+      if (te === "VANO") {
+        const vano = await fetchVanoById(eid);
+        if (!vano) return { ok: false, reason: "No se encontró el vano en SQLite" };
+
+        const payload = {
+          ...vano,
+
+          // ✅ algunos vienen como Vano_Codigo, acá lo aseguramos
+          VanoCodigo: pickVanoCodigo(vano),
+
+          // ✅ NOT NULL en tu BD (según tu form)
+          VanoEtiqueta: ensureVanoEtiqueta(vano),
+
+          VanoInspeccionado: Number(inspected) ? 1 : 0,
+
+          VanoTerceros:
+            vano?.VanoTerceros == null || vano?.VanoTerceros === ""
+              ? null
+              : Number(vano.VanoTerceros),
+        };
+
+        await saveVano(payload);
+        return { ok: true };
+      }
+
+      return { ok: false, reason: "typeElement no soportado" };
+    } catch (e) {
+      console.error("❌ syncElementoInspeccionadoToServer:", e);
+      return { ok: false, reason: e?.message ?? String(e) };
+    }
+  },
+  [getPostData, savePost, fetchVanoById, saveVano]
+);
+
+
+  const recalcularInspeccionadoElemento = useCallback(
+  async ({ showUI = true } = {}) => {
+    const { elementId, typeElement } = getElementoTarget();
+
+    if (!elementId || !typeElement) {
+      if (showUI) Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
+      return { ok: false };
+    }
+
+    if (showUI) setBusy({ active: true, msg: "Actualizando inspección..." });
+
+    try {
+      // 1) ✅ recalcula y escribe en SQLITE
+      const res = await recalcElementoInspeccionadoLocal(elementId, typeElement);
+
+      if (!res?.ok) {
+        if (showUI) Alert.alert("Error", `No se pudo recalcular.\n${res?.reason ?? ""}`);
+        return res;
+      }
+
+      // 2) ✅ manda al SERVIDOR usando savePost/saveVano (mismo flujo de forms)
+      if (showUI) setBusy({ active: true, msg: "Sincronizando con servidor..." });
+
+      const syncRes = await syncElementoInspeccionadoToServer({
+        elementId,
+        typeElement,
+        inspected: res.inspected,
+        showUI,
+      });
+
+      // 3) UI
+      if (showUI) {
+        if (syncRes?.ok) {
+          if (Platform.OS === "android") {
+            ToastAndroid.show("✅ Actualizado y sincronizado", ToastAndroid.SHORT);
+          } else {
+            Alert.alert("✅ OK", "Actualizado y sincronizado.");
+          }
+        } else {
+          // OJO: si falló server, igual SQLite ya quedó correcto.
+          Alert.alert(
+            "⚠️ SQLite OK / Server NO",
+            `Se actualizó en el equipo pero falló el servidor.\n\n${syncRes?.reason ?? ""}`
+          );
+        }
+      }
+
+      return { ...res, syncOk: !!syncRes?.ok };
+    } catch (e) {
+      if (showUI) Alert.alert("Error", e?.message ?? "Falló el proceso.");
+      return { ok: false };
+    } finally {
+      if (showUI) setBusy({ active: false, msg: "" });
+    }
+  },
+  [getElementoTarget, syncElementoInspeccionadoToServer]
+);
+
+
+
+
 
   /* =======================
       HELPERS DE VALIDACIÓN
@@ -130,6 +298,17 @@ export default function Inspection() {
       return () => sub.remove();
     }, [])
   );
+  useFocusEffect(
+    useCallback(() => {
+      // al salir de la pantalla (blur/unmount)
+      return () => {
+        // ⚠️ sin UI ni setState (para no reventar por unmount)
+        recalcularInspeccionadoElemento({ showUI: false });
+      };
+    }, [recalcularInspeccionadoElemento])
+  );
+
+
 
   const refreshList = async () => {
     if (!selectedItem) return;
@@ -347,21 +526,33 @@ export default function Inspection() {
         renderItem={renderItem}
       />
 
-      <View style={{ padding: 8 }}>
-        <Button
-          title="Nueva Deficiencia"
-          onPress={() => {
-            if (existeSinDeficiencia()) {
-              Alert.alert(
-                "No permitido",
-                "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
-              );
-              return;
-            }
-            setNewDefModalVisible(true);
-          }}
-        />
+      <View style={{ padding: 8, flexDirection: "row" }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Button
+            title="Nueva Deficiencia"
+            onPress={() => {
+              if (existeSinDeficiencia()) {
+                Alert.alert(
+                  "No permitido",
+                  "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
+                );
+                return;
+              }
+              setNewDefModalVisible(true);
+            }}
+            disabled={busy.active}
+          />
+        </View>
+
+        <View style={{ width: 120 }}>
+          <Button
+            title="Actualizar"
+            onPress={() => recalcularInspeccionadoElemento({ showUI: true })}
+            disabled={busy.active || !selectedItem || !(selectedItem.PostInterno || selectedItem.VanoInterno)}
+          />
+        </View>
       </View>
+
 
       <DataGeneralModal
         visible={modalGeneralVisible}
@@ -388,6 +579,33 @@ export default function Inspection() {
       />
 
       <Loading visible={loading.active} text={loading.msg} />
+
+
+      <Modal visible={busy.active} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.20)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              padding: 18,
+              borderRadius: 12,
+              minWidth: 240,
+              alignItems: "center",
+            }}
+          >
+            <ActivityIndicator size="large" color="black" />
+            <Text style={{ marginTop: 10, color: "#000", textAlign: "center" }}>
+              {busy.msg || "Procesando..."}
+            </Text>
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
