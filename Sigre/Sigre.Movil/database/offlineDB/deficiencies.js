@@ -528,30 +528,31 @@ export const getComentarioEstandarByTypificationIdLocal = async (typificationId)
 export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
   try {
     const query = `
-          SELECT 
-            d.DefiInterno,
-            d.TablInterno,
-            d.DefiIdElemento,
-            d.DefiTipoElemento,
-            d.DefiNumSuministro,
-            d.DefiUsuarioInic,
-            d.DefiObservacion,
-            d.DefiComentario,
-            d.DefiDistVertical,
-            d.DefiDistHorizontal,
-            t.TypificationId AS TipiInterno,
-            t.Code,
-            t.Component,
-            t.Deficiency,
-            t.Typification
-          FROM Deficiencias d
-          LEFT JOIN Tipificaciones t
-            ON d.TipiInterno = t.TypificationId
-          WHERE d.DefiIdElemento = ?
-            AND d.DefiTipoElemento = ?
-            AND d.DefiActivo = 1
-          ORDER BY d.DefiInterno ASC;
-        `;
+      SELECT 
+        d.DefiInterno,
+        d.TablInterno,
+        d.DefiIdElemento,
+        d.DefiTipoElemento,
+        d.DefiNumSuministro,
+        d.DefiUsuarioInic,
+        d.DefiObservacion,
+        d.DefiComentario,
+        d.DefiDistVertical,
+        d.DefiDistHorizontal,
+        d.DefiInspeccionado,              
+        t.TypificationId AS TipiInterno,
+        t.Code,
+        t.Component,
+        t.Deficiency,
+        t.Typification
+      FROM Deficiencias d
+      LEFT JOIN Tipificaciones t
+        ON d.TipiInterno = t.TypificationId
+      WHERE d.DefiIdElemento = ?
+        AND d.DefiTipoElemento = ?
+        AND d.DefiActivo = 1
+      ORDER BY d.DefiInterno ASC;
+    `;
 
     const results = await runQuery(query, [elementId, typeElement]);
     return results;
@@ -560,6 +561,7 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
     return [];
   }
 };
+
 
 
 export const markDeficiencyAsSyncing = async (defiInterno) => {

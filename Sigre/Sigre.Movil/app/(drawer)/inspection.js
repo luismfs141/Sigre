@@ -163,6 +163,12 @@ export default function Inspection() {
     return b ? "FINALIZADO" : "PENDIENTE";
   };
 
+
+  const getDefFinalizada = (defItem) => {
+    return Number(defItem?.data?.defiInspeccionado) === 1;
+  };
+
+
   const handleActualizarEstadoPress = async () => {
     const { elementId, typeElement } = getElementoTarget();
 
@@ -184,20 +190,7 @@ export default function Inspection() {
 
       const new01 = Number(res.inspected) === 1 ? 1 : 0;
 
-      // ✅ 2) Parchar UI (para que el label cambie al toque)
-      setItems((prev) =>
-        prev.map((x) => {
-          if (x?.type !== "general") return x;
-
-          const data = { ...(x.data ?? {}) };
-          if (typeElement === "POST") data.PostInspeccionado = new01;
-          if (typeElement === "VANO") data.VanoInspeccionado = new01;
-
-          return { ...x, data };
-        })
-      );
-
-      // ✅ 3) Solo si cambió => sincroniza con servidor
+      // ✅ 2) Solo si cambió => sincroniza con servidor
       if (res.changed) {
         try {
           if (typeElement === "POST") {
@@ -209,9 +202,25 @@ export default function Inspection() {
           }
         } catch (syncErr) {
           console.warn("⚠ sync estado inspeccionado falló:", syncErr);
-          // No crashear por sync. El SQLite ya quedó bien.
+          // SQLite ya quedó bien, no rompas la UI por sync.
         }
       }
+
+      // ✅ 3) Refresca deficiencias (para que cambien los colores)
+      await refreshList();
+
+      // ✅ 4) Parcha el GENERAL al final (por si refreshList pisa el valor)
+      setItems((prev) =>
+        prev.map((x) => {
+          if (x?.type !== "general") return x;
+
+          const data = { ...(x.data ?? {}) };
+          if (typeElement === "POST") data.PostInspeccionado = new01;
+          if (typeElement === "VANO") data.VanoInspeccionado = new01;
+
+          return { ...x, data };
+        })
+      );
 
       const estadoTxt = new01 === 1 ? "FINALIZADO" : "PENDIENTE";
       const msg = res.changed
@@ -227,6 +236,7 @@ export default function Inspection() {
       setBusy({ active: false, msg: "" });
     }
   };
+
 
 
   /* =======================
@@ -604,6 +614,8 @@ export default function Inspection() {
       );
     }
 
+    const defFinalizada = getDefFinalizada(item);
+
     return (
       <SelectedDeficiencyItem
         item={item}
@@ -614,8 +626,13 @@ export default function Inspection() {
           router.push("/(drawer)/multimedia");
         }}
         onDeficiency={openFormModal}
+        containerStyle={[
+          styles.defCardTint,
+          defFinalizada ? styles.defCardFinalizada : styles.defCardPendiente,
+        ]}
       />
     );
+
   };
 
 
@@ -812,5 +829,19 @@ const styles = StyleSheet.create({
   afterGeneralSpacer: {
     height: 10,
   },
+  defCardTint: {
+    borderWidth: 1,
+  },
+
+  defCardFinalizada: {
+    backgroundColor: "#E8F5E9", // verde suave
+    borderColor: "#A5D6A7",
+  },
+
+  defCardPendiente: {
+    backgroundColor: "#FFEBEE", // rojo suave
+    borderColor: "#EF9A9A",
+  },
+
 });
 

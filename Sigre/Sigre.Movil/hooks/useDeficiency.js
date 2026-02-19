@@ -724,6 +724,8 @@ export const useDeficiency = () => {
         contadorPorCode[code] = (contadorPorCode[code] ?? 0) + 1;
         const nroEnCodigo = contadorPorCode[code];
 
+        const defiInspeccionado01 = Number(def.DefiInspeccionado) === 1 ? 1 : 0;
+
         return {
           id: def.DefiInterno,
           type: "def",
@@ -733,7 +735,8 @@ export const useDeficiency = () => {
           orderInCode: nroEnCodigo,
 
           name: hasTypification
-            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""}`
+            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""
+            }`
             : `0000 → ${def.Deficiency ?? "Sin Deficiencia"}`,
 
           data: {
@@ -754,8 +757,10 @@ export const useDeficiency = () => {
             infoDeficiencia: def.Deficiency ?? "",
             infoDescripcion: (def.Typification ?? def.Component) ?? "",
 
-            // ✅ RESTAURADO
             ownerUserId: def.DefiUsuarioInic ?? null,
+
+            // ✅ CAMPO FIJO PARA EL COLOR (0/1)
+            defiInspeccionado: defiInspeccionado01,
           },
 
           photos: [],
@@ -769,6 +774,7 @@ export const useDeficiency = () => {
       return [];
     }
   };
+
 
   return {
     loading,
