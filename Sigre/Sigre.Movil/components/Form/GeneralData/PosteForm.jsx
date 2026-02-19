@@ -87,8 +87,6 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
 
   useImperativeHandle(ref, () => ({
     save: async () => {
-      console.log("POSTE FORM -> PostTerceros raw:", form.PostTerceros, typeof form.PostTerceros);
-      console.log("POSTE FORM -> PostTerceros Number:", Number(form.PostTerceros));
 
       const id = await savePost({
         ...form,

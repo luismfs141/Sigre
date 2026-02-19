@@ -12,7 +12,9 @@ const pickFirst = (obj, keys, fallback = "") => {
   return fallback;
 };
 
-const asSiNo = (v) => (Number(v) === 1 || v === true ? "SÍ" : "NO");
+const asSiNo = (v) => (Number(v) === 1 || v === true ? "NO" : "SÍ");
+
+
 const k = (v) => String(v ?? "").trim();
 
 export default function GeneralDataItem({ item, onEdit }) {
@@ -102,7 +104,7 @@ export default function GeneralDataItem({ item, onEdit }) {
         `Material: ${material}`,
         `Retenida: ${retenida}`,
         `Altura: ${altura}`,
-        `Terceros: ${terceros}`,
+        `Poste existe: ${terceros}`,
       ];
 
       return { title, lines };
@@ -121,7 +123,7 @@ export default function GeneralDataItem({ item, onEdit }) {
       const lines = [
         `Nodo inicial: ${nodoIni}`,
         `Nodo final: ${nodoFin}`,
-        `Terceros: ${terceros}`,
+        `Red existe: ${terceros}`,
       ];
 
       return { title, lines };

@@ -105,21 +105,18 @@ export const useGap = () => {
   const autoSyncVano = async (vanoInternoLocal) => {
     try {
       const online = await isOnline();
-      if (!online) {
-        console.log("ℹ️ Auto-sync vano no realizada, queda offline");
-        return;
-      }
+      if (!online) return;
 
       const vano = await getVanoByIdLocal(vanoInternoLocal);
       if (!vano || vano.EstadoOffLine == null) return;
 
       const vanoToSync = normalizeVanoForSync(vano);
 
-      console.log("📤 Payload vano sync:", JSON.stringify([vanoToSync], null, 2));
+      console.log("📤 Sincronización Update de Vano");
 
       const response = await client.post(
         "/Gap/SyncFromSQLite",
-        [vanoToSync], // 🔥 ARRAY DIRECTO (uniforme)
+        [vanoToSync],
         { timeout: 6000 }
       );
 
@@ -133,19 +130,11 @@ export const useGap = () => {
       } else {
         await markVanoAsSynced(serverId);
       }
-
-      console.log("✅ Vano sincronizado correctamente");
-
     } catch (err) {
-      if (err.response) {
-        console.log("❌ Sync vano error:", err.response.status, err.response.data);
-      } else if (err.request) {
-        console.log("❌ Sin respuesta del servidor (vano)");
-      } else {
-        console.log("❌ Error vano:", err.message);
-      }
+      // sin logs
     }
   };
+
 
   return {
     loading,

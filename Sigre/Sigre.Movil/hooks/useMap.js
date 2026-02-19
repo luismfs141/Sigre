@@ -105,16 +105,12 @@ export const useMap = () => {
     // Si el zoom no es suficiente → no mostrar pines
     if (region.latitudeDelta > ZOOM_THRESHOLD) {
       if (prevVisibleIdsRef.current.size !== 0) {
-        if (DEBUG_VISIBLE_PINS) {
-          console.log(
-            `[PINS][ZOOM OUT] visible->0 (prev=${prevVisibleIdsRef.current.size})`
-          );
-        }
         prevVisibleIdsRef.current.clear();
         setPins([]);
       }
       return;
     }
+
 
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
 
@@ -153,13 +149,6 @@ export const useMap = () => {
       if (same) return;
     }
 
-    if (DEBUG_VISIBLE_PINS) {
-      console.log(
-        `[PINS][DIFF${force ? " FORCE" : ""}] visible=${nextIds.size} (+${added.length} / -${removed.length})`
-      );
-      if (added.length) console.log(`[PINS][ADD]`, added.slice(0, DEBUG_LOG_LIMIT));
-      if (removed.length) console.log(`[PINS][REMOVE]`, removed.slice(0, DEBUG_LOG_LIMIT));
-    }
 
     prevVisibleIdsRef.current = nextIds;
     setPins(visiblePins);

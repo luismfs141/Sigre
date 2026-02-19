@@ -4,7 +4,8 @@ import { recalcElementoInspeccionadoLocal } from "../../database/offlineDB/defic
 import { useGap } from "../../hooks/useGap";
 import { usePost } from "../../hooks/usePost";
 
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -46,7 +47,7 @@ export default function Inspection() {
 
   const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
   const { getPostData, savePost } = usePost();
-const { fetchVanoById, saveVano } = useGap();
+  const { fetchVanoById, saveVano } = useGap();
 
 
   const [items, setItems] = useState([]);
@@ -57,6 +58,9 @@ const { fetchVanoById, saveVano } = useGap();
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
 
   const [busy, setBusy] = useState({ active: false, msg: "" });
+
+  const lastLoadKeyRef = useRef(null);
+
 
   const getElementoTarget = useCallback(() => {
     if (!selectedItem) return { elementId: null, typeElement: null };
@@ -74,141 +78,64 @@ const { fetchVanoById, saveVano } = useGap();
   }, [selectedItem]);
 
   const pickVanoCodigo = (src) =>
-  src?.VanoCodigo ?? src?.Vano_Codigo ?? src?.VANO_Codigo ?? "";
+    src?.VanoCodigo ?? src?.Vano_Codigo ?? src?.VANO_Codigo ?? "";
 
-const ensureVanoEtiqueta = (src) => {
-  const et = (src?.VanoEtiqueta ?? src?.VANO_Etiqueta ?? "").toString().trim();
-  if (et) return et;
+  const ensureVanoEtiqueta = (src) => {
+    const et = (src?.VanoEtiqueta ?? src?.VANO_Etiqueta ?? "").toString().trim();
+    if (et) return et;
 
-  const cod = String(pickVanoCodigo(src) ?? "").trim();
-  if (cod) return cod;
+    const cod = String(pickVanoCodigo(src) ?? "").trim();
+    if (cod) return cod;
 
-  return "SIN ETIQUETA";
-};
+    return "SIN ETIQUETA";
+  };
 
-const syncElementoInspeccionadoToServer = useCallback(
-  async ({ elementId, typeElement, inspected, showUI }) => {
-    const eid = Number(elementId);
-    const te = String(typeElement || "").trim().toUpperCase();
 
-    try {
-      if (te === "POST") {
-        const post = await getPostData(eid);
-        if (!post) return { ok: false, reason: "No se encontró el poste en SQLite" };
-
-        // ✅ nos aseguramos que el campo esté set (igual ya lo actualizaste en SQLite)
-        const payload = {
-          ...post,
-          PostInspeccionado: Number(inspected) ? 1 : 0,
-
-          // ✅ normalizaciones que tu savePost normalmente espera
-          PostTerceros:
-            post?.PostTerceros == null || post?.PostTerceros === ""
-              ? null
-              : Number(post.PostTerceros),
-
-          PostAltura:
-            post?.PostAltura == null || post?.PostAltura === ""
-              ? null
-              : Number(post.PostAltura),
-        };
-
-        await savePost(payload);
-        return { ok: true };
-      }
-
-      if (te === "VANO") {
-        const vano = await fetchVanoById(eid);
-        if (!vano) return { ok: false, reason: "No se encontró el vano en SQLite" };
-
-        const payload = {
-          ...vano,
-
-          // ✅ algunos vienen como Vano_Codigo, acá lo aseguramos
-          VanoCodigo: pickVanoCodigo(vano),
-
-          // ✅ NOT NULL en tu BD (según tu form)
-          VanoEtiqueta: ensureVanoEtiqueta(vano),
-
-          VanoInspeccionado: Number(inspected) ? 1 : 0,
-
-          VanoTerceros:
-            vano?.VanoTerceros == null || vano?.VanoTerceros === ""
-              ? null
-              : Number(vano.VanoTerceros),
-        };
-
-        await saveVano(payload);
-        return { ok: true };
-      }
-
-      return { ok: false, reason: "typeElement no soportado" };
-    } catch (e) {
-      console.error("❌ syncElementoInspeccionadoToServer:", e);
-      return { ok: false, reason: e?.message ?? String(e) };
-    }
-  },
-  [getPostData, savePost, fetchVanoById, saveVano]
-);
 
 
   const recalcularInspeccionadoElemento = useCallback(
-  async ({ showUI = true } = {}) => {
-    const { elementId, typeElement } = getElementoTarget();
+    async ({ showUI = true } = {}) => {
+      const { elementId, typeElement } = getElementoTarget();
 
-    if (!elementId || !typeElement) {
-      if (showUI) Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
-      return { ok: false };
-    }
-
-    if (showUI) setBusy({ active: true, msg: "Actualizando inspección..." });
-
-    try {
-      // 1) ✅ recalcula y escribe en SQLITE
-      const res = await recalcElementoInspeccionadoLocal(elementId, typeElement);
-
-      if (!res?.ok) {
-        if (showUI) Alert.alert("Error", `No se pudo recalcular.\n${res?.reason ?? ""}`);
-        return res;
+      if (!elementId || !typeElement) {
+        if (showUI) Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
+        return { ok: false };
       }
 
-      // 2) ✅ manda al SERVIDOR usando savePost/saveVano (mismo flujo de forms)
-      if (showUI) setBusy({ active: true, msg: "Sincronizando con servidor..." });
+      if (showUI) setBusy({ active: true, msg: "Actualizando inspección..." });
 
-      const syncRes = await syncElementoInspeccionadoToServer({
-        elementId,
-        typeElement,
-        inspected: res.inspected,
-        showUI,
-      });
+      try {
+        // ✅ recalcula y escribe SOLO en SQLITE
+        const res = await recalcElementoInspeccionadoLocal(elementId, typeElement);
 
-      // 3) UI
-      if (showUI) {
-        if (syncRes?.ok) {
-          if (Platform.OS === "android") {
-            ToastAndroid.show("✅ Actualizado y sincronizado", ToastAndroid.SHORT);
-          } else {
-            Alert.alert("✅ OK", "Actualizado y sincronizado.");
-          }
-        } else {
-          // OJO: si falló server, igual SQLite ya quedó correcto.
-          Alert.alert(
-            "⚠️ SQLite OK / Server NO",
-            `Se actualizó en el equipo pero falló el servidor.\n\n${syncRes?.reason ?? ""}`
-          );
+        if (!res?.ok) {
+          if (showUI) Alert.alert("Error", `No se pudo recalcular.\n${res?.reason ?? ""}`);
+          return res;
         }
-      }
 
-      return { ...res, syncOk: !!syncRes?.ok };
-    } catch (e) {
-      if (showUI) Alert.alert("Error", e?.message ?? "Falló el proceso.");
-      return { ok: false };
-    } finally {
-      if (showUI) setBusy({ active: false, msg: "" });
-    }
-  },
-  [getElementoTarget, syncElementoInspeccionadoToServer]
-);
+        // ✅ UI
+        if (showUI) {
+          const msg = res.inspected ? "✅ Marcado como inspeccionado" : "✅ Marcado como NO inspeccionado";
+
+          if (Platform.OS === "android") {
+            ToastAndroid.show(msg, ToastAndroid.SHORT);
+          } else {
+            Alert.alert("OK", msg);
+          }
+        }
+
+        return res;
+      } catch (e) {
+        console.error("❌ recalcularInspeccionadoElemento:", e);
+        if (showUI) Alert.alert("Error", e?.message ?? "Falló el proceso.");
+        return { ok: false };
+      } finally {
+        if (showUI) setBusy({ active: false, msg: "" });
+      }
+    },
+    [getElementoTarget]
+  );
+
 
 
 
@@ -248,16 +175,13 @@ const syncElementoInspeccionadoToServer = useCallback(
   };
 
   /* =======================
-      CARGA INICIAL
-     ======================= */
-  useEffect(() => {
-    if (!selectedItem) {
-      setItems([]);
-      return;
-    }
+        LEER DATOS DE ELEMENTO
+       ======================= */
 
-    const elementId =
-      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+
+  const leerElementoDesdeSqlite = useCallback(async () => {
+    console.log("📦 Lectura de datos al sqlite");
+    if (!selectedItem) return null;
 
     const typeElement = selectedItem.PostInterno
       ? "POST"
@@ -265,25 +189,92 @@ const syncElementoInspeccionadoToServer = useCallback(
         ? "VANO"
         : "SED";
 
-    const loadDefs = async () => {
-      try {
-        const existingDefs = await deficienciesForFlatList(elementId, typeElement);
+    // SED no se lee de sqlite (según tu lógica actual)
+    if (typeElement === "SED") {
+      setItems((prev) => {
+        const idx = prev.findIndex((x) => x?.type === "general");
 
         const generalItem = {
           id: "general",
           type: "general",
           name: "Datos Generales",
-          data: selectedItem
+          data: selectedItem,
         };
 
-        setItems([generalItem, ...existingDefs]);
-      } catch (err) {
-        console.error("❌ Error cargando inspección:", err);
-      }
-    };
+        if (idx === -1) return [generalItem, ...prev];
 
-    loadDefs();
-  }, [selectedItem]);
+        const next = [...prev];
+        next[idx] = generalItem;
+        return next;
+      });
+
+      return selectedItem;
+    }
+
+    let elementData = selectedItem;
+
+    try {
+      if (typeElement === "POST" && selectedItem.PostInterno != null) {
+        const p = await getPostData(selectedItem.PostInterno);
+        if (p) elementData = p;
+      } else if (typeElement === "VANO" && selectedItem.VanoInterno != null) {
+        const v = await fetchVanoById(selectedItem.VanoInterno);
+        if (v) elementData = v;
+      }
+    } catch (e) {
+      console.warn("⚠ leerElementoDesdeSqlite:", e?.message ?? e);
+    }
+
+    // ✅ actualiza SOLO el item "general"
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x?.type === "general");
+
+      const generalItem = {
+        id: "general",
+        type: "general",
+        name: "Datos Generales",
+        data: elementData,
+      };
+
+      if (idx === -1) return [generalItem, ...prev];
+
+      const next = [...prev];
+      next[idx] = generalItem;
+      return next;
+    });
+
+    return elementData;
+  }, [selectedItem, getPostData, fetchVanoById]);
+
+
+  /* =======================
+      CARGA INICIAL
+     ======================= */
+  useEffect(() => {
+    if (!selectedItem) {
+      setItems([]);
+      lastLoadKeyRef.current = null;
+      return;
+    }
+
+    const key =
+      selectedItem.PostInterno != null
+        ? `POST-${selectedItem.PostInterno}`
+        : selectedItem.VanoInterno != null
+          ? `VANO-${selectedItem.VanoInterno}`
+          : `SED-${selectedItem.SedInterno ?? "X"}`;
+
+    // ✅ evita loops aunque cambien callbacks
+    if (lastLoadKeyRef.current === key) return;
+    lastLoadKeyRef.current = key;
+
+    (async () => {
+      await refreshList();              // ✅ lista de deficiencias
+      await leerElementoDesdeSqlite();  // ✅ datos del elemento (sqlite)
+    })();
+  }, [selectedItem, refreshList, leerElementoDesdeSqlite]);
+
+
 
   /* =======================
       BACK HANDLER
@@ -298,23 +289,17 @@ const syncElementoInspeccionadoToServer = useCallback(
       return () => sub.remove();
     }, [])
   );
-  useFocusEffect(
-    useCallback(() => {
-      // al salir de la pantalla (blur/unmount)
-      return () => {
-        // ⚠️ sin UI ni setState (para no reventar por unmount)
-        recalcularInspeccionadoElemento({ showUI: false });
-      };
-    }, [recalcularInspeccionadoElemento])
-  );
 
 
 
-  const refreshList = async () => {
+  const refreshList = useCallback(async () => {
+    console.log("📦 Refresh tipificaciones existentes");
     if (!selectedItem) return;
 
     const elementId =
-      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+      selectedItem.PostInterno ??
+      selectedItem.VanoInterno ??
+      selectedItem.SedInterno;
 
     const typeElement = selectedItem.PostInterno
       ? "POST"
@@ -324,15 +309,22 @@ const syncElementoInspeccionadoToServer = useCallback(
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
-    const generalItem = {
-      id: "general",
-      type: "general",
-      name: "Datos Generales",
-      data: selectedItem
-    };
+    // ✅ NO lee elemento: preserva el "general" actual
+    setItems((prev) => {
+      const prevGeneral = prev.find((x) => x?.type === "general");
 
-    setItems([generalItem, ...existingDefs]);
-  };
+      const generalItem = prevGeneral ?? {
+        id: "general",
+        type: "general",
+        name: "Datos Generales",
+        data: selectedItem,
+      };
+
+      return [generalItem, ...existingDefs];
+    });
+  }, [selectedItem, deficienciesForFlatList]);
+
+
 
   /* =======================
       ABRIR MODAL
@@ -495,9 +487,10 @@ const syncElementoInspeccionadoToServer = useCallback(
     if (item.type === "general") {
       return (
         <GeneralDataItem
-          item={selectedItem}
+          item={item.data} // ✅ ahora pinta lo que refreshList leyó de sqlite
           onEdit={(it) => openFormModal({ ...item, data: it })}
         />
+
       );
     }
 
@@ -557,7 +550,12 @@ const syncElementoInspeccionadoToServer = useCallback(
       <DataGeneralModal
         visible={modalGeneralVisible}
         item={currentItem}
-        onClose={() => setModalGeneralVisible(false)}
+        onClose={async () => {
+          setModalGeneralVisible(false);
+          await leerElementoDesdeSqlite(); // ✅ SOLO actualiza datos generales
+        }}
+
+
       />
 
       <DeficiencyModal
@@ -565,11 +563,34 @@ const syncElementoInspeccionadoToServer = useCallback(
         deficiency={currentDeficiency}
         userId={user.id}
         selectedItem={selectedItem}
+        onSaved={async ({ defId, data, isNew }) => {
+          // ✅ si fue NUEVA, ahí sí cambia la lista => refresh
+          if (isNew) {
+            await refreshList();
+            return;
+          }
+
+          // ✅ si fue EDICIÓN, patch sin refresh
+          if (!defId) return;
+
+          setItems((prev) =>
+            prev.map((x) => {
+              if (x?.type !== "def") return x;
+              if (String(x?.defId) !== String(defId)) return x;
+
+              return {
+                ...x,
+                data: { ...(x.data ?? {}), ...(data ?? {}) },
+              };
+            })
+          );
+        }}
         onClose={() => {
           setModalDeficiencyVisible(false);
-          refreshList();
+          // ✅ NO refresh aquí
         }}
       />
+
 
       <ListaTipificaciones
         visible={newDefModalVisible}

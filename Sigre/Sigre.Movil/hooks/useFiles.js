@@ -98,42 +98,43 @@ export function useFiles() {
 
 
 
-// ===============================
-// 🔄 AUTO SYNC
-// ===============================
-const autoSyncArchivo = useCallback(async (archInternoLocal) => {
-  if (syncingRef.current) return;
-  syncingRef.current = true;
+  // ===============================
+  // 🔄 AUTO SYNC
+  // ===============================
+  const autoSyncArchivo = useCallback(async (archInternoLocal) => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
 
-  try {
-    // 🔐 CLAVE: garantizar DB
-    const dbOk = await checkDatabase();
-    if (!dbOk) return;
+    try {
+      console.log("📤 Sincronización de Update de archivo");
+      // 🔐 CLAVE: garantizar DB
+      const dbOk = await checkDatabase();
+      if (!dbOk) return;
 
-    const online = await isOnline();
-    if (!online) return;
+      const online = await isOnline();
+      if (!online) return;
 
-    const arch = await getArchivoByIdLocal(archInternoLocal);
-    if (!arch) return;
+      const arch = await getArchivoByIdLocal(archInternoLocal);
+      if (!arch) return;
 
-    const payload = [normalizeArchivoForSync(arch)];
+      const payload = [normalizeArchivoForSync(arch)];
 
-    const response = await client.post("/File/SyncFromSQLite", payload, {
-      timeout: 15000,
-    });
+      const response = await client.post("/File/SyncFromSQLite", payload, {
+        timeout: 15000,
+      });
 
-    const map = response.data?.[0];
-    if (!map) return;
+      const map = response.data?.[0];
+      if (!map) return;
 
-    if (map.localId !== map.serverId) {
-      await updateArchivoIdAfterSync(map.localId, map.serverId);
+      if (map.localId !== map.serverId) {
+        await updateArchivoIdAfterSync(map.localId, map.serverId);
+      }
+    } catch (err) {
+      console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
+    } finally {
+      syncingRef.current = false;
     }
-  } catch (err) {
-    console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
-  } finally {
-    syncingRef.current = false;
-  }
-}, [checkDatabase, isOnline, client]);
+  }, [checkDatabase, isOnline, client]);
 
   // ===============================
   // 💾 SAVE / UPDATE (SQLite)
@@ -190,6 +191,8 @@ const autoSyncArchivo = useCallback(async (archInternoLocal) => {
 
     return true;
   }, [checkDatabase, autoSyncArchivo]);
+
+
 
   // ✅ Baja ArchActivo a 0 sin mover archivos (caso: “falta foto en carpeta pública”)
   const markArchivoAsInactive = useCallback(
