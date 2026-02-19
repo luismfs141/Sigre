@@ -870,7 +870,7 @@ namespace Sigre.DataAccess
                     if (input.DefiFecRegistro != DateTime.MinValue)
                     {
                         existente.DefiFecRegistro = input.DefiFecRegistro;
-                        existente.DefiFechaCreacion = input.DefiFecRegistro;
+                        
                     }
 
                     // Auditoría
