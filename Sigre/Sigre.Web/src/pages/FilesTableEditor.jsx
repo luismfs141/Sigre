@@ -17,11 +17,24 @@ import { saveAs } from 'file-saver';
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 
-const formatCompactDate = (d) => {
-    if (!d || !(d instanceof Date) || isNaN(d)) return '00000000-000000';
-    const pad = (n) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-};
+// --- AL FINAL DE WebInspectionManager.js ---
+
+function formatCompactDate(date) {
+    if (!date) return "00000000-000000";
+    const d = new Date(date);
+    if(isNaN(d.getTime())) return "00000000-000000";
+    
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    // 🔥 DESCOMENTADO Y CORREGIDO:
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    
+    return `${y}${m}${day}-${h}${min}${s}`; // Ej: 20260218-143005
+}
 
 const toLocalISOString = (date) => {
     if (!date) return null;
@@ -45,7 +58,7 @@ const photoTypes = {
 export default function FilesTableEditor({ 
     namingContext, historicalData, getCodeById, toast, 
     existingFiles, onDeleteDbFile, loadingFiles, 
-    onAddFile 
+    onAddFile ,viewMode, sessionBlobs
 }) {
     
     const [fileRows, setFileRows] = useState([]);
@@ -105,14 +118,15 @@ export default function FilesTableEditor({
     const applyPathUpdates = () => {
         const { feeder, sed, structureCode, structureType, globalDate, globalLat, globalLon } = namingContext;
 
+        // 1. Validaciones básicas
         const isPathUpdate = !!feeder; 
-
         if (isPathUpdate && !sed) {
             toast.current.show({ severity: 'warn', summary: 'Falta SED', detail: 'Para cambiar la ruta, el campo SED es obligatorio.' });
             return;
         }
 
         const isDateUpdate = !!globalDate;
+        // Verificamos si hay coordenadas globales para aplicar
         const isGeoUpdate = (globalLat && String(globalLat).trim() !== '') || (globalLon && String(globalLon).trim() !== '');
 
         if (!isPathUpdate && !isDateUpdate && !isGeoUpdate) {
@@ -120,20 +134,32 @@ export default function FilesTableEditor({
             return;
         }
 
+        // 2. Preparar datos de Ruta
         const newFeeder = isPathUpdate ? resolveCurrentFeederName() : null;
         const newSed = isPathUpdate ? safeSeg(sed.sedCodigo || sed.value || sed) : null;
         const newType = isPathUpdate ? (structureType === 'Vano' ? 'Vano' : 'Poste') : null;
         const newCode = isPathUpdate ? safeSeg(structureCode || "SIN_CODIGO") : null;
 
+        // 3. 🔥 CALCULAR UTM GLOBAL (Una sola vez)
+        let globalUtm = { northing: 0, easting: 0 };
+        if (isGeoUpdate) {
+            // Convertimos las entradas globales (Lat/Lon) a UTM (Norte/Este)
+            globalUtm = latLonToUTM(parseFloat(globalLat), parseFloat(globalLon));
+        }
+
+        // 4. Aplicar a las filas
         const updatedRows = fileRows.map(row => {
             const isAudio = row.archTipo === 0;
 
+            // Actualizar Fecha
             const finalDate = isDateUpdate ? new Date(globalDate) : row.archFecha;
             
-            // Si es audio, no aplicamos geo global
-            const finalLat = (!isAudio && globalLat && String(globalLat).trim() !== '') ? globalLat : row.archLatitud;
-            const finalLon = (!isAudio && globalLon && String(globalLon).trim() !== '') ? globalLon : row.archLongitud;
+            // 🔥 Actualizar GEO: Si hay update global y no es audio, usamos el valor convertido a UTM
+            // Mapeamos: Latitud -> Norte (UTM Northing), Longitud -> Este (UTM Easting)
+            const finalLat = (!isAudio && isGeoUpdate) ? globalUtm.northing : row.archLatitud;
+            const finalLon = (!isAudio && isGeoUpdate) ? globalUtm.easting : row.archLongitud;
 
+            // Actualizar Ruta (Nombre)
             let currentPathParts = row.currentPath.split('/');
             
             if (currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
@@ -167,8 +193,8 @@ export default function FilesTableEditor({
                 ...row, 
                 currentPath: newPath,
                 archFecha: finalDate,     
-                archLatitud: finalLat,    
-                archLongitud: finalLon    
+                archLatitud: finalLat,     // Valor UTM
+                archLongitud: finalLon     // Valor UTM
             };
         });
 
@@ -177,7 +203,7 @@ export default function FilesTableEditor({
         const changes = [];
         if (isPathUpdate) changes.push("Rutas");
         if (isDateUpdate) changes.push("Fecha");
-        if (isGeoUpdate) changes.push("Ubicación");
+        if (isGeoUpdate) changes.push("Ubicación (UTM)");
         
         toast.current.show({ severity: 'success', summary: 'Actualizado', detail: `Aplicado: ${changes.join(', ')}.` });
     };
@@ -326,6 +352,36 @@ const handleRemoveRequest = (event, row) => {
             </div>
         );
     };
+const imageBodyTemplate = (rowData) => {
+        // Extraemos solo el nombre del archivo de la ruta completa
+        const fileName = (rowData.currentPath || "").split(/[/\\]/).pop();
+        let imgSrc = null;
+
+        // A. Prioridad: Buscar en memoria (foto recién subida, blob local)
+        if (sessionBlobs && sessionBlobs[fileName]) {
+            imgSrc = URL.createObjectURL(sessionBlobs[fileName]);
+        } 
+        // B. Respaldo: Usar URL del servidor (foto histórica)
+        else {
+            imgSrc = rowData.previewUrl; 
+        }
+
+        return (
+            <div className="flex justify-center items-center h-16 w-16 bg-gray-50 rounded border overflow-hidden">
+                <Image 
+                    src={imgSrc} 
+                    alt="Foto" 
+                    width="50" 
+                    preview 
+                    imageClassName="object-cover h-full w-full"
+                    onError={(e) => {
+                        e.target.onerror = null; 
+                        e.target.src = 'https://via.placeholder.com/50?text=N/A';
+                    }}
+                />
+            </div>
+        );
+    };
 
     return (
         <Card title="Editor de Archivos (Files)" className="mt-4 shadow-sm">
@@ -333,14 +389,18 @@ const handleRemoveRequest = (event, row) => {
             <Toolbar className="mb-4 p-2 border-none bg-transparent"
                 left={
                     <div className="flex gap-2">
+                        
                         <Button label="Aplicar Cambios" icon="pi pi-refresh" severity="info" outlined onClick={applyPathUpdates} tooltip="Aplica Alim/SED y/o Metadatos globales" />
                         <Button label={saving ? "Guardando..." : "Guardar Cambios"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-save"} severity="success" onClick={handleSaveAll} disabled={fileRows.length === 0 || saving} />
                     </div>
                 }
-                right={<Button label="Descargar ZIP" icon={zipLoading ? "pi pi-spin pi-spinner" : "pi pi-download"} severity="help" outlined onClick={handleGenerateZip} disabled={fileRows.length === 0} />}
+                
             />
             
             <DataTable value={fileRows} size="small" emptyMessage="No hay archivos asociados." loading={loadingFiles} stripedRows showGridlines className="text-sm">
+                {viewMode === 'gallery' && (
+                    <Column header="Foto" body={imageBodyTemplate} style={{width:'80px'}} />
+                )}
                 <Column header="Id" body={(r) => <span className="text-xs">{r.archInterno}</span>} style={{ width: '60px' }} />
                 
                 {/* Deficiencia y Tipo (Solo Lectura) */}
@@ -395,4 +455,47 @@ const handleRemoveRequest = (event, row) => {
             </DataTable>
         </Card>
     );
+}
+// ==========================================
+// 🔥🔥🔥 HELPER FUNCTIONS 🔥🔥🔥
+// ==========================================
+// --- CONVERSIÓN LAT/LON A UTM (WGS84) ---
+function latLonToUTM(lat, lon) {
+    if (!lat || !lon) return { northing: 0, easting: 0, zone: 0 };
+
+    const a = 6378137; // Semi-eje mayor WGS84
+    const f = 1 / 298.257223563; // Aplanamiento
+    const k0 = 0.9996; // Factor de escala
+
+    const phi = lat * (Math.PI / 180);
+    const lambda = lon * (Math.PI / 180);
+    const zone = Math.floor((lon + 180) / 6) + 1;
+    const lambda0 = ((zone - 1) * 6 - 180 + 3) * (Math.PI / 180);
+
+    const e2 = 2 * f - f * f; // Excentricidad al cuadrado
+    const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
+    const T = Math.tan(phi) * Math.tan(phi);
+    const C = (e2 / (1 - e2)) * Math.cos(phi) * Math.cos(phi);
+    const A = (lambda - lambda0) * Math.cos(phi);
+
+    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi
+        - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi)
+        + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi)
+        - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
+
+    const easting = 500000 + k0 * N * (A + (1 - T + C) * A * A * A / 6
+        + (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A * A / 120);
+
+    const northing = k0 * (M + N * Math.tan(phi) * (A * A / 2
+        + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24
+        + (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720));
+
+    // Para hemisferio sur (Latitud negativa), sumar 10,000,000 al norte
+    const finalNorthing = lat < 0 ? northing + 10000000 : northing;
+
+    return {
+        easting: parseFloat(easting.toFixed(3)),
+        northing: parseFloat(finalNorthing.toFixed(3)),
+        zone: zone
+    };
 }
