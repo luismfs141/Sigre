@@ -5,11 +5,11 @@ export const ZOOM_THRESHOLD = 0.003;
 
 // Tamaños
 export const ICON_SIZES = {
-  DEFAULT: 22,
-  SED: 35,
+  DEFAULT: 24,
+  SED: 32,
 };
 
-const LABEL_GAP = 2;
+const LABEL_GAP = 16;
 
 // ---------------- TYPES ----------------
 export const isSedType = (type) => Number(type) === 1 || Number(type) === 2;
@@ -18,10 +18,7 @@ export const isPostType = (type) => Number(type) === 5;
 export const getIconSizeByType = (type) =>
   isSedType(type) ? ICON_SIZES.SED : ICON_SIZES.DEFAULT;
 
-export const getLabelOffsetByType = (type) => {
-  const size = getIconSizeByType(type);
-  return size / 2 + LABEL_GAP;
-};
+
 
 // ---------------- TEXT ----------------
 export const formatLabel = (label) =>

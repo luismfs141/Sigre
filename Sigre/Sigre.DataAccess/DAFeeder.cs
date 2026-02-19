@@ -206,7 +206,9 @@ namespace Sigre.DataAccess
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
                         ElementCode = string.IsNullOrWhiteSpace(p.ElementCode) ? $"PIN_{Guid.NewGuid():N}" : p.ElementCode,
-                        IdSed = p.IdSed
+                        IdSed = p.IdSed,
+                        Tercero = p.Tercero
+
 
                     }).ToList();
 
@@ -276,8 +278,7 @@ namespace Sigre.DataAccess
                     var dAFeeder = new DAFeeder();
 
                     var pines = new List<PinStruct>();
-                    pines.AddRange(dADeficiency.DADEFI_GetPinsBySubestacion(x_ids));
-                    pines.AddRange(dAGap.DAGAP_GetPinsBySubestacion(x_ids));
+                    
                     pines.AddRange(dAPost.DAPOST_PinsBySubestacion(x_ids));
                     pines.AddRange(dASed.DASed_PinsBySeds(x_ids));
 
