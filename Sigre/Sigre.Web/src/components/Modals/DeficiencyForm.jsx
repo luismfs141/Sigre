@@ -522,28 +522,39 @@ const handleSubmit = () => {
     
     {/* CONDICIONAL: Si es NUEVO (!deficiencyToEdit) mostramos el Buscador */}
     {!deficiencyToEdit ? (
-        <AutoComplete 
-            value={formData.defiCodigoElemento} 
-            suggestions={suggestions} 
-            completeMethod={searchNetworkElement} 
-            field="codigo"  // Muestra el código en el input al seleccionar
-            itemTemplate={itemTemplate} // Tu diseño con iconos
-            
-            // 1. AL SELECCIONAR: Autocompletar Tipo y Coordenadas
-            onSelect={(e) => {
-                const item = e.value;
-                const tipoParaDropdown = item._tipo === 'POSTE' ? 'POST' : 'VANO';
-                setFormData(prev => ({
-                    ...prev,
-                    defiCodigoElemento: item.codigo,
-                    defiTipoElemento: tipoParaDropdown,
-                    defiLatitud: item.lat,        
-                    defiLongitud: item.lng
-                }));
-            }}
-            
-           
-        />
+<AutoComplete 
+    value={formData.defiCodigoElemento} 
+    suggestions={suggestions} 
+    completeMethod={searchNetworkElement} 
+    field="codigo"
+    itemTemplate={itemTemplate} 
+    
+    // 1. ESTO ES LO QUE FALTABA: Permitir escribir
+    onChange={(e) => {
+        // e.value puede ser el texto que escribes O el objeto seleccionado
+        // Si es objeto, sacamos el codigo. Si es texto, lo usamos directo.
+        const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
+        
+        setFormData(prev => ({ ...prev, defiCodigoElemento: valor }));
+    }}
+
+    // 2. AL SELECCIONAR: Autocompletar Tipo y Coordenadas (Tu lógica actual)
+    onSelect={(e) => {
+        const item = e.value;
+        const tipoParaDropdown = item._tipo === 'POSTE' ? 'POST' : 'VANO';
+        setFormData(prev => ({
+            ...prev,
+            defiCodigoElemento: item.codigo,
+            defiTipoElemento: tipoParaDropdown,
+            defiLatitud: item.lat,        
+            defiLongitud: item.lng
+        }));
+    }}
+    
+    placeholder="Buscar Poste o Vano..."
+    className="w-full"
+    inputClassName="w-full p-inputtext-sm font-bold uppercase"
+/>
     ) : (
         // CONDICIONAL: Si es EDICIÓN, mostramos el Input bloqueado (tu código original)
         <InputText 

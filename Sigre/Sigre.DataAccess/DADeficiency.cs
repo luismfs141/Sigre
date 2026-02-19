@@ -949,17 +949,30 @@ namespace Sigre.DataAccess
                                   select new
                                   {
                                       Id = p.PostCodigoNodo,
-                                      Sector = p.PostSubestacion, // Esto es un INT (ej: 8143)
-                                      CodDef = d.TipiInterno
+                                      Sector = p.PostSubestacion,
+                                      CodDef = d.TipiInterno,
+                                      // 🔥 NUEVO: Traemos la criticidad (1: Leve, 2: Media, 3: Crítica, 0: S/D)
+                                      Criticidad = d.DefiEstadoCriticidad
                                   })
-                                  .ToList()
+                                  .ToList() // Ejecutamos la consulta SQL aquí
                                   .GroupBy(x => x.Id)
                                   .Select(g => new
                                   {
                                       id = g.Key,
-                                      // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
                                       sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
-                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+
+                                      // Lista simple de códigos de defecto (como tenías antes)
+                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
+
+                                      // 🔥 NUEVO: Lista de objetos detallados con Criticidad
+                                      details = g.Select(x => new {
+                                          code = x.CodDef,
+                                          crit = x.Criticidad
+                                      }).ToList(),
+
+                                      // 🔥 OPCIONAL: La peor criticidad del elemento (para colorear el poste entero)
+                                      // Si hay un 3 (Crítico), el poste es Crítico. Si no, busca 2, luego 1.
+                                      maxCriticality = g.Max(x => x.Criticidad ?? 0)
                                   }).ToList();
 
                 // -----------------------------------------------------------------------------
@@ -972,17 +985,28 @@ namespace Sigre.DataAccess
                                  select new
                                  {
                                      Id = v.VanoCodigo,
-                                     Sector = v.VanoSubestacion, // Esto es un INT
-                                     CodDef = d.TipiInterno
+                                     Sector = v.VanoSubestacion,
+                                     CodDef = d.TipiInterno,
+                                     // 🔥 NUEVO: Traemos la criticidad
+                                     Criticidad = d.DefiEstadoCriticidad
                                  })
                                  .ToList()
                                  .GroupBy(x => x.Id)
                                  .Select(g => new
                                  {
                                      id = g.Key,
-                                     // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
                                      sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
-                                     deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+
+                                     deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
+
+                                     // 🔥 NUEVO: Detalles con criticidad
+                                     details = g.Select(x => new {
+                                         code = x.CodDef,
+                                         crit = x.Criticidad
+                                     }).ToList(),
+
+                                     // 🔥 OPCIONAL: Peor criticidad
+                                     maxCriticality = g.Max(x => x.Criticidad ?? 0)
                                  }).ToList();
 
                 return new { postes = dataPostes, vanos = dataVanos };

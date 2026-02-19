@@ -51,8 +51,63 @@ const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) =
 const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
 const urlToBlob = async (url) => { try { const response = await fetch(url); if (!response.ok) throw new Error("404"); return await response.blob(); } catch { return null; } };
 
+// =====================================================================
+// 🌎 MOTOR MATEMÁTICO: CONVERSIÓN WGS84 EXACTA
+// =====================================================================
+
+const getUtmBandLetter = (lat) => {
+    if (-16 >= lat && lat >= -24) return 'K'; 
+    if (-8 >= lat && lat > -16) return 'L';   
+    if (0 >= lat && lat > -8) return 'M';     
+    return 'S'; 
+};
+
+const latLonToUTM = (lat, lon) => {
+    if (!lat || !lon) return { zone: "--", easting: 0, northing: 0, letter: "-" };
+
+    const a = 6378137.0; 
+    const f = 1 / 298.257223563; 
+    const k0 = 0.9996; 
+
+    const phi = lat * (Math.PI / 180);
+    const lambda = lon * (Math.PI / 180);
+    
+    const zoneNumber = Math.floor((lon + 180) / 6) + 1;
+    const lambda0 = ((zoneNumber - 1) * 6 - 180 + 3) * (Math.PI / 180);
+
+    const e2 = 2 * f - f * f;
+    const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
+    const T = Math.tan(phi) * Math.tan(phi);
+    const C = e2 * Math.cos(phi) * Math.cos(phi) / (1 - e2);
+    const A = (lambda - lambda0) * Math.cos(phi);
+
+    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi
+        - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi)
+        + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi)
+        - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
+
+    const easting = 500000 + k0 * N * (A + (1 - T + C) * A * A * A / 6
+        + (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A / 120);
+
+    let northing = k0 * M + k0 * N * Math.tan(phi) * (A * A / 2
+        + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24
+        + (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720);
+
+    if (lat < 0) northing += 10000000.0;
+
+    const letter = getUtmBandLetter(lat);
+
+    return {
+        zone: zoneNumber,
+        letter: letter,
+        // 🟢 CAMBIO AQUÍ: Usamos toFixed(2) para 2 decimales y parseFloat para que siga siendo número
+        easting: parseFloat(easting.toFixed(2)),
+        northing: parseFloat(northing.toFixed(2))
+    };
+};
+
 // --- COMPONENTE IMAGEN ---
-const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode }) => {
+const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode,onDelete }) => {
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
     const generateCandidates = (rawPath) => {
         if (!rawPath) return [];
@@ -96,6 +151,24 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
     return (
         <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all" onClick={() => onImageClick(index)}>
             <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
+            {/* 🔴 BOTÓN DE ELIMINAR AÑADIDO */}
+            <button 
+                onClick={(e) => {
+                    e.stopPropagation(); // Evita que se abra el Lightbox al borrar
+                    onDelete(file);
+                }}
+                // SE HAN HECHO LOS SIGUIENTES CAMBIOS PARA RESALTARLO:
+                // 1. !bg-red-600 y hover:!bg-red-700: El signo '!' fuerza el color rojo intenso.
+                // 2. w-7 h-7: Se aumentó el tamaño (antes era w-6 h-6).
+                // 3. border-2 border-white: Se añade un borde blanco para contraste.
+                // 4. shadow-md: Añade una pequeña sombra para que "flote".
+                // 5. z-20: Aseguramos que esté por encima de todo.
+                className="absolute top-0 right-0 !bg-red-600 text-white w-7 h-7 border-2 border-white flex items-center justify-center rounded-bl-md shadow-md hover:!bg-red-700 transition-all z-20"
+                title="Eliminar foto"
+            >
+                {/* Se aumentó ligeramente el tamaño del icono (de text-[10px] a text-xs) */}
+                <i className="pi pi-trash text-xs font-bold"></i>
+            </button>
             <div className="absolute bottom-0 w-full bg-black/70 text-white text-[9px] font-bold text-center py-0.5 uppercase tracking-tighter">{typeName}</div>
         </div>
     );
@@ -104,7 +177,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
 // --- COMPONENTE PRINCIPAL ---
 export default function EvidenceGallery({ deficiency, feeder, sed, suministro, element7004Count, my7004Correlativo }) {
     const toast = useRef(null);
-    const { files, loadFiles, addFile } = useFiles();
+    const { files, loadFiles, addFile,deleteFile } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
     const resolvedUrlsRef = useRef({}); 
@@ -150,14 +223,13 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         };
     };
 
-    const handleUploadSave = async (dataToSave) => {
+const handleUploadSave = async (dataToSave) => {
         const feederLbl = resolveFeederName(feeder, deficiency);
         const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
         const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
-        const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'Vano' : 'Poste'; 
+        const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'VANO' : 'POSTE'; 
         
-        // CORRECCIÓN TAMBIÉN AQUÍ PARA CONSISTENCIA
         const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
         const defCodeBase = String(defCodeRaw).trim();
         
@@ -168,18 +240,67 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         if (is7004) { 
             const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1; 
             defFolder = `7004/${folderNum}`; 
-            namePart = `7004_${folderNum}-${(currentSupply && currentSupply !== '0') ? currentSupply : "00000"}`; 
+            // 🟢 CAMBIO: Se eliminó la parte del suministro, queda solo 7004_Correlativo
+            namePart = `7004_${folderNum}`; 
         } 
         else if (isSinDef) { defFolder = "SINDEF"; namePart = "0000"; } 
         else { defFolder = defCodeBase; namePart = defCodeBase; }
         
         const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${formatCompactDate(dataToSave.date)}-${dataToSave.tipo}.jpg`;
         const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
+        
         await LocalFileStore.save(fileName, dataToSave.file);
 
-        const payload = { archInterno: 0, archTipo: String(dataToSave.tipo), archNombre: dbPath.substring(0, 255), archTabla: "Deficiencias", archCodTabla: Number(getValue('Interno')), archLatitud: parseFloat(dataToSave.lat)||0, archLongitud: parseFloat(dataToSave.long)||0, archFecha: toLocalISOString(dataToSave.date), archTipoElemento: tipoElemRaw, archIdElemento: Number(getValue('IdElemento')), tipiInterno: Number(deficiency.tipiInterno), archActivo: true };
-        if (await addFile(payload)) { toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada' }); setModalVisible(false); loadFiles(deficiency.defiInterno); } 
-        else toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
+        // 🔥🔥🔥 CONVERSIÓN A UTM ANTES DE GUARDAR 🔥🔥🔥
+        const rawLat = parseFloat(dataToSave.lat) || 0;
+        const rawLon = parseFloat(dataToSave.long) || 0;
+        
+        // Usamos la función matemática que tienes al final del archivo
+        const utmCoords = latLonToUTM(rawLat, rawLon);
+
+        const payload = { 
+            archTabla: "Deficiencias",
+            archInterno: 0, 
+            archTipo: String(dataToSave.tipo), 
+            archNombre: dbPath.substring(0, 255), 
+            archCodTabla: Number(getValue('Interno')), 
+            // 🟢 CAMBIO AQUÍ: Guardamos UTM Norte en latitud y UTM Este en longitud
+            archLatitud: utmCoords.northing, 
+            archLongitud: utmCoords.easting, 
+            archFecha: toLocalISOString(dataToSave.date), 
+            archTipoElemento: tipoElemRaw, 
+            archIdElemento: Number(getValue('IdElemento')), 
+            tipiInterno: Number(deficiency.tipiInterno), 
+            archActivo: true 
+        };
+
+        if (await addFile(payload)) { 
+            toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada (UTM)' }); 
+            setModalVisible(false); 
+            loadFiles(deficiency.defiInterno); 
+        } 
+        else {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
+        }
+    };
+    const handleDeleteImage = async (file) => {
+        // Confirmación simple del navegador (puedes usar confirmDialog de PrimeReact si prefieres)
+        if (!window.confirm("¿Estás seguro de que deseas eliminar esta evidencia?")) return;
+
+        const idToDelete = file.archInterno || file.ARCH_Interno;
+        if (!idToDelete) {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se puede eliminar una imagen sin ID' });
+            return;
+        }
+
+        const success = await deleteFile(idToDelete);
+        
+        if (success) {
+            toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Evidencia eliminada correctamente' });
+            // No necesitas recargar manualmente si tu useFiles ya hace setFiles filter
+        } else {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar la imagen' });
+        }
     };
 
     // 🔥🔥🔥 FUNCIÓN ZIP CORREGIDA PARA USAR getCodeById 🔥🔥🔥
@@ -190,7 +311,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
             const zip = new JSZip();
             const getBestUrl = (f, i) => resolvedUrlsRef.current[i] || `${API_BASE_URL}/${(f.archNombre || "").replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/\/(?:Vano|Poste)\//gi, '/').split('/').map(encodeURIComponent).join('/')}`;
             const feederLbl = resolveFeederName(feeder, deficiency); const sedLbl = safeSeg(sed?.sedCodigo || "SIN_SED"); const codeElemLbl = safeSeg(getValue('CodigoElemento'));
-            const tipoElem = (getValue('TipoElemento') || 'POST').toUpperCase() === 'VANO' ? 'Vano' : 'Poste';
+            const tipoElem = (getValue('TipoElemento') || 'POST').toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
             
             // ✅ AQUÍ ESTÁ LA CORRECCIÓN: Usamos getCodeById como respaldo si tipiCodigo es null
             const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
@@ -297,6 +418,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
                         <ResilientImage 
                             key={f.archInterno ? f.archInterno : `temp-${i}-${currentSupply}`}
                             index={i} file={f} 
+                            onDelete={handleDeleteImage}
                             onImageClick={openLightbox} onUrlResolved={handleUrlResolved} 
                             typeName={getPhotoTypeName(parseInt(f.archTipo || f.ARCH_Tipo, 10))}
                             currentSupply={currentSupply} defCode={defCode}
