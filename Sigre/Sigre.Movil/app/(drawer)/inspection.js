@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import Loading from "../../components/LoadingOverlay";
-import { recalcElementoInspeccionadoLocal } from "../../database/offlineDB/deficiencies";
+import { recalcElementoInspeccionadoFromDefsLocal } from "../../database/offlineDB/inspectionDB";
 import { useGap } from "../../hooks/useGap";
 import { usePost } from "../../hooks/usePost";
 
@@ -17,10 +17,12 @@ import {
   StyleSheet,
   Text,
   ToastAndroid,
+  TouchableOpacity,
   View
 } from "react-native";
 
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
@@ -38,7 +40,6 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 export default function Inspection() {
   const { selectedItem, setSelectedDeficiency, isAdmin, isSupervisor, isInspector, currentUserId } = useDatos();
 
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useContext(AuthContext);
 
@@ -93,51 +94,6 @@ export default function Inspection() {
 
 
 
-  const recalcularInspeccionadoElemento = useCallback(
-    async ({ showUI = true } = {}) => {
-      const { elementId, typeElement } = getElementoTarget();
-
-      if (!elementId || !typeElement) {
-        if (showUI) Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
-        return { ok: false };
-      }
-
-      if (showUI) setBusy({ active: true, msg: "Actualizando inspección..." });
-
-      try {
-        // ✅ recalcula y escribe SOLO en SQLITE
-        const res = await recalcElementoInspeccionadoLocal(elementId, typeElement);
-
-        if (!res?.ok) {
-          if (showUI) Alert.alert("Error", `No se pudo recalcular.\n${res?.reason ?? ""}`);
-          return res;
-        }
-
-        // ✅ UI
-        if (showUI) {
-          const msg = res.inspected ? "✅ Marcado como inspeccionado" : "✅ Marcado como NO inspeccionado";
-
-          if (Platform.OS === "android") {
-            ToastAndroid.show(msg, ToastAndroid.SHORT);
-          } else {
-            Alert.alert("OK", msg);
-          }
-        }
-
-        return res;
-      } catch (e) {
-        console.error("❌ recalcularInspeccionadoElemento:", e);
-        if (showUI) Alert.alert("Error", e?.message ?? "Falló el proceso.");
-        return { ok: false };
-      } finally {
-        if (showUI) setBusy({ active: false, msg: "" });
-      }
-    },
-    [getElementoTarget]
-  );
-
-
-
 
 
 
@@ -173,6 +129,105 @@ export default function Inspection() {
 
     return String(owner).trim() === String(currentUserId).trim();
   };
+
+
+  /* =======================
+    ESTADO (FINALIZADO / PENDIENTE)
+   ======================= */
+
+  const parseBool01 = (v) => {
+    if (v === true) return true;
+    if (v === false) return false;
+    if (v === null || v === undefined) return null;
+
+    const s = String(v).trim().toLowerCase();
+    if (s === "1" || s === "true") return true;
+    if (s === "0" || s === "false") return false;
+
+    return null;
+  };
+
+  const getEstadoElemento = (data) => {
+    const raw =
+      data?.PostInspeccionado ??
+      data?.POST_Inspeccionado ??
+      data?.postInspeccionado ??
+      data?.VanoInspeccionado ??
+      data?.VANO_Inspeccionado ??
+      data?.vanoInspeccionado ??
+      null;
+
+    const b = parseBool01(raw);
+    if (b === null) return null;
+
+    return b ? "FINALIZADO" : "PENDIENTE";
+  };
+
+  const handleActualizarEstadoPress = async () => {
+    const { elementId, typeElement } = getElementoTarget();
+
+    if (!elementId || !typeElement) {
+      Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
+      return;
+    }
+
+    setBusy({ active: true, msg: "Actualizando estado..." });
+
+    try {
+      // ✅ 1) Recalcula y actualiza EN SQLITE (PostInspeccionado/VanoInspeccionado)
+      const res = await recalcElementoInspeccionadoFromDefsLocal(elementId, typeElement);
+
+      if (!res?.ok) {
+        Alert.alert("Error", res?.reason ?? "No se pudo recalcular el estado.");
+        return;
+      }
+
+      const new01 = Number(res.inspected) === 1 ? 1 : 0;
+
+      // ✅ 2) Parchar UI (para que el label cambie al toque)
+      setItems((prev) =>
+        prev.map((x) => {
+          if (x?.type !== "general") return x;
+
+          const data = { ...(x.data ?? {}) };
+          if (typeElement === "POST") data.PostInspeccionado = new01;
+          if (typeElement === "VANO") data.VanoInspeccionado = new01;
+
+          return { ...x, data };
+        })
+      );
+
+      // ✅ 3) Solo si cambió => sincroniza con servidor
+      if (res.changed) {
+        try {
+          if (typeElement === "POST") {
+            const p = await getPostData(elementId);
+            if (p) await savePost({ ...p, PostInspeccionado: new01 });
+          } else if (typeElement === "VANO") {
+            const v = await fetchVanoById(elementId);
+            if (v) await saveVano({ ...v, VanoInspeccionado: new01 });
+          }
+        } catch (syncErr) {
+          console.warn("⚠ sync estado inspeccionado falló:", syncErr);
+          // No crashear por sync. El SQLite ya quedó bien.
+        }
+      }
+
+      const estadoTxt = new01 === 1 ? "FINALIZADO" : "PENDIENTE";
+      const msg = res.changed
+        ? `Estado actualizado: ${estadoTxt}`
+        : `Estado ya estaba: ${estadoTxt}`;
+
+      if (Platform.OS === "android") ToastAndroid.show(msg, ToastAndroid.SHORT);
+      else Alert.alert("OK", msg);
+    } catch (e) {
+      console.error("❌ handleActualizarEstadoPress:", e);
+      Alert.alert("Error", e?.message ?? "No se pudo actualizar el estado.");
+    } finally {
+      setBusy({ active: false, msg: "" });
+    }
+  };
+
 
   /* =======================
         LEER DATOS DE ELEMENTO
@@ -215,15 +270,38 @@ export default function Inspection() {
 
     try {
       if (typeElement === "POST" && selectedItem.PostInterno != null) {
-        const p = await getPostData(selectedItem.PostInterno);
+        const id = selectedItem.PostInterno;
+
+        const p = await getPostData(id);
         if (p) elementData = p;
+
+        // ✅ Al entrar: recalcula estado en SQLite (SIN SYNC)
+        const r = await recalcElementoInspeccionadoFromDefsLocal(id, "POST");
+        if (r?.ok) {
+          elementData = {
+            ...(elementData ?? {}),
+            PostInspeccionado: Number(r.inspected) === 1 ? 1 : 0,
+          };
+        }
       } else if (typeElement === "VANO" && selectedItem.VanoInterno != null) {
-        const v = await fetchVanoById(selectedItem.VanoInterno);
+        const id = selectedItem.VanoInterno;
+
+        const v = await fetchVanoById(id);
         if (v) elementData = v;
+
+        // ✅ Al entrar: recalcula estado en SQLite (SIN SYNC)
+        const r = await recalcElementoInspeccionadoFromDefsLocal(id, "VANO");
+        if (r?.ok) {
+          elementData = {
+            ...(elementData ?? {}),
+            VanoInspeccionado: Number(r.inspected) === 1 ? 1 : 0,
+          };
+        }
       }
     } catch (e) {
       console.warn("⚠ leerElementoDesdeSqlite:", e?.message ?? e);
     }
+
 
     // ✅ actualiza SOLO el item "general"
     setItems((prev) => {
@@ -485,12 +563,44 @@ export default function Inspection() {
      ======================= */
   const renderItem = ({ item }) => {
     if (item.type === "general") {
-      return (
-        <GeneralDataItem
-          item={item.data} // ✅ ahora pinta lo que refreshList leyó de sqlite
-          onEdit={(it) => openFormModal({ ...item, data: it })}
-        />
+      const estado = getEstadoElemento(item?.data) ?? "PENDIENTE";
+      const isFinalizado = estado === "FINALIZADO";
 
+      return (
+        <View>
+          <View style={styles.estadoRow}>
+            <View style={styles.estadoLeft}>
+              <Text style={styles.estadoLabel}>ESTADO:</Text>
+              <Text
+                style={[
+                  styles.estadoValue,
+                  isFinalizado ? styles.estadoFinalizado : styles.estadoPendiente,
+                ]}
+              >
+                {estado}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.estadoBtn}
+              onPress={handleActualizarEstadoPress} // ✅ por ahora relee sqlite
+              activeOpacity={0.8}
+            >
+              <Text style={styles.estadoBtnText}>Actualizar</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ✅ Esto controla el “vacío” debajo del ESTADO (compensa margen interno del card) */}
+          <View style={styles.generalCardWrap}>
+            <GeneralDataItem
+              item={item.data}
+              onEdit={(it) => openFormModal({ ...item, data: it })}
+            />
+          </View>
+
+          {/* ✅ Esto separa el card del elemento de la primera deficiencia */}
+          <View style={styles.afterGeneralSpacer} />
+        </View>
       );
     }
 
@@ -506,45 +616,47 @@ export default function Inspection() {
         onDeficiency={openFormModal}
       />
     );
-
   };
 
+
+
+
   return (
-    <SafeAreaView style={{ flex: 1, paddingBottom: insets.bottom }}>
+    <SafeAreaView edges={["left", "right", "bottom"]} style={styles.screen}>
+
       <FlatList
         data={items}
-        keyExtractor={item =>
+        keyExtractor={(item) =>
           item.type === "def" ? item.defId.toString() : item.id.toString()
         }
         renderItem={renderItem}
+        contentContainerStyle={{
+          paddingHorizontal: 12,
+          paddingTop: 0,
+          paddingBottom: 24,
+        }}
+
+        ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+        showsVerticalScrollIndicator={false}
       />
 
-      <View style={{ padding: 8, flexDirection: "row" }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Button
-            title="Nueva Deficiencia"
-            onPress={() => {
-              if (existeSinDeficiencia()) {
-                Alert.alert(
-                  "No permitido",
-                  "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
-                );
-                return;
-              }
-              setNewDefModalVisible(true);
-            }}
-            disabled={busy.active}
-          />
-        </View>
-
-        <View style={{ width: 120 }}>
-          <Button
-            title="Actualizar"
-            onPress={() => recalcularInspeccionadoElemento({ showUI: true })}
-            disabled={busy.active || !selectedItem || !(selectedItem.PostInterno || selectedItem.VanoInterno)}
-          />
-        </View>
+      <View style={{ padding: 8 }}>
+        <Button
+          title="Nueva Deficiencia"
+          onPress={() => {
+            if (existeSinDeficiencia()) {
+              Alert.alert(
+                "No permitido",
+                "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
+              );
+              return;
+            }
+            setNewDefModalVisible(true);
+          }}
+          disabled={busy.active}
+        />
       </View>
+
 
 
       <DataGeneralModal
@@ -633,19 +745,72 @@ export default function Inspection() {
 }
 
 const styles = StyleSheet.create({
-  itemCard: {
-    padding: 12,
-    backgroundColor: "#f8f8f8",
-    borderBottomWidth: 1,
-    borderColor: "#ddd"
+  screen: {
+    flex: 1,
+    backgroundColor: "#f2f2f2",
   },
-  itemHeader: {
+
+  // ======================
+  // ESTADO (header compacto)
+  // ======================
+  estadoRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center"
+
+    paddingHorizontal: 2,
+
+    paddingVertical: 0,
+
+    marginTop: 10,
+    marginBottom: 2,
   },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: "bold"
-  }
+
+  estadoLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  estadoLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginRight: 6,
+  },
+
+  estadoValue: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  estadoFinalizado: { color: "#1B8F3A" },
+  estadoPendiente: { color: "#D32F2F" },
+
+  estadoBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: "#E6E6E6",
+  },
+
+  estadoBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#222",
+  },
+
+  // ======================
+  // Ajustes de separación
+  // ======================
+
+  // 🔧 ESTE es el que te elimina el “vacío grande” debajo del estado
+  // Si todavía ves mucho espacio, baja a -6 o -8.
+  generalCardWrap: {
+    marginTop: -6,
+  },
+
+  // 🔧 Separación bonita entre card del elemento y primera deficiencia
+  afterGeneralSpacer: {
+    height: 10,
+  },
 });
+
