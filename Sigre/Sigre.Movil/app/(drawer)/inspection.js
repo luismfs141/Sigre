@@ -12,7 +12,6 @@ import {
   BackHandler,
   Button,
   FlatList,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -414,22 +413,6 @@ export default function Inspection() {
 
 
 
-  /* =======================
-      ABRIR MODAL
-     ======================= */
-  // const openFormModal = item => {
-  //   setCurrentItem(item);
-
-  //   if (item.type === "general") {
-  //     setModalGeneralVisible(true);
-  //     return;
-  //   }
-
-  //   setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
-  //   setCurrentDeficiency({ ...item.data });
-  //   setModalDeficiencyVisible(true);
-  // };
-
   const openFormModal = (item) => {
     setCurrentItem(item);
 
@@ -592,12 +575,18 @@ export default function Inspection() {
             </View>
 
             <TouchableOpacity
-              style={styles.estadoBtn}
-              onPress={handleActualizarEstadoPress} // ✅ por ahora relee sqlite
-              activeOpacity={0.8}
-            >
-              <Text style={styles.estadoBtnText}>Actualizar</Text>
-            </TouchableOpacity>
+  style={[styles.estadoBtn, busy.active && styles.estadoBtnDisabled]}
+  onPress={handleActualizarEstadoPress}
+  activeOpacity={0.8}
+  disabled={busy.active}
+>
+  {busy.active ? (
+    <ActivityIndicator size="small" color="#222" />
+  ) : (
+    <Text style={styles.estadoBtnText}>Actualizar</Text>
+  )}
+</TouchableOpacity>
+
           </View>
 
           {/* ✅ Esto controla el “vacío” debajo del ESTADO (compensa margen interno del card) */}
@@ -728,34 +717,11 @@ export default function Inspection() {
         onClose={() => setNewDefModalVisible(false)}
       />
 
-      <Loading visible={loading.active} text={loading.msg} />
+      <Loading
+  visible={loading.active || busy.active}
+  text={(loading.active ? loading.msg : busy.msg) || "Procesando..."}
+/>
 
-
-      <Modal visible={busy.active} transparent animationType="fade">
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.20)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "white",
-              padding: 18,
-              borderRadius: 12,
-              minWidth: 240,
-              alignItems: "center",
-            }}
-          >
-            <ActivityIndicator size="large" color="black" />
-            <Text style={{ marginTop: 10, color: "#000", textAlign: "center" }}>
-              {busy.msg || "Procesando..."}
-            </Text>
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -842,6 +808,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFEBEE", // rojo suave
     borderColor: "#EF9A9A",
   },
+
+  estadoBtnDisabled: {
+  opacity: 0.6,
+},
+
 
 });
 
