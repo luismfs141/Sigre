@@ -62,6 +62,19 @@ export default function Inspection() {
   const lastLoadKeyRef = useRef(null);
 
 
+  const selectedItemRef = useRef(selectedItem);
+  useEffect(() => {
+    selectedItemRef.current = selectedItem;
+  }, [selectedItem]);
+
+  const fnsRef = useRef({ deficienciesForFlatList, getPostData, fetchVanoById });
+  useEffect(() => {
+    fnsRef.current = { deficienciesForFlatList, getPostData, fetchVanoById };
+  }, [deficienciesForFlatList, getPostData, fetchVanoById]);
+
+
+
+
   const getElementoTarget = useCallback(() => {
     if (!selectedItem) return { elementId: null, typeElement: null };
 
@@ -280,37 +293,16 @@ export default function Inspection() {
     try {
       if (typeElement === "POST" && selectedItem.PostInterno != null) {
         const id = selectedItem.PostInterno;
-
         const p = await getPostData(id);
-        if (p) elementData = p;
-
-        // ✅ Al entrar: recalcula estado en SQLite (SIN SYNC)
-        const r = await recalcElementoInspeccionadoFromDefsLocal(id, "POST");
-        if (r?.ok) {
-          elementData = {
-            ...(elementData ?? {}),
-            PostInspeccionado: Number(r.inspected) === 1 ? 1 : 0,
-          };
-        }
+        if (p) elementData = p; // ✅ SOLO lee, NO recalcula estado
       } else if (typeElement === "VANO" && selectedItem.VanoInterno != null) {
         const id = selectedItem.VanoInterno;
-
         const v = await fetchVanoById(id);
-        if (v) elementData = v;
-
-        // ✅ Al entrar: recalcula estado en SQLite (SIN SYNC)
-        const r = await recalcElementoInspeccionadoFromDefsLocal(id, "VANO");
-        if (r?.ok) {
-          elementData = {
-            ...(elementData ?? {}),
-            VanoInspeccionado: Number(r.inspected) === 1 ? 1 : 0,
-          };
-        }
+        if (v) elementData = v; // ✅ SOLO lee, NO recalcula estado
       }
     } catch (e) {
       console.warn("⚠ leerElementoDesdeSqlite:", e?.message ?? e);
     }
-
 
     // ✅ actualiza SOLO el item "general"
     setItems((prev) => {
@@ -334,33 +326,6 @@ export default function Inspection() {
   }, [selectedItem, getPostData, fetchVanoById]);
 
 
-  /* =======================
-      CARGA INICIAL
-     ======================= */
-  useEffect(() => {
-    if (!selectedItem) {
-      setItems([]);
-      lastLoadKeyRef.current = null;
-      return;
-    }
-
-    const key =
-      selectedItem.PostInterno != null
-        ? `POST-${selectedItem.PostInterno}`
-        : selectedItem.VanoInterno != null
-          ? `VANO-${selectedItem.VanoInterno}`
-          : `SED-${selectedItem.SedInterno ?? "X"}`;
-
-    // ✅ evita loops aunque cambien callbacks
-    if (lastLoadKeyRef.current === key) return;
-    lastLoadKeyRef.current = key;
-
-    (async () => {
-      await refreshList();              // ✅ lista de deficiencias
-      await leerElementoDesdeSqlite();  // ✅ datos del elemento (sqlite)
-    })();
-  }, [selectedItem, refreshList, leerElementoDesdeSqlite]);
-
 
 
   /* =======================
@@ -368,14 +333,93 @@ export default function Inspection() {
      ======================= */
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+
+      const load = async () => {
+        const si = selectedItemRef.current;
+
+        // si no hay selección => limpia
+        if (!si) {
+          setItems([]);
+          return;
+        }
+
+        setLoading({ active: true, msg: "Cargando..." });
+
+        try {
+          const elementId = si.PostInterno ?? si.VanoInterno ?? si.SedInterno;
+
+          const typeElement = si.PostInterno
+            ? "POST"
+            : si.VanoInterno
+              ? "VANO"
+              : "SED";
+
+          // 1) Deficiencias (colores)
+          const existingDefs = await fnsRef.current.deficienciesForFlatList(
+            elementId,
+            typeElement
+          );
+
+          // 2) Datos generales (SOLO LECTURA)
+          let elementData = si;
+
+          if (typeElement === "POST" && si.PostInterno != null) {
+            const p = await fnsRef.current.getPostData(si.PostInterno);
+            if (p) elementData = p;
+          } else if (typeElement === "VANO" && si.VanoInterno != null) {
+            const v = await fnsRef.current.fetchVanoById(si.VanoInterno);
+            if (v) elementData = v;
+          }
+
+          if (cancelled) return;
+
+          const generalItem = {
+            id: "general",
+            type: "general",
+            name: "Datos Generales",
+            data: elementData,
+          };
+
+          setItems([generalItem, ...existingDefs]);
+        } catch (e) {
+          console.warn("⚠ load Inspection:", e?.message ?? e);
+        } finally {
+          if (!cancelled) setLoading({ active: false, msg: "" });
+        }
+      };
+
+      // ✅ SIEMPRE carga al entrar (mismo elemento o no)
+      load();
+
+      // ✅ back android
       const onBackPress = () => {
         router.replace("/(drawer)/map");
         return true;
       };
       const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-      return () => sub.remove();
-    }, [])
+
+      // ✅ cleanup real (nada en memoria)
+      return () => {
+        cancelled = true;
+        sub.remove();
+
+        lastLoadKeyRef.current = null;
+
+        setItems([]);
+        setCurrentItem(null);
+        setCurrentDeficiency(null);
+
+        setModalGeneralVisible(false);
+        setModalDeficiencyVisible(false);
+        setNewDefModalVisible(false);
+
+        setBusy({ active: false, msg: "" });
+        setLoading({ active: false, msg: "" });
+      };
+    }, [router])
   );
+
 
 
 
@@ -647,27 +691,27 @@ export default function Inspection() {
       />
 
       <View style={{ padding: 8, gap: 8 }}>
-  <Button
-    title="Nueva Deficiencia"
-    onPress={() => {
-      if (existeSinDeficiencia()) {
-        Alert.alert(
-          "No permitido",
-          "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
-        );
-        return;
-      }
-      setNewDefModalVisible(true);
-    }}
-    disabled={busy.active}
-  />
+        <Button
+          title="Nueva Deficiencia"
+          onPress={() => {
+            if (existeSinDeficiencia()) {
+              Alert.alert(
+                "No permitido",
+                "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
+              );
+              return;
+            }
+            setNewDefModalVisible(true);
+          }}
+          disabled={busy.active}
+        />
 
-  <Button
-    title="Regresar al mapa"
-    onPress={() => router.replace("/(drawer)/map")}
-    disabled={busy.active || loading.active}
-  />
-</View>
+        <Button
+          title="Regresar al mapa"
+          onPress={() => router.replace("/(drawer)/map")}
+          disabled={busy.active || loading.active}
+        />
+      </View>
 
 
 
@@ -688,33 +732,20 @@ export default function Inspection() {
         deficiency={currentDeficiency}
         userId={user.id}
         selectedItem={selectedItem}
-        onSaved={async ({ defId, data, isNew }) => {
-          // ✅ si fue NUEVA, ahí sí cambia la lista => refresh
-          if (isNew) {
-            await refreshList();
-            return;
-          }
+        onSaved={async () => {
+          // ✅ SIEMPRE re-leer de SQLite para reflejar cambios (edición o nueva)
+          await refreshList();
 
-          // ✅ si fue EDICIÓN, patch sin refresh
-          if (!defId) return;
-
-          setItems((prev) =>
-            prev.map((x) => {
-              if (x?.type !== "def") return x;
-              if (String(x?.defId) !== String(defId)) return x;
-
-              return {
-                ...x,
-                data: { ...(x.data ?? {}), ...(data ?? {}) },
-              };
-            })
-          );
+          // ✅ cierra y limpia
+          setModalDeficiencyVisible(false);
+          setCurrentDeficiency(null);
         }}
         onClose={() => {
           setModalDeficiencyVisible(false);
-          // ✅ NO refresh aquí
+          setCurrentDeficiency(null);
         }}
       />
+
 
 
       <ListaTipificaciones

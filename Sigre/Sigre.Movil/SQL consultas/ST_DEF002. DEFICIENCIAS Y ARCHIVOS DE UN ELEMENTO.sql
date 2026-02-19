@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = '0111434'
+DECLARE @CODIGO VARCHAR(20) = '033052'
 
 
 
@@ -18,7 +18,7 @@ SELECT	D.DEFI_Interno,
 		D.DEFI_Activo,
 		D.DEFI_TipoElemento,
 		D.DEFI_CodigoElemento,
-		D.TIPI_Interno,
+		CO.CODI_Codigo,
 		
 		CASE
 			WHEN D.DEFI_EstadoCriticidad = 1 THEN 'Leve'
@@ -31,7 +31,7 @@ SELECT	D.DEFI_Interno,
 		CASE
 			WHEN D.DEFI_Accesibilidad = 1 THEN 'Accesible'
 			WHEN D.DEFI_Accesibilidad = 2 THEN 'No accesible'
-		END AS Criticidad,
+		END AS Accesibilidad,
 		CASE
 			WHEN D.DEFI_TipoCruce = 1 THEN 'Calle'
 			WHEN D.DEFI_TipoCruce = 2 THEN 'Avenida'
@@ -46,8 +46,10 @@ SELECT	D.DEFI_Interno,
 		US.USUA_Nombres + ' ' + US.USUA_Apellidos AS [Isp. CREADOR],
 		D.DEFI_FecModificacion,
 		US2.USUA_Nombres + ' ' + US2.USUA_Apellidos AS [Isp. MODIFICADOR],
+		D.DEFI_FecRegistro,
 		D.DEFI_Latitud,
 		D.DEFI_Longitud,
+		D.DEFI_Inspeccionado,
 		[***] = '',
 		D.*
 FROM Deficiencias AS D
@@ -97,4 +99,29 @@ WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
 GO
 
+
+--==================================================================
+
+
+------------------------------------------------------------------
+-- BUSCA UN VANO ------------------------------------------------
+------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = '033052'
+
+SELECT  V.VANO_Interno,
+        V.VANO_Codigo,
+        A.ALIM_Etiqueta,
+        V.VANO_NodoInicial,
+        V.VANO_NodoFinal,
+        VANO_Terceros,
+		V.VANO_Inspeccionado,
+        [***] = '',
+        V.*
+FROM Vanos AS V
+LEFT JOIN Alimentadores AS A
+    ON V.ALIM_Interno = A.ALIM_Interno
+
+WHERE V.VANO_Codigo LIKE '%' + @CODIGO
+    OR V.VANO_Codigo = @CODIGO
+GO
 
