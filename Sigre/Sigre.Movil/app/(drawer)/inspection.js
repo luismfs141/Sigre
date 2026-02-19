@@ -575,17 +575,17 @@ export default function Inspection() {
             </View>
 
             <TouchableOpacity
-  style={[styles.estadoBtn, busy.active && styles.estadoBtnDisabled]}
-  onPress={handleActualizarEstadoPress}
-  activeOpacity={0.8}
-  disabled={busy.active}
->
-  {busy.active ? (
-    <ActivityIndicator size="small" color="#222" />
-  ) : (
-    <Text style={styles.estadoBtnText}>Actualizar</Text>
-  )}
-</TouchableOpacity>
+              style={[styles.estadoBtn, busy.active && styles.estadoBtnDisabled]}
+              onPress={handleActualizarEstadoPress}
+              activeOpacity={0.8}
+              disabled={busy.active}
+            >
+              {busy.active ? (
+                <ActivityIndicator size="small" color="#222" />
+              ) : (
+                <Text style={styles.estadoBtnText}>Actualizar</Text>
+              )}
+            </TouchableOpacity>
 
           </View>
 
@@ -646,22 +646,29 @@ export default function Inspection() {
         showsVerticalScrollIndicator={false}
       />
 
-      <View style={{ padding: 8 }}>
-        <Button
-          title="Nueva Deficiencia"
-          onPress={() => {
-            if (existeSinDeficiencia()) {
-              Alert.alert(
-                "No permitido",
-                "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
-              );
-              return;
-            }
-            setNewDefModalVisible(true);
-          }}
-          disabled={busy.active}
-        />
-      </View>
+      <View style={{ padding: 8, gap: 8 }}>
+  <Button
+    title="Nueva Deficiencia"
+    onPress={() => {
+      if (existeSinDeficiencia()) {
+        Alert.alert(
+          "No permitido",
+          "Este elemento ya tiene 'Sin Deficiencia'. Debe eliminarla antes de registrar otra."
+        );
+        return;
+      }
+      setNewDefModalVisible(true);
+    }}
+    disabled={busy.active}
+  />
+
+  <Button
+    title="Regresar al mapa"
+    onPress={() => router.replace("/(drawer)/map")}
+    disabled={busy.active || loading.active}
+  />
+</View>
+
 
 
 
@@ -718,9 +725,9 @@ export default function Inspection() {
       />
 
       <Loading
-  visible={loading.active || busy.active}
-  text={(loading.active ? loading.msg : busy.msg) || "Procesando..."}
-/>
+        visible={loading.active || busy.active}
+        text={(loading.active ? loading.msg : busy.msg) || "Procesando..."}
+      />
 
 
     </SafeAreaView>
@@ -810,8 +817,8 @@ const styles = StyleSheet.create({
   },
 
   estadoBtnDisabled: {
-  opacity: 0.6,
-},
+    opacity: 0.6,
+  },
 
 
 });

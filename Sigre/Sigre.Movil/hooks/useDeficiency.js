@@ -543,7 +543,6 @@ export const useDeficiency = () => {
       const localId = await saveOrUpdateDeficiency(normalized);
 
       if (localId) {
-        console.log("📤 kaaaaaaaaaaaaaaaaaaaaa");
         await autoSyncDeficiency(localId);
       }
 
