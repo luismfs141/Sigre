@@ -191,7 +191,7 @@ const LocalFileStore = {
         }
     };
 
-    const handleSearchDeficiencies = async () => {
+const handleSearchDeficiencies = async () => {
         const cod = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
         if (!cod) {
             toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Ingrese un código GIS' });
@@ -199,14 +199,18 @@ const LocalFileStore = {
         }
         
         const data = await fetchByGis(cod);
-        setHistoricalData(data || []);
         
-        if(data?.length > 0) {
-            setSelectedDeficiency(data[0]);
-            loadFiles(data[0].defiInterno);
-            toast.current.show({severity:'success', summary:'Encontrado', detail:`${data.length} registros`});
+        // 🔥 CAMBIO: Filtramos solo las deficiencias donde defiActivo no sea 0 ni false
+        const activeData = (data || []).filter(d => d.defiActivo !== 0 && d.defiActivo !== false);
+        
+        setHistoricalData(activeData);
+        
+        if(activeData.length > 0) {
+            setSelectedDeficiency(activeData[0]);
+            loadFiles(activeData[0].defiInterno);
+            toast.current.show({severity:'success', summary:'Encontrado', detail:`${activeData.length} registros activos`});
         } else {
-             toast.current.show({severity:'info', summary:'Sin historial', detail:`0 registros`});
+             toast.current.show({severity:'info', summary:'Sin historial', detail:`0 registros activos`});
         }
     };
 
@@ -426,7 +430,7 @@ const LocalFileStore = {
     };
 
     const dateTemplate = (r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-';
-    const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Cód"}</span>;
+    const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Def"}</span>;
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
