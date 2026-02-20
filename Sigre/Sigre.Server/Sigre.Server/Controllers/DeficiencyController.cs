@@ -416,5 +416,26 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { success = false, message = "Error interno del servidor: " + ex.Message });
             }
         }
+        [HttpGet("del-dia")]
+        public async Task<IActionResult> GetDeficienciasDelDia()
+        {
+            try
+            {
+                var daDeficiency = new DADeficiency();
+                var result = await daDeficiency.ObtenerDeficienciasDelDiaAsync();
+
+                if (result == null || !result.Any())
+                {
+                    return NotFound(new { mensaje = "No se registraron deficiencias el día de hoy." });
+                }
+
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                // En producción, loguea 'ex.Message'
+                return StatusCode(500, new { mensaje = "Error al obtener deficiencias del día", detalle = ex.Message });
+            }
+        }
     }
 }

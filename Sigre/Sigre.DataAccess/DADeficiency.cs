@@ -1426,5 +1426,25 @@ namespace Sigre.DataAccess
                 return filasAfectadas > 0;
             }
         }
+
+        public async Task<List<Deficiencia>> ObtenerDeficienciasDelDiaAsync()
+        {
+            using (var ctx = new SigreContext())
+            {
+                // Obtenemos el inicio del día de hoy
+                DateTime hoy = DateTime.Today;
+
+                var deficiencias = await ctx.Deficiencias
+                    .AsNoTracking()
+                    // Filtro 1: Solo las creadas hoy
+                    // Filtro 2: Solo las que están activas (DefiActivo == true o != 0)
+                    .Where(d => d.DefiFechaCreacion >= hoy && d.DefiActivo == true)
+                    .OrderByDescending(d => d.DefiInterno)
+                    .ToListAsync();
+
+                return deficiencias;
+            }
+        }
+
     }
 }
