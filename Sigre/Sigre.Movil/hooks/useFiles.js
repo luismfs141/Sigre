@@ -243,6 +243,25 @@ export function useFiles() {
     }
   }, [checkDatabase]);
 
+  const countPendingArchivosLocal = useCallback(async () => {
+  const dbOk = await checkDatabase();
+  if (!dbOk) return 0;
+
+  try {
+    const pendientes = await getArchivosPendientes();
+    if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+
+    // mismo criterio que usas para sincronizar
+    return pendientes.filter((a) =>
+      [1, 2, 3].includes(Number(a?.EstadoOffLine))
+    ).length;
+  } catch (err) {
+    console.error("❌ Error contando archivos pendientes:", err);
+    return 0;
+  }
+}, [checkDatabase]);
+
+
   const syncAllArchivos = useCallback(async () => {
     const online = await isOnline();
     if (!online) return { ok: false };
@@ -312,6 +331,7 @@ export function useFiles() {
     fetchMediosByDeficienciaId,
     deletedFile,
     markArchivoAsInactive,
-    syncAllArchivos
+    syncAllArchivos,
+    countPendingArchivosLocal
   };
 }

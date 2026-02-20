@@ -26,7 +26,7 @@ import { useSed } from "../../hooks/useSed";
 export default function Sync() {
 
   const { user } = useContext(AuthContext);
-  const { offlineLoading, downloadDatabase, syncing, syncAllPending } = useOffline();
+  const { downloading, downloadDatabase, syncing, syncAllPending } = useOffline();
   const { dbName, setDbName, selectedFeeder, setSelectedFeeder } = useDatos();
   const dispatch = useDispatch();
   const isAppLoading = useSelector((state) => state.app.isLoading);
@@ -76,7 +76,7 @@ export default function Sync() {
   //───────────────────────────────────────────────
   // CARGAR ALIMENTADORES
   //───────────────────────────────────────────────
-  
+
   useEffect(() => {
     if (user?.id) {
       //console.log("👤 Cargando alimentadores del usuario:", user.id);
@@ -234,46 +234,40 @@ export default function Sync() {
   };
 
   //───────────────────────────────────────────────
-  // 🔄 SINCRONIZAR OFFLINE → SERVIDOR
-  //───────────────────────────────────────────────
-  const handleSync = async () => {
-    if (!dbExists) {
-      return Alert.alert("Aviso", "No existe una base local para sincronizar.");
-    }
+// 🔄 SINCRONIZAR OFFLINE → SERVIDOR
+//───────────────────────────────────────────────
+const handleSync = async () => {
+  if (!dbExists) {
+    return Alert.alert("Aviso", "No existe una base local para sincronizar.");
+  }
 
-    if (syncing) return;
+  if (syncing) return;
 
-    dispatch({
-      type: "APP/SET_LOADING_MESSAGE",
-      payload: "Sincronizando información..."
-    });
-    dispatch({ type: "APP/SET_LOADING", payload: true });
+  dispatch({
+    type: "APP/SET_LOADING_MESSAGE",
+    payload: "Sincronizando información..."
+  });
+  dispatch({ type: "APP/SET_LOADING", payload: true });
 
-    try {
-      const result = await syncAllPending();
+  try {
+    const result = await syncAllPending();
 
-      if (result?.ok) {
-        Alert.alert(
-          "Sincronización completa",
-          `Se sincronizaron ${result.synced} registros correctamente.`
-        );
-      } else {
-        Alert.alert(
-          "Sincronización incompleta",
-          "La sincronización no pudo completarse. Se reanudará en el próximo intento."
-        );
-      }
-    } catch (e) {
-      console.log("❌ Error sincronizando:", e);
-      Alert.alert(
-        "Error",
-        "Ocurrió un error durante la sincronización. Intenta nuevamente."
-      );
-    } finally {
-      dispatch({ type: "APP/SET_LOADING", payload: false });
-      dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
-    }
-  };
+    const total = Number(result?.totalPending ?? 0);
+    const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
+    const remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
+
+    Alert.alert(
+      result?.ok ? "Sincronización completa" : "Sincronización incompleta",
+      `Se sincronizaron ${synced} de ${total} registros.\nFaltan ${remaining} por sincronizar.`
+    );
+  } catch (e) {
+    console.log("❌ Error sincronizando:", e);
+    Alert.alert("Error", "Ocurrió un error durante la sincronización. Intenta nuevamente.");
+  } finally {
+    dispatch({ type: "APP/SET_LOADING", payload: false });
+    dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
+  }
+};
 
   //───────────────────────────────────────────────
   // ALIMENTADORES
@@ -385,62 +379,62 @@ export default function Sync() {
             </Text>
 
             {/* 🔴 AQUÍ ESTÁ LA CORRECCIÓN: MOSTRAR SOLO SEDS LOCALES CUANDO EXISTE BASE */}
-<FlatList
-  style={{ flex: 1 }}
-  data={
-    user?.proyecto === 0
-      ? dbExists
-        ? localSeds            // 👉 SED desde SQLite
-        : selectedSubstations // 👉 SED seleccionados antes
-      : selectedFeeders
-  }
-  keyExtractor={(item, index) =>
-    item.SedInterno
-      ? item.SedInterno.toString()
-      : item.sedInterno
-      ? item.sedInterno.toString()
-      : index.toString()
-  }
-  contentContainerStyle={{ paddingBottom: 20 }}
+            <FlatList
+              style={{ flex: 1 }}
+              data={
+                user?.proyecto === 0
+                  ? dbExists
+                    ? localSeds            // 👉 SED desde SQLite
+                    : selectedSubstations // 👉 SED seleccionados antes
+                  : selectedFeeders
+              }
+              keyExtractor={(item, index) =>
+                item.SedInterno
+                  ? item.SedInterno.toString()
+                  : item.sedInterno
+                    ? item.sedInterno.toString()
+                    : index.toString()
+              }
+              contentContainerStyle={{ paddingBottom: 20 }}
 
-  ListEmptyComponent={() => (
-    <View style={{ paddingVertical: 12 }}>
-      <Text style={{ color: "#777" }}>
-        {user?.proyecto === 0
-          ? dbExists
-            ? "No hay SED en la base local"
-            : "No hay SED seleccionados"
-          : "No hay alimentadores seleccionados"}
-      </Text>
-    </View>
-  )}
+              ListEmptyComponent={() => (
+                <View style={{ paddingVertical: 12 }}>
+                  <Text style={{ color: "#777" }}>
+                    {user?.proyecto === 0
+                      ? dbExists
+                        ? "No hay SED en la base local"
+                        : "No hay SED seleccionados"
+                      : "No hay alimentadores seleccionados"}
+                  </Text>
+                </View>
+              )}
 
-  renderItem={({ item }) => (
-    <View style={styles.feederRow}>
-      <Text style={styles.feederText}>
-        {user?.proyecto === 0
-          ? dbExists
-            ? item.SedCodigo    // ✅ CAMPO REAL
-            : item.name
-          : item.name}
-      </Text>
+              renderItem={({ item }) => (
+                <View style={styles.feederRow}>
+                  <Text style={styles.feederText}>
+                    {user?.proyecto === 0
+                      ? dbExists
+                        ? item.SedCodigo    // ✅ CAMPO REAL
+                        : item.name
+                      : item.name}
+                  </Text>
 
-      {/* ❌ Solo permitir borrar cuando NO es base local */}
-      {!dbExists && (
-        <Button
-          title="❌"
-          onPress={() => {
-            if (user?.proyecto === 0) {
-              toggleSubstation({ sedInterno: item.id });
-            } else {
-              removeFeeder(item);
-            }
-          }}
-        />
-      )}
-    </View>
-  )}
-/>
+                  {/* ❌ Solo permitir borrar cuando NO es base local */}
+                  {!dbExists && (
+                    <Button
+                      title="❌"
+                      onPress={() => {
+                        if (user?.proyecto === 0) {
+                          toggleSubstation({ sedInterno: item.id });
+                        } else {
+                          removeFeeder(item);
+                        }
+                      }}
+                    />
+                  )}
+                </View>
+              )}
+            />
 
           </View>
 

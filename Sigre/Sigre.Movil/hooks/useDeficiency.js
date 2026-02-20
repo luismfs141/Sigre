@@ -487,6 +487,23 @@ export const useDeficiency = () => {
     }
   };
 
+  const countPendingDeficienciesLocal = async () => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return 0;
+
+    try {
+      const pendientes = await getDeficienciesPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+
+      // mismo criterio que usas para sincronizar
+      return pendientes.filter((d) =>
+        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
+      ).length;
+    } catch (err) {
+      console.error("❌ Error contando deficiencias pendientes:", err);
+      return 0;
+    }
+  };
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
   const syncAllDeficiencies = async () => {
@@ -791,6 +808,7 @@ export const useDeficiency = () => {
 
     autoSyncDeficiency,
     syncAllDeficiencies,
+    countPendingDeficienciesLocal,
 
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
