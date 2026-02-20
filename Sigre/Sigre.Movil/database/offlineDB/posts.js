@@ -93,6 +93,81 @@ export const getPostByIdLocal = async (postInterno) => {
   }
 };
 
+// // 🔹 Guardar o actualizar un poste
+// export const saveOrUpdatePost = async (post) => {
+//   try {
+//     if (post.PostInterno) {
+//       const estado = post.EstadoOffLine == null ? 1 : post.EstadoOffLine;
+
+//       const updateQuery = `
+//         UPDATE Postes
+//         SET
+//           PostCodigoNodo = ?,
+//           PostEtiqueta = ?,
+//           PostMaterial = ?,
+//           PostArmadoMaterial = ?,
+//           PostRetenidaTipo = ?,
+//           PostRetenidaMaterial = ?,
+//           PostTerceros = ?,
+//           PostTramo = ?,
+//           EstadoOffLine = ?,
+//           PostAltura = ?
+//         WHERE PostInterno = ?
+//       `;
+
+//       await runQuery(updateQuery, [
+//         post.PostCodigoNodo ?? "",
+//         post.PostEtiqueta ?? "",
+//         post.PostMaterial ?? "",
+//         post.PostArmadoMaterial ?? "",
+//         post.PostRetenidaTipo ?? "",
+//         post.PostRetenidaMaterial ?? "",
+//         post.PostTerceros == null ? 0 : Number(post.PostTerceros),
+//         post.PostTramo ?? null,
+//         estado,
+//         post.PostAltura ?? null,
+//         post.PostInterno
+//       ]);
+
+//       return post.PostInterno;
+//     } else {
+//       const insertQuery = `
+//         INSERT INTO Postes (
+//           PostCodigoNodo,
+//           PostEtiqueta,
+//           PostMaterial,
+//           PostArmadoMaterial,
+//           PostRetenidaTipo,
+//           PostRetenidaMaterial,
+//           PostTerceros,    
+//           PostTramo,  
+//           EstadoOffLine,
+//           PostAltura
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+//       `;
+
+//       const result = await runQuery(insertQuery, [
+//         post.PostCodigoNodo ?? "",
+//         post.PostEtiqueta ?? "",
+//         post.PostMaterial ?? "",
+//         post.PostArmadoMaterial ?? "",
+//         post.PostRetenidaTipo ?? "",
+//         post.PostRetenidaMaterial ?? "",
+//         post.PostTerceros == null ? 0 : Number(post.PostTerceros),
+//         post.PostTramo ?? null,
+//         2,
+//         post.PostAltura ?? null
+//       ]);
+
+//       return result?.insertId ?? null;
+//     }
+//   } catch (error) {
+//     console.error("❌ Error guardando o actualizando poste:", error);
+//     throw error;
+//   }
+// };
+
+
 // 🔹 Guardar o actualizar un poste
 export const saveOrUpdatePost = async (post) => {
   try {
@@ -129,6 +204,26 @@ export const saveOrUpdatePost = async (post) => {
         post.PostInterno
       ]);
 
+      // ✅ ALSO UPDATE PINES (mismo poste: Pines.IdOriginal == Postes.PostInterno)
+      const labelRaw = post.PostEtiqueta ?? "";
+      const label = String(labelRaw).trim();
+      const labelOrNull = label ? label : null;
+
+      const inspeccionadoOrNull =
+        post.PostInspeccionado == null ? null : (Number(post.PostInspeccionado) ? 1 : 0);
+
+      const terceroOrNull =
+        post.PostTerceros == null ? null : (Number(post.PostTerceros) ? 1 : 0);
+
+      await runQuery(
+        `UPDATE Pines
+            SET Label = COALESCE(?, Label),
+                Inspeccionado = COALESCE(?, Inspeccionado),
+                Tercero = COALESCE(?, Tercero)
+            WHERE IdOriginal = ? AND Type = 5;`,
+        [labelOrNull, inspeccionadoOrNull, terceroOrNull, Number(post.PostInterno)]
+      );
+
       return post.PostInterno;
     } else {
       const insertQuery = `
@@ -139,8 +234,8 @@ export const saveOrUpdatePost = async (post) => {
           PostArmadoMaterial,
           PostRetenidaTipo,
           PostRetenidaMaterial,
-          PostTerceros,    
-          PostTramo,  
+          PostTerceros,
+          PostTramo,
           EstadoOffLine,
           PostAltura
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -166,6 +261,8 @@ export const saveOrUpdatePost = async (post) => {
     throw error;
   }
 };
+
+
 
 
 export const getPostesPendientes = async () => {
