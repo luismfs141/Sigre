@@ -1338,7 +1338,7 @@ const MapScreen = () => {
   };
 
 
-  
+
 
   // render
   return (
@@ -1507,23 +1507,34 @@ const MapScreen = () => {
 
       </MapView>
 
+
+
+
+
+
+
+
+
+
       {/* TOP LEFT: selector alineado al compass */}
       <View
         pointerEvents={uiLocked ? "none" : "auto"}
         style={{
           position: "absolute",
+          top: 11,              // ✅ este era el desfase (inset del compás)
           left: 15,
+          height: 44,           // ✅ misma “línea” visual que el compás
           zIndex: 6000,
-          elevation: 0,
+          elevation: 10,        // ✅ por encima del mapa en Android
           flexDirection: "row",
           alignItems: "center",
         }}
       >
-        {/* espacio para no chocar con el compass nativo */}
+        {/* reserva el espacio del compás */}
         <View style={{ width: 44, height: 44 }} pointerEvents="none" />
 
-        {/* ancho fijo para que DropDownSed (width:100%) NO colapse */}
-        <View style={{ width: 150 }}>
+        {/* selector */}
+        <View style={{ width: 150, height: 44, justifyContent: "center" }}>
           {user?.proyecto === 0 ? (
             <DropDownSed onSelectSed={setSelectedSed} />
           ) : (
