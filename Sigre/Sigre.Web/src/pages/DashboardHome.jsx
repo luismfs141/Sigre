@@ -179,7 +179,7 @@ return (
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-300">
             <UtilityPole className="w-16 h-16 text-amber-500" />
           </div>
-          <p className="text-sm font-medium text-gray-500 relative z-10">Total Postes Instalados</p>
+          <p className="text-sm font-medium text-gray-500 relative z-10">Total Postes</p>
           <h3 className="text-4xl font-bold text-amber-600 relative z-10 mt-2">
             {totalPostes > 0 ? totalPostes.toLocaleString() : '0'}
           </h3>
@@ -190,7 +190,7 @@ return (
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-300">
             <Cable className="w-16 h-16 text-indigo-500" />
           </div>
-          <p className="text-sm font-medium text-gray-500 relative z-10">Total Vanos (Tramos)</p>
+          <p className="text-sm font-medium text-gray-500 relative z-10">Total Vanos </p>
           <h3 className="text-4xl font-bold text-indigo-600 relative z-10 mt-2">
             {totalVanos > 0 ? totalVanos.toLocaleString() : '0'}
           </h3>
