@@ -1,6 +1,6 @@
 // components/Map/MapModals.js
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import styles from "../../styles/mapStyles";
 import { modalStyles } from "../../styles/modalStyles.js";
@@ -47,8 +47,7 @@ export const SearchModal = ({
   onClear,
   onCancel,
   onLocate,
-  onSelect,
-}) => {
+  onSelect, }) => {
   if (!visible) return null;
 
   return (
@@ -149,6 +148,159 @@ export const SearchModal = ({
             onPress={onSelect}
           >
             <Text style={modalStyles.saveButtonText}>Seleccionar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+export const AuditInspeccionadoModal = ({
+  visible,
+  loading,
+  analyzed,
+  title = "Analizar inconsistencias",
+  subtitle = "",
+  items,
+  selectedKey,
+  onSelectKey,
+  onAnalyze,
+  onReAnalyze,
+  onClose,
+  onLocate,
+  onInspect,
+}) => {
+  if (!visible) return null;
+
+  const list = Array.isArray(items) ? items : [];
+  const hasItems = list.length > 0;
+
+  const showInfo = () => {
+    Alert.alert(
+      "Información",
+      "Estas inconsistencias indican que el estado del elemento no coincide con lo que reflejan sus deficiencias.\n\n" +
+      "Revisa las deficiencias (finalizar o actualizar su estado) y luego presiona “Volver a analizar” para confirmar que todo quedó corregido."
+    );
+  };
+
+  return (
+    <View style={modalStyles.modalOverlay}>
+      <View style={modalStyles.modalContainer}>
+        {/* HEADER: título + info */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={modalStyles.modalTitle}>{title}</Text>
+
+          <TouchableOpacity onPress={showInfo} style={{ padding: 6 }}>
+            <Ionicons name="information-circle-outline" size={22} color="#333" />
+          </TouchableOpacity>
+        </View>
+
+        {!!subtitle && (
+          <Text style={{ marginTop: 4, color: "#444", fontSize: 13 }}>
+            {subtitle}
+          </Text>
+        )}
+
+        {/* Acción principal */}
+        <TouchableOpacity
+          style={[
+            modalStyles.saveButton,
+            { marginTop: 10, alignItems: "center", justifyContent: "center" },
+            loading && { opacity: 0.6 },
+          ]}
+          onPress={analyzed ? onReAnalyze : onAnalyze}
+          disabled={loading}
+        >
+          {loading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>Analizando...</Text>
+            </View>
+          ) : (
+            <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>
+              {analyzed ? "Volver a analizar" : "Analizar elementos"}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Lista */}
+        <View style={[styles.resultsBox, { marginTop: 10, minHeight: 220 }]}>
+          {!analyzed ? (
+            <Text style={styles.hintText}>
+              Presiona “Analizar elementos” para buscar inconsistencias en SQLite.
+            </Text>
+          ) : !hasItems ? (
+            <Text style={styles.hintText}>
+              ✅ No se encontraron inconsistencias.
+            </Text>
+          ) : (
+            <ScrollView
+              style={styles.resultsScroll}
+              contentContainerStyle={styles.resultsContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              {list.map((r) => {
+                const isSelected = selectedKey === r.key;
+                const left = `${r.kind} — ${String(r.code ?? "").trim() || "(sin código)"}`;
+
+                return (
+                  <TouchableOpacity
+                    key={r.key}
+                    style={[
+                      styles.resultItem,
+                      isSelected && styles.resultItemSelected,
+                    ]}
+                    onPress={() => onSelectKey?.(r.key)}
+                  >
+                    <Text style={styles.resultTitle}>{left}</Text>
+
+                    {!!String(r.label ?? "").trim() && (
+                      <Text style={styles.resultSubtitle} numberOfLines={2}>
+                        {String(r.label).replace(/\r?\n|\r/g, " - ").trim()}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Botones abajo */}
+        <View style={modalStyles.footerButtons}>
+          <TouchableOpacity
+            style={[
+              modalStyles.cancelButton,
+              { flex: 1, marginRight: 8, alignItems: "center", justifyContent: "center" },
+            ]}
+            onPress={onClose}
+          >
+            <Text style={[modalStyles.cancelButtonText, { textAlign: "center" }]}>Cerrar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              modalStyles.saveButton,
+              { flex: 1, marginHorizontal: 8, alignItems: "center", justifyContent: "center" },
+              (!selectedKey || !analyzed || loading) && { opacity: 0.5 },
+            ]}
+            disabled={!selectedKey || !analyzed || loading}
+            onPress={onLocate}
+          >
+            <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>Ubicar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              modalStyles.saveButton,
+              { flex: 1, marginLeft: 8, alignItems: "center", justifyContent: "center" },
+              (!selectedKey || !analyzed || loading) && { opacity: 0.5 },
+            ]}
+            disabled={!selectedKey || !analyzed || loading}
+            onPress={onInspect}
+          >
+            <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>Seleccionar</Text>
           </TouchableOpacity>
         </View>
       </View>

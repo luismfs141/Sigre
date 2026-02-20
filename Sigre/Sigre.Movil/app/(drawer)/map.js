@@ -8,13 +8,17 @@ import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "r
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
-import { GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
+import { AuditInspeccionadoModal, GapSelectorModal, SearchModal } from "../../components/Map/MapModals";
 import { AuthContext } from "../../context/AuthContext";
 import { useDatos } from "../../context/DatosContext.js";
 import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
 import styles, { mapStyles, pinStyles } from "../../styles/mapStyles";
+
+import { runQuery } from "../../database/offlineDB/db";
+import { useGap } from "../../hooks/useGap.js";
+
 import {
   ZOOM_THRESHOLD, buildSearchResults, centerMap, findOverlappedGaps, formatLabel, getCleanLabel, getIconSizeByType,
   getPinsVisibleInRegion, isPostType, isSedType, normalizeText,
@@ -234,7 +238,7 @@ const SedWithLabel = memo(function SedWithLabel({
 
 
 
-const Map = () => {
+const MapScreen = () => {
   const router = useRouter();
   const mapRef = useRef(null);
   const lastRegionSentRef = useRef(null);
@@ -271,6 +275,7 @@ const Map = () => {
   } = useMap();
 
   const { getPostData } = usePost();
+  const { fetchVanoById } = useGap();
   const { fetchAndSelectSed } = useSed();
 
   const [loadingPins, setLoadingPins] = useState(false);
@@ -287,6 +292,16 @@ const Map = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedSearchResult, setSelectedSearchResult] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+  // ✅ Auditoría (cache por SED)
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [audit, setAudit] = useState({
+    sedId: null,
+    analyzed: false,
+    loading: false,
+    list: [],
+    selectedKey: null,
+  });
+
 
   const [movedPins, setMovedPins] = useState({});
   const [movedGaps, setMovedGaps] = useState({});
@@ -300,6 +315,9 @@ const Map = () => {
 
   const [movingGapKey, setMovingGapKey] = useState(null); // solo para "highlight" opcional
 
+
+
+  const uiLocked = showAuditModal; // ✅ bloquea botones mientras el modal está abierto
 
   const GAP_HOLD_MS = 350;      // Tiempo para detectar movel elemento
   const GAP_CANCEL_PX = 10;      // ✅ tolerancia de movimiento en pixeles
@@ -504,7 +522,17 @@ const Map = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const sedId = user?.proyecto === 0 ? selectedSed?.SedInterno ?? null : null;
 
+    setAudit({
+      sedId,
+      analyzed: false,
+      loading: false,
+      list: [],
+      selectedKey: null,
+    });
+  }, [user?.proyecto, selectedSed?.SedInterno]);
 
   const goToUserLocation = async () => {
     try {
@@ -1065,6 +1093,249 @@ const Map = () => {
     }
   };
 
+
+  const uniqNums = (arr) => Array.from(new Set((arr ?? []).map(Number).filter(Number.isFinite)));
+
+  const chunk = (arr, size = 800) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  };
+
+  const getStoredMap = async (table, idCol, storedCol, ids) => {
+    const map = new Map();
+    const u = uniqNums(ids);
+    if (!u.length) return map;
+
+    for (const part of chunk(u)) {
+      const placeholders = part.map(() => "?").join(",");
+      const rows = await runQuery(
+        `SELECT ${idCol} AS id, ${storedCol} AS stored
+       FROM ${table}
+       WHERE ${idCol} IN (${placeholders})`,
+        part
+      );
+
+      for (const r of rows ?? []) {
+        const id = Number(r?.id);
+        if (Number.isFinite(id)) map.set(id, Number(r?.stored) ? 1 : 0);
+      }
+    }
+
+    return map;
+  };
+
+  const getDefAggMap = async (tipo, ids) => {
+    const map = new Map();
+    const u = uniqNums(ids);
+    if (!u.length) return map;
+
+    for (const part of chunk(u)) {
+      const placeholders = part.map(() => "?").join(",");
+      const rows = await runQuery(
+        `SELECT DefiIdElemento AS id,
+              COUNT(*) AS total,
+              SUM(CASE WHEN DefiInspeccionado = 1 THEN 1 ELSE 0 END) AS done
+       FROM Deficiencias
+       WHERE DefiActivo = 1
+         AND DefiTipoElemento = ?
+         AND DefiIdElemento IN (${placeholders})
+       GROUP BY DefiIdElemento`,
+        [tipo, ...part]
+      );
+
+      for (const r of rows ?? []) {
+        const id = Number(r?.id);
+        if (!Number.isFinite(id)) continue;
+        const total = Number(r?.total ?? 0);
+        const done = Number(r?.done ?? 0);
+        map.set(id, { total, done });
+      }
+    }
+
+    return map;
+  };
+
+  const buildAuditList = async () => {
+    if (user?.proyecto !== 0 || !selectedSed?.SedInterno) {
+      Alert.alert("No aplica", "Este análisis es solo para modo SED.");
+      return;
+    }
+
+    setAudit((prev) => ({ ...prev, loading: true }));
+
+    try {
+      // IDs desde lo que ya cargaste por SED
+      const postPinsAll = (Array.isArray(pinsRef.current) ? pinsRef.current : [])
+        .filter((p) => Number(p?.Type) === 5);
+
+      const postIds = uniqNums(postPinsAll.map((p) => p?.IdOriginal ?? p?.Id));
+      const vanoIds = uniqNums((Array.isArray(memoGaps) ? memoGaps : []).map((g) => g?.VanoInterno));
+
+      // Maps desde SQLite (solo lectura)
+      const [postStored, vanoStored, postAgg, vanoAgg] = await Promise.all([
+        getStoredMap("Postes", "PostInterno", "PostInspeccionado", postIds),
+        getStoredMap("Vanos", "VanoInterno", "VanoInspeccionado", vanoIds),
+        getDefAggMap("POST", postIds),
+        getDefAggMap("VANO", vanoIds),
+      ]);
+
+      const list = [];
+
+      // POSTES
+      for (const id of postIds) {
+        const stored = Number(postStored.get(id) ?? 0) ? 1 : 0;
+        const agg = postAgg.get(id) ?? { total: 0, done: 0 };
+        const expected = agg.total > 0 && agg.done === agg.total ? 1 : 0;
+
+        if (stored !== expected) {
+          const pin = postPinsAll.find((p) => Number(p?.IdOriginal ?? p?.Id) === id);
+          const code = pin?.ElementCode ?? id;
+          const label = pin?.Label ?? "";
+
+          list.push({
+            key: `POST-${id}`,
+            kind: "POSTE",
+            id,
+            code,
+            label,
+            stored,
+            expected,
+            total: agg.total,
+            done: agg.done,
+          });
+        }
+      }
+
+      // VANOS
+      for (const id of vanoIds) {
+        const stored = Number(vanoStored.get(id) ?? 0) ? 1 : 0;
+        const agg = vanoAgg.get(id) ?? { total: 0, done: 0 };
+        const expected = agg.total > 0 && agg.done === agg.total ? 1 : 0;
+
+        if (stored !== expected) {
+          const g = (Array.isArray(memoGaps) ? memoGaps : []).find((x) => Number(x?.VanoInterno) === id);
+          const code = g?.VanoCodigo ?? id;
+          const label = g?.VanoEtiqueta ?? "";
+
+          list.push({
+            key: `VANO-${id}`,
+            kind: "VANO",
+            id,
+            code,
+            label,
+            stored,
+            expected,
+            total: agg.total,
+            done: agg.done,
+          });
+        }
+      }
+
+      // orden: primero postes luego vanos, y por código
+      list.sort((a, b) => {
+        const ka = a.key.startsWith("POST") ? 0 : 1;
+        const kb = b.key.startsWith("POST") ? 0 : 1;
+        if (ka !== kb) return ka - kb;
+        return String(a.code).localeCompare(String(b.code));
+      });
+
+      setAudit((prev) => ({
+        ...prev,
+        sedId: selectedSed?.SedInterno ?? prev.sedId,
+        analyzed: true,
+        loading: false,
+        list,
+        selectedKey: list?.[0]?.key ?? null,
+      }));
+    } catch (e) {
+      console.error("❌ buildAuditList:", e);
+      Alert.alert("Error", e?.message ?? "No se pudo analizar.");
+      setAudit((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const getAuditSelected = () => {
+    const key = audit.selectedKey;
+    if (!key) return null;
+    return (audit.list ?? []).find((x) => x.key === key) ?? null;
+  };
+
+  const centerAuditItem = (sel) => {
+    if (!sel) return false;
+
+    if (sel.key.startsWith("POST-")) {
+      const id = Number(sel.id);
+      const pin = (Array.isArray(pinsRef.current) ? pinsRef.current : [])
+        .find((p) => Number(p?.Type) === 5 && Number(p?.IdOriginal ?? p?.Id) === id);
+
+      if (!pin) return false;
+
+      const coord = getPinCoord(pin);
+      centerMap(mapRef, coord.latitude, coord.longitude);
+      return true;
+    }
+
+    if (sel.key.startsWith("VANO-")) {
+      const id = Number(sel.id);
+      const g = (Array.isArray(renderGaps) ? renderGaps : [])
+        .find((x) => Number(x?.VanoInterno) === id);
+
+      if (!g) return false;
+
+      const midLat = (Number(g.VanoLatitudIni) + Number(g.VanoLatitudFin)) / 2;
+      const midLng = (Number(g.VanoLongitudIni) + Number(g.VanoLongitudFin)) / 2;
+      centerMap(mapRef, midLat, midLng);
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleAuditLocate = () => {
+    const sel = getAuditSelected();
+    centerAuditItem(sel);
+  };
+
+  const handleAuditSelect = async () => {
+    const sel = getAuditSelected();
+    if (!sel) return;
+
+    // ✅ centrar primero
+    centerAuditItem(sel);
+
+    try {
+      if (sel.key.startsWith("POST-")) {
+        const data = await getPostData(Number(sel.id));
+        if (!data) {
+          Alert.alert("Error", "No se pudo cargar el poste desde SQLite.");
+          return;
+        }
+
+        setSelectedItem(data);
+        setShowAuditModal(false);
+        router.push("inspection");
+        return;
+      }
+
+      if (sel.key.startsWith("VANO-")) {
+        const data = await fetchVanoById(Number(sel.id));
+        if (!data) {
+          Alert.alert("Error", "No se pudo cargar el vano desde SQLite.");
+          return;
+        }
+
+        setSelectedItem(data);
+        setShowAuditModal(false);
+        router.push("inspection");
+      }
+    } catch (e) {
+      console.warn("⚠ handleAuditSelect:", e);
+      Alert.alert("Error", "No se pudo abrir inspección.");
+    }
+  };
+
+
   // render
   return (
     <View style={{ flex: 1 }}>
@@ -1246,37 +1517,72 @@ const Map = () => {
         onCancel={() => setShowGapSelector(false)}
       />
 
-      <TouchableOpacity style={styles.floatBtn} onPress={goToUserLocation}>
+      <TouchableOpacity
+        style={[styles.floatBtn, uiLocked && { opacity: 0.5 }]}
+        onPress={goToUserLocation}
+        disabled={uiLocked}
+      >
         <Image source={require("../../assets/GPS.png")} style={styles.btnImg} />
       </TouchableOpacity>
+
+
+
+
+
 
       {/* BOTONES TOP RIGHT */}
       <View style={styles.topRightButtons}>
         <TouchableOpacity
           onPress={() => {
+            if (uiLocked) return;
             setShowSearchModal(true);
             clearSearch();
           }}
-          disabled={loadingPins || loadingGaps || loadingLocation}
+          disabled={uiLocked || loadingPins || loadingGaps || loadingLocation}
           style={[
             styles.circleBtn,
-            (loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
+            (uiLocked || loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
           ]}
         >
           <Ionicons name="search" size={24} color="#333" />
         </TouchableOpacity>
 
+
+
+
         <TouchableOpacity
-          onPress={handleRefreshMap}
-          disabled={loadingPins || loadingGaps || loadingLocation}
+          onPress={() => {
+            if (uiLocked) return;
+            handleRefreshMap();
+          }}
+          disabled={uiLocked || loadingPins || loadingGaps || loadingLocation}
           style={[
             styles.circleBtn,
             { marginTop: 10 },
-            (loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
+            (uiLocked || loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
           ]}
         >
           <Ionicons name="refresh" size={24} color="#333" />
         </TouchableOpacity>
+
+
+
+        <TouchableOpacity
+          onPress={() => {
+            if (uiLocked) return;
+            setShowAuditModal(true);
+          }}
+          disabled={uiLocked || loadingPins || loadingGaps || loadingLocation}
+          style={[
+            styles.circleBtn,
+            { marginTop: 10 },
+            (uiLocked || loadingPins || loadingGaps || loadingLocation) && { opacity: 0.6 },
+          ]}
+        >
+          <Ionicons name="alert-circle" size={24} color="#333" />
+        </TouchableOpacity>
+
+
       </View>
 
       <SearchModal
@@ -1293,8 +1599,34 @@ const Map = () => {
         onLocate={handleLocateSelected}
         onSelect={handleSelectSelected}
       />
+
+      <AuditInspeccionadoModal
+        visible={showAuditModal}
+        loading={audit.loading}
+        analyzed={audit.analyzed}
+        title="Analizar inconsistencias"
+        subtitle={
+          user?.proyecto === 0
+            ? `Inconsistencias: ${(audit.list ?? []).length}`
+            : "Solo disponible en modo SED"
+        }
+        items={audit.list}
+        selectedKey={audit.selectedKey}
+        onSelectKey={(k) => setAudit((prev) => ({ ...prev, selectedKey: k }))}
+        onAnalyze={buildAuditList}
+        onReAnalyze={buildAuditList}
+        onClose={() => setShowAuditModal(false)}
+
+        onLocate={() => {
+          handleAuditLocate();
+          setShowAuditModal(false); // ✅ Ubicar cierra modal
+        }}
+        onInspect={handleAuditSelect} // ✅ Seleccionar: centra y luego abre inspection
+      />
+
+
     </View>
   );
 };
 
-export default Map;
+export default MapScreen;
