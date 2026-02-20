@@ -62,11 +62,23 @@ const PostWithLabel = memo(function PostWithLabel({
     return () => console.log(`[MARKER UNMOUNT] ${pinKey}`);
   }, [pinKey]);
 
+
+
   useEffect(() => {
     setTracks(true);
     const t = setTimeout(() => setTracks(false), 250);
     return () => clearTimeout(t);
-  }, [iconSize, hideIcon, hideLabel, pin?.Type]);
+  }, [
+    iconSize,
+    hideIcon,
+    hideLabel,
+    pin?.Type,
+    pin?.Label,
+    pin?.Inspeccionado,
+    pin?.Tercero,
+  ]);
+
+
 
   const handlePress = (e) => {
     e?.stopPropagation?.(); // ✅ evita que el mapa “agarre” el toque
@@ -165,7 +177,7 @@ const SedWithLabel = memo(function SedWithLabel({
     setTracks(true);
     const t = setTimeout(() => setTracks(false), 250);
     return () => clearTimeout(t);
-  }, [pinKey, coordinate?.latitude, coordinate?.longitude]);
+  }, [pinKey, coordinate?.latitude, coordinate?.longitude, label, pin?.Inspeccionado]);
 
   const handleDragStart = () => {
     if (!canDrag) return;
@@ -331,7 +343,7 @@ const Map = () => {
     return { latitude, longitude, latitudeDelta, longitudeDelta };
   };
 
- 
+
 
   const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
     if (user?.proyecto === 1 && !selectedFeeder) {
@@ -341,6 +353,8 @@ const Map = () => {
       setSedsAll([]); // ✅
       return;
     }
+
+
 
     if (user?.proyecto === 0 && !selectedSed) {
       pinsRef.current = [];

@@ -257,7 +257,7 @@ export default function Inspection() {
 
 
   const leerElementoDesdeSqlite = useCallback(async () => {
-    console.log("📦 Lectura de datos al sqlite");
+    console.log("📦 log. Lectura de datos al sqlite");
     if (!selectedItem) return null;
 
     const typeElement = selectedItem.PostInterno
@@ -424,7 +424,7 @@ export default function Inspection() {
 
 
   const refreshList = useCallback(async () => {
-    console.log("📦 Refresh tipificaciones existentes");
+    console.log("📦 log. Refresh tipificaciones existentes");
     if (!selectedItem) return;
 
     const elementId =
