@@ -317,7 +317,9 @@ const MapScreen = () => {
 
 
 
-  const uiLocked = showAuditModal; // ✅ bloquea botones mientras el modal está abierto
+  const isMapUiLocked = showSearchModal || showAuditModal || showGapSelector;
+
+  const uiLocked = isMapUiLocked; // ✅ bloquea con Search/Audit/GapSelector
 
   const GAP_HOLD_MS = 350;      // Tiempo para detectar movel elemento
   const GAP_CANCEL_PX = 10;      // ✅ tolerancia de movimiento en pixeles
@@ -1336,14 +1338,12 @@ const MapScreen = () => {
   };
 
 
+  
+
   // render
   return (
     <View style={{ flex: 1 }}>
-      {user?.proyecto === 0 ? (
-        <DropDownSed onSelectSed={setSelectedSed} />
-      ) : (
-        <DropDown onSelectFeeder={setSelectedFeeder} />
-      )}
+
 
       {(loadingPins || loadingGaps || loadingLocation) && (
         <View style={styles.loadingOverlay}>
@@ -1362,15 +1362,15 @@ const MapScreen = () => {
 
         moveOnMarkerPress={false}
 
-        scrollEnabled={!isDraggingGap}
-        zoomEnabled={!isDraggingGap}
-        rotateEnabled={!isDraggingGap}
-        pitchEnabled={!isDraggingGap}
+        scrollEnabled={!isDraggingGap && !uiLocked}
+        zoomEnabled={!isDraggingGap && !uiLocked}
+        rotateEnabled={!isDraggingGap && !uiLocked}
+        pitchEnabled={!isDraggingGap && !uiLocked}
 
-        onTouchStart={startGapHold}
-        onTouchMove={moveGapHold}
-        onTouchEnd={endGapHold}
-        onTouchCancel={endGapHold}
+        onTouchStart={uiLocked ? undefined : startGapHold}
+        onTouchMove={uiLocked ? undefined : moveGapHold}
+        onTouchEnd={uiLocked ? undefined : endGapHold}
+        onTouchCancel={uiLocked ? undefined : endGapHold}
 
 
 
@@ -1507,6 +1507,31 @@ const MapScreen = () => {
 
       </MapView>
 
+      {/* TOP LEFT: selector alineado al compass */}
+      <View
+        pointerEvents={uiLocked ? "none" : "auto"}
+        style={{
+          position: "absolute",
+          left: 15,
+          zIndex: 6000,
+          elevation: 0,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        {/* espacio para no chocar con el compass nativo */}
+        <View style={{ width: 44, height: 44 }} pointerEvents="none" />
+
+        {/* ancho fijo para que DropDownSed (width:100%) NO colapse */}
+        <View style={{ width: 150 }}>
+          {user?.proyecto === 0 ? (
+            <DropDownSed onSelectSed={setSelectedSed} />
+          ) : (
+            <DropDown onSelectFeeder={setSelectedFeeder} />
+          )}
+        </View>
+      </View>
+
       <GapSelectorModal
         visible={showGapSelector}
         overlappedGaps={overlappedGaps}
@@ -1531,7 +1556,7 @@ const MapScreen = () => {
 
 
       {/* BOTONES TOP RIGHT */}
-      <View style={styles.topRightButtons}>
+      <View style={styles.topRightButtons} pointerEvents={uiLocked ? "none" : "auto"}>
         <TouchableOpacity
           onPress={() => {
             if (uiLocked) return;

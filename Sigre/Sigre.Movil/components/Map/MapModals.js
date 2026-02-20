@@ -1,6 +1,19 @@
 // components/Map/MapModals.js
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Keyboard,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 
 import styles from "../../styles/mapStyles";
 import { modalStyles } from "../../styles/modalStyles.js";
@@ -47,110 +60,230 @@ export const SearchModal = ({
   onClear,
   onCancel,
   onLocate,
-  onSelect, }) => {
+  onSelect,
+}) => {
+  // ✅ HOOKS SIEMPRE ARRIBA (NUNCA return antes)
+  const containerRef = useRef(null);
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const screenH = Dimensions.get("window").height;
+
+  const TOP_MARGIN = 18;      // margen superior fijo
+  const BOTTOM_MARGIN = 12;   // margen arriba del teclado
+
+  const [kb, setKb] = useState({ height: 0, top: screenH });
+
+  const runShift = (keyboardTop) => {
+    const bottomLimit = keyboardTop - BOTTOM_MARGIN;
+
+    requestAnimationFrame(() => {
+      containerRef.current?.measureInWindow((x, y, w, h) => {
+        const overlap = (y + h) - bottomLimit;
+        let shift = overlap > 0 ? -overlap : 0;
+
+        const maxUp = -(y - TOP_MARGIN);
+        if (shift < maxUp) shift = maxUp;
+
+        Animated.timing(translateY, {
+          toValue: shift,
+          duration: Platform.OS === "ios" ? 260 : 200,
+          useNativeDriver: true,
+        }).start();
+      });
+    });
+  };
+
+  useEffect(() => {
+    // al abrir resetea
+    Animated.timing(translateY, {
+      toValue: 0,
+      duration: 0,
+      useNativeDriver: true,
+    }).start();
+
+    setKb({ height: 0, top: screenH });
+  }, [visible, screenH, translateY]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const subShow = Keyboard.addListener(showEvt, (e) => {
+      const h = e?.endCoordinates?.height ?? 0;
+      const top = e?.endCoordinates?.screenY ?? (screenH - h);
+
+      setKb({ height: h, top });
+
+      runShift(top);
+      setTimeout(() => runShift(top), 60);
+    });
+
+    const subHide = Keyboard.addListener(hideEvt, () => {
+      setKb({ height: 0, top: screenH });
+
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: Platform.OS === "ios" ? 220 : 170,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [screenH]);
+
+  const maxH =
+    kb.height > 0
+      ? Math.max(240, kb.top - TOP_MARGIN - 10)
+      : Math.floor(screenH * 0.85);
+
+  const handleSearch = () => {
+    Keyboard.dismiss();   // ✅ ocultar teclado al buscar
+    onSearch?.();
+  };
+
+  // ✅ RECIÉN AQUÍ puedes cortar render
   if (!visible) return null;
 
   return (
-    <View style={modalStyles.modalOverlay}>
-      <View style={modalStyles.modalContainer}>
-        <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
-
-        <Text style={styles.inputLabel}>Ingrese código o etiqueta:</Text>
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.inputField}
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Ej: 035840 / VBT..."
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-          />
-
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={onClear} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={[modalStyles.saveButton, { marginTop: 6 }]}
-          onPress={onSearch}
+    <View
+      style={[
+        modalStyles.modalOverlay,
+        kb.height > 0 && { paddingBottom: kb.height },
+      ]}
+    >
+      <Animated.View
+        ref={containerRef}
+        style={[
+          modalStyles.modalContainer,
+          {
+            maxHeight: maxH,
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 12 }}
         >
-          <Text style={modalStyles.saveButtonText}>Buscar</Text>
-        </TouchableOpacity>
+          <Text style={modalStyles.modalTitle}>Buscar Elemento</Text>
 
-        <View style={styles.resultsBox}>
-          {!hasSearched ? (
-            <Text style={styles.hintText}>Escribe algo y presiona “Buscar”.</Text>
-          ) : searchResults.length === 0 ? (
-            <Text style={styles.hintText}>Sin resultados.</Text>
-          ) : (
-            <ScrollView
-              style={styles.resultsScroll}
-              contentContainerStyle={styles.resultsContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator
-            >
-              {searchResults.map((r) => {
-                const isSelected = selectedSearchResult?.key === r.key;
+          <Text style={styles.inputLabel}>Ingrese código o etiqueta:</Text>
 
-                return (
-                  <TouchableOpacity
-                    key={r.key}
-                    style={[styles.resultItem, isSelected && styles.resultItemSelected]}
-                    onPress={() => setSelectedSearchResult(r)}
-                  >
-                    <Text style={styles.resultTitle}>
-                      {r.subKind} — {String(r.code ?? "").trim() || "(sin código)"}
-                    </Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.inputField}
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Ej: 035840 / VBT..."
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              returnKeyType="search"
+              onSubmitEditing={handleSearch}
+            />
 
-                    {!!String(r.label ?? "").trim() && (
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
-                        {String(r.label).replace(/\r?\n|\r/g, " - ").trim()}
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={onClear} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              modalStyles.saveButton,
+              { marginTop: 6, alignItems: "center", justifyContent: "center" },
+            ]}
+            onPress={handleSearch}
+          >
+            <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>
+              Buscar
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.resultsBox}>
+            {!hasSearched ? (
+              <Text style={styles.hintText}>Escribe algo y presiona “Buscar”.</Text>
+            ) : searchResults.length === 0 ? (
+              <Text style={styles.hintText}>Sin resultados.</Text>
+            ) : (
+              <ScrollView
+                style={styles.resultsScroll}
+                contentContainerStyle={styles.resultsContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+              >
+                {searchResults.map((r) => {
+                  const isSelected = selectedSearchResult?.key === r.key;
+
+                  return (
+                    <TouchableOpacity
+                      key={r.key}
+                      style={[styles.resultItem, isSelected && styles.resultItemSelected]}
+                      onPress={() => setSelectedSearchResult(r)}
+                    >
+                      <Text style={styles.resultTitle}>
+                        {r.subKind} — {String(r.code ?? "").trim() || "(sin código)"}
                       </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
 
-        <View style={modalStyles.footerButtons}>
-          <TouchableOpacity
-            style={[modalStyles.cancelButton, { flex: 1, marginRight: 8 }]}
-            onPress={onCancel}
-          >
-            <Text style={modalStyles.cancelButtonText}>Cancelar</Text>
-          </TouchableOpacity>
+                      {!!String(r.label ?? "").trim() && (
+                        <Text style={styles.resultSubtitle} numberOfLines={2}>
+                          {String(r.label).replace(/\r?\n|\r/g, " - ").trim()}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
 
-          <TouchableOpacity
-            style={[
-              modalStyles.saveButton,
-              { flex: 1, marginHorizontal: 8 },
-              !selectedSearchResult && { opacity: 0.5 },
-            ]}
-            disabled={!selectedSearchResult}
-            onPress={onLocate}
-          >
-            <Text style={modalStyles.saveButtonText}>Ubicar</Text>
-          </TouchableOpacity>
+          <View style={modalStyles.footerButtons}>
+            <TouchableOpacity
+              style={[
+                modalStyles.cancelButton,
+                { flex: 1, marginRight: 8, alignItems: "center", justifyContent: "center" },
+              ]}
+              onPress={onCancel}
+            >
+              <Text style={[modalStyles.cancelButtonText, { textAlign: "center" }]}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              modalStyles.saveButton,
-              { flex: 1, marginLeft: 8 },
-              !selectedSearchResult && { opacity: 0.5 },
-            ]}
-            disabled={!selectedSearchResult}
-            onPress={onSelect}
-          >
-            <Text style={modalStyles.saveButtonText}>Seleccionar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <TouchableOpacity
+              style={[
+                modalStyles.saveButton,
+                { flex: 1, marginHorizontal: 8, alignItems: "center", justifyContent: "center" },
+                !selectedSearchResult && { opacity: 0.5 },
+              ]}
+              disabled={!selectedSearchResult}
+              onPress={onLocate}
+            >
+              <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>
+                Ubicar
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                modalStyles.saveButton,
+                { flex: 1, marginLeft: 8, alignItems: "center", justifyContent: "center" },
+                !selectedSearchResult && { opacity: 0.5 },
+              ]}
+              disabled={!selectedSearchResult}
+              onPress={onSelect}
+            >
+              <Text style={[modalStyles.saveButtonText, { textAlign: "center" }]}>
+                Seleccionar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </Animated.View>
     </View>
   );
 };
