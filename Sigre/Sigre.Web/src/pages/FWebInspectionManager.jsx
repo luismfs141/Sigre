@@ -74,6 +74,7 @@ export default function WebInspectionManager() {
 
     // 🔥 B. MEMORIA DE SESIÓN (Nuevo: Para ZIP instantáneo y Preview)
     const sessionBlobs = useRef({});
+    const debounceTimer = useRef(null);
     
 
 const LocalFileStore = {
@@ -118,6 +119,11 @@ const LocalFileStore = {
     // --- 5. LÓGICA GIS ---
     const searchNetworkElement = async (event) => {
         const query = event.query.toLowerCase();
+        // Limpiamos el timeout anterior si el usuario sigue escribiendo
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    // Esperamos 500ms después de la última tecla antes de hacer el fetch
+    debounceTimer.current = setTimeout(async () => {
         try {
             const [postesRes, vanosRes] = await Promise.allSettled([
                 fetchPostesChunk(0, 10, query),
@@ -155,7 +161,8 @@ const LocalFileStore = {
         } catch (e) {
             console.error("Error búsqueda GIS:", e);
         }
-    };
+    }, 500);
+};
 
     const handleGisSelection = (e) => {
         const item = e.value; 

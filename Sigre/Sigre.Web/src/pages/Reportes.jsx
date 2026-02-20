@@ -150,7 +150,7 @@ useEffect(() => {
                 sector: item.sector, 
                 // Calculamos totales basados en details
                 total: item.details ? item.details.length : 0, 
-                cantFotos: item.photoCount || 0,
+                cantFotos: item.totalArchivosPoste || 0,
                 criticidad: item.maxCriticality || 0
             };
             
