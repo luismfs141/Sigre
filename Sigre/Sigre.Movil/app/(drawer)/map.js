@@ -362,7 +362,32 @@ const MapScreen = () => {
 
     return { latitude, longitude, latitudeDelta, longitudeDelta };
   };
+  const recenterToCurrentPins = () => {
+    const newReg = buildRegionFromPins(pinsRef.current);
+    if (!newReg) return false;
 
+    mapRef.current?.animateToRegion(newReg, 600);
+    setRegion(newReg);
+    return true;
+  };
+
+  const handleSelectSed = (sed) => {
+    const prevId = selectedSed?.SedInterno ?? null;
+    const nextId = sed?.SedInterno ?? null;
+
+    // ✅ si vuelves a elegir el mismo SED: recentra sí o sí
+    if (prevId != null && nextId != null && prevId === nextId) {
+      endDragGap?.(); // por si estabas en drag de vano
+      setSelectedSed({ ...sed }); // fuerza render aunque sea “el mismo”
+      if (!recenterToCurrentPins()) {
+        loadMapData({ recenter: true, keepView: false });
+      }
+      return;
+    }
+
+    // ✅ si es otro SED: tu useEffect ya lo recentra
+    setSelectedSed(sed);
+  };
 
 
   const loadMapData = async ({ recenter = false, keepView = false } = {}) => {
@@ -1009,7 +1034,7 @@ const MapScreen = () => {
         </Text>
 
         {user?.proyecto === 1 && <DropDown onSelectFeeder={setSelectedFeeder} />}
-        {user?.proyecto === 0 && <DropDownSed onSelectSed={setSelectedSed} />}
+        {user?.proyecto === 0 && <DropDownSed onSelectSed={handleSelectSed} />}
 
         <MapView
           style={styles.map}
@@ -1518,25 +1543,33 @@ const MapScreen = () => {
 
       {/* TOP LEFT: selector alineado al compass */}
       <View
-        pointerEvents={uiLocked ? "none" : "auto"}
+        pointerEvents="box-none" // ✅ NO bloquea el compás (solo los hijos capturan touch)
         style={{
           position: "absolute",
-          top: 11,              // ✅ este era el desfase (inset del compás)
+          top: 11,
           left: 15,
-          height: 44,           // ✅ misma “línea” visual que el compás
+          height: 44,
           zIndex: 6000,
-          elevation: 10,        // ✅ por encima del mapa en Android
+          elevation: 10,
           flexDirection: "row",
           alignItems: "center",
         }}
       >
-        {/* reserva el espacio del compás */}
+        {/* reserva el espacio del compás (taps pasan al compás) */}
         <View style={{ width: 44, height: 44 }} pointerEvents="none" />
 
-        {/* selector */}
-        <View style={{ width: 150, height: 44, justifyContent: "center" }}>
+        {/* selector (este sí captura touch) */}
+        <View
+          pointerEvents={uiLocked ? "none" : "auto"}
+          style={{
+            width: 150,
+            height: 44,
+            justifyContent: "center",
+            opacity: uiLocked ? 0.5 : 1,
+          }}
+        >
           {user?.proyecto === 0 ? (
-            <DropDownSed onSelectSed={setSelectedSed} />
+            <DropDownSed onSelectSed={handleSelectSed} />
           ) : (
             <DropDown onSelectFeeder={setSelectedFeeder} />
           )}
