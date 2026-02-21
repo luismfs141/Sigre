@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -12,6 +12,9 @@ import { saveAs } from 'file-saver';
 
 // Servicios
 import { ReporteService } from '../services/reporteService';
+// 🔥 IMPORTA AQUÍ TU NUEVA FUNCIÓN (Ajusta la ruta según donde la guardaste)
+import { getAllTypifications } from '../services/typificationService';
+
 // Hooks
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
 
@@ -19,13 +22,13 @@ const Reportes = () => {
     // -------------------------------------------------------------------------
     // 0. CONFIGURACIÓN
     // -------------------------------------------------------------------------
-    // Configuración visual (solo para la web)
     const getCriticidadConfig = (val) => {
         const num = parseInt(val);
         switch (num) {
             case 3: return { label: 'CRÍTICO', severity: 'danger' };
             case 2: return { label: 'MEDIO', severity: 'warning' };
             case 1: return { label: 'LEVE', severity: 'info' };
+            case 0: return { label: 'SIN DEFICIENCIA', severity: 'success' };
             default: return { label: 'N/A', severity: 'secondary' };
         }
     };
@@ -42,9 +45,49 @@ const Reportes = () => {
     const [postesData, setPostesData] = useState({ rows: [], cols: [] });
     const [vanosData, setVanosData] = useState({ rows: [], cols: [] });
     
+    // 🔥 NUEVO ESTADO: Mapa de Tipificaciones (ID -> Código)
+    const [tipificationMap, setTipificationMap] = useState({});
+
     const [loading, setLoading] = useState(false);
     const toast = useRef(null);
 
+    // -------------------------------------------------------------------------
+    // 1.5. CARGA INICIAL DE TIPIFICACIONES
+    // -------------------------------------------------------------------------
+useEffect(() => {
+        const cargarMaestros = async () => {
+            try {
+                const data = await getAllTypifications();
+
+                if (!data || data.length === 0) return;
+
+                const map = {};
+                
+                // 1. Mapeo estricto: typificationId -> code
+                data.forEach(t => {
+                    const id = Number(t.typificationId); 
+                    const visualCode = t.code; 
+
+                    // Validamos !isNaN para permitir el 0 si viniera en la API
+                    if (!isNaN(id) && visualCode) {
+                        map[id] = visualCode;
+                    }
+                });
+
+                // 2. 🔥 CORRECCIÓN MANUAL PARA EL CERO (S/D)
+                // Si el ID 0 no vino de la API, lo forzamos aquí para que el label diga "SINDEF"
+                // en lugar de "ID:0".
+                map[0] = "SINDEF"; 
+
+                console.log("🗺️ MAPA FINAL (Incluye 0):", map);
+                setTipificationMap(map);
+
+            } catch (error) {
+                console.error("❌ Error cargando tipificaciones:", error);
+            }
+        };
+        cargarMaestros();
+    }, []);
     // -------------------------------------------------------------------------
     // 2. LÓGICA DE DATOS
     // -------------------------------------------------------------------------
@@ -54,7 +97,6 @@ const Reportes = () => {
             return;
         }
 
-        // Obtener ID seguro
         const idSed = selectedSed.value || selectedSed.sedInterno || selectedSed.id;
 
         setLoading(true);
@@ -81,31 +123,49 @@ const Reportes = () => {
         if (!listaBackend || listaBackend.length === 0) return { rows: [], cols: [] };
 
         const uniqueCodes = new Set();
+
+        // 1. RECORREMOS "DETAILS" PARA ENCONTRAR COLUMNAS
         listaBackend.forEach(item => {
-            if (item.deficiencies) item.deficiencies.forEach(c => uniqueCodes.add(c));
+            if (item.details && Array.isArray(item.details)) {
+                item.details.forEach(detalle => {
+                    // detalle es { code: 52, crit: 3 }
+                    // Guardamos el 52 (ID)
+                    uniqueCodes.add(detalle.code);
+                });
+            }
         });
-        const sortedCols = Array.from(uniqueCodes).sort();
 
+        // 2. ORDENAMOS LAS COLUMNAS USANDO EL MAPA (Traducimos 52 -> "1000" para ordenar)
+        const sortedCols = Array.from(uniqueCodes).sort((idA, idB) => {
+            const codigoVisualA = tipificationMap[idA] || String(idA);
+            const codigoVisualB = tipificationMap[idB] || String(idB);
+            return codigoVisualA.localeCompare(codigoVisualB, undefined, { numeric: true });
+        });
+
+        // 3. CREAMOS LAS FILAS
         const rows = listaBackend.map(item => {
-            // --- EXTRACCIÓN DE DATOS ---
-            // 1. Cantidad de Fotos: Ajusta 'item.total_fotos' al nombre real que venga del backend
-            const cantFotos = item.total_fotos !== undefined ? item.total_fotos : (item.fotos ? item.fotos.length : 0);
-            
-            // 2. Criticidad: Ajusta 'item.criticidad' al nombre real (ej: item.defiEstadoCriticidad)
-            // Nos aseguramos que sea un número o 0 si no existe
-            const criticidad = item.criticidad ? parseInt(item.criticidad) : 0;
-
+            // Datos base
             const row = { 
                 id: item.id, 
                 sector: item.sector, 
-                total: item.deficiencies ? item.deficiencies.length : 0,
-                cantFotos: cantFotos,     // Dato procesado
-                criticidad: criticidad    // Dato procesado (Numérico)
+                // Calculamos totales basados en details
+                total: item.details ? item.details.length : 0, 
+                cantFotos: item.totalArchivosPoste || 0,
+                criticidad: item.maxCriticality || 0
             };
             
-            sortedCols.forEach(code => {
-                row[code] = item.deficiencies.includes(code);
+            // Rellenamos las columnas dinámicas
+            sortedCols.forEach(colId => {
+                // Buscamos si este ID (ej: 52) existe en los detalles de este poste
+                const detalleEncontrado = item.details?.find(d => d.code === colId);
+
+                // Si existe, guardamos TRUE (o el objeto entero si quieres usar la criticidad específica)
+                row[colId] = !!detalleEncontrado; 
+                
+                // OPCIONAL: Si quisieras guardar la criticidad específica de esa celda:
+                // row[colId] = detalleEncontrado ? detalleEncontrado.crit : null;
             });
+
             return row;
         });
 
@@ -126,12 +186,16 @@ const Reportes = () => {
                 const row = { 
                     "Sector": r.sector, 
                     [colIdLabel]: r.id,
-                    "Criticidad": r.criticidad,  // <--- IMPORTANTE: Se exporta el NÚMERO (1, 2, 3)
-                    "Fotos": r.cantFotos         // <--- Se exporta la cantidad de fotos
+                    "Criticidad": r.criticidad,
+                    "Fotos": r.cantFotos
                 };
                 
-                // Columnas dinámicas de deficiencias
-                dataObj.cols.forEach(c => row[`Def. ${c}`] = r[c] ? "X" : "");
+                // 🔥 AQUÍ USAMOS EL MAPA PARA EL HEADER DEL EXCEL
+                dataObj.cols.forEach(codeId => {
+                    // Obtenemos el código visual (ej: "205") o fallback al ID
+                    const headerCode = tipificationMap[codeId] || `ID_${codeId}`;
+                    row[`Def. ${headerCode}`] = r[codeId] ? "X" : "";
+                });
                 
                 row["Total Hallazgos"] = r.total;
                 return row;
@@ -139,14 +203,13 @@ const Reportes = () => {
 
             const ws = XLSX.utils.json_to_sheet(excelRows);
             
-            // Ajustar anchos de columna para mejor presentación
             ws['!cols'] = [
-                {wch:15}, // Sector
-                {wch:15}, // Código ID
-                {wch:10}, // Criticidad
-                {wch:8},  // Fotos
-                ...dataObj.cols.map(()=>({wch:8})), // Deficiencias
-                {wch:12}  // Total
+                {wch:15}, 
+                {wch:15}, 
+                {wch:10}, 
+                {wch:8}, 
+                ...dataObj.cols.map(()=>({wch:8})),
+                {wch:12} 
             ];
             
             XLSX.utils.book_append_sheet(workbook, ws, nombreHoja);
@@ -171,7 +234,6 @@ const Reportes = () => {
     // 4. UI (Renderizado)
     // -------------------------------------------------------------------------
     
-    // Template para mostrar las fotos con icono
     const fotosBodyTemplate = (rowData) => {
         return (
             <div className="flex align-items-center justify-content-center gap-2">
@@ -181,14 +243,12 @@ const Reportes = () => {
         );
     };
 
-    // Template para mostrar criticidad VISUALMENTE (aunque en Excel salga número)
     const criticidadBodyTemplate = (rowData) => {
         if (!rowData.criticidad) return "-";
         const conf = getCriticidadConfig(rowData.criticidad);
         return <Tag value={conf.label} severity={conf.severity} />;
     };
 
-    // (Toolbars se mantienen igual)
     const leftToolbarTemplate = () => {
         return (
             <div className="flex flex-wrap gap-3 align-items-end">
@@ -249,7 +309,6 @@ const Reportes = () => {
                 <Column field="sector" header="Sector" frozen style={{ minWidth: '90px' }} />
                 <Column field="id" header={headerId} frozen style={{ minWidth: '110px', fontWeight: 'bold' }} />
                 
-                {/* --- NUEVA COLUMNA CRITICIDAD --- */}
                 <Column 
                     field="criticidad" 
                     header="Criticidad" 
@@ -258,7 +317,6 @@ const Reportes = () => {
                     frozen
                 />
                 
-                {/* --- NUEVA COLUMNA FOTOS --- */}
                 <Column 
                     field="cantFotos" 
                     header="Fotos" 
@@ -267,16 +325,21 @@ const Reportes = () => {
                     frozen
                 />
 
-                {data.cols.map(col => (
-                    <Column 
-                        key={col} 
-                        field={col} 
-                        header={col} 
-                        body={(r) => r[col] ? <i className="pi pi-check text-red-500 font-bold"/> : "-"}
-                        style={{ minWidth: '50px', textAlign: 'center' }}
-                        headerTooltip={`Código Deficiencia: ${col}`}
-                    />
-                ))}
+                {/* --- RENDERIZADO DINÁMICO DE COLUMNAS CON CÓDIGOS --- */}
+                {data.cols.map(colId => {
+                    // colId es 52. Buscamos en el mapa: map[52] -> "1000"
+                    const tituloColumna = tipificationMap[colId] || `ID:${colId}`;
+                    
+                    return (
+                        <Column 
+                            key={colId} 
+                            field={colId} 
+                            header={tituloColumna} // <--- AQUÍ MOSTRAMOS EL CÓDIGO VISUAL
+                            body={(r) => r[colId] ? <i className="pi pi-check text-green-600 font-bold"/> : ""}
+                            style={{ minWidth: '50px', textAlign: 'center' }}
+                        />
+                    );
+                })}
 
                 <Column 
                     field="total" 

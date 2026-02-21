@@ -803,7 +803,7 @@ namespace Sigre.DataAccess
         {
             using (SigreContext ctx = new SigreContext())
             {
-                // 1. Buscar el registro por ID
+                // 1. Buscar el registro de la Deficiencia por ID
                 var registro = ctx.Deficiencias
                                   .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
 
@@ -812,13 +812,27 @@ namespace Sigre.DataAccess
                 {
                     return false;
                 }
-                // 2. Aplicar el Borrado Lógico
-                registro.DefiActivo = false;
 
+                // 2. Aplicar el Borrado Lógico a la Deficiencia
+                registro.DefiActivo = false;
                 registro.DefiFecModificacion = DateTime.Now;
 
+                // --- NUEVO: 3. Buscar los archivos asociados a esta deficiencia ---
+                // Basado en tu captura, validamos que ARCH_CodTabla sea el ID de la deficiencia
+                // y opcionalmente que ARCH_Tabla sea "Deficiencias" para ser precisos.
+                var archivosAsociados = ctx.Archivos
+                                           .Where(a => a.ArchCodTabla == x_defiInterno
+                                                    && a.ArchTabla == "Deficiencias")
+                                           .ToList();
 
-                // 4. Guardar cambios
+                // --- NUEVO: 4. Aplicar el Borrado Lógico a los archivos ---
+                foreach (var archivo in archivosAsociados)
+                {
+                    archivo.ArchActivo = false; // Cambia "ArchActivo" por el nombre real de tu columna de estado
+                                                // archivo.ArchFecModificacion = DateTime.Now; // Descomenta si también tienes esta columna en Archivos
+                }
+
+                // 5. Guardar cambios (EF Core hace un solo commit para la deficiencia y sus archivos)
                 ctx.SaveChanges();
 
                 return true;
@@ -870,7 +884,7 @@ namespace Sigre.DataAccess
                     if (input.DefiFecRegistro != DateTime.MinValue)
                     {
                         existente.DefiFecRegistro = input.DefiFecRegistro;
-                        existente.DefiFechaCreacion = input.DefiFecRegistro;
+                        
                     }
 
                     // Auditoría
@@ -949,17 +963,33 @@ namespace Sigre.DataAccess
                                   select new
                                   {
                                       Id = p.PostCodigoNodo,
-                                      Sector = p.PostSubestacion, // Esto es un INT (ej: 8143)
-                                      CodDef = d.TipiInterno
+                                      Sector = p.PostSubestacion,
+                                      CodDef = d.TipiInterno,
+                                      Criticidad = d.DefiEstadoCriticidad,
+                                      // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia en la BD
+                                      // NOTA: Cambia 'ArchCodigoDeficiencia', 'DefiInterno' y 'ArchActivo' por tus propiedades reales
+                                      CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                   })
-                                  .ToList()
+                                  .ToList() // Ejecutamos la consulta SQL aquí
                                   .GroupBy(x => x.Id)
                                   .Select(g => new
                                   {
                                       id = g.Key,
-                                      // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
                                       sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
-                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+
+                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
+
+                                      details = g.Select(x => new {
+                                          code = x.CodDef,
+                                          crit = x.Criticidad,
+                                          // 🔥 NUEVO: Agregamos la cantidad de archivos al detalle de cada deficiencia
+                                          archivosActivos = x.CantidadArchivos
+                                      }).ToList(),
+
+                                      maxCriticality = g.Max(x => x.Criticidad ?? 0),
+
+                                      // 🔥 OPCIONAL: Suma total de archivos activos en todo el poste
+                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos)
                                   }).ToList();
 
                 // -----------------------------------------------------------------------------
@@ -972,17 +1002,32 @@ namespace Sigre.DataAccess
                                  select new
                                  {
                                      Id = v.VanoCodigo,
-                                     Sector = v.VanoSubestacion, // Esto es un INT
-                                     CodDef = d.TipiInterno
+                                     Sector = v.VanoSubestacion,
+                                     CodDef = d.TipiInterno,
+                                     Criticidad = d.DefiEstadoCriticidad,
+                                     // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia
+                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo!="0")
                                  })
                                  .ToList()
                                  .GroupBy(x => x.Id)
                                  .Select(g => new
                                  {
                                      id = g.Key,
-                                     // CORRECCIÓN AQUÍ: Convertimos a String explícitamente
                                      sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
-                                     deficiencies = g.Select(x => x.CodDef).Distinct().ToList()
+
+                                     deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
+
+                                     details = g.Select(x => new {
+                                         code = x.CodDef,
+                                         crit = x.Criticidad,
+                                         // 🔥 NUEVO: Reflejamos el conteo en los detalles
+                                         archivosActivos = x.CantidadArchivos
+                                     }).ToList(),
+
+                                     maxCriticality = g.Max(x => x.Criticidad ?? 0),
+
+                                     // 🔥 OPCIONAL: Suma total de archivos activos en todo el vano
+                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos)
                                  }).ToList();
 
                 return new { postes = dataPostes, vanos = dataVanos };
@@ -1381,5 +1426,25 @@ namespace Sigre.DataAccess
                 return filasAfectadas > 0;
             }
         }
+
+        public async Task<List<Deficiencia>> ObtenerDeficienciasDelDiaAsync()
+        {
+            using (var ctx = new SigreContext())
+            {
+                // Obtenemos el inicio del día de hoy
+                DateTime hoy = DateTime.Today;
+
+                var deficiencias = await ctx.Deficiencias
+                    .AsNoTracking()
+                    // Filtro 1: Solo las creadas hoy
+                    // Filtro 2: Solo las que están activas (DefiActivo == true o != 0)
+                    .Where(d => d.DefiFechaCreacion >= hoy && d.DefiActivo == true)
+                    .OrderByDescending(d => d.DefiInterno)
+                    .ToListAsync();
+
+                return deficiencias;
+            }
+        }
+
     }
 }

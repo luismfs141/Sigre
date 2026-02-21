@@ -252,7 +252,7 @@ const compressImageForLite = (blob) => {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             // ✅ CAMBIO: Calidad JPEG a 0.5 para reducir peso drásticamente
-            canvas.toBlob(resolve, 'image/jpeg', 0.7);
+            canvas.toBlob(resolve, 'image/jpeg', 0.6);
         };
     });
 };

@@ -200,7 +200,7 @@ const itemTemplate = (item) => {
         // Determinamos el valor a guardar en el input de texto
         // Si es SED, guardamos su código/nombre. Si es Poste, su etiqueta o código.
         const valorTexto = item._tipo === 'SED' 
-            ? item.label // O item.sedCodigo
+            ? (item.label || "").split(' - ')[0] // O item.sedCodigo
             : (item.postEtiqueta || item.postCodigoNodo);
 
         // Obtenemos coordenadas (Asegúrate que tu objeto SED tenga lat/lon)
