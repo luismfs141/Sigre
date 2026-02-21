@@ -7,6 +7,7 @@ import {
   getPostMaterial,
   getPostRetenidaMaterial,
   getPostRetenidaTipo,
+  insertPostAndPin,
   markPostAsSynced,
   saveOrUpdatePost,
   updatePostIdAfterSync
@@ -62,7 +63,11 @@ export const usePost = () => {
     }
 
     try {
-      const localId = await saveOrUpdatePost(post);
+      const isUpdate = post?.PostInterno != null && Number(post.PostInterno) > 0;
+
+      const localId = isUpdate
+        ? await saveOrUpdatePost(post)   // ✅ UPDATE ONLY
+        : await insertPostAndPin(post);  // ✅ INSERT Postes + Pines
 
       // 🔥 AUTO-SYNC (no await)
       if (localId) autoSyncPost(localId);
@@ -116,7 +121,7 @@ export const usePost = () => {
     try {
       const data = await getPostArmadoMaterial();
       return data || [];
-    } catch (err) { 
+    } catch (err) {
       console.error("❌ Error obteniendo materiales de armado:", err);
       setError(err);
       return [];

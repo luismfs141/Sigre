@@ -1,46 +1,65 @@
-import { Audio } from "expo-av";
 import { useRef, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { formatLocalISO, getUniqueNowMs } from "../../utils/dateUtils";
 
+// ✅ NUEVO: expo-audio
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 
 export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
-  const [recording, setRecording] = useState(null);
   const stampRef = useRef(null); // ✅ timestamp único por grabación
 
-  const startRecording = async () => {
-    try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) return;
+  // ✅ NUEVO: recorder hook
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+  const [busy, setBusy] = useState(false);
+
+  const startRecording = async () => {
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      const micPerm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!micPerm?.granted) return;
+
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
       // ✅ UNA sola vez aquí
       stampRef.current = getUniqueNowMs();
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(recording);
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
     } catch (err) {
       console.error("Error iniciando grabación", err);
+    } finally {
+      setBusy(false);
     }
   };
 
   const stopRecording = async () => {
+    if (busy) return;
+    setBusy(true);
+
     try {
-      if (!recording) return;
+      if (!recorderState.isRecording) return;
 
-      const rec = recording;
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI();
+      if (!uri) {
+        console.warn("No se obtuvo uri de grabación.");
+        return;
+      }
 
       // ✅ reutiliza el mismo timestamp
       const capturedAtMs = stampRef.current ?? getUniqueNowMs();
@@ -48,13 +67,16 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
 
       stampRef.current = null;
 
-      onAudioRecorded({ uri, fechaISO, capturedAtMs });
-      onClose();
+      onAudioRecorded?.({ uri, fechaISO, capturedAtMs });
+      onClose?.();
     } catch (err) {
-      console.warn("Grabación ya detenida");
+      console.warn("Grabación ya detenida o error al detener:", err);
+    } finally {
+      setBusy(false);
+      // opcional: volver a modo normal
+      setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     }
   };
-
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -62,12 +84,12 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
         <View style={styles.modal}>
           <Text style={styles.title}>🎙️ Grabar audio</Text>
 
-          {!recording ? (
-            <TouchableOpacity style={styles.recordButton} onPress={startRecording}>
+          {!recorderState.isRecording ? (
+            <TouchableOpacity style={styles.recordButton} onPress={startRecording} disabled={busy}>
               <Text style={styles.buttonText}>Iniciar</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.stopButton} onPress={stopRecording}>
+            <TouchableOpacity style={styles.stopButton} onPress={stopRecording} disabled={busy}>
               <Text style={styles.buttonText}>Detener</Text>
             </TouchableOpacity>
           )}
@@ -75,8 +97,9 @@ export default function ModalAudio({ visible, onClose, onAudioRecorded }) {
           <TouchableOpacity
             onPress={() => {
               stampRef.current = null;
-              onClose();
+              onClose?.();
             }}
+            disabled={busy}
           >
             <Text style={styles.cancel}>Cancelar</Text>
           </TouchableOpacity>

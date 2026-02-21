@@ -324,8 +324,8 @@ export default forwardRef(function NewPoste(_, ref) {
       return;
     }
 
-    setPostLatitud(lat.toFixed(7));
-    setPostLongitud(lng.toFixed(7));
+    setPostLatitud(lat.toFixed(12));
+    setPostLongitud(lng.toFixed(12));
   };
 
 
@@ -539,7 +539,7 @@ export default forwardRef(function NewPoste(_, ref) {
       )}
 
       {/* Alimentador (bloqueado) */}
-      <Text style={styles.label}>Alimentador (bloqueado)</Text>
+      <Text style={styles.label}>Alimentador</Text>
       <TextInput
         value={alimInterno == null ? "" : `${alimEtiqueta || ""} (ID: ${alimInterno})`}
         editable={false}
@@ -547,7 +547,7 @@ export default forwardRef(function NewPoste(_, ref) {
         placeholder="Sin alimentador"
       />
 
-      <Text style={styles.label}>Código (PostCodigoNodo)</Text>
+      <Text style={styles.label}>Código</Text>
       <TextInput
         value={PostCodigoNodo}
         onChangeText={setPostCodigoNodo}
@@ -555,7 +555,7 @@ export default forwardRef(function NewPoste(_, ref) {
         placeholder="Ej: PTO000123456"
       />
 
-      <Text style={styles.label}>Etiqueta (PostEtiqueta)</Text>
+      <Text style={styles.label}>Etiqueta</Text>
       <TextInput
         value={PostEtiqueta}
         onChangeText={setPostEtiqueta}
@@ -564,7 +564,7 @@ export default forwardRef(function NewPoste(_, ref) {
       />
 
       {/* Material */}
-      <Text style={styles.label}>Material (PostMaterial)</Text>
+      <Text style={styles.label}>Material</Text>
       <TouchableOpacity
         style={styles.select}
         onPress={() =>
@@ -581,7 +581,7 @@ export default forwardRef(function NewPoste(_, ref) {
       </TouchableOpacity>
 
       {/* Retenida Tipo */}
-      <Text style={styles.label}>Tipo de retenida (PostRetenidaTipo)</Text>
+      <Text style={styles.label}>Tipo de retenida</Text>
       <TouchableOpacity
         style={styles.select}
         onPress={() =>
@@ -598,7 +598,7 @@ export default forwardRef(function NewPoste(_, ref) {
       </TouchableOpacity>
 
       {/* Subestación */}
-      <Text style={styles.label}>Subestación (PostSubestacion)</Text>
+      <Text style={styles.label}>Subestación</Text>
       <TouchableOpacity
         style={styles.select}
         onPress={() =>
@@ -614,7 +614,7 @@ export default forwardRef(function NewPoste(_, ref) {
         <Ionicons name="chevron-down" size={18} color="#444" />
       </TouchableOpacity>
 
-      <Text style={styles.label}>Altura (PostAltura)</Text>
+      <Text style={styles.label}>Altura</Text>
       <TextInput
         value={PostAltura}
         onChangeText={setPostAltura}
@@ -626,7 +626,7 @@ export default forwardRef(function NewPoste(_, ref) {
       {/* Lat/Lng + flechas */}
       <View style={styles.row2}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Latitud (PostLatitud)</Text>
+          <Text style={styles.label}>Latitud</Text>
           <TextInput
             value={PostLatitud}
             onChangeText={setPostLatitud}
@@ -639,7 +639,7 @@ export default forwardRef(function NewPoste(_, ref) {
         <View style={{ width: 10 }} />
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Longitud (PostLongitud)</Text>
+          <Text style={styles.label}>Longitud</Text>
           <TextInput
             value={PostLongitud}
             onChangeText={setPostLongitud}

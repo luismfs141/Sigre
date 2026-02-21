@@ -33,37 +33,61 @@ export default function NewScreen() {
       return;
     }
 
-    // ==========================
-    // POSTE
-    // ==========================
     if (tipo === "poste") {
       const data = posteRef.current?.getData?.();
-
       if (!data) {
         Alert.alert("Error", "No se pudo leer el formulario.");
         return;
       }
 
-      if (!String(data.PostCodigoNodo ?? "").trim()) {
-        Alert.alert("Validación", "El Código (PostCodigoNodo) es obligatorio.");
+      // --------- OBLIGATORIOS ----------
+      const codigo = String(data.PostCodigoNodo ?? "").trim();
+      const etiqueta = String(data.PostEtiqueta ?? "").trim();
+
+      if (!codigo) {
+        Alert.alert("Validación", "El Código es obligatorio.");
         return;
       }
 
-      if (!String(data.PostEtiqueta ?? "").trim()) {
-        Alert.alert("Validación", "La Etiqueta (PostEtiqueta) es obligatoria.");
+      // ✅ Código sin espacios (ni dentro, ni al inicio, ni al final)
+      if (/\s/.test(codigo)) {
+        Alert.alert("Validación", "El Código no debe tener espacios.");
         return;
       }
 
+      if (!etiqueta) {
+        Alert.alert("Validación", "La Etiqueta es obligatoria.");
+        return;
+      }
+
+      // ✅ selects obligatorios
+      if (!Number.isFinite(Number(data.PostMaterial))) {
+        Alert.alert("Validación", "Material es obligatorio.");
+        return;
+      }
+
+      if (!Number.isFinite(Number(data.PostRetenidaTipo))) {
+        Alert.alert("Validación", "Tipo de retenida es obligatorio.");
+        return;
+      }
+
+      if (!Number.isFinite(Number(data.PostSubestacion))) {
+        Alert.alert("Validación", "Subestación es obligatoria.");
+        return;
+      }
+
+      // ✅ alimentador debe existir
       if (!Number.isFinite(Number(data.AlimInterno))) {
-        Alert.alert("Validación", "No hay alimentador seleccionado (AlimInterno).");
+        Alert.alert("Validación", "No hay alimentador seleccionado.");
         return;
       }
 
+      // ✅ Lat/Lng obligatorios
       const lat = Number(data.PostLatitud);
       const lng = Number(data.PostLongitud);
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        Alert.alert("Validación", "Latitud y Longitud deben ser numéricas.");
+        Alert.alert("Validación", "Latitud y Longitud son obligatorias.");
         return;
       }
 
@@ -77,6 +101,19 @@ export default function NewScreen() {
         return;
       }
 
+      // ✅ Altura puede estar en blanco, pero si viene, debe ser numérica
+      if (data.PostAltura != null && data.PostAltura !== "") {
+        const h = Number(data.PostAltura);
+        if (!Number.isFinite(h)) {
+          Alert.alert("Validación", "Altura debe ser numérica (o dejar en blanco).");
+          return;
+        }
+      }
+
+      // normaliza por si acaso
+      data.PostCodigoNodo = codigo;
+      data.PostEtiqueta = etiqueta;
+
       const id = await savePost(data);
 
       if (!id) {
@@ -84,16 +121,11 @@ export default function NewScreen() {
         return;
       }
 
-      // ✅ reset después de guardar
       posteRef.current?.reset?.();
-
       Alert.alert("Éxito", `Poste guardado (ID: ${id}).`);
       return;
     }
 
-    // ==========================
-    // VANO (por ahora vacío)
-    // ==========================
     Alert.alert("Aviso", "Nuevo Vano aún no está implementado.");
   };
 
