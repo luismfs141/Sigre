@@ -79,6 +79,7 @@ export const usePost = () => {
 
   // ------------------- DATOS AUXILIARES -------------------
   const getMaterialsPost = async () => {
+    console.log("📦 log. Lectura de material de postes");
     setLoading(true);
     setError(null);
 
@@ -115,7 +116,7 @@ export const usePost = () => {
     try {
       const data = await getPostArmadoMaterial();
       return data || [];
-    } catch (err) {
+    } catch (err) { 
       console.error("❌ Error obteniendo materiales de armado:", err);
       setError(err);
       return [];
@@ -125,6 +126,7 @@ export const usePost = () => {
   };
 
   const getTipoRetenidasPost = async () => {
+    console.log("📦 log. Lectura tipo de retenida");
     setLoading(true);
     setError(null);
 
@@ -242,7 +244,7 @@ export const usePost = () => {
       if (!post || post.EstadoOffLine == null) return;
 
       const postToSync = normalizePostForSync(post);
-      console.log("📤 Sincronización Update info de Poste");
+      //console.log("📤 Sincronización Update info de Poste");
 
       const response = await client.post(
         "/Post/SyncFromSQLite",

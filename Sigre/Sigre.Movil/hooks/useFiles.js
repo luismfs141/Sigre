@@ -106,7 +106,7 @@ export function useFiles() {
     syncingRef.current = true;
 
     try {
-      console.log("📤 Sincronización de Update de archivo");
+      //console.log("📤 Sincronización de Update de archivo");
       // 🔐 CLAVE: garantizar DB
       const dbOk = await checkDatabase();
       if (!dbOk) return;
