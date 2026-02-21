@@ -171,7 +171,60 @@ export const usePost = () => {
   };
 
   // 🔁 Auto-sync de UN poste (automático)
+  // const autoSyncPost = async (postInternoLocal) => {
+  //   const dbOk = await checkDatabase();
+  //   if (!dbOk) {
+  //     console.warn("⚠ Base de datos no disponible, auto-sync cancelado");
+  //     return;
+  //   }
+
+  //   try {
+  //     const online = await isOnline();
+  //     if (!online) {
+  //       console.log("ℹ️ Auto-sync no realizada, queda offline");
+  //       return;
+  //     }
+
+  //     const post = await getPostByIdLocal(postInternoLocal);
+  //     if (!post || post.EstadoOffLine == null) return;
+
+  //     const postToSync = normalizePostForSync(post);
+  //     console.log("📤 Payload sync:", JSON.stringify([postToSync], null, 2));
+
+  //     const response = await client.post(
+  //       "/Post/SyncFromSQLite",
+  //       [postToSync],
+  //       { timeout: 6000 }
+  //     );
+
+  //     const result = response.data;
+  //     if (!Array.isArray(result) || result.length === 0) return;
+
+  //     const map = result[0];
+  //     if (map.localId !== map.serverId) {
+  //       await updatePostIdAfterSync(map.localId, map.serverId);
+  //     } else {
+  //       await markPostAsSynced(map.serverId);
+  //     }
+
+  //     console.log("✅ Poste sincronizado correctamente");
+  //   } catch (err) {
+  //     if (err.response) {
+  //       console.log("❌ Sync error:", err.response.status, err.response.data);
+  //     } else if (err.request) {
+  //       console.log("❌ Sin respuesta del servidor");
+  //     } else {
+  //       console.log("❌ Error:", err.message);
+  //     }
+  //   }
+  // };
+
+  // Sincronizar log
+  // 🔁 Auto-sync de UN poste (automático)
   const autoSyncPost = async (postInternoLocal) => {
+    // ✅ LOG + STACK para saber QUIÉN lo llamó
+
+
     const dbOk = await checkDatabase();
     if (!dbOk) {
       console.warn("⚠ Base de datos no disponible, auto-sync cancelado");
@@ -189,7 +242,7 @@ export const usePost = () => {
       if (!post || post.EstadoOffLine == null) return;
 
       const postToSync = normalizePostForSync(post);
-      console.log("📤 Payload sync:", JSON.stringify([postToSync], null, 2));
+      console.log("📤 Sincronización Update info de Poste");
 
       const response = await client.post(
         "/Post/SyncFromSQLite",
@@ -207,7 +260,6 @@ export const usePost = () => {
         await markPostAsSynced(map.serverId);
       }
 
-      console.log("✅ Poste sincronizado correctamente");
     } catch (err) {
       if (err.response) {
         console.log("❌ Sync error:", err.response.status, err.response.data);
@@ -219,24 +271,25 @@ export const usePost = () => {
     }
   };
 
+
   const normalizePostForSync = (post) => ({
-  ...post,
-  EstadoOffLine: Number(post.EstadoOffLine ?? 1),
-  AlimInterno: Number(post.AlimInterno),
+    ...post,
+    EstadoOffLine: Number(post.EstadoOffLine ?? 1),
+    AlimInterno: Number(post.AlimInterno),
 
-  // ✅ este es el correcto para campos 0/1
-  PostTerceros: Number(post.PostTerceros) === 1,
+    // ✅ este es el correcto para campos 0/1
+    PostTerceros: Number(post.PostTerceros) === 1,
 
-  PostInspeccionado: Boolean(post.PostInspeccionado),
-  PostEsMt: Boolean(post.PostEsMt),
-  PostEsBt: Boolean(post.PostEsBt),
+    PostInspeccionado: Boolean(post.PostInspeccionado),
+    PostEsMt: Boolean(post.PostEsMt),
+    PostEsBt: Boolean(post.PostEsBt),
 
-  PostMaterial: post.PostMaterial ? Number(post.PostMaterial) : null,
-  PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
-  PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
-  PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
+    PostMaterial: post.PostMaterial ? Number(post.PostMaterial) : null,
+    PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
+    PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
+    PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
 
-});
+  });
 
 
   return {

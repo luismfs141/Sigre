@@ -48,7 +48,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
     select * from Vanos where VANO_Subestacion = '1712' order by 2
 
 
-
+    
 
 
 --------------------------------
@@ -59,7 +59,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 -- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%8154%'-- <-- tu SED_Codigo
+DECLARE @SUB_ETI VARCHAR(20) = '%1459%'-- <-- tu SED_Codigo
 (
     SELECT  
             ALI.ALIM_Interno AS [Id Alimentador],
@@ -124,6 +124,7 @@ SELECT  P.POST_Interno,
         RT.RTNTP_Nombre,
         P.POST_Altura,
         P.POST_Terceros,
+        P.POST_Inspeccionado,
         [***] = '',
         p.*
 FROM Postes AS P
@@ -148,6 +149,7 @@ SELECT  V.VANO_Interno,
         V.VANO_NodoInicial,
         V.VANO_NodoFinal,
         VANO_Terceros,
+        V.VANO_Inspeccionado,
         [***] = '',
         V.*
 FROM Vanos AS V

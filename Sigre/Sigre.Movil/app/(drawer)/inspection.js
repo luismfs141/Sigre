@@ -1,16 +1,27 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useContext, useEffect, useState } from "react";
+import Loading from "../../components/LoadingOverlay";
+import { recalcElementoInspeccionadoFromDefsLocal } from "../../database/offlineDB/inspectionDB";
+import { useGap } from "../../hooks/useGap";
+import { usePost } from "../../hooks/usePost";
+
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+
 import {
+  ActivityIndicator,
   Alert,
   BackHandler,
   Button,
   FlatList,
   Platform,
   StyleSheet,
+  Text,
   ToastAndroid,
+  TouchableOpacity,
   View
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { SafeAreaView } from "react-native-safe-area-context";
+
 
 
 import DeficiencyModal from "../../components/Form/Defiencies/DeficiencyModal";
@@ -28,11 +39,16 @@ import { useDeficiency } from "../../hooks/useDeficiency";
 export default function Inspection() {
   const { selectedItem, setSelectedDeficiency, isAdmin, isSupervisor, isInspector, currentUserId } = useDatos();
 
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useContext(AuthContext);
 
+  const [loading, setLoading] = useState({ active: false, msg: "" });
+
+
   const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
+  const { getPostData, savePost } = usePost();
+  const { fetchVanoById, saveVano } = useGap();
+
 
   const [items, setItems] = useState([]);
   const [modalGeneralVisible, setModalGeneralVisible] = useState(false);
@@ -40,6 +56,58 @@ export default function Inspection() {
   const [newDefModalVisible, setNewDefModalVisible] = useState(false);
   const [currentItem, setCurrentItem] = useState(null);
   const [currentDeficiency, setCurrentDeficiency] = useState(null);
+
+  const [busy, setBusy] = useState({ active: false, msg: "" });
+
+  const lastLoadKeyRef = useRef(null);
+
+
+  const selectedItemRef = useRef(selectedItem);
+  useEffect(() => {
+    selectedItemRef.current = selectedItem;
+  }, [selectedItem]);
+
+  const fnsRef = useRef({ deficienciesForFlatList, getPostData, fetchVanoById });
+  useEffect(() => {
+    fnsRef.current = { deficienciesForFlatList, getPostData, fetchVanoById };
+  }, [deficienciesForFlatList, getPostData, fetchVanoById]);
+
+
+
+
+  const getElementoTarget = useCallback(() => {
+    if (!selectedItem) return { elementId: null, typeElement: null };
+
+    const elementId =
+      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? null;
+
+    const typeElement = selectedItem.PostInterno
+      ? "POST"
+      : selectedItem.VanoInterno
+        ? "VANO"
+        : null;
+
+    return { elementId, typeElement };
+  }, [selectedItem]);
+
+  const pickVanoCodigo = (src) =>
+    src?.VanoCodigo ?? src?.Vano_Codigo ?? src?.VANO_Codigo ?? "";
+
+  const ensureVanoEtiqueta = (src) => {
+    const et = (src?.VanoEtiqueta ?? src?.VANO_Etiqueta ?? "").toString().trim();
+    if (et) return et;
+
+    const cod = String(pickVanoCodigo(src) ?? "").trim();
+    if (cod) return cod;
+
+    return "SIN ETIQUETA";
+  };
+
+
+
+
+
+
 
   /* =======================
       HELPERS DE VALIDACIÓN
@@ -74,17 +142,123 @@ export default function Inspection() {
     return String(owner).trim() === String(currentUserId).trim();
   };
 
+
   /* =======================
-      CARGA INICIAL
-     ======================= */
-  useEffect(() => {
-    if (!selectedItem) {
-      setItems([]);
+    ESTADO (FINALIZADO / PENDIENTE)
+   ======================= */
+
+  const parseBool01 = (v) => {
+    if (v === true) return true;
+    if (v === false) return false;
+    if (v === null || v === undefined) return null;
+
+    const s = String(v).trim().toLowerCase();
+    if (s === "1" || s === "true") return true;
+    if (s === "0" || s === "false") return false;
+
+    return null;
+  };
+
+  const getEstadoElemento = (data) => {
+    const raw =
+      data?.PostInspeccionado ??
+      data?.POST_Inspeccionado ??
+      data?.postInspeccionado ??
+      data?.VanoInspeccionado ??
+      data?.VANO_Inspeccionado ??
+      data?.vanoInspeccionado ??
+      null;
+
+    const b = parseBool01(raw);
+    if (b === null) return null;
+
+    return b ? "FINALIZADO" : "PENDIENTE";
+  };
+
+
+  const getDefFinalizada = (defItem) => {
+    return Number(defItem?.data?.defiInspeccionado) === 1;
+  };
+
+
+  const handleActualizarEstadoPress = async () => {
+    const { elementId, typeElement } = getElementoTarget();
+
+    if (!elementId || !typeElement) {
+      Alert.alert("No aplica", "Solo aplica para Poste o Vano.");
       return;
     }
 
-    const elementId =
-      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+    setBusy({ active: true, msg: "Actualizando estado..." });
+
+    try {
+      // ✅ 1) Recalcula y actualiza EN SQLITE (PostInspeccionado/VanoInspeccionado)
+      const res = await recalcElementoInspeccionadoFromDefsLocal(elementId, typeElement);
+
+      if (!res?.ok) {
+        Alert.alert("Error", res?.reason ?? "No se pudo recalcular el estado.");
+        return;
+      }
+
+      const new01 = Number(res.inspected) === 1 ? 1 : 0;
+
+      // ✅ 2) Solo si cambió => sincroniza con servidor
+      if (res.changed) {
+        try {
+          if (typeElement === "POST") {
+            const p = await getPostData(elementId);
+            if (p) await savePost({ ...p, PostInspeccionado: new01 });
+          } else if (typeElement === "VANO") {
+            const v = await fetchVanoById(elementId);
+            if (v) await saveVano({ ...v, VanoInspeccionado: new01 });
+          }
+        } catch (syncErr) {
+          console.warn("⚠ sync estado inspeccionado falló:", syncErr);
+          // SQLite ya quedó bien, no rompas la UI por sync.
+        }
+      }
+
+      // ✅ 3) Refresca deficiencias (para que cambien los colores)
+      await refreshList();
+
+      // ✅ 4) Parcha el GENERAL al final (por si refreshList pisa el valor)
+      setItems((prev) =>
+        prev.map((x) => {
+          if (x?.type !== "general") return x;
+
+          const data = { ...(x.data ?? {}) };
+          if (typeElement === "POST") data.PostInspeccionado = new01;
+          if (typeElement === "VANO") data.VanoInspeccionado = new01;
+
+          return { ...x, data };
+        })
+      );
+
+      const estadoTxt = new01 === 1 ? "FINALIZADO" : "PENDIENTE";
+      const msg = res.changed
+        ? `Estado actualizado: ${estadoTxt}`
+        : `Estado ya estaba: ${estadoTxt}`;
+
+      if (Platform.OS === "android") ToastAndroid.show(msg, ToastAndroid.SHORT);
+      else Alert.alert("OK", msg);
+    } catch (e) {
+      console.error("❌ handleActualizarEstadoPress:", e);
+      Alert.alert("Error", e?.message ?? "No se pudo actualizar el estado.");
+    } finally {
+      setBusy({ active: false, msg: "" });
+    }
+  };
+
+
+
+  /* =======================
+        LEER DATOS DE ELEMENTO
+       ======================= */
+
+
+  const leerElementoDesdeSqlite = useCallback(async () => {
+    console.log("📦 log. Lectura de datos al sqlite");
+    if (!selectedItem) return null;
 
     const typeElement = selectedItem.PostInterno
       ? "POST"
@@ -92,45 +266,171 @@ export default function Inspection() {
         ? "VANO"
         : "SED";
 
-    const loadDefs = async () => {
-      try {
-        const existingDefs = await deficienciesForFlatList(elementId, typeElement);
+    // SED no se lee de sqlite (según tu lógica actual)
+    if (typeElement === "SED") {
+      setItems((prev) => {
+        const idx = prev.findIndex((x) => x?.type === "general");
 
         const generalItem = {
           id: "general",
           type: "general",
           name: "Datos Generales",
-          data: selectedItem
+          data: selectedItem,
         };
 
-        setItems([generalItem, ...existingDefs]);
-      } catch (err) {
-        console.error("❌ Error cargando inspección:", err);
-      }
-    };
+        if (idx === -1) return [generalItem, ...prev];
 
-    loadDefs();
-  }, [selectedItem]);
+        const next = [...prev];
+        next[idx] = generalItem;
+        return next;
+      });
+
+      return selectedItem;
+    }
+
+    let elementData = selectedItem;
+
+    try {
+      if (typeElement === "POST" && selectedItem.PostInterno != null) {
+        const id = selectedItem.PostInterno;
+        const p = await getPostData(id);
+        if (p) elementData = p; // ✅ SOLO lee, NO recalcula estado
+      } else if (typeElement === "VANO" && selectedItem.VanoInterno != null) {
+        const id = selectedItem.VanoInterno;
+        const v = await fetchVanoById(id);
+        if (v) elementData = v; // ✅ SOLO lee, NO recalcula estado
+      }
+    } catch (e) {
+      console.warn("⚠ leerElementoDesdeSqlite:", e?.message ?? e);
+    }
+
+    // ✅ actualiza SOLO el item "general"
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x?.type === "general");
+
+      const generalItem = {
+        id: "general",
+        type: "general",
+        name: "Datos Generales",
+        data: elementData,
+      };
+
+      if (idx === -1) return [generalItem, ...prev];
+
+      const next = [...prev];
+      next[idx] = generalItem;
+      return next;
+    });
+
+    return elementData;
+  }, [selectedItem, getPostData, fetchVanoById]);
+
+
+
 
   /* =======================
       BACK HANDLER
      ======================= */
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+
+      const load = async () => {
+        const si = selectedItemRef.current;
+
+        // si no hay selección => limpia
+        if (!si) {
+          setItems([]);
+          return;
+        }
+
+        setLoading({ active: true, msg: "Cargando..." });
+
+        try {
+          const elementId = si.PostInterno ?? si.VanoInterno ?? si.SedInterno;
+
+          const typeElement = si.PostInterno
+            ? "POST"
+            : si.VanoInterno
+              ? "VANO"
+              : "SED";
+
+          // 1) Deficiencias (colores)
+          const existingDefs = await fnsRef.current.deficienciesForFlatList(
+            elementId,
+            typeElement
+          );
+
+          // 2) Datos generales (SOLO LECTURA)
+          let elementData = si;
+
+          if (typeElement === "POST" && si.PostInterno != null) {
+            const p = await fnsRef.current.getPostData(si.PostInterno);
+            if (p) elementData = p;
+          } else if (typeElement === "VANO" && si.VanoInterno != null) {
+            const v = await fnsRef.current.fetchVanoById(si.VanoInterno);
+            if (v) elementData = v;
+          }
+
+          if (cancelled) return;
+
+          const generalItem = {
+            id: "general",
+            type: "general",
+            name: "Datos Generales",
+            data: elementData,
+          };
+
+          setItems([generalItem, ...existingDefs]);
+        } catch (e) {
+          console.warn("⚠ load Inspection:", e?.message ?? e);
+        } finally {
+          if (!cancelled) setLoading({ active: false, msg: "" });
+        }
+      };
+
+      // ✅ SIEMPRE carga al entrar (mismo elemento o no)
+      load();
+
+      // ✅ back android
       const onBackPress = () => {
         router.replace("/(drawer)/map");
         return true;
       };
       const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-      return () => sub.remove();
-    }, [])
+
+      // ✅ cleanup real (nada en memoria)
+      return () => {
+        cancelled = true;
+        sub.remove();
+
+        lastLoadKeyRef.current = null;
+
+        setItems([]);
+        setCurrentItem(null);
+        setCurrentDeficiency(null);
+
+        setModalGeneralVisible(false);
+        setModalDeficiencyVisible(false);
+        setNewDefModalVisible(false);
+
+        setBusy({ active: false, msg: "" });
+        setLoading({ active: false, msg: "" });
+      };
+    }, [router])
   );
 
-  const refreshList = async () => {
+
+
+
+  const refreshList = useCallback(async () => {
+    console.log("📦 log. Refresh tipificaciones existentes");
     if (!selectedItem) return;
 
     const elementId =
-      selectedItem.PostInterno ?? selectedItem.VanoInterno ?? selectedItem.SedInterno;
+      selectedItem.PostInterno ??
+      selectedItem.VanoInterno ??
+      selectedItem.SedInterno;
 
     const typeElement = selectedItem.PostInterno
       ? "POST"
@@ -140,31 +440,22 @@ export default function Inspection() {
 
     const existingDefs = await deficienciesForFlatList(elementId, typeElement);
 
-    const generalItem = {
-      id: "general",
-      type: "general",
-      name: "Datos Generales",
-      data: selectedItem
-    };
+    // ✅ NO lee elemento: preserva el "general" actual
+    setItems((prev) => {
+      const prevGeneral = prev.find((x) => x?.type === "general");
 
-    setItems([generalItem, ...existingDefs]);
-  };
+      const generalItem = prevGeneral ?? {
+        id: "general",
+        type: "general",
+        name: "Datos Generales",
+        data: selectedItem,
+      };
 
-  /* =======================
-      ABRIR MODAL
-     ======================= */
-  // const openFormModal = item => {
-  //   setCurrentItem(item);
+      return [generalItem, ...existingDefs];
+    });
+  }, [selectedItem, deficienciesForFlatList]);
 
-  //   if (item.type === "general") {
-  //     setModalGeneralVisible(true);
-  //     return;
-  //   }
 
-  //   setSelectedDeficiency({ ...item.data, id: item.id, name: item.name });
-  //   setCurrentDeficiency({ ...item.data });
-  //   setModalDeficiencyVisible(true);
-  // };
 
   const openFormModal = (item) => {
     setCurrentItem(item);
@@ -183,33 +474,16 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
-  // /* =======================
-  //     LIMPIEZA FÍSICA
-  //    ======================= */
-  // const cleanPhysicalFiles = async (defId) => {
-  //   if (!defId) return;
-
-  //   try {
-  //     const dirInfo = await FileSystem.readDirectoryAsync(APP_MEDIA_DIR);
-  //     const targetString = `_DEF_${defId}`;
-  //     const filesToDelete = dirInfo.filter(filename => filename.includes(targetString));
-
-  //     await Promise.all(
-  //       filesToDelete.map(file =>
-  //         FileSystem.deleteAsync(APP_MEDIA_DIR + file, { idempotent: true })
-  //       )
-  //     );
-  //   } catch (error) {
-  //     console.warn("⚠️ Error menor limpiando archivos físicos:", error);
-  //   }
-  // };
-
   /* =======================
       ELIMINAR DEFICIENCIA
      ======================= */
   const handleLocalDelete = async (itemToDelete) => {
     if (!itemToDelete) return;
-    // ✅ PERMISOS: bloquear ANTES del alert y antes de borrar fotos
+
+    // ✅ Evitar doble click / re-entradas
+    if (loading.active) return;
+
+    // ✅ PERMISOS
     if (!canDeleteItem(itemToDelete)) {
       Alert.alert(
         "No permitido",
@@ -217,6 +491,7 @@ export default function Inspection() {
       );
       return;
     }
+
     Alert.alert(
       "Eliminar tipificación",
       "⚠️ Está a punto de eliminar esta tipificación y todos los archivos asociados. ¿Desea continuar?",
@@ -226,8 +501,9 @@ export default function Inspection() {
           text: "Eliminar",
           style: "destructive",
           onPress: async () => {
+            setLoading({ active: true, msg: "Eliminando deficiencia..." });
+
             try {
-              //await cleanPhysicalFiles(itemToDelete.defId);
               const delRes = await deleteDeficiency(itemToDelete.defId);
 
               if (delRes?.pinMsg) {
@@ -235,20 +511,28 @@ export default function Inspection() {
               }
 
               setModalDeficiencyVisible(false);
-              refreshList();
 
-              if (Platform.OS === 'android') {
-                ToastAndroid.show("Deficiencia eliminada correctamente", ToastAndroid.SHORT);
+              // ✅ IMPORTANTE: espera el refresh antes de soltar el loading
+              await refreshList();
+
+              if (Platform.OS === "android") {
+                ToastAndroid.show(
+                  "Deficiencia eliminada correctamente",
+                  ToastAndroid.SHORT
+                );
               }
             } catch (err) {
               console.error("❌ Error eliminando deficiencia:", err);
               Alert.alert("Error", "No se pudo eliminar la deficiencia.");
+            } finally {
+              setLoading({ active: false, msg: "" });
             }
           }
         }
       ]
     );
   };
+
 
   /* =======================
       SELECCIONAR TIPIFICACIÓN
@@ -316,13 +600,54 @@ export default function Inspection() {
      ======================= */
   const renderItem = ({ item }) => {
     if (item.type === "general") {
+      const estado = getEstadoElemento(item?.data) ?? "PENDIENTE";
+      const isFinalizado = estado === "FINALIZADO";
+
       return (
-        <GeneralDataItem
-          item={selectedItem}
-          onEdit={(it) => openFormModal({ ...item, data: it })}
-        />
+        <View>
+          <View style={styles.estadoRow}>
+            <View style={styles.estadoLeft}>
+              <Text style={styles.estadoLabel}>ESTADO:</Text>
+              <Text
+                style={[
+                  styles.estadoValue,
+                  isFinalizado ? styles.estadoFinalizado : styles.estadoPendiente,
+                ]}
+              >
+                {estado}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.estadoBtn, busy.active && styles.estadoBtnDisabled]}
+              onPress={handleActualizarEstadoPress}
+              activeOpacity={0.8}
+              disabled={busy.active}
+            >
+              {busy.active ? (
+                <ActivityIndicator size="small" color="#222" />
+              ) : (
+                <Text style={styles.estadoBtnText}>Actualizar</Text>
+              )}
+            </TouchableOpacity>
+
+          </View>
+
+          {/* ✅ Esto controla el “vacío” debajo del ESTADO (compensa margen interno del card) */}
+          <View style={styles.generalCardWrap}>
+            <GeneralDataItem
+              item={item.data}
+              onEdit={(it) => openFormModal({ ...item, data: it })}
+            />
+          </View>
+
+          {/* ✅ Esto separa el card del elemento de la primera deficiencia */}
+          <View style={styles.afterGeneralSpacer} />
+        </View>
       );
     }
+
+    const defFinalizada = getDefFinalizada(item);
 
     return (
       <SelectedDeficiencyItem
@@ -334,22 +659,38 @@ export default function Inspection() {
           router.push("/(drawer)/multimedia");
         }}
         onDeficiency={openFormModal}
+        containerStyle={[
+          styles.defCardTint,
+          defFinalizada ? styles.defCardFinalizada : styles.defCardPendiente,
+        ]}
       />
     );
 
   };
 
+
+
+
   return (
-    <SafeAreaView style={{ flex: 1, paddingBottom: insets.bottom }}>
+    <SafeAreaView edges={["left", "right", "bottom"]} style={styles.screen}>
+
       <FlatList
         data={items}
-        keyExtractor={item =>
+        keyExtractor={(item) =>
           item.type === "def" ? item.defId.toString() : item.id.toString()
         }
         renderItem={renderItem}
+        contentContainerStyle={{
+          paddingHorizontal: 12,
+          paddingTop: 0,
+          paddingBottom: 24,
+        }}
+
+        ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+        showsVerticalScrollIndicator={false}
       />
 
-      <View style={{ padding: 8 }}>
+      <View style={{ padding: 8, gap: 8 }}>
         <Button
           title="Nueva Deficiencia"
           onPress={() => {
@@ -362,13 +703,28 @@ export default function Inspection() {
             }
             setNewDefModalVisible(true);
           }}
+          disabled={busy.active}
+        />
+
+        <Button
+          title="Regresar al mapa"
+          onPress={() => router.replace("/(drawer)/map")}
+          disabled={busy.active || loading.active}
         />
       </View>
+
+
+
 
       <DataGeneralModal
         visible={modalGeneralVisible}
         item={currentItem}
-        onClose={() => setModalGeneralVisible(false)}
+        onClose={async () => {
+          setModalGeneralVisible(false);
+          await leerElementoDesdeSqlite(); // ✅ SOLO actualiza datos generales
+        }}
+
+
       />
 
       <DeficiencyModal
@@ -376,11 +732,21 @@ export default function Inspection() {
         deficiency={currentDeficiency}
         userId={user.id}
         selectedItem={selectedItem}
+        onSaved={async () => {
+          // ✅ SIEMPRE re-leer de SQLite para reflejar cambios (edición o nueva)
+          await refreshList();
+
+          // ✅ cierra y limpia
+          setModalDeficiencyVisible(false);
+          setCurrentDeficiency(null);
+        }}
         onClose={() => {
           setModalDeficiencyVisible(false);
-          refreshList();
+          setCurrentDeficiency(null);
         }}
       />
+
+
 
       <ListaTipificaciones
         visible={newDefModalVisible}
@@ -388,24 +754,103 @@ export default function Inspection() {
         onSelect={handleSelectTypification}
         onClose={() => setNewDefModalVisible(false)}
       />
+
+      <Loading
+        visible={loading.active || busy.active}
+        text={(loading.active ? loading.msg : busy.msg) || "Procesando..."}
+      />
+
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  itemCard: {
-    padding: 12,
-    backgroundColor: "#f8f8f8",
-    borderBottomWidth: 1,
-    borderColor: "#ddd"
+  screen: {
+    flex: 1,
+    backgroundColor: "#f2f2f2",
   },
-  itemHeader: {
+
+  // ======================
+  // ESTADO (header compacto)
+  // ======================
+  estadoRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center"
+
+    paddingHorizontal: 2,
+
+    paddingVertical: 0,
+
+    marginTop: 10,
+    marginBottom: 2,
   },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: "bold"
-  }
+
+  estadoLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  estadoLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginRight: 6,
+  },
+
+  estadoValue: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  estadoFinalizado: { color: "#1B8F3A" },
+  estadoPendiente: { color: "#D32F2F" },
+
+  estadoBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: "#E6E6E6",
+  },
+
+  estadoBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#222",
+  },
+
+  // ======================
+  // Ajustes de separación
+  // ======================
+
+  // 🔧 ESTE es el que te elimina el “vacío grande” debajo del estado
+  // Si todavía ves mucho espacio, baja a -6 o -8.
+  generalCardWrap: {
+    marginTop: -6,
+  },
+
+  // 🔧 Separación bonita entre card del elemento y primera deficiencia
+  afterGeneralSpacer: {
+    height: 10,
+  },
+  defCardTint: {
+    borderWidth: 1,
+  },
+
+  defCardFinalizada: {
+    backgroundColor: "#E8F5E9", // verde suave
+    borderColor: "#A5D6A7",
+  },
+
+  defCardPendiente: {
+    backgroundColor: "#FFEBEE", // rojo suave
+    borderColor: "#EF9A9A",
+  },
+
+  estadoBtnDisabled: {
+    opacity: 0.6,
+  },
+
+
 });
+
