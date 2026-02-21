@@ -1,18 +1,27 @@
 import { useState, useCallback } from 'react';
 import api from '../api/apiConfig';
 
+// ====================================================
+// HOOK 1: DEFICIENCIAS DEL DÍA (PAGINADAS)
+// ====================================================
 export const useUltimasDeficiencias = () => {
     const [deficiencies, setDeficiencies] = useState([]);
+    const [totalRecords, setTotalRecords] = useState(0); // <-- Nuevo estado para el total del día
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const fetchUltimas = useCallback(async () => {
+    const fetchDeficienciasPaginadas = useCallback(async (skip, take, fechaStr) => {
         setLoading(true);
         setError(null);
         try {
-            // 1. Traemos las deficiencias
-            const responseDefs = await api.get('/Deficiency/del-dia');
-            const dataDeficiencias = responseDefs.data || [];
+            // 1. Traemos la PÁGINA de deficiencias (ej: 10 registros)
+            const responseDefs = await api.get('/Deficiency/del-dia-paginado', {
+                params: { skip, take, fecha: fechaStr }
+            });
+            
+            const rawData = responseDefs.data?.data || [];
+            // Guardamos el total (ej: 10,984) para el KPI rojo
+            setTotalRecords(responseDefs.data?.totalRecords || 0);
 
             // 2. Traemos Usuarios (Inspectores)
             let mapaUsuarios = {};
@@ -26,21 +35,17 @@ export const useUltimasDeficiencias = () => {
                 console.warn("⚠️ Error cargando usuarios:", errUser);
             }
 
-            // 3. ✨ EL ARREGLO ESTÁ AQUÍ ✨: Buscamos Elementos usando GetPaginado
-            const promesasElementos = dataDeficiencias.map(async (def) => {
+            // 3. Buscamos Elementos (¡Ahora solo hará 10 peticiones rápidas!)
+            const promesasElementos = rawData.map(async (def) => {
                 try {
-                    // Evaluamos si es Poste o Vano
                     const isPoste = def.defiTipoElemento === 'POST';
                     const endpoint = isPoste ? '/Post/GetPaginado' : '/Gap/GetPaginado';
 
-                    // Buscamos enviando el código GIS del elemento en el parámetro "busqueda"
                     const res = await api.get(endpoint, {
                         params: { skip: 0, take: 1, busqueda: def.defiCodigoElemento }
                     });
 
                     const datos = res.data?.data;
-                    
-                    // Si encontró el elemento, capturamos su alimentador y SED
                     if (datos && datos.length > 0) {
                         const item = datos[0];
                         return {
@@ -56,8 +61,8 @@ export const useUltimasDeficiencias = () => {
 
             const datosElementos = await Promise.all(promesasElementos);
 
-            // 4. Cruzamos TODA la información
-            const dataCombinada = dataDeficiencias.map((def, index) => {
+            // 4. Cruzamos la información
+            const dataCombinada = rawData.map((def, index) => {
                 const elemento = datosElementos[index];
                 const nombreInspector = def.defiUsuarioInic 
                                         ? mapaUsuarios[def.defiUsuarioInic] || `ID: ${def.defiUsuarioInic}`
@@ -77,11 +82,52 @@ export const useUltimasDeficiencias = () => {
             console.error("❌ Error en useUltimasDeficiencias:", err);
             setError("No se pudieron cargar los datos recientes.");
             setDeficiencies([]);
+            setTotalRecords(0);
             return null;
         } finally {
             setLoading(false);
         }
     }, []);
 
-    return { deficiencies, loading, error, fetchUltimas };
+    return { deficiencies, totalRecords, loading, error, fetchDeficienciasPaginadas };
+};
+
+// ====================================================
+// HOOK 2: ESTADÍSTICAS DE INSPECTORES (SQL AGRUPADO)
+// ====================================================
+export const useEstadisticasInspectores = () => {
+    const [estadisticas, setEstadisticas] = useState([]);
+    const [loadingStats, setLoadingStats] = useState(false);
+
+    const fetchEstadisticas = useCallback(async (fechaStr) => {
+        setLoadingStats(true);
+        try {
+            const resStats = await api.get('/Deficiency/estadisticas-inspectores', {
+                params: { fecha: fechaStr }
+            });
+            const datosAgrupados = resStats.data || [];
+
+            let mapaUsuarios = {};
+            try {
+                const resUsers = await api.get('/User/users'); 
+                (resUsers.data || []).forEach(u => {
+                    mapaUsuarios[u.usuaInterno.toString()] = `${u.usuaNombres} ${u.usuaApellidos}`;
+                });
+            } catch (e) {}
+
+            const dataFinal = datosAgrupados.map(stat => ({
+                ...stat,
+                nombreInspector: stat.idInspector ? (mapaUsuarios[stat.idInspector] || `ID: ${stat.idInspector}`) : 'Sin asignar'
+            }));
+
+            setEstadisticas(dataFinal);
+        } catch (error) {
+            console.error("Error cargando estadísticas:", error);
+            setEstadisticas([]);
+        } finally {
+            setLoadingStats(false);
+        }
+    }, []);
+
+    return { estadisticas, loadingStats, fetchEstadisticas };
 };

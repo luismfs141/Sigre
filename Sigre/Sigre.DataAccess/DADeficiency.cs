@@ -1427,24 +1427,60 @@ namespace Sigre.DataAccess
             }
         }
 
-        public async Task<List<Deficiencia>> ObtenerDeficienciasDelDiaAsync()
+        public async Task<object> ObtenerDeficienciasDelDiaPaginadoAsync(int skip, int take, DateTime fechaBusqueda)
         {
             using (var ctx = new SigreContext())
             {
-                // Obtenemos el inicio del día de hoy
-                DateTime hoy = DateTime.Today;
+                DateTime inicioDia = fechaBusqueda.Date; // 00:00:00 del día solicitado
+                DateTime finDia = inicioDia.AddDays(1);  // 00:00:00 del día siguiente
 
-                var deficiencias = await ctx.Deficiencias
+                // 1. Armamos la consulta base con exactamente los mismos filtros del día
+                var query = ctx.Deficiencias
                     .AsNoTracking()
-                    // Filtro 1: Solo las creadas hoy
-                    // Filtro 2: Solo las que están activas (DefiActivo == true o != 0)
-                    .Where(d => d.DefiFechaCreacion >= hoy && d.DefiActivo == true)
-                    .OrderByDescending(d => d.DefiInterno)
+                    .Where(d => d.DefiFechaCreacion >= inicioDia && d.DefiFechaCreacion < finDia && d.DefiActivo == true);
+
+                // 2. Contamos el total real de registros del día (Ej: los 10,984). 
+                // Esto servirá para tu Indicador Rojo y para la paginación de PrimeReact.
+                int totalRecords = await query.CountAsync();
+
+                // 3. Traemos solo el pedacito que React nos pide (Ej: los primeros 10)
+                var data = await query
+                    .OrderByDescending(d => d.DefiInterno) // Las más recientes de hoy primero
+                    .Skip(skip)
+                    .Take(take)
                     .ToListAsync();
 
-                return deficiencias;
+                // 4. Devolvemos un objeto anónimo con el total y la data
+                return new { totalRecords, data };
             }
         }
+        public async Task<object> ObtenerEstadisticasInspectoresDelDiaAsync(DateTime fechaBusqueda)
+        {
+            using (var ctx = new SigreContext())
+            {
+                DateTime inicioDia = fechaBusqueda.Date; // 00:00:00 del día solicitado
+                DateTime finDia = inicioDia.AddDays(1);  // 00:00:00 del día siguiente
 
+                // La base de datos hará toda la matemática súper rápido
+                var estadisticas = await ctx.Deficiencias
+                    .AsNoTracking()
+                    // 1. FILTRAMOS ESTRICTAMENTE POR EL DÍA
+                    .Where(d => d.DefiFechaCreacion >= inicioDia && d.DefiFechaCreacion < finDia && d.DefiActivo == true)
+                    // 2. AGRUPAMOS POR INSPECTOR
+                    .GroupBy(d => d.DefiUsuarioInic)
+                    .Select(g => new
+                    {
+                        IdInspector = g.Key,
+                        // Contamos cuántos son POST y cuántos son VANO
+                        Postes = g.Count(x => x.DefiTipoElemento == "POST"),
+                        Vanos = g.Count(x => x.DefiTipoElemento == "VANO"),
+                        Total = g.Count()
+                    })
+                    .OrderByDescending(e => e.Total) // Ordenamos del más trabajador al menor
+                    .ToListAsync();
+
+                return estadisticas;
+            }
+        }
     }
 }
