@@ -81,7 +81,7 @@ export default forwardRef(function NewPoste(_, ref) {
 
 
 
-  const { selectedFeeder, alimEtiquetaLocal, region, dbReady } = useDatos();
+  const { selectedFeeder, alimEtiquetaLocal, region, dbReady, dbEpoch } = useDatos();
   const { getMaterialsPost, getTipoRetenidasPost } = usePost();
 
   const [loadingLists, setLoadingLists] = useState(false);
@@ -135,8 +135,85 @@ export default forwardRef(function NewPoste(_, ref) {
 
   const listsLoadedRef = useRef(false);
 
+  // ===============================
+  // RESET cuando cambia la DB (dbEpoch)
+  // ===============================
+  const lastDbEpochRef = useRef(dbEpoch);
 
+  useEffect(() => {
+    if (lastDbEpochRef.current === dbEpoch) return;
+    lastDbEpochRef.current = dbEpoch;
 
+    // ✅ cerrar modales/mapas
+    setIsFullMap(false);
+    setSelectModal({ visible: false, title: "", items: [], onPick: null });
+
+    // ✅ limpiar listas (para no ver datos viejos)
+    setMaterials([]);
+    setRetenidaTipos([]);
+    setSeds([]);
+
+    // ✅ limpiar feeder mostrado (se volverá a cargar con la DB nueva)
+    setAlimInterno(null);
+    setAlimEtiqueta("");
+
+    // ✅ limpiar búsqueda y resultados
+    setPlaceQuery("");
+    setPlaceResults([]);
+    setPlaceSearching(false);
+
+    // ✅ permitir recargar listas en la nueva DB
+    listsLoadedRef.current = false;
+
+    // ✅ reset campos
+    reset();
+  }, [dbEpoch]);
+  // ===============================
+  // DB ERROR GUARD (SQLite nativo)
+  // ===============================
+  const dbErrorShownRef = useRef(false);
+
+  const isFatalSqliteNativeError = (err) => {
+    const msg = String(err?.message ?? err ?? "");
+    return (
+      msg.includes("NativeDatabase.prepareAsync") ||
+      msg.includes("NativeStatement.finalizeAsync") ||
+      msg.includes("NullPointerException") ||
+      msg.includes("shared object that was already released") ||
+      msg.includes("Cannot use shared object")
+    );
+  };
+
+  const resetDueToDbError = (err) => {
+    if (!isFatalSqliteNativeError(err)) return;
+    if (dbErrorShownRef.current) return;
+
+    dbErrorShownRef.current = true;
+
+    Alert.alert(
+      "Aviso",
+      "Se detectó un problema con la base local (SQLite). Puede haber cambiado desde la última vez.\n\nEs necesario reiniciar el formulario para evitar errores.",
+      [
+        {
+          text: "Aceptar",
+          onPress: () => {
+            // ✅ cierra modales/mapas abiertos para evitar estados raros
+            setIsFullMap(false);
+            setSelectModal({ visible: false, title: "", items: [], onPick: null });
+
+            // ✅ permite que vuelva a intentar cargar listas luego
+            listsLoadedRef.current = false;
+
+            // ✅ resetea campos
+            reset();
+
+            dbErrorShownRef.current = false;
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  };
 
 
   const reset = () => {
@@ -223,11 +300,17 @@ export default forwardRef(function NewPoste(_, ref) {
       }
 
       // fallback: SQLite suele tener 1 alimentador
-      const feeder = await getSingleFeederLocal();
-      if (feeder?.AlimInterno != null) {
-        setAlimInterno(Number(feeder.AlimInterno));
-        setAlimEtiqueta(String(feeder.AlimEtiqueta ?? ""));
+      try {
+        const feeder = await getSingleFeederLocal();
+        if (feeder?.AlimInterno != null) {
+          setAlimInterno(Number(feeder.AlimInterno));
+          setAlimEtiqueta(String(feeder.AlimEtiqueta ?? ""));
+        }
+      } catch (e) {
+        resetDueToDbError(e);
       }
+
+
     })();
   }, [selectedFeeder?.AlimInterno, selectedFeeder?.id, alimEtiquetaLocal]);
 
@@ -279,7 +362,7 @@ export default forwardRef(function NewPoste(_, ref) {
         setRetenidaTipos(rtpItems);
         setSeds(sedItems);
       } catch (e) {
-        // si falló, permite reintentar
+        resetDueToDbError(e); // ✅ si es error nativo, alerta + reset
         listsLoadedRef.current = false;
         console.log("❌ Error cargando listas NewPoste:", e?.message ?? e);
       } finally {
@@ -494,7 +577,9 @@ export default forwardRef(function NewPoste(_, ref) {
         );
         lat = Number(rows?.[0]?.SedLatitud);
         lng = Number(rows?.[0]?.SedLongitud);
-      } catch { }
+      } catch (e) {
+        resetDueToDbError(e);
+      }
     }
 
     if (Number.isFinite(lat) && Number.isFinite(lng)) {

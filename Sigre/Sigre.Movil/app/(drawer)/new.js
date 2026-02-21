@@ -13,6 +13,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import NewPoste from "../../components/Form/Nuevo/NewPosteForm";
+import NewVano from "../../components/Form/Nuevo/NewVanoForm";
+import { useGap } from "../../hooks/useGap";
 import { usePost } from "../../hooks/usePost";
 
 const MAP_ROUTE = "map"; // ✅ tu MapScreen normalmente está en app/(drawer)/maps.js
@@ -24,8 +26,12 @@ export default function NewScreen() {
   const [tipo, setTipo] = useState(null);
 
   const posteRef = useRef(null);
+  const vanoRef = useRef(null);
 
-  const { savePost, loading } = usePost();
+  const { savePost, loading: loadingPost } = usePost();
+  const { saveVano, loading: loadingVano } = useGap();
+
+  const loading = loadingPost || loadingVano;
 
   const handleGuardar = async () => {
     if (!tipo) {
@@ -33,6 +39,9 @@ export default function NewScreen() {
       return;
     }
 
+    // =========================
+    // NUEVO POSTE (igual)
+    // =========================
     if (tipo === "poste") {
       const data = posteRef.current?.getData?.();
       if (!data) {
@@ -40,98 +49,98 @@ export default function NewScreen() {
         return;
       }
 
-      // --------- OBLIGATORIOS ----------
       const codigo = String(data.PostCodigoNodo ?? "").trim();
       const etiqueta = String(data.PostEtiqueta ?? "").trim();
 
-      if (!codigo) {
-        Alert.alert("Validación", "El Código es obligatorio.");
-        return;
-      }
+      if (!codigo) return Alert.alert("Validación", "El Código es obligatorio.");
+      if (/\s/.test(codigo)) return Alert.alert("Validación", "El Código no debe tener espacios.");
+      if (!etiqueta) return Alert.alert("Validación", "La Etiqueta es obligatoria.");
 
-      // ✅ Código sin espacios (ni dentro, ni al inicio, ni al final)
-      if (/\s/.test(codigo)) {
-        Alert.alert("Validación", "El Código no debe tener espacios.");
-        return;
-      }
+      if (!Number.isFinite(Number(data.PostMaterial))) return Alert.alert("Validación", "Material es obligatorio.");
+      if (!Number.isFinite(Number(data.PostRetenidaTipo))) return Alert.alert("Validación", "Tipo de retenida es obligatorio.");
+      if (!Number.isFinite(Number(data.PostSubestacion))) return Alert.alert("Validación", "Subestación es obligatoria.");
+      if (!Number.isFinite(Number(data.AlimInterno))) return Alert.alert("Validación", "No hay alimentador seleccionado.");
 
-      if (!etiqueta) {
-        Alert.alert("Validación", "La Etiqueta es obligatoria.");
-        return;
-      }
-
-      // ✅ selects obligatorios
-      if (!Number.isFinite(Number(data.PostMaterial))) {
-        Alert.alert("Validación", "Material es obligatorio.");
-        return;
-      }
-
-      if (!Number.isFinite(Number(data.PostRetenidaTipo))) {
-        Alert.alert("Validación", "Tipo de retenida es obligatorio.");
-        return;
-      }
-
-      if (!Number.isFinite(Number(data.PostSubestacion))) {
-        Alert.alert("Validación", "Subestación es obligatoria.");
-        return;
-      }
-
-      // ✅ alimentador debe existir
-      if (!Number.isFinite(Number(data.AlimInterno))) {
-        Alert.alert("Validación", "No hay alimentador seleccionado.");
-        return;
-      }
-
-      // ✅ Lat/Lng obligatorios
       const lat = Number(data.PostLatitud);
       const lng = Number(data.PostLongitud);
 
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        Alert.alert("Validación", "Latitud y Longitud son obligatorias.");
-        return;
-      }
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Alert.alert("Validación", "Latitud y Longitud son obligatorias.");
+      if (lat < -90 || lat > 90) return Alert.alert("Validación", "Latitud fuera de rango (-90..90).");
+      if (lng < -180 || lng > 180) return Alert.alert("Validación", "Longitud fuera de rango (-180..180).");
 
-      if (lat < -90 || lat > 90) {
-        Alert.alert("Validación", "Latitud fuera de rango (-90..90).");
-        return;
-      }
-
-      if (lng < -180 || lng > 180) {
-        Alert.alert("Validación", "Longitud fuera de rango (-180..180).");
-        return;
-      }
-
-      // ✅ Altura puede estar en blanco, pero si viene, debe ser numérica
       if (data.PostAltura != null && data.PostAltura !== "") {
         const h = Number(data.PostAltura);
-        if (!Number.isFinite(h)) {
-          Alert.alert("Validación", "Altura debe ser numérica (o dejar en blanco).");
-          return;
-        }
+        if (!Number.isFinite(h)) return Alert.alert("Validación", "Altura debe ser numérica (o dejar en blanco).");
       }
 
-      // normaliza por si acaso
       data.PostCodigoNodo = codigo;
       data.PostEtiqueta = etiqueta;
 
       const id = await savePost(data);
 
-      if (!id) {
-        Alert.alert("Error", "No se pudo guardar el poste.");
-        return;
-      }
+      if (!id) return Alert.alert("Error", "No se pudo guardar el poste.");
 
       posteRef.current?.reset?.();
       Alert.alert("Éxito", `Poste guardado (ID: ${id}).`);
       return;
     }
 
-    Alert.alert("Aviso", "Nuevo Vano aún no está implementado.");
+    // =========================
+    // NUEVO VANO
+    // =========================
+    if (tipo === "vano") {
+      const data = vanoRef.current?.getData?.();
+      if (!data) {
+        Alert.alert("Error", "No se pudo leer el formulario.");
+        return;
+      }
+
+      const codigo = String(data.VanoCodigo ?? "").trim();
+      if (!codigo) return Alert.alert("Validación", "El Código es obligatorio.");
+      if (/\s/.test(codigo)) return Alert.alert("Validación", "El Código no debe tener espacios.");
+
+      if (!Number.isFinite(Number(data.AlimInterno))) return Alert.alert("Validación", "No hay alimentador seleccionado.");
+      if (!Number.isFinite(Number(data.VanoSubestacion))) return Alert.alert("Validación", "Subestación es obligatoria.");
+
+      const nodoIni = String(data.VanoNodoInicial ?? "").trim();
+      const nodoFin = String(data.VanoNodoFinal ?? "").trim();
+
+      if (!nodoIni) return Alert.alert("Validación", "Nodo inicial es obligatorio.");
+      if (!nodoFin) return Alert.alert("Validación", "Nodo final es obligatorio.");
+
+      if (nodoIni === nodoFin) return Alert.alert("Validación", "Nodo inicial y final no pueden ser iguales.");
+
+      const latIni = Number(data.VanoLatitudIni);
+      const lngIni = Number(data.VanoLongitudIni);
+      const latFin = Number(data.VanoLatitudFin);
+      const lngFin = Number(data.VanoLongitudFin);
+
+      if (!Number.isFinite(latIni) || !Number.isFinite(lngIni)) return Alert.alert("Validación", "Lat/Long inicial obligatorias.");
+      if (!Number.isFinite(latFin) || !Number.isFinite(lngFin)) return Alert.alert("Validación", "Lat/Long final obligatorias.");
+
+      if (latIni < -90 || latIni > 90 || latFin < -90 || latFin > 90) return Alert.alert("Validación", "Latitud fuera de rango (-90..90).");
+      if (lngIni < -180 || lngIni > 180 || lngFin < -180 || lngFin > 180) return Alert.alert("Validación", "Longitud fuera de rango (-180..180).");
+
+      // normaliza
+      data.VanoCodigo = codigo;
+      data.VanoNodoInicial = nodoIni;
+      data.VanoNodoFinal = nodoFin;
+
+      const id = await saveVano(data);
+
+      if (!id) return Alert.alert("Error", "No se pudo guardar el vano.");
+
+      vanoRef.current?.reset?.();
+      Alert.alert("Éxito", `Vano guardado (ID: ${id}).`);
+      return;
+    }
+
+    Alert.alert("Aviso", "Tipo no soportado.");
   };
 
   const handleCancelar = () => {
-    // ✅ resetea todo y vuelve al mapa
     posteRef.current?.reset?.();
+    vanoRef.current?.reset?.();
     setTipo(null);
     router.replace(MAP_ROUTE);
   };
@@ -171,11 +180,7 @@ export default function NewScreen() {
           >
             {tipo === "poste" && <NewPoste ref={posteRef} />}
 
-            {tipo === "vano" && (
-              <View style={styles.todoBox}>
-                <Text style={styles.todoText}>Nuevo Vano: (pendiente)</Text>
-              </View>
-            )}
+            {tipo === "vano" && <NewVano ref={vanoRef} />}
 
             {!tipo && (
               <View style={styles.todoBox}>

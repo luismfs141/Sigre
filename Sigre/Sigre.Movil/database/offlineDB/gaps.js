@@ -1,5 +1,31 @@
 import { runQuery } from "./db";
 
+// ===============================
+// HELPERS internos (para no romper si tu schema cambia)
+// ===============================
+let _vanosColsCache = null;
+
+const _getVanosCols = async () => {
+  if (_vanosColsCache) return _vanosColsCache;
+
+  const rows = await runQuery(`PRAGMA table_info(Vanos);`);
+  const set = new Set((rows ?? []).map((r) => String(r?.name ?? "")));
+  _vanosColsCache = set;
+  return set;
+};
+
+const _hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const _toInt01 = (v, fallback = 0) => {
+  if (v == null) return fallback;
+  return Number(v) ? 1 : 0;
+};
+
+const _numOrNull = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 export const getGapsByFeederLocal = async (feederId) => {
   try {
     const rows = await runQuery(
@@ -41,71 +67,131 @@ export const getGapsBySedLocal = async (sedId) => {
 
 export const saveOrUpdateVano = async (vano) => {
   try {
-    if (vano.VanoInterno) {
-      // UPDATE: si EstadoOffLine es null, ponemos 1 (modificado)
-      const estado = vano.EstadoOffLine === null || vano.EstadoOffLine === undefined
-        ? 1
-        : vano.EstadoOffLine; // si ya era 2 o 1, no se cambia
+    const cols = await _getVanosCols();
 
-      const updateQuery = `
-        UPDATE Vanos
-        SET
-          VanoCodigo = ?,
-          VanoEtiqueta = ?,
-          VanoNodoInicial = ?,
-          VanoNodoFinal = ?,
-          VanoTerceros = ?,
-          VanoTramo = COALESCE(?, VanoTramo),
-          EstadoOffLine = ?,
-          VanoInspeccionado = ?
-        WHERE VanoInterno = ?
-      `;
+    // =========================
+    // UPDATE
+    // =========================
+    if (vano?.VanoInterno != null && Number(vano.VanoInterno) > 0) {
+      const id = Number(vano.VanoInterno);
 
-      await runQuery(updateQuery, [
-        vano.VanoCodigo,
-        vano.VanoEtiqueta,
-        vano.VanoNodoInicial,
-        vano.VanoNodoFinal,
-        vano.VanoTerceros,
-         vano.VanoTramo,
-        estado,
-        vano.VanoInspeccionado ?? "",
-        vano.VanoInterno
-      ]);
+      // UPDATE: si EstadoOffLine es null => 1 (modificado)
+      const estado = vano.EstadoOffLine == null ? 1 : Number(vano.EstadoOffLine);
 
-      return vano.VanoInterno;
-    } else {
-      // INSERT: EstadoOffLine = 2
-      const insertQuery = `
-        INSERT INTO Vanos (
-          VanoCodigo,
-          VanoEtiqueta,
-          VanoNodoInicial,
-          VanoNodoFinal,
-          VanoTerceros,
-          VanoTramo, 
-          EstadoOffLine,
-          VanoInspeccionado,
-          AlimInterno,
-          VanoSubestacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
-      `;
+      const sets = [];
+      const vals = [];
 
-      const result = await runQuery(insertQuery, [
-        vano.VanoCodigo,
-        vano.VanoEtiqueta,
-        vano.VanoNodoInicial,
-        vano.VanoNodoFinal,
-        vano.VanoTerceros ?? "",
-         vano.VanoTramo ?? null,
-        2, 
-        vano.VanoInspeccionado ?? "",
-        vano.AlimInterno ?? null,
-        vano.VanoSubestacion ?? null
-      ]);
+      const setIfHas = (col, value, { force = false } = {}) => {
+        if (!cols.has(col)) return;
+        if (!force && !_hasOwn(vano, col)) return; // solo si viene en el payload
+        sets.push(`${col} = ?`);
+        vals.push(value);
+      };
 
-      return result?.insertId ?? null;
+      setIfHas("VanoCodigo", vano.VanoCodigo ?? null);
+      setIfHas("VanoEtiqueta", vano.VanoEtiqueta ?? null);
+      setIfHas("VanoNodoInicial", vano.VanoNodoInicial ?? null);
+      setIfHas("VanoNodoFinal", vano.VanoNodoFinal ?? null);
+
+      setIfHas("VanoLatitudIni", _numOrNull(vano.VanoLatitudIni));
+      setIfHas("VanoLongitudIni", _numOrNull(vano.VanoLongitudIni));
+      setIfHas("VanoLatitudFin", _numOrNull(vano.VanoLatitudFin));
+      setIfHas("VanoLongitudFin", _numOrNull(vano.VanoLongitudFin));
+
+      setIfHas("VanoTerceros", _toInt01(vano.VanoTerceros, 0));
+      setIfHas("VanoMaterial", vano.VanoMaterial ?? null);
+      setIfHas("VanoInspeccionado", _toInt01(vano.VanoInspeccionado, 0));
+
+      setIfHas("VanoSubestacion", vano.VanoSubestacion == null ? null : Number(vano.VanoSubestacion));
+      setIfHas("VanoEsMt", vano.VanoEsMt == null ? null : _toInt01(vano.VanoEsMt, 0));
+      setIfHas("VanoEsBt", vano.VanoEsBt == null ? null : _toInt01(vano.VanoEsBt, 1));
+
+      setIfHas("AlimInterno", vano.AlimInterno == null ? null : Number(vano.AlimInterno));
+      // ✅ esta columna existe en tu dump y es NOT NULL
+      if (cols.has("AlimInternoNavigationAlimInterno")) {
+        const nav = vano.AlimInternoNavigationAlimInterno ?? vano.AlimInterno ?? null;
+        setIfHas("AlimInternoNavigationAlimInterno", nav == null ? null : Number(nav));
+      }
+
+      // EstadoOffLine (force)
+      if (cols.has("EstadoOffLine")) {
+        sets.push(`EstadoOffLine = ?`);
+        vals.push(estado);
+      }
+
+      if (sets.length) {
+        await runQuery(
+          `UPDATE Vanos
+           SET ${sets.join(", ")}
+           WHERE VanoInterno = ?;`,
+          [...vals, id]
+        );
+      }
+
+      return id;
     }
+
+    // =========================
+    // INSERT
+    // =========================
+    const alim = vano?.AlimInterno ?? null;
+
+    const payload = {
+      // obligatorios
+      VanoCodigo: vano?.VanoCodigo ?? null,
+      VanoLatitudIni: _numOrNull(vano?.VanoLatitudIni),
+      VanoLongitudIni: _numOrNull(vano?.VanoLongitudIni),
+      VanoLatitudFin: _numOrNull(vano?.VanoLatitudFin),
+      VanoLongitudFin: _numOrNull(vano?.VanoLongitudFin),
+      AlimInterno: alim == null ? null : Number(alim),
+
+      // defaults pedidos
+      EstadoOffLine: 2,
+      VanoEtiqueta: vano?.VanoEtiqueta ?? ".",
+      VanoTerceros: _toInt01(vano?.VanoTerceros, 0),
+      VanoMaterial: vano?.VanoMaterial ?? null,
+      VanoNodoInicial: vano?.VanoNodoInicial ?? null,
+      VanoNodoFinal: vano?.VanoNodoFinal ?? null,
+      VanoInspeccionado: _toInt01(vano?.VanoInspeccionado, 0),
+      VanoSubestacion: vano?.VanoSubestacion == null ? null : Number(vano.VanoSubestacion),
+      VanoEsMt: vano?.VanoEsMt == null ? 0 : _toInt01(vano.VanoEsMt, 0),
+      VanoEsBt: vano?.VanoEsBt == null ? 1 : _toInt01(vano.VanoEsBt, 1),
+
+      // ✅ NOT NULL en tu schema
+      AlimInternoNavigationAlimInterno:
+        vano?.AlimInternoNavigationAlimInterno ?? (alim == null ? null : Number(alim)),
+    };
+
+    // mínimos (para evitar NOT NULL)
+    if (!String(payload.VanoCodigo ?? "").trim()) throw new Error("VanoCodigo obligatorio.");
+    if (!Number.isFinite(Number(payload.VanoLatitudIni))) throw new Error("VanoLatitudIni obligatorio.");
+    if (!Number.isFinite(Number(payload.VanoLongitudIni))) throw new Error("VanoLongitudIni obligatorio.");
+    if (!Number.isFinite(Number(payload.VanoLatitudFin))) throw new Error("VanoLatitudFin obligatorio.");
+    if (!Number.isFinite(Number(payload.VanoLongitudFin))) throw new Error("VanoLongitudFin obligatorio.");
+    if (!Number.isFinite(Number(payload.AlimInterno))) throw new Error("AlimInterno obligatorio.");
+    if (!String(payload.VanoEtiqueta ?? "").trim()) throw new Error("VanoEtiqueta obligatorio.");
+
+    const insertCols = [];
+    const insertVals = [];
+
+    const addIfCol = (col, val) => {
+      if (!cols.has(col)) return;
+      insertCols.push(col);
+      insertVals.push(val);
+    };
+
+    for (const [k, v] of Object.entries(payload)) addIfCol(k, v);
+
+    await runQuery(
+      `INSERT INTO Vanos (${insertCols.join(", ")})
+       VALUES (${insertCols.map(() => "?").join(", ")});`,
+      insertVals
+    );
+
+    const row = await runQuery(`SELECT last_insert_rowid() AS id;`);
+    const newId = Number(row?.[0]?.id);
+
+    return Number.isFinite(newId) && newId > 0 ? newId : null;
   } catch (error) {
     console.error("❌ Error guardando o actualizando vano:", error);
     throw error;
