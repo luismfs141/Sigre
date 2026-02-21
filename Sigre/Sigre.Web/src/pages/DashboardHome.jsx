@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 // TUS HOOKS
 import { useFeeder } from '../hooks/useFeeder';
 import { useElements } from '../hooks/useElement';
-// Importamos AMBOS hooks del mismo archivo
 import { useUltimasDeficiencias, useEstadisticasInspectores } from '../hooks/useUltimasDeficiencias';
 
 // PRIMEREACT
@@ -11,34 +10,40 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Badge } from 'primereact/badge';
 import { Splitter, SplitterPanel } from 'primereact/splitter';
+import { Calendar } from 'primereact/calendar'; // <-- NUEVO: Importamos el Calendario
 
 // LUCIDE ICONS
-import { Zap, AlertTriangle, RotateCcw, Activity, Users, Wrench, UtilityPole, Cable } from 'lucide-react';
+import { Zap, AlertTriangle, RotateCcw, Activity, Users, Wrench, UtilityPole, Cable, CalendarDays } from 'lucide-react';
 
 function DashboardHome() {
   // 1. Instanciar Hooks
   const { feeders, loading: loadingFeeders, error: errorFeeders } = useFeeder();
   const { fetchPostesChunk, fetchVanosChunk } = useElements();
   
-  // Extraemos la paginación y el total de registros de deficiencias
   const { deficiencies, totalRecords, loading: loadingDefs, error: errorDefs, fetchDeficienciasPaginadas } = useUltimasDeficiencias();
-  
-  // Extraemos las estadísticas agrupadas por SQL
   const { estadisticas, loadingStats, fetchEstadisticas } = useEstadisticasInspectores();
-
-  // Fecha de hoy calculada automáticamente
-  const fechaHoy = new Date().toISOString().split('T')[0];
-
 
   // 2. Estados Generales
   const [totalPostes, setTotalPostes] = useState(0);
   const [totalVanos, setTotalVanos] = useState(0);
   const [loadingCounts, setLoadingCounts] = useState(false);
 
+  // NUEVO ESTADO: Fecha seleccionada por el usuario (inicia hoy)
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
   // ESTADO DE PAGINACIÓN PARA PRIMEREACT (LAZY)
   const [lazyParams, setLazyParams] = useState({ first: 0, rows: 10, page: 0 });
 
   const totalFeeders = feeders?.length || 0;
+
+  // Función auxiliar para convertir Date de JS a "YYYY-MM-DD"
+  const formatDateForBackend = (dateObj) => {
+      if (!dateObj) return "";
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
 
   // 3. Efecto 1: Carga Única (Solo cuenta de infraestructura global)
   useEffect(() => {
@@ -59,22 +64,26 @@ function DashboardHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 4. Efecto 2: Carga Diaria Paginada (Se dispara al inicio y cada vez que cambias de página)
+  // 4. Efecto 2: Carga Diaria Paginada (Reacciona al cambiar la página o LA FECHA)
   useEffect(() => {
-      fetchDeficienciasPaginadas(lazyParams.first, lazyParams.rows, fechaHoy);
-      // Las estadísticas las recargamos también por si acaso, aunque no están paginadas
-      fetchEstadisticas(fechaHoy);
-  }, [lazyParams, fechaHoy, fetchDeficienciasPaginadas, fetchEstadisticas]);
+      if (selectedDate) {
+          const fechaStr = formatDateForBackend(selectedDate);
+          fetchDeficienciasPaginadas(lazyParams.first, lazyParams.rows, fechaStr);
+          fetchEstadisticas(fechaStr);
+      }
+  }, [lazyParams, selectedDate, fetchDeficienciasPaginadas, fetchEstadisticas]);
 
-  // Evento para capturar el cambio de página en la tabla
+  // Eventos de usuario
   const onPage = (event) => {
       setLazyParams(event);
   };
 
-  // Función para recargar todo manualmente desde el botón
   const handleReload = () => {
-    fetchDeficienciasPaginadas(lazyParams.first, lazyParams.rows, fechaHoy);
-    fetchEstadisticas(fechaHoy);
+      if (selectedDate) {
+          const fechaStr = formatDateForBackend(selectedDate);
+          fetchDeficienciasPaginadas(lazyParams.first, lazyParams.rows, fechaStr);
+          fetchEstadisticas(fechaStr);
+      }
   };
 
   // ==========================================
@@ -127,18 +136,37 @@ function DashboardHome() {
   return (
     <div className="space-y-4 animate-fade-in p-2 max-w-7xl mx-auto bg-slate-50/50 min-h-screen">
 
-      {/* Header Compacto */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-2">
+      {/* Header Compacto con Calendario */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-3">
         <div>
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Activity className="text-blue-600 w-6 h-6" />
-            Dashboard Sigre
+            Dashboard Sigre Web
           </h1>
-          <p className="text-gray-500 text-xs mt-0.5">Resumen de infraestructura y últimas deficiencias registradas hoy.</p>
+          <p className="text-gray-500 text-xs mt-0.5">Resumen de infraestructura y deficiencias por fecha seleccionada.</p>
         </div>
-        <button onClick={handleReload} className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 shadow-sm text-xs font-medium transition-all">
-          <RotateCcw className="w-3.5 h-3.5 text-blue-600" /> Refrescar Panel
-        </button>
+        
+        {/* NUEVO: Controles de Fecha y Refresco */}
+        <div className="flex flex-wrap items-center gap-3 bg-white p-1.5 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 px-2 border-r border-gray-200">
+                <CalendarDays className="w-4 h-4 text-gray-400" />
+                <span className="text-xs font-semibold text-gray-600">Fecha:</span>
+                <Calendar 
+                    value={selectedDate} 
+                    onChange={(e) => {
+                        setSelectedDate(e.value);
+                        // Reseteamos la página a 0 cuando cambian de fecha
+                        setLazyParams({ first: 0, rows: 10, page: 0 }); 
+                    }} 
+                    dateFormat="dd/mm/yy" 
+                    showIcon 
+                    className="p-inputtext-sm w-36"
+                />
+            </div>
+            <button onClick={handleReload} className="flex items-center justify-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 text-gray-700 rounded-md text-xs font-medium transition-all">
+                <RotateCcw className="w-3.5 h-3.5 text-blue-600" /> Refrescar
+            </button>
+        </div>
       </div>
 
       {/* Tarjetas de Resumen (KPIs) */}
@@ -175,7 +203,7 @@ function DashboardHome() {
           </h3>
         </div>
 
-        {/* KPI 4: ¡ACTUALIZADO CON TOTAL RECORDS! */}
+        {/* KPI 4: Deficiencias de la FECHA SELECCIONADA */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-300">
             <AlertTriangle className="w-16 h-16 text-rose-500" />
@@ -195,11 +223,10 @@ function DashboardHome() {
             <SplitterPanel className="flex flex-col" size={30} minSize={20}>
                 <div className="p-3 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
                     <div className="p-1.5 bg-purple-100 text-purple-600 rounded-md"><Users className="w-4 h-4" /></div>
-                    <h2 className="font-bold text-gray-800 text-sm">Actividad Inspectores (Hoy)</h2>
+                    <h2 className="font-bold text-gray-800 text-sm">Actividad Inspectores</h2>
                 </div>
                 <div className="p-2 flex-1 overflow-auto">
-                    {/* ¡USA 'estadisticas' y 'loadingStats'! */}
-                    <DataTable value={estadisticas} loading={loadingStats} size="small" stripedRows paginator rows={8} emptyMessage="No hay actividad hoy.">
+                    <DataTable value={estadisticas} loading={loadingStats} size="small" stripedRows paginator rows={8} emptyMessage="No hay actividad para esta fecha.">
                         <Column field="nombreInspector" header="Inspector" style={{ fontSize: '0.75rem' }}></Column>
                         <Column field="postes" header="Postes" align="center" style={{ fontSize: '0.75rem' }}></Column>
                         <Column field="vanos" header="Vanos" align="center" style={{ fontSize: '0.75rem' }}></Column>
@@ -212,10 +239,9 @@ function DashboardHome() {
             <SplitterPanel className="flex flex-col" size={70} minSize={50}>
                 <div className="p-3 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
                     <div className="p-1.5 bg-orange-100 text-orange-600 rounded-md"><Wrench className="w-4 h-4" /></div>
-                    <h2 className="font-bold text-gray-800 text-sm">Últimas Deficiencias (Hoy)</h2>
+                    <h2 className="font-bold text-gray-800 text-sm">Registro de Deficiencias</h2>
                 </div>
                 <div className="p-2 flex-1 overflow-auto">
-                    {/* ¡TABLA LAZY ACTIVADA! */}
                     <DataTable 
                         value={deficiencies} 
                         lazy={true} 
@@ -227,7 +253,7 @@ function DashboardHome() {
                         size="small" 
                         stripedRows 
                         paginator 
-                        emptyMessage="No hay deficiencias registradas hoy.">
+                        emptyMessage="No hay deficiencias registradas para esta fecha.">
                         
                         <Column field="alimentador" header="Alim." body={alimentadorTemplate} style={{ minWidth: '120px', fontSize: '0.75rem' }}></Column>
                         <Column field="sed" header="SED" style={{ fontSize: '0.75rem' }}></Column>
