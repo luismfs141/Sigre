@@ -1,5 +1,6 @@
 import * as Location from "expo-location";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DropDownSed } from "../../../components/DropDownSed";
 
 import { Ionicons } from "@expo/vector-icons";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -469,7 +470,37 @@ export default forwardRef(function NewPoste(_, ref) {
   };
 
 
+  const handlePickSedFromMapSelector = async (sed) => {
+    const id = sed?.SedInterno ?? sed?.id ?? null;
+    if (id == null) return;
 
+    setPostSubestacion(Number(id));
+
+    // Intento 1: coords vienen en el objeto
+    let lat =
+      Number(sed?.SedLatitud ?? sed?.SED_Latitud ?? sed?.Latitude ?? sed?.latitude);
+    let lng =
+      Number(sed?.SedLongitud ?? sed?.SED_Longitud ?? sed?.Longitude ?? sed?.longitude);
+
+    // Intento 2: si no vienen, las leo de SQLite
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      try {
+        const rows = await runQuery(
+          `SELECT SedLatitud, SedLongitud
+         FROM Seds
+         WHERE SedInterno = ?
+         LIMIT 1;`,
+          [Number(id)]
+        );
+        lat = Number(rows?.[0]?.SedLatitud);
+        lng = Number(rows?.[0]?.SedLongitud);
+      } catch { }
+    }
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      centerMiniMapTo(lat, lng, 0.01);
+    }
+  };
 
   //---------------------------------------------------------
 
@@ -670,6 +701,9 @@ export default forwardRef(function NewPoste(_, ref) {
 
         {/* Mapa (MINIMIZADO): puedes mover mapa y mover el punto */}
         <View style={{ position: "relative" }}>
+          <View style={styles.sedSelectorOverlay}>
+            <DropDownSed onSelectSed={handlePickSedFromMapSelector} />
+          </View>
           <MapView
             ref={mapRef}
             style={styles.map}
@@ -1040,5 +1074,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  sedSelectorOverlay: {
+    position: "absolute",
+    top: 55,           // ✅ lo baja para que no tape el compás
+    left: 8,
+    width: 160,
+    height: 44,
+    justifyContent: "center",
+    zIndex: 2000,
+    elevation: 10,
   },
 });
