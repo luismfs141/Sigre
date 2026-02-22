@@ -27,12 +27,10 @@ import { getPostByIdLocal } from "../../../database/offlineDB/posts";
 import { getAllSedsLocal, getSedById } from "../../../database/offlineDB/seds";
 
 import {
-    ZOOM_THRESHOLD,
     getCleanLabel,
     getIconSizeByType,
-    getPinsVisibleInRegion,
     isPostType,
-    isSedType,
+    isSedType
 } from "../../../utils/map/mapUtils";
 
 import { pinStyles } from "../../../styles/mapStyles";
@@ -189,17 +187,33 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
         selectedFeeder,
         setSelectedFeeder,
         selectedSed,
+        setSelectedSed,
         region: ctxRegion,
     } = useDatos();
 
     const { getPinsByFeeder, getPinsBySed, getGapsByFeeder, getGapsBySed } = useMap();
 
-    const [region, setRegion] = useState(ctxRegion);
-    const regionRef = useRef(ctxRegion);
+    // ✅ fallback por si ctxRegion viene raro
+    const fallbackRegion = useMemo(() => {
+        const r = ctxRegion;
+        const ok =
+            r &&
+            Number.isFinite(Number(r.latitude)) &&
+            Number.isFinite(Number(r.longitude)) &&
+            Number.isFinite(Number(r.latitudeDelta)) &&
+            Number.isFinite(Number(r.longitudeDelta));
+
+        if (ok) return r;
+
+        // Arequipa-ish por defecto (da igual, luego recentramos a data)
+        return { latitude: -16.4, longitude: -71.5, latitudeDelta: 0.08, longitudeDelta: 0.08 };
+    }, [ctxRegion]);
+
+    const [region, setRegion] = useState(fallbackRegion);
+    const regionRef = useRef(fallbackRegion);
 
     const [pinsAll, setPinsAll] = useState([]);
     const [gapsAll, setGapsAll] = useState([]);
-
     const [loading, setLoading] = useState(false);
 
     const [movedPins, setMovedPins] = useState({});
@@ -207,16 +221,90 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
 
     useEffect(() => {
         if (!visible) return;
-        setRegion(ctxRegion);
-        regionRef.current = ctxRegion;
+        setRegion(fallbackRegion);
+        regionRef.current = fallbackRegion;
         setMovedPins({});
         setCandidate(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visible]);
+    }, [visible, fallbackRegion]);
 
     const getPinKey = (p) => {
         const base = p?.IdOriginal ?? p?.Id ?? p?.ElementCode ?? `${p?.Latitude}-${p?.Longitude}`;
         return String(`${p?.Type ?? "X"}-${base}`);
+    };
+
+    // ✅ Si tu SED viene como Type=8 (ya te pasó antes), también la tratamos como SED
+    const isSedTypeLocal = (t) => isSedType(t) || Number(t) === 8;
+    const isPostTypeLocal = (t) => isPostType(t);
+
+    const applyRegion = (reg, duration = 650) => {
+        if (!reg) return;
+        setRegion(reg);
+        regionRef.current = reg;
+
+        setTimeout(() => {
+            mapRef.current?.animateToRegion(reg, duration);
+        }, 80);
+    };
+
+    const buildRegionFromData = (pinsArr, gapsArr) => {
+        const pts = [];
+
+        for (const p of (Array.isArray(pinsArr) ? pinsArr : [])) {
+            const lat = Number(p?.Latitude);
+            const lng = Number(p?.Longitude);
+            if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
+        }
+
+        for (const g of (Array.isArray(gapsArr) ? gapsArr : [])) {
+            const aLat = Number(g?.VanoLatitudIni);
+            const aLng = Number(g?.VanoLongitudIni);
+            const bLat = Number(g?.VanoLatitudFin);
+            const bLng = Number(g?.VanoLongitudFin);
+
+            if (Number.isFinite(aLat) && Number.isFinite(aLng)) pts.push({ lat: aLat, lng: aLng });
+            if (Number.isFinite(bLat) && Number.isFinite(bLng)) pts.push({ lat: bLat, lng: bLng });
+        }
+
+        if (!pts.length) return null;
+
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const p of pts) {
+            if (p.lat < minLat) minLat = p.lat;
+            if (p.lat > maxLat) maxLat = p.lat;
+            if (p.lng < minLng) minLng = p.lng;
+            if (p.lng > maxLng) maxLng = p.lng;
+        }
+
+        const latitude = (minLat + maxLat) / 2;
+        const longitude = (minLng + maxLng) / 2;
+
+        // padding para ver TODO
+        const latitudeDelta = Math.max((maxLat - minLat) * 1.6, 0.01);
+        const longitudeDelta = Math.max((maxLng - minLng) * 1.6, 0.01);
+
+        return { latitude, longitude, latitudeDelta, longitudeDelta };
+    };
+
+    // ✅ filtro de “visibles” SIN el corte duro de mapUtils (>0.008 = [])
+    const getPinsVisibleLoose = (pinsArray, reg) => {
+        const arr = Array.isArray(pinsArray) ? pinsArray : [];
+        if (!reg) return arr;
+
+        const { latitude, longitude, latitudeDelta, longitudeDelta } = reg;
+
+        const minLat = latitude - latitudeDelta * 0.6;
+        const maxLat = latitude + latitudeDelta * 0.6;
+        const minLng = longitude - longitudeDelta * 0.6;
+        const maxLng = longitude + longitudeDelta * 0.6;
+
+        return arr.filter(
+            (p) =>
+                Number(p?.Latitude) >= minLat &&
+                Number(p?.Latitude) <= maxLat &&
+                Number(p?.Longitude) >= minLng &&
+                Number(p?.Longitude) <= maxLng
+        );
     };
 
     const loadData = async () => {
@@ -233,10 +321,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                     return;
                 }
 
-                const [p, g] = await Promise.all([
-                    getPinsByFeeder(feederId),
-                    getGapsByFeeder(feederId),
-                ]);
+                const [p, g] = await Promise.all([getPinsByFeeder(feederId), getGapsByFeeder(feederId)]);
                 pinsLoaded = Array.isArray(p) ? p : [];
                 gapsLoaded = Array.isArray(g) ? g : [];
             } else {
@@ -247,20 +332,39 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                     return;
                 }
 
-                const [p, g] = await Promise.all([
-                    getPinsBySed(sedId),
-                    getGapsBySed(sedId),
-                ]);
+                const [p, g] = await Promise.all([getPinsBySed(sedId), getGapsBySed(sedId)]);
                 pinsLoaded = Array.isArray(p) ? p : [];
                 gapsLoaded = Array.isArray(g) ? g : [];
             }
 
             setPinsAll(pinsLoaded);
             setGapsAll(gapsLoaded);
+
+            // ✅ RECENTER AUTOMÁTICO al abrir
+            const reg = buildRegionFromData(pinsLoaded, gapsLoaded);
+            if (reg) applyRegion(reg, 650);
         } finally {
             setLoading(false);
         }
     };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     useEffect(() => {
         if (!visible) return;
@@ -268,51 +372,37 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, user?.proyecto, selectedFeeder?.AlimInterno, selectedSed?.SedInterno]);
 
-    const recenterToPins = () => {
-        const pts = (Array.isArray(pinsAll) ? pinsAll : [])
-            .map((p) => ({ lat: Number(p?.Latitude), lng: Number(p?.Longitude) }))
-            .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-
-        if (!pts.length) return;
-
-        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-        for (const p of pts) {
-            if (p.lat < minLat) minLat = p.lat;
-            if (p.lat > maxLat) maxLat = p.lat;
-            if (p.lng < minLng) minLng = p.lng;
-            if (p.lng > maxLng) maxLng = p.lng;
-        }
-
-        const latitude = (minLat + maxLat) / 2;
-        const longitude = (minLng + maxLng) / 2;
-
-        const latitudeDelta = Math.max((maxLat - minLat) * 1.6, 0.01);
-        const longitudeDelta = Math.max((maxLng - minLng) * 1.6, 0.01);
-
-        const reg = { latitude, longitude, latitudeDelta, longitudeDelta };
-        setRegion(reg);
-        regionRef.current = reg;
-        mapRef.current?.animateToRegion(reg, 600);
-    };
-
     const handleRefresh = async () => {
         setMovedPins({});
         setCandidate(null);
         await loadData();
-        recenterToPins();
     };
 
-    const shouldShowPosts = (region?.latitudeDelta ?? 1) < ZOOM_THRESHOLD;
+    // ✅ en este modal queremos ver postes sin tener que mega-zoom
+    const POSTS_ZOOM_THRESHOLD = 0.08;
+    const shouldShowPosts = (region?.latitudeDelta ?? 1) < POSTS_ZOOM_THRESHOLD;
 
     const sedsPins = useMemo(() => {
-        return (Array.isArray(pinsAll) ? pinsAll : []).filter((p) => isSedType(p?.Type));
+        return (Array.isArray(pinsAll) ? pinsAll : [])
+            .filter((p) => isSedTypeLocal(p?.Type))
+            .filter((p) => Number.isFinite(Number(p?.Latitude)) && Number.isFinite(Number(p?.Longitude)));
     }, [pinsAll]);
 
     const postsPinsVisible = useMemo(() => {
         if (!shouldShowPosts) return [];
-        const posts = (Array.isArray(pinsAll) ? pinsAll : []).filter((p) => isPostType(p?.Type));
-        return getPinsVisibleInRegion(posts, regionRef.current);
-    }, [pinsAll, shouldShowPosts, region?.latitude, region?.longitude, region?.latitudeDelta, region?.longitudeDelta]);
+        const posts = (Array.isArray(pinsAll) ? pinsAll : [])
+            .filter((p) => isPostTypeLocal(p?.Type))
+            .filter((p) => Number.isFinite(Number(p?.Latitude)) && Number.isFinite(Number(p?.Longitude)));
+
+        return getPinsVisibleLoose(posts, regionRef.current);
+    }, [
+        pinsAll,
+        shouldShowPosts,
+        region?.latitude,
+        region?.longitude,
+        region?.latitudeDelta,
+        region?.longitudeDelta,
+    ]);
 
     const getPinCoord = (pin) => {
         const key = getPinKey(pin);
@@ -322,15 +412,14 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
 
     const onPressPin = (pin) => {
         const t = Number(pin?.Type);
-        if (!(isPostType(t) || isSedType(t))) return;
+        if (!(isPostTypeLocal(t) || isSedTypeLocal(t))) return;
 
         const id = pin?.IdOriginal ?? pin?.Id ?? null;
         const label = getCleanLabel(pin) || pin?.Label || pin?.ElementCode || "";
-
         if (id == null) return;
 
         setCandidate({
-            kind: isPostType(t) ? "POST" : "SED",
+            kind: isPostTypeLocal(t) ? "POST" : "SED",
             id: Number(id),
             label: String(label ?? "").trim(),
         });
@@ -358,7 +447,11 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                         {user?.proyecto === 1 ? (
                             <DropDown onSelectFeeder={setSelectedFeeder} />
                         ) : (
-                            <DropDownSed onSelectSed={() => { }} />
+                            <DropDownSed
+                                onSelectSed={(sed) => {
+                                    setSelectedSed?.(sed); // ✅ ahora SÍ carga dataset por SED
+                                }}
+                            />
                         )}
 
                         <TouchableOpacity style={[styles.btnDanger, { marginTop: 18 }]} onPress={onClose}>
@@ -381,6 +474,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                             <Text numberOfLines={1} style={styles.pickerSub}>
                                 Seleccionado: {candidate?.label ? candidate.label : "(nada)"}
                             </Text>
+                            {loading && <Text style={{ color: "#bbb", marginTop: 2, fontWeight: "700" }}>Cargando...</Text>}
                         </View>
 
                         <TouchableOpacity style={styles.headerBtn} onPress={handleRefresh}>
@@ -390,23 +484,24 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
 
                     {/* Map */}
                     <View style={{ flex: 1 }}>
-                        {/* Overlay SED selector para centrar (no cambia dataset) */}
+                        {/* Overlay SED selector para centrar */}
                         <View style={styles.sedSelectorOverlay}>
                             <DropDownSed
                                 onSelectSed={(sed) => {
+                                    // ✅ si estás en modo SED, esto DEBE actualizar selectedSed para que loadData() traiga pines/vanos
+                                    if (user?.proyecto === 0) {
+                                        setSelectedSed?.(sed);
+                                    }
+
+                                    // ✅ y de paso centramos
                                     const lat = Number(sed?.SedLatitud);
                                     const lng = Number(sed?.SedLongitud);
                                     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-                                    const reg = {
-                                        latitude: lat,
-                                        longitude: lng,
-                                        latitudeDelta: 0.01,
-                                        longitudeDelta: 0.01,
-                                    };
-                                    setRegion(reg);
-                                    regionRef.current = reg;
-                                    mapRef.current?.animateToRegion(reg, 600);
+                                    applyRegion(
+                                        { latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+                                        650
+                                    );
                                 }}
                             />
                         </View>
@@ -414,7 +509,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                         <MapView
                             ref={mapRef}
                             style={{ flex: 1 }}
-                            initialRegion={region}
+                            region={region}          // ✅ controlado (no initialRegion)
                             mapType="satellite"
                             showsUserLocation
                             showsMyLocationButton={false}
@@ -424,7 +519,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                                 regionRef.current = reg;
                             }}
                         >
-                            {/* VANOS (solo vista) */}
+                            {/* VANOS */}
                             {(Array.isArray(gapsAll) ? gapsAll : []).map((g) => {
                                 const k = String(g?.VanoInterno ?? g?.VanoCodigo ?? Math.random());
                                 const a = { latitude: Number(g?.VanoLatitudIni), longitude: Number(g?.VanoLongitudIni) };
@@ -441,7 +536,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                                 );
                             })}
 
-                            {/* POSTES (seleccionables) */}
+                            {/* POSTES */}
                             {postsPinsVisible.map((pin) => {
                                 const key = getPinKey(pin);
                                 const coord = getPinCoord(pin);
@@ -461,7 +556,7 @@ function NodePickerModal({ visible, title, onClose, onConfirm }) {
                                 );
                             })}
 
-                            {/* SED (seleccionables) */}
+                            {/* SED */}
                             {sedsPins.map((pin) => {
                                 const key = getPinKey(pin);
                                 const coord = getPinCoord(pin);
