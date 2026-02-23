@@ -107,7 +107,7 @@ export const useDeficiency = () => {
       const payload = rows.filter(Boolean).map(normalizeArchivoForSync);
       if (!payload.length) return;
 
-      console.log("📤 Sincronización de update de archivos");
+      //console.log("📤 Sincronización de update de archivos");
 
 
       const response = await client.post("/File/SyncFromSQLite", payload, {
@@ -464,7 +464,7 @@ export const useDeficiency = () => {
       const normalized = normalizeDeficiencyForSync(def);
       const payload = [normalized];
 
-      console.log("📤 Sincronización de Update de deficiencia");
+      //console.log("📤 Sincronización de Update de deficiencia");
 
 
       const response = await client.post("/Deficiency/SyncFromSQLite", payload, {

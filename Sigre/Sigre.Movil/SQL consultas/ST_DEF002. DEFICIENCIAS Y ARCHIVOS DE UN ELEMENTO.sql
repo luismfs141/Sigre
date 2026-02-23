@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = '033052'
+DECLARE @CODIGO VARCHAR(20) = 'Dos'
 
 
 
@@ -104,24 +104,27 @@ GO
 
 
 ------------------------------------------------------------------
--- BUSCA UN VANO ------------------------------------------------
+-- BUSCA UN POSTE ------------------------------------------------
 ------------------------------------------------------------------
-DECLARE @CODIGO VARCHAR(20) = '033052'
+DECLARE @CODIGO VARCHAR(20) = 'Dos'
 
-SELECT  V.VANO_Interno,
-        V.VANO_Codigo,
+SELECT  P.POST_Interno,
+        P.POST_Etiqueta,
         A.ALIM_Etiqueta,
-        V.VANO_NodoInicial,
-        V.VANO_NodoFinal,
-        VANO_Terceros,
-		V.VANO_Inspeccionado,
+        PM.POSMT_Nombre,
+        RT.RTNTP_Nombre,
+        P.POST_Altura,
+        P.POST_Terceros,
+        P.POST_Inspeccionado,
         [***] = '',
-        V.*
-FROM Vanos AS V
+        p.*
+FROM Postes AS P
 LEFT JOIN Alimentadores AS A
-    ON V.ALIM_Interno = A.ALIM_Interno
-
-WHERE V.VANO_Codigo LIKE '%' + @CODIGO
-    OR V.VANO_Codigo = @CODIGO
+    ON P.ALIM_Interno = A.ALIM_Interno
+LEFT JOIN PosteMaterial AS PM
+    ON P.POST_Material = PM.POSMT_Interno
+LEFT JOIN RetenidaTipo AS RT
+    ON P.POST_RetenidaTipo = RT.RTNTP_Interno
+WHERE P.POST_CodigoNodo LIKE '%' + @CODIGO
+    OR P.POST_CodigoNodo = @CODIGO
 GO
-

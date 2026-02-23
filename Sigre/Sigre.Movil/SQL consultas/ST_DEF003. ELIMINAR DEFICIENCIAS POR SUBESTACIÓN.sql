@@ -7,7 +7,7 @@
 -- CONSULTAR DEFICIENCIAS QUE SE ELIMINARÁN
 ----------------------------------------------------------------------
 
-DECLARE @SED_CODIGO VARCHAR(50) = '2755';
+DECLARE @SED_CODIGO VARCHAR(50) = '1459';
 
 SELECT COUNT(*) AS TotalAEliminar
 FROM Deficiencias D

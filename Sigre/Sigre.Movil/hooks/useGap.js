@@ -112,7 +112,7 @@ export const useGap = () => {
 
       const vanoToSync = normalizeVanoForSync(vano);
 
-      console.log("📤 Sincronización Update de Vano");
+      //console.log("📤 Sincronización Update de Vano");
 
       const response = await client.post(
         "/Gap/SyncFromSQLite",
