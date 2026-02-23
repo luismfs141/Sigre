@@ -350,11 +350,19 @@ const debounceTimer = useRef(null);
 const handleSubmit = () => {
         setSubmitted(true);
 
-        // 1. Validaciones Básicas
+// 1. Validaciones Básicas
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
         if (formData.tipiInterno === null || formData.tipiInterno === undefined) {
             alert("Falta Tipificación.");
             return;
+        }
+
+        // 🔥 AQUÍ ENTRA LA VALIDACIÓN DINÁMICA 🔥
+        // Validamos todos los campos obligatorios del JSON de configuración
+        // Si validateDynamicForm devuelve false, significa que hubo errores y ya mostró el alert.
+        if (!validateDynamicForm()) {
+            setSubmitted(false); // Reiniciamos el estado para que puedan intentar de nuevo
+            return;              // Detenemos el guardado
         }
 
         // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
@@ -362,8 +370,7 @@ const handleSubmit = () => {
        // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
         const isSavingSD = Number(formData.tipiInterno) === 0;
 
-        // 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
-        // Si intento crear un S/D y YA existe uno, detener inmediatamente.
+// 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
         if (isSavingSD && hasCleanRecord && !isEditingSD) {
             alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
             setSubmitted(false); 
@@ -446,8 +453,32 @@ const handleSubmit = () => {
             }
         }
 
-        if (fieldKey === 'defiEstadoCriticidad') {
-            return (<div className="field mb-3 w-full" key={fieldKey}><label className="text-sm font-bold text-gray-700 block mb-1">Criticidad</label><Dropdown {...commonProps} options={criticidadOptions} optionLabel="label" optionValue="value" onChange={(e) => updateField(fieldKey, e.value)} /></div>);
+if (fieldKey === 'defiEstadoCriticidad') {
+            // 1. Verificamos si estamos en el caso "Sin Deficiencia"
+            const isSinDef = formData.tipiInterno === 0;
+
+            // 2. Si es SINDEF, forzamos visualmente el valor a 0, sino usamos el valor normal
+            const currentValue = isSinDef ? 0 : commonProps.value;
+
+            return (
+                <div className="field mb-3 w-full" key={fieldKey}>
+                    <label className="text-sm font-bold text-gray-700 block mb-1">
+                        Criticidad
+                    </label>
+                    <Dropdown 
+                        {...commonProps} 
+                        value={currentValue}
+                        options={criticidadOptions} 
+                        optionLabel="label" 
+                        optionValue="value" 
+                        disabled={isSinDef} // 3. Bloqueamos el input si es SINDEF
+                        onChange={(e) => {
+                            // Prevenimos actualizaciones innecesarias si está bloqueado
+                            if (!isSinDef) updateField(fieldKey, e.value);
+                        }} 
+                    />
+                </div>
+            );
         }
 
         return (
