@@ -13,6 +13,7 @@ import { AutoComplete } from 'primereact/autocomplete';
 
 import { useTypification } from '../../hooks/useTypification';
 import { useElements } from '../../hooks/useElement'; 
+import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
@@ -31,6 +32,7 @@ export default function DeficiencyForm({
     onHide,
     onSave,
     deficiencyToEdit,
+    alimentadorId,
     sedId,
     existingDeficiencies = [],
     referenceSelection
@@ -39,11 +41,11 @@ export default function DeficiencyForm({
     const [submitted, setSubmitted] = useState(false);
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
-    const [suggestions, setSuggestions] = useState([]);
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
-    const { fetchPostesChunk } = useElements();
-    const {fetchVanosChunk} = useElements();
+    const { fetchPostesChunk, fetchVanosChunk } = useElements();
+    const { suggestions, searchNode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
+
     
 
 // =========================================================================
@@ -244,65 +246,7 @@ const currentConfig = useMemo(() => {
     // Crea la referencia fuera de la función pero dentro de tu componente
 const debounceTimer = useRef(null);
 
-const searchNetworkElement = (event) => {
-    const query = event.query.toLowerCase();
-    
-    // 1. DEBOUNCE: Limpiamos el temporizador anterior si el usuario sigue escribiendo
-    if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-    }
 
-    // 2. Iniciamos un nuevo temporizador (ej. 500ms)
-    debounceTimer.current = setTimeout(async () => {
-        try {
-            // Opcional: Si tienes un estado de "loading", actívalo aquí
-            // setLoading(true);
-
-            // 3. OPTIMIZACIÓN: Ejecutar ambas peticiones al mismo tiempo (en paralelo)
-            const [responsePostes, responseVanos] = await Promise.all([
-                fetchPostesChunk(0, 15, query),
-                fetchVanosChunk(0, 15, query)
-            ]);
-            
-            const resultados = [];
-
-            // A. Procesar Postes
-            if (responsePostes?.data) {
-                resultados.push(...responsePostes.data.map(p => ({
-                    ...p,
-                    _tipo: 'POSTE',
-                    codigo: p.postCodigoNodo, 
-                    label: p.postEtiqueta || 'S/N',
-                    lat: p.postLatitud,
-                    lng: p.postLongitud
-                })));
-            }
-
-            // B. Procesar Vanos
-            if (responseVanos?.data) {
-                resultados.push(...responseVanos.data.map(v => ({
-                    ...v,
-                    _tipo: 'VANO',
-                    codigo: v.vanoCodigo, 
-                    label: v.vanoEtiqueta || 'S/N',
-                    lat: v.vanoLatitudIni,
-                    lng: v.vanoLongitudIni
-                })));
-            } 
-
-            // 4. Actualizar estado
-            setSuggestions(resultados);
-
-        } catch (error) {
-            // 5. MANEJO DE ERRORES: Evita que el componente se quede "cargando" si falla la red
-            console.error("Error al buscar elementos de red:", error);
-            setSuggestions([]); 
-        } finally {
-            // Opcional: Apagar el estado de "loading" aquí
-            // setLoading(false);
-        }
-    }, 500); // 500 milisegundos de espera después de la última tecla presionada
-};
     const itemTemplate = (item) => {
         const esPoste = item._tipo === 'POSTE';
         
@@ -536,10 +480,16 @@ const handleSubmit = () => {
             <div className="flex flex-col gap-4 mt-2">
                 <div className="p-4 border rounded bg-blue-50 border-blue-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <div className="field">
-                            <label className="font-bold text-xs uppercase text-gray-500">Tipo Elemento</label>
-                            <Dropdown value={formData.defiTipoElemento} options={TIPO_ELEMENTO_OPTIONS} onChange={(e) => updateField('defiTipoElemento', e.value)} disabled={!!deficiencyToEdit} />
-                        </div>
+<div className="field">
+    <label className="font-bold text-xs uppercase text-gray-500">Tipo Elemento(AUTOGENERADO)</label>
+    <Dropdown 
+        value={formData.defiTipoElemento} 
+        options={TIPO_ELEMENTO_OPTIONS} 
+        // Ya no necesitamos el onChange manual, el sistema lo controla
+        disabled={true} // 🔥 BLOQUEO TOTAL
+        className="bg-gray-100 opacity-90 cursor-not-allowed" 
+    />
+</div>
                         <div className="field">
     <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
     
@@ -548,17 +498,33 @@ const handleSubmit = () => {
 <AutoComplete 
     value={formData.defiCodigoElemento} 
     suggestions={suggestions} 
-    completeMethod={searchNetworkElement} 
+    completeMethod={(e) => searchNode(e.query, alimentadorId, sedId)}
     field="codigo"
     itemTemplate={itemTemplate} 
     
     // 1. ESTO ES LO QUE FALTABA: Permitir escribir
     onChange={(e) => {
-        // e.value puede ser el texto que escribes O el objeto seleccionado
-        // Si es objeto, sacamos el codigo. Si es texto, lo usamos directo.
         const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
+        const texto = String(valor || '').toUpperCase(); // Forzamos a mayúsculas
         
-        setFormData(prev => ({ ...prev, defiCodigoElemento: valor }));
+        setFormData(prev => {
+            let nuevoTipo = prev.defiTipoElemento;
+            
+            // Si el código contiene VBT o VANO, es un VANO
+            if (texto.includes('VBT') || texto.includes('VANO')) {
+                nuevoTipo = 'VANO';
+            } 
+            // Si el código contiene PTO o POST, es un POSTE
+            else if (texto.includes('PTO') || texto.includes('POST')) {
+                nuevoTipo = 'POST';
+            }
+
+            return { 
+                ...prev, 
+                defiCodigoElemento: texto, 
+                defiTipoElemento: nuevoTipo // Se actualiza solo
+            };
+        });
     }}
 
     // 2. AL SELECCIONAR: Autocompletar Tipo y Coordenadas (Tu lógica actual)
