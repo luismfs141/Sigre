@@ -213,47 +213,50 @@ const handleVisualize = async () => {
             <MapController coords={flyToCoords} />
             <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             
-            {/* VANOS (Gaps / Cables) */}
-            {gaps.map((gap, i) => {
-                // Si tienes la data, calculamos si es de terceros o está inspeccionado
-                const colorVano = getGapColor(gap); 
+ {/* VANOS (Líneas / Cables) */}
+{gaps.map((gap, i) => {
+    // 🔥 USAMOS LOS NOMBRES DE TU C#
+    const p1 = [gap.Lat1 || gap.lat1, gap.Lon1 || gap.lon1];
+    const p2 = [gap.Lat2 || gap.lat2, gap.Lon2 || gap.lon2];
 
-                return (
-                    <Polyline 
-                        key={`gap-${gap.id || i}`} 
-                        positions={[[gap.lat1, gap.lon1], [gap.lat2, gap.lon2]]} 
-                        // Aplicamos el color dinámico aquí 👇
-                        pathOptions={{ color: colorVano, weight: 4 }}
-                    />
-                );
-            })}
+    // Solo dibujamos si las coordenadas son válidas
+    if (!p1[0] || !p2[0]) return null;
 
-            {/* PINES (Postes) */}
-            {pins.map((pin, i) => {
-                // OJO AQUÍ: Asegúrate de que tu API (fetchPinsBySed) devuelve las 
-                // deficiencias dentro del objeto pin (ej: pin.deficiencias). 
-                // Si se llama diferente en tu BD, cámbialo aquí.
-                const deficiencias = pin.deficiencias || [];
+    return (
+        <Polyline 
+            key={`gap-${gap.Id || i}`} 
+            positions={[p1, p2]} 
+            pathOptions={{ color: gap.Inspeccionado ? '#10b981' : '#3b82f6', weight: 4 }}
+        />
+    );
+})}
 
-                return (
-                    <Marker 
-                        key={`pin-${pin.id || i}`} 
-                        position={[pin.Latitude, pin.Longitude]} 
-                        // Pasamos el elemento Y sus deficiencias 👇
-                        icon={getIconFromType(pin, deficiencias)}
-                    >
-                        {/* Un popup super pro de Leaflet/PrimeReact */}
-                        <Popup>
-                            <div className="flex flex-column gap-1">
-                                <span className="font-bold text-gray-800">Cód: {pin.elementCode}</span>
-                                <span className="text-xs">
-                                    {pin.postTerceros ? 'Poste de Terceros' : 'Poste Propio'}
-                                </span>
-                            </div>
-                        </Popup>
-                    </Marker>
-                );
-            })}
+{/* PINES (Postes) */}
+{pins.map((pin, i) => {
+    // 🔥 USAMOS LOS NOMBRES DE TU C#
+    const lat = pin.Latitude || pin.latitude || 0;
+    const lng = pin.Longitude || pin.longitude || 0;
+
+    if (lat === 0) return null;
+
+    return (
+        <Marker 
+            key={`pin-${pin.Id || i}`} 
+            position={[lat, lng]} 
+            icon={getIconFromType(pin)} 
+        >
+            <Popup>
+                <div className="flex flex-column gap-1">
+                    {/* ElementCode de tu PinStruct */}
+                    <span className="font-bold text-gray-800">Cód: {pin.ElementCode || pin.elementCode}</span>
+                    <span className={`text-xs font-bold ${pin.Inspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
+                        {pin.Inspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
+                    </span>
+                </div>
+            </Popup>
+        </Marker>
+    );
+})}
           </MapContainer>
       </div>
     </div>

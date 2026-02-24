@@ -24,7 +24,7 @@ export const usePinsBySed = () => {
                 // 🔥 MAPEO ROBUSTO (Cualquier nombre de variable funciona)
                 Latitude: Number(p.Latitude ?? p.Latitud ?? p.latitude ?? p.PostLatitud ?? 0),
                 Longitude: Number(p.Longitude ?? p.Longitud ?? p.longitude ?? p.PostLongitud ?? 0),
-                
+                inspeccionado: p.inspeccionado || p.Inspeccionado,
                 status: p.status || 'pending',
                 elementType: 'Poste',
                 type: 5
