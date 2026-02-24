@@ -985,6 +985,7 @@ namespace Sigre.DataAccess
 
                         ctx.Deficiencias.Add(input);
                         ctx.SaveChanges();
+                        SincronizarEstadoInspeccionElemento(input.DefiInterno);
 
                         return input.DefiInterno;
                     }
@@ -1562,6 +1563,47 @@ namespace Sigre.DataAccess
 
                     ctx.SaveChanges();
                 }
+            }
+        }
+        public void SincronizarEstadoInspeccionElemento(int defiInterno)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Obtener la deficiencia actual y sus datos de vinculación
+                var deficienciaActual = ctx.Deficiencias.Find(defiInterno);
+                if (deficienciaActual == null) return;
+
+                string codigoGis = deficienciaActual.DefiCodigoElemento;
+                string tipo = deficienciaActual.DefiTipoElemento?.ToUpper() ?? "";
+
+                // 2. REGLA DE ORO: Un elemento solo está "COMPLETADO" si 
+                // NO tiene ninguna deficiencia activa en estado 'false' (0)
+                bool todoInspeccionado = !ctx.Deficiencias
+                    .Any(d => d.DefiCodigoElemento == codigoGis
+                           && d.DefiActivo == true
+                           && d.DefiInspeccionado == false); // Buscamos si falta alguna
+
+                // 3. Actualizar la tabla correspondiente
+                if (tipo.Contains("POST"))
+                {
+                    var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                    if (poste != null)
+                    {
+                        // Actualizamos la columna en la tabla Postes
+                        poste.PostInspeccionado = todoInspeccionado;
+                    }
+                }
+                else if (tipo.Contains("VANO"))
+                {
+                    var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                    if (vano != null)
+                    {
+                        // Actualizamos vanoInspeccionado que vimos en tu respuesta JSON
+                        vano.VanoInspeccionado = todoInspeccionado;
+                    }
+                }
+
+                ctx.SaveChanges();
             }
         }
     }
