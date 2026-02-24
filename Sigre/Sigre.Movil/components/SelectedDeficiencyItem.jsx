@@ -7,8 +7,10 @@ export default function SelectedDeficiencyItem({
   onDelete,
   onPhotos,
   onDeficiency,
-  canDelete = true, // ✅ NUEVO
+  canDelete = true,
+  containerStyle = null,
 }) {
+
 
   const [infoVisible, setInfoVisible] = useState(false);
 
@@ -21,7 +23,8 @@ export default function SelectedDeficiencyItem({
 
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, containerStyle]}>
+
       {/* ✅ BOTÓN INFO (arriba derecha) */}
 
       <View style={styles.badge}>

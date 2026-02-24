@@ -803,7 +803,7 @@ namespace Sigre.DataAccess
         {
             using (SigreContext ctx = new SigreContext())
             {
-                // 1. Buscar el registro por ID
+                // 1. Buscar el registro de la Deficiencia por ID
                 var registro = ctx.Deficiencias
                                   .FirstOrDefault(d => d.DefiInterno == x_defiInterno);
 
@@ -812,13 +812,27 @@ namespace Sigre.DataAccess
                 {
                     return false;
                 }
-                // 2. Aplicar el Borrado Lógico
-                registro.DefiActivo = false;
 
+                // 2. Aplicar el Borrado Lógico a la Deficiencia
+                registro.DefiActivo = false;
                 registro.DefiFecModificacion = DateTime.Now;
 
+                // --- NUEVO: 3. Buscar los archivos asociados a esta deficiencia ---
+                // Basado en tu captura, validamos que ARCH_CodTabla sea el ID de la deficiencia
+                // y opcionalmente que ARCH_Tabla sea "Deficiencias" para ser precisos.
+                var archivosAsociados = ctx.Archivos
+                                           .Where(a => a.ArchCodTabla == x_defiInterno
+                                                    && a.ArchTabla == "Deficiencias")
+                                           .ToList();
 
-                // 4. Guardar cambios
+                // --- NUEVO: 4. Aplicar el Borrado Lógico a los archivos ---
+                foreach (var archivo in archivosAsociados)
+                {
+                    archivo.ArchActivo = false; // Cambia "ArchActivo" por el nombre real de tu columna de estado
+                                                // archivo.ArchFecModificacion = DateTime.Now; // Descomenta si también tienes esta columna en Archivos
+                }
+
+                // 5. Guardar cambios (EF Core hace un solo commit para la deficiencia y sus archivos)
                 ctx.SaveChanges();
 
                 return true;
@@ -870,7 +884,7 @@ namespace Sigre.DataAccess
                     if (input.DefiFecRegistro != DateTime.MinValue)
                     {
                         existente.DefiFecRegistro = input.DefiFecRegistro;
-                        existente.DefiFechaCreacion = input.DefiFecRegistro;
+                        
                     }
 
                     // Auditoría
@@ -951,8 +965,10 @@ namespace Sigre.DataAccess
                                       Id = p.PostCodigoNodo,
                                       Sector = p.PostSubestacion,
                                       CodDef = d.TipiInterno,
-                                      // 🔥 NUEVO: Traemos la criticidad (1: Leve, 2: Media, 3: Crítica, 0: S/D)
-                                      Criticidad = d.DefiEstadoCriticidad
+                                      Criticidad = d.DefiEstadoCriticidad,
+                                      // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia en la BD
+                                      // NOTA: Cambia 'ArchCodigoDeficiencia', 'DefiInterno' y 'ArchActivo' por tus propiedades reales
+                                      CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                   })
                                   .ToList() // Ejecutamos la consulta SQL aquí
                                   .GroupBy(x => x.Id)
@@ -961,18 +977,19 @@ namespace Sigre.DataAccess
                                       id = g.Key,
                                       sector = g.FirstOrDefault()?.Sector.ToString() ?? "S/N",
 
-                                      // Lista simple de códigos de defecto (como tenías antes)
                                       deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
 
-                                      // 🔥 NUEVO: Lista de objetos detallados con Criticidad
                                       details = g.Select(x => new {
                                           code = x.CodDef,
-                                          crit = x.Criticidad
+                                          crit = x.Criticidad,
+                                          // 🔥 NUEVO: Agregamos la cantidad de archivos al detalle de cada deficiencia
+                                          archivosActivos = x.CantidadArchivos
                                       }).ToList(),
 
-                                      // 🔥 OPCIONAL: La peor criticidad del elemento (para colorear el poste entero)
-                                      // Si hay un 3 (Crítico), el poste es Crítico. Si no, busca 2, luego 1.
-                                      maxCriticality = g.Max(x => x.Criticidad ?? 0)
+                                      maxCriticality = g.Max(x => x.Criticidad ?? 0),
+
+                                      // 🔥 OPCIONAL: Suma total de archivos activos en todo el poste
+                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos)
                                   }).ToList();
 
                 // -----------------------------------------------------------------------------
@@ -987,8 +1004,9 @@ namespace Sigre.DataAccess
                                      Id = v.VanoCodigo,
                                      Sector = v.VanoSubestacion,
                                      CodDef = d.TipiInterno,
-                                     // 🔥 NUEVO: Traemos la criticidad
-                                     Criticidad = d.DefiEstadoCriticidad
+                                     Criticidad = d.DefiEstadoCriticidad,
+                                     // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia
+                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo!="0")
                                  })
                                  .ToList()
                                  .GroupBy(x => x.Id)
@@ -999,14 +1017,17 @@ namespace Sigre.DataAccess
 
                                      deficiencies = g.Select(x => x.CodDef).Distinct().ToList(),
 
-                                     // 🔥 NUEVO: Detalles con criticidad
                                      details = g.Select(x => new {
                                          code = x.CodDef,
-                                         crit = x.Criticidad
+                                         crit = x.Criticidad,
+                                         // 🔥 NUEVO: Reflejamos el conteo en los detalles
+                                         archivosActivos = x.CantidadArchivos
                                      }).ToList(),
 
-                                     // 🔥 OPCIONAL: Peor criticidad
-                                     maxCriticality = g.Max(x => x.Criticidad ?? 0)
+                                     maxCriticality = g.Max(x => x.Criticidad ?? 0),
+
+                                     // 🔥 OPCIONAL: Suma total de archivos activos en todo el vano
+                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos)
                                  }).ToList();
 
                 return new { postes = dataPostes, vanos = dataVanos };
@@ -1403,6 +1424,62 @@ namespace Sigre.DataAccess
                 }
 
                 return filasAfectadas > 0;
+            }
+        }
+
+        public async Task<object> ObtenerDeficienciasDelDiaPaginadoAsync(int skip, int take, DateTime fechaBusqueda)
+        {
+            using (var ctx = new SigreContext())
+            {
+                DateTime inicioDia = fechaBusqueda.Date; // 00:00:00 del día solicitado
+                DateTime finDia = inicioDia.AddDays(1);  // 00:00:00 del día siguiente
+
+                // 1. Armamos la consulta base con exactamente los mismos filtros del día
+                var query = ctx.Deficiencias
+                    .AsNoTracking()
+                    .Where(d => d.DefiFechaCreacion >= inicioDia && d.DefiFechaCreacion < finDia && d.DefiActivo == true);
+
+                // 2. Contamos el total real de registros del día (Ej: los 10,984). 
+                // Esto servirá para tu Indicador Rojo y para la paginación de PrimeReact.
+                int totalRecords = await query.CountAsync();
+
+                // 3. Traemos solo el pedacito que React nos pide (Ej: los primeros 10)
+                var data = await query
+                    .OrderByDescending(d => d.DefiInterno) // Las más recientes de hoy primero
+                    .Skip(skip)
+                    .Take(take)
+                    .ToListAsync();
+
+                // 4. Devolvemos un objeto anónimo con el total y la data
+                return new { totalRecords, data };
+            }
+        }
+        public async Task<object> ObtenerEstadisticasInspectoresDelDiaAsync(DateTime fechaBusqueda)
+        {
+            using (var ctx = new SigreContext())
+            {
+                DateTime inicioDia = fechaBusqueda.Date; // 00:00:00 del día solicitado
+                DateTime finDia = inicioDia.AddDays(1);  // 00:00:00 del día siguiente
+
+                // La base de datos hará toda la matemática súper rápido
+                var estadisticas = await ctx.Deficiencias
+                    .AsNoTracking()
+                    // 1. FILTRAMOS ESTRICTAMENTE POR EL DÍA
+                    .Where(d => d.DefiFechaCreacion >= inicioDia && d.DefiFechaCreacion < finDia && d.DefiActivo == true)
+                    // 2. AGRUPAMOS POR INSPECTOR
+                    .GroupBy(d => d.DefiUsuarioInic)
+                    .Select(g => new
+                    {
+                        IdInspector = g.Key,
+                        // Contamos cuántos son POST y cuántos son VANO
+                        Postes = g.Count(x => x.DefiTipoElemento == "POST"),
+                        Vanos = g.Count(x => x.DefiTipoElemento == "VANO"),
+                        Total = g.Count()
+                    })
+                    .OrderByDescending(e => e.Total) // Ordenamos del más trabajador al menor
+                    .ToListAsync();
+
+                return estadisticas;
             }
         }
     }

@@ -25,7 +25,7 @@ export const DatosProvider = ({ children }) => {
   const [dbName, setDbName] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [loadingDB, setLoadingDB] = useState(true);
-
+  const [dbEpoch, setDbEpoch] = useState(0); // ✅ cambia cuando se descarga/cambia DB
 
 
 
@@ -197,7 +197,7 @@ export const DatosProvider = ({ children }) => {
     await AsyncStorage.removeItem(SELECTED_FEEDER_KEY);
     _setSelectedFeeder(null);
     setAlimEtiquetaLocal(null);
-
+    setDbEpoch((v) => v + 1); // ✅ avisa a formularios "Nuevo" que cambió la DB
 
   };
 
@@ -291,7 +291,9 @@ export const DatosProvider = ({ children }) => {
         dbReady,
         loadingDB,
         dbName,
+        dbEpoch,
         setDbName,
+        
         openLocalDB,
         checkDatabase,
         setNewDatabase,

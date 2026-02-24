@@ -43,6 +43,9 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   // ✅ 2. ESTADO PARA LA FOTO TEMPORAL (PREVIEW)
   const [tempPhoto, setTempPhoto] = useState(null);
   const [processing, setProcessing] = useState(false);
+  // ✅ UBICACIÓN CACHEADA (se actualiza mientras el modal está abierto)
+  const [lastCoords, setLastCoords] = useState(null);
+
 
   /* ======================
      ZOOM (BOTONES)
@@ -61,21 +64,46 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   const zoomOut = () => setZoom((z) => Math.max(z - 0.1, 0));
 
   /* ======================
-     UBICACIÓN
-  ====================== */
-  const getCurrentLocation = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return null;
+   UBICACIÓN (RÁPIDA: WATCH + LAST KNOWN)
+====================== */
+  useEffect(() => {
+    let sub = null;
 
-    const loc = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
 
-    return {
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
+      // 1) inmediato si existe algo cacheado por el sistema
+      const last = await Location.getLastKnownPositionAsync();
+      if (last?.coords) {
+        setLastCoords({
+          latitude: last.coords.latitude,
+          longitude: last.coords.longitude,
+        });
+      }
+
+      // 2) se actualiza mientras el modal está abierto
+      sub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 1200,
+          distanceInterval: 2,
+        },
+        (loc) => {
+          if (loc?.coords) {
+            setLastCoords({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+        }
+      );
+    })();
+
+    return () => {
+      sub?.remove?.();
     };
-  };
+  }, []);
 
   const convertToUTM = (lat, lon) => {
     const utm = fromLatLon(lat, lon);
@@ -87,48 +115,60 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
   };
 
 
+
+
   const takePhoto = async () => {
-    if (!cameraRef.current || processing) return;
-    setProcessing(true);
+  if (!cameraRef.current || processing) return;
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: false,
-      });
+  setProcessing(true);
 
-      if (!photo?.uri) return;
+  // ✅ snapshot exacto al disparo
+  const coordsAtShot = lastCoords;
+  const capturedAtMs = getUniqueNowMs();
 
-      const coords = await getCurrentLocation();
-      let utm = null;
+  try {
+    await cameraRef.current.takePictureAsync({
+      quality: 0.7,
+      exif: false,
 
-      if (coords) {
-        utm = convertToUTM(coords.latitude, coords.longitude);
-      }
+      // ✅ evita pantalla en blanco (archivo listo)
+      skipProcessing: false,
+
+      // ✅ setTempPhoto SOLO cuando ya guardó el archivo
+      onPictureSaved: (photo) => {
+        try {
+          if (!photo?.uri) return;
+
+          let utm = null;
+          if (coordsAtShot) {
+            utm = convertToUTM(coordsAtShot.latitude, coordsAtShot.longitude);
+          }
+
+          const temp = {
+            uri: photo.uri,
+            latUtm: utm?.utmY ?? null,
+            lonUtm: utm?.utmX ?? null,
+            utmZone: utm?.zone ?? null,
+
+            capturedAtMs,
+            fechaISO: formatLocalISO(capturedAtMs),
+          };
+
+          setTempPhoto(temp);
+        } catch (e) {
+          console.error("❌ Error post-proceso foto:", e);
+        } finally {
+          setProcessing(false);
+        }
+      },
+    });
+  } catch (e) {
+    console.error("❌ Error cámara:", e);
+    setProcessing(false);
+  }
+};
 
 
-      const capturedAtMs = getUniqueNowMs();
-
-      const temp = {
-        uri: photo.uri,
-        latUtm: utm?.utmY ?? null,
-        lonUtm: utm?.utmX ?? null,
-        utmZone: utm?.zone ?? null,
-
-        // ✅ UN SOLO ORIGEN
-        capturedAtMs,
-        fechaISO: formatLocalISO(capturedAtMs),
-      };
-
-      setTempPhoto(temp);
-
-
-    } catch (e) {
-      console.error("❌ Error cámara:", e);
-    } finally {
-      setProcessing(false);
-    }
-  };
 
 
   /* ======================

@@ -13,6 +13,7 @@ import { Calendar } from 'primereact/calendar';
 import JSZip from 'jszip'; // 📦 Requiere: npm install jszip
 import { saveAs } from 'file-saver'; // 📦 Requiere: npm install file-saver
 import { SelectButton } from 'primereact/selectbutton'; // 👈 AGREGAR ESTO
+import { Message } from 'primereact/message';
 
 // --- HOOKS (Tus hooks existentes) ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
@@ -22,13 +23,13 @@ import { useFiles } from '../hooks/useFiles';
 import { useElements } from '../hooks/useElement';
 
 // --- COMPONENTES HIJOS ---
-import FilesTableEditor from './FilesTableEditor'; 
-import PhotoUploadModal from '../components/Modals/PhotoUploadModal'; 
+import FilesTableEditor from './FilesTableEditor';
+import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 
 
 // --- UTILIDADES ---
 // URL base para descargas si no es local (ajusta según tu config)
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000"; 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function WebInspectionManager() {
     const toast = useRef(null);
@@ -38,19 +39,19 @@ export default function WebInspectionManager() {
     const [selectedFeederId, setSelectedFeederId] = useState(null);
     const [selectedSed, setSelectedSed] = useState(null);
     const [filteredSeds, setFilteredSeds] = useState([]);
-    const [pendingSedId, setPendingSedId] = useState(null); 
+    const [pendingSedId, setPendingSedId] = useState(null);
 
     const { seds: sedsDelAlimentador } = useSedsByFeeder(selectedFeederId);
 
     // --- 2. ESTADOS GIS ---
     const { fetchByGis, loading: searchLoading } = useDeficiencyByGis();
     const [structureCode, setStructureCode] = useState('');
-    const [structureType, setStructureType] = useState('Poste'); 
+    const [structureType, setStructureType] = useState('Poste');
     // Para guardar ID numérico del elemento si es necesario
-    const [structureIdInt, setStructureIdInt] = useState(0); 
-    
+    const [structureIdInt, setStructureIdInt] = useState(0);
+
     // Datos Globales
-    const [globalDate, setGlobalDate] = useState(''); 
+    const [globalDate, setGlobalDate] = useState('');
     const [globalLat, setGlobalLat] = useState('');
     const [globalLon, setGlobalLon] = useState('');
     const [gisSuggestions, setGisSuggestions] = useState([]);
@@ -66,7 +67,7 @@ export default function WebInspectionManager() {
     const [showPhotoModal, setShowPhotoModal] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
     // 🔥 A. MODO DE VISTA (Nuevo: Toggle Lista/Galería)
-    const [viewMode, setViewMode] = useState('list'); 
+    const [viewMode, setViewMode] = useState('list');
     const viewOptions = [
         { label: 'Datos', value: 'list', icon: 'pi pi-list' },
         { label: 'Galería', value: 'gallery', icon: 'pi pi-images' }
@@ -74,27 +75,28 @@ export default function WebInspectionManager() {
 
     // 🔥 B. MEMORIA DE SESIÓN (Nuevo: Para ZIP instantáneo y Preview)
     const sessionBlobs = useRef({});
-    
+    const debounceTimer = useRef(null);
 
-const LocalFileStore = {
-    dbName: "SigreTempPhotos", storeName: "photos",
-    async open() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 1);
-            request.onupgradeneeded = (e) => { if (!e.target.result.objectStoreNames.contains(this.storeName)) e.target.result.createObjectStore(this.storeName); };
-            request.onsuccess = (e) => resolve(e.target.result); request.onerror = (e) => reject(e);
-        });
-    },
-    async save(fileName, fileBlob) {
-        try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).put(fileBlob, fileName); return true; } catch (e) { return false; }
-    },
-    async get(fileName) {
-        try { const db = await this.open(); return new Promise((resolve) => { const req = db.transaction(this.storeName, "readonly").objectStore(this.storeName).get(fileName); req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); }); } catch (e) { return null; }
-    },
-    async clear() {
-        try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).clear(); return true; } catch (e) { return false; }
-    }
-};
+
+    const LocalFileStore = {
+        dbName: "SigreTempPhotos", storeName: "photos",
+        async open() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.dbName, 1);
+                request.onupgradeneeded = (e) => { if (!e.target.result.objectStoreNames.contains(this.storeName)) e.target.result.createObjectStore(this.storeName); };
+                request.onsuccess = (e) => resolve(e.target.result); request.onerror = (e) => reject(e);
+            });
+        },
+        async save(fileName, fileBlob) {
+            try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).put(fileBlob, fileName); return true; } catch (e) { return false; }
+        },
+        async get(fileName) {
+            try { const db = await this.open(); return new Promise((resolve) => { const req = db.transaction(this.storeName, "readonly").objectStore(this.storeName).get(fileName); req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); }); } catch (e) { return null; }
+        },
+        async clear() {
+            try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).clear(); return true; } catch (e) { return false; }
+        }
+    };
 
     // --- 4. EFECTOS ---
     useEffect(() => {
@@ -103,14 +105,14 @@ const LocalFileStore = {
 
     useEffect(() => {
         if (pendingSedId && sedsDelAlimentador && sedsDelAlimentador.length > 0) {
-            const sedEncontrada = sedsDelAlimentador.find(s => 
-                String(s.sedInterno) === String(pendingSedId) || 
+            const sedEncontrada = sedsDelAlimentador.find(s =>
+                String(s.sedInterno) === String(pendingSedId) ||
                 String(s.value) === String(pendingSedId) ||
                 String(s.id) === String(pendingSedId)
             );
             if (sedEncontrada) {
-                setSelectedSed(sedEncontrada); 
-                setPendingSedId(null); 
+                setSelectedSed(sedEncontrada);
+                setPendingSedId(null);
             }
         }
     }, [sedsDelAlimentador, pendingSedId]);
@@ -118,60 +120,66 @@ const LocalFileStore = {
     // --- 5. LÓGICA GIS ---
     const searchNetworkElement = async (event) => {
         const query = event.query.toLowerCase();
-        try {
-            const [postesRes, vanosRes] = await Promise.allSettled([
-                fetchPostesChunk(0, 10, query),
-                fetchVanosChunk ? fetchVanosChunk(0, 10, query) : Promise.resolve({ data: [] })
-            ]);
+        // Limpiamos el timeout anterior si el usuario sigue escribiendo
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-            const resultados = [];
+        // Esperamos 500ms después de la última tecla antes de hacer el fetch
+        debounceTimer.current = setTimeout(async () => {
+            try {
+                const [postesRes, vanosRes] = await Promise.allSettled([
+                    fetchPostesChunk(0, 10, query),
+                    fetchVanosChunk ? fetchVanosChunk(0, 10, query) : Promise.resolve({ data: [] })
+                ]);
 
-            if (postesRes.status === 'fulfilled' && postesRes.value?.data) {
-                resultados.push(...postesRes.value.data.map(p => ({
-                    label: `POSTE: ${p.postCodigoNodo} - ${p.postEtiqueta || 'S/N'}`,
-                    codigo: p.postCodigoNodo,
-                    idInterno: p.postInterno, // Capturamos ID interno
-                    _tipo: 'Poste',
-                    lat: p.postLatitud,
-                    lng: p.postLongitud,
-                    alimentadorId: p.alimInterno, 
-                    sedId: p.postSubestacion
-                })));
+                const resultados = [];
+
+                if (postesRes.status === 'fulfilled' && postesRes.value?.data) {
+                    resultados.push(...postesRes.value.data.map(p => ({
+                        label: `POSTE: ${p.postCodigoNodo} - ${p.postEtiqueta || 'S/N'}`,
+                        codigo: p.postCodigoNodo,
+                        idInterno: p.postInterno, // Capturamos ID interno
+                        _tipo: 'Poste',
+                        lat: p.postLatitud,
+                        lng: p.postLongitud,
+                        alimentadorId: p.alimInterno,
+                        sedId: p.postSubestacion
+                    })));
+                }
+
+                if (vanosRes.status === 'fulfilled' && vanosRes.value?.data) {
+                    resultados.push(...vanosRes.value.data.map(v => ({
+                        label: `VANO: ${v.vanoCodigo} - ${v.vanoEtiqueta || 'S/N'}`,
+                        codigo: v.vanoCodigo,
+                        idInterno: v.vanoInterno, // Capturamos ID interno
+                        _tipo: 'Vano',
+                        lat: v.vanoLatitudIni,
+                        lng: v.vanoLongitudIni,
+                        alimentadorId: v.alimInterno,
+                        sedId: v.vanoSubestacion
+                    })));
+                }
+                setGisSuggestions(resultados);
+            } catch (e) {
+                console.error("Error búsqueda GIS:", e);
             }
-
-            if (vanosRes.status === 'fulfilled' && vanosRes.value?.data) {
-                resultados.push(...vanosRes.value.data.map(v => ({
-                    label: `VANO: ${v.vanoCodigo} - ${v.vanoEtiqueta || 'S/N'}`,
-                    codigo: v.vanoCodigo, 
-                    idInterno: v.vanoInterno, // Capturamos ID interno
-                    _tipo: 'Vano',
-                    lat: v.vanoLatitudIni,
-                    lng: v.vanoLongitudIni,
-                    alimentadorId: v.alimInterno,           
-                    sedId: v.vanoSubestacion                
-                })));
-            }
-            setGisSuggestions(resultados);
-        } catch (e) {
-            console.error("Error búsqueda GIS:", e);
-        }
+        }, 500);
     };
 
     const handleGisSelection = (e) => {
-        const item = e.value; 
+        const item = e.value;
         if (!item) return;
 
         setStructureCode(item.codigo);
         setStructureType(item._tipo);
         setStructureIdInt(item.idInterno || 0); // Guardamos el ID interno
 
-        if(item.lat) setGlobalLat(item.lat.toString());
-        if(item.lng) setGlobalLon(item.lng.toString());
+        if (item.lat) setGlobalLat(item.lat.toString());
+        if (item.lng) setGlobalLon(item.lng.toString());
 
         if (item.alimentadorId) {
-            setSelectedFeederId(item.alimentadorId); 
-            setSelectedSed(null); 
-            if (item.sedId) setPendingSedId(item.sedId); 
+            setSelectedFeederId(item.alimentadorId);
+            setSelectedSed(null);
+            if (item.sedId) setPendingSedId(item.sedId);
         }
     };
 
@@ -184,9 +192,9 @@ const LocalFileStore = {
     const searchSeds = (event) => {
         const query = event.query.toLowerCase();
         if (sedsDelAlimentador) {
-            setFilteredSeds(sedsDelAlimentador.filter(sed => 
-                (sed.label||"").toLowerCase().includes(query) || 
-                (sed.sedCodigo||"").toLowerCase().includes(query)
+            setFilteredSeds(sedsDelAlimentador.filter(sed =>
+                (sed.label || "").toLowerCase().includes(query) ||
+                (sed.sedCodigo || "").toLowerCase().includes(query)
             ));
         }
     };
@@ -197,16 +205,20 @@ const LocalFileStore = {
             toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Ingrese un código GIS' });
             return;
         }
-        
+
         const data = await fetchByGis(cod);
-        setHistoricalData(data || []);
-        
-        if(data?.length > 0) {
-            setSelectedDeficiency(data[0]);
-            loadFiles(data[0].defiInterno);
-            toast.current.show({severity:'success', summary:'Encontrado', detail:`${data.length} registros`});
+
+        // 🔥 CAMBIO: Filtramos solo las deficiencias donde defiActivo no sea 0 ni false
+        const activeData = (data || []).filter(d => d.defiActivo !== 0 && d.defiActivo !== false);
+
+        setHistoricalData(activeData);
+
+        if (activeData.length > 0) {
+            setSelectedDeficiency(activeData[0]);
+            loadFiles(activeData[0].defiInterno);
+            toast.current.show({ severity: 'success', summary: 'Encontrado', detail: `${activeData.length} registros activos` });
         } else {
-             toast.current.show({severity:'info', summary:'Sin historial', detail:`0 registros`});
+            toast.current.show({ severity: 'info', summary: 'Sin historial', detail: `0 registros activos` });
         }
     };
 
@@ -217,9 +229,9 @@ const LocalFileStore = {
             // A. Contexto y Nombres
             const feederObj = feeders.find(f => f.value === selectedFeederId);
             const feederLbl = resolveFeederName(feederObj);
-            
+
             let sedLbl = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || selectedSed.codigo || "SIN_SED") : "SIN_SED";
-            if(sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
+            if (sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
             sedLbl = safeSeg(sedLbl);
 
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
@@ -231,17 +243,17 @@ const LocalFileStore = {
             const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
             const defCodeRaw = selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000";
             const defCodeBase = String(defCodeRaw).trim();
-            
+
             // Identificar tipos especiales
             const is7004 = defCodeBase === "7004" || String(defTipiInterno) === "60";
             const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(defTipiInterno) === "0";
-            
+
             // C. Lógica de Carpetas
             let defFolder = "", namePart = "";
-            
+
             if (is7004) {
                 // 🔥 LÓGICA CORREGIDA: Contar deficiencias en la tabla histórica
-                
+
                 // 1. Filtramos de la tabla 'historicalData' solo las que sean 7004
                 const defs7004 = historicalData.filter(d => {
                     const code = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
@@ -259,16 +271,16 @@ const LocalFileStore = {
                 // Si la deficiencia es la única (índice 0), la carpeta será 1.
                 const folderNum = index !== -1 ? index + 1 : (defs7004.length + 1);
 
-                defFolder = `7004/${folderNum}`; 
-                namePart = `7004_${folderNum}`; 
-            } 
-            else if (isSinDef) { 
-                defFolder = "SINDEF"; 
-                namePart = "0000"; 
-            } 
-            else { 
-                defFolder = defCodeBase; 
-                namePart = defCodeBase; 
+                defFolder = `7004/${folderNum}`;
+                namePart = `7004_${folderNum}`;
+            }
+            else if (isSinDef) {
+                defFolder = "SINDEF";
+                namePart = "0000";
+            }
+            else {
+                defFolder = defCodeBase;
+                namePart = defCodeBase;
             }
 
             // --- (Resto igual) ---
@@ -280,7 +292,7 @@ const LocalFileStore = {
             const utmCoords = latLonToUTM(rawLat, rawLon);
 
             if (typeof LocalFileStore !== 'undefined' && LocalFileStore.save) {
-                 await LocalFileStore.save(fileName, dataToSave.file);
+                await LocalFileStore.save(fileName, dataToSave.file);
             }
 
             if (dataToSave.file) {
@@ -294,14 +306,14 @@ const LocalFileStore = {
                 archLatitud: utmCoords.northing, archLongitud: utmCoords.easting,
                 archFecha: dataToSave.date ? new Date(dataToSave.date).toISOString() : new Date().toISOString(),
                 archTipoElemento: tipoElem, archIdElemento: Number(structureIdInt),
-                tipiInterno: Number(defTipiInterno), archActivo: true, file: dataToSave.file 
+                tipiInterno: Number(defTipiInterno), archActivo: true, file: dataToSave.file
             };
 
             const result = await addFile(payload);
             if (result) {
                 toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada' });
                 setShowPhotoModal(false);
-                setViewMode('gallery'); 
+                setViewMode('gallery');
                 if (selectedDeficiency) loadFiles(selectedDeficiency.defiInterno);
             }
         } catch (error) {
@@ -311,25 +323,25 @@ const LocalFileStore = {
     // --- 7. LÓGICA ZIP ---
     // --- 7. LÓGICA ZIP CORREGIDA (Agrupación Correcta 7004) ---
     const handleDownloadZip = async () => {
-        if (dbFiles.length === 0) { 
-            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'Sin fotos' }); 
-            return; 
+        if (dbFiles.length === 0) {
+            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'Sin fotos' });
+            return;
         }
         setZipLoading(true);
         try {
             const zip = new JSZip();
-            
+
             // A. Preparar Contexto Global (Una sola vez)
             const feederObj = feeders.find(f => f.value === selectedFeederId);
             const feederLbl = resolveFeederName(feederObj);
-            
+
             let sedLbl = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || "SIN_SED") : "SIN_SED";
-            if(sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
+            if (sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
             sedLbl = safeSeg(sedLbl);
-            
+
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
             const tipoElem = (structureType || 'Poste').toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
-            
+
             // B. Datos de la Deficiencia
             const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
             const defCodeRaw = selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000";
@@ -338,7 +350,7 @@ const LocalFileStore = {
 
             // 🔥 C. CALCULAR NÚMERO DE CARPETA (FUERA DEL BUCLE)
             // Calculamos 'folderNum' una sola vez para todas las fotos de esta deficiencia.
-            let folderNum = 1; 
+            let folderNum = 1;
 
             if (is7004) {
                 // 1. Filtramos las 7004 del historial
@@ -375,10 +387,10 @@ const LocalFileStore = {
                 if (sessionFile) {
                     zip.file(fullPathInZip, sessionFile);
                 } else {
-                    const fileUrl = f.url || `${API_BASE_URL}/api/files/download/${f.archInterno}`; 
+                    const fileUrl = f.url || `${API_BASE_URL}/api/files/download/${f.archInterno}`;
                     try {
                         const response = await fetch(fileUrl);
-                        if(response.ok) {
+                        if (response.ok) {
                             const blob = await response.blob();
                             zip.file(fullPathInZip, blob);
                         }
@@ -391,10 +403,10 @@ const LocalFileStore = {
             toast.current.show({ severity: 'success', summary: 'ZIP', detail: 'Descarga iniciada' });
 
         } catch (e) {
-            console.error("ZIP Error:", e); 
+            console.error("ZIP Error:", e);
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo generando ZIP' });
-        } finally { 
-            setZipLoading(false); 
+        } finally {
+            setZipLoading(false);
         }
     };
 
@@ -408,7 +420,7 @@ const LocalFileStore = {
     };
 
     const initialPhotoData = {
-        tipo: 1, lat: globalLat, long: globalLon, 
+        tipo: 1, lat: globalLat, long: globalLon,
         date: globalDate || new Date(), file: null, preview: null
     };
 
@@ -426,7 +438,7 @@ const LocalFileStore = {
     };
 
     const dateTemplate = (r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-';
-    const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Cód"}</span>;
+    const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Def"}</span>;
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
@@ -438,9 +450,9 @@ const LocalFileStore = {
                 <div className="w-full max-w-lg">
                     <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda por Código GIS</label>
                     <div className="p-inputgroup">
-                        <AutoComplete 
-                            value={structureCode} suggestions={gisSuggestions} completeMethod={searchNetworkElement} 
-                            field="codigo" itemTemplate={itemTemplate} onChange={(e) => setStructureCode(e.value)} onSelect={handleGisSelection} 
+                        <AutoComplete
+                            value={structureCode} suggestions={gisSuggestions} completeMethod={searchNetworkElement}
+                            field="codigo" itemTemplate={itemTemplate} onChange={(e) => setStructureCode(e.value)} onSelect={handleGisSelection}
                             placeholder="Ej: VBT0000372026..." className="w-full" inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
                         />
                         <Button icon="pi pi-search" onClick={handleSearchDeficiencies} loading={searchLoading} />
@@ -449,29 +461,83 @@ const LocalFileStore = {
             </div>
 
             {/* B. HISTORIAL */}
-             {historicalData.length > 0 && (
+            {historicalData.length > 0 && (
                 <div className="card border-l-4 border-blue-500 shadow-md bg-white rounded-lg mb-6">
                     <div className="p-3 bg-blue-50 flex justify-between items-center border-b border-blue-100">
                         <h3 className="font-bold text-blue-800 m-0 text-sm">Historial</h3>
                         <Tag value={`${historicalData.length} Reg.`} severity="info" rounded />
                     </div>
-                    <DataTable 
-                        value={historicalData} size="small" stripedRows rows={5} paginator selectionMode="single" selection={selectedDeficiency} 
-                        onSelectionChange={(e) => { setSelectedDeficiency(e.value); if(e.value) loadFiles(e.value.defiInterno); }}
+                    <DataTable
+                        value={historicalData} size="small" stripedRows rows={5} paginator selectionMode="single" selection={selectedDeficiency}
+                        onSelectionChange={(e) => { setSelectedDeficiency(e.value); if (e.value) loadFiles(e.value.defiInterno); }}
                         dataKey="defiInterno" className="text-sm"
                     >
-                        <Column field="defiInterno" header="ID" style={{width:'70px'}} />
+                        <Column field="defiInterno" header="ID" style={{ width: '70px' }} />
                         <Column field="defiCodigoElemento" header="Cód. GIS" />
                         <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} />
                         <Column header="Tipificacion" body={typeBodyTemplate} />
-                        <Column field="defiObservacion" header="Obs" className="truncate" style={{maxWidth:'150px'}} />
+                        <Column field="defiObservacion" header="Obs" className="truncate" style={{ maxWidth: '150px' }} />
                     </DataTable>
                 </div>
             )}
+            {/* CONTENEDOR DE GESTIÓN DE ARCHIVOS / FOTOS */}
+<div className="surface-card p-3 border-round-xl shadow-1 mt-4 border-1 border-200">
+    
+    {/* Instrucciones usando el componente Message de PrimeReact */}
+    <div className="mb-3">
+        <Message 
+            severity="info" 
+            className="w-full justify-content-start border-none bg-blue-50 text-blue-800"
+            content={(
+                <div className="flex align-items-center gap-2">
+                    <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
+                    <span className="text-xs">
+                        <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.</strong> 
+                    </span>
+                </div>
+            )}
+        />
+    </div>
+
+    {/* HEADER Y BOTONES DE ACCIÓN */}
+    <div className="flex flex-column md:flex-row justify-content-end align-items-center gap-3">
+
+        
+        <div className="flex flex-wrap justify-content-center gap-2">
+            <Button 
+                label="Descargar ZIP" 
+                icon="pi pi-download" 
+                className="p-button-sm p-button-secondary p-button-outlined" 
+                onClick={handleDownloadZip}
+                loading={zipLoading}
+                disabled={dbFiles.length === 0}
+            />
+
+            <Button 
+                label="Añadir Fotos" 
+                icon="pi pi-camera" 
+                className="p-button-sm p-button-success shadow-1 p-2 " 
+                onClick={() => setShowPhotoModal(true)} 
+            />
+
+            <SelectButton 
+                value={viewMode} 
+                onChange={(e) => e.value && setViewMode(e.value)} 
+                options={viewOptions} 
+                itemTemplate={(option) => (
+                    <div className="flex align-items-center px-2 py-1">
+                        <i className={`${option.icon} mr-2`}></i>
+                        <span className="text-xs">{option.label}</span>
+                    </div>
+                )} 
+            />
+        </div>
+    </div>
+</div>
 
             {/* C. FORMULARIO PRINCIPAL */}
             <Card className="border-t-4 border-indigo-500 shadow-sm">
-                
+
                 {/* C.1 UBICACIÓN */}
                 <div className="mb-4 p-4 bg-indigo-50 rounded border border-indigo-100">
                     <h4 className="text-sm font-bold text-indigo-800 mb-3 flex items-center">
@@ -488,7 +554,7 @@ const LocalFileStore = {
                         </div>
                         <div className="flex flex-col">
                             <label className="text-[10px] font-bold text-indigo-700 uppercase">Tipo Estructura</label>
-                            <Dropdown value={structureType} options={[{label: 'Poste', value: 'Poste'}, {label: 'Vano', value: 'Vano'}]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm" />
+                            <Dropdown value={structureType} options={[{ label: 'Poste', value: 'Poste' }, { label: 'Vano', value: 'Vano' }]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm" />
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-4 items-end pt-3 border-t border-indigo-200">
@@ -498,38 +564,8 @@ const LocalFileStore = {
                     </div>
                 </div>
 
-                {/* HEADER Y BOTONES DE ACCIÓN */}
-                <div className="flex justify-between items-center mb-2 mt-6 border-t border-gray-100 pt-4">
-                    <h4 className="text-sm font-bold text-gray-700 m-0">
-                        Gestión de Archivos / Fotos
-                    </h4>
-                    <div className="flex gap-2">
-                        {/* Botón ZIP */}
-                        <Button 
-                            label="Descargar ZIP" 
-                            icon="pi pi-download" 
-                            className="p-button-sm p-button-secondary p-button-outlined" 
-                            onClick={handleDownloadZip}
-                            loading={zipLoading}
-                            disabled={dbFiles.length === 0}
-                        />
-                        {/* Botón Upload */}
-                        <Button 
-                            label="Añadir Fotos" 
-                            icon="pi pi-camera" 
-                            className="p-button-sm p-button-success" 
-                            onClick={() => setShowPhotoModal(true)} 
-                        />
-                        <SelectButton 
-            value={viewMode} 
-            onChange={(e) => e.value && setViewMode(e.value)} 
-            options={viewOptions} 
-            itemTemplate={(option) => <i className={`${option.icon} mr-2`}>{option.label}</i>} 
-        />
-                    </div>
-                </div>
-                
-                <FilesTableEditor 
+
+                <FilesTableEditor
                     namingContext={contextData}
                     historicalData={historicalData}
                     getCodeById={getCodeById}
@@ -537,14 +573,14 @@ const LocalFileStore = {
                     existingFiles={dbFiles}
                     onDeleteDbFile={deleteFile}
                     loadingFiles={loadingFiles}
-                    viewMode={viewMode} 
-    sessionBlobs={sessionBlobs.current}
+                    viewMode={viewMode}
+                    sessionBlobs={sessionBlobs.current}
                 />
             </Card>
 
             {/* MODAL CON EL MANEJADOR PERSONALIZADO */}
             {showPhotoModal && (
-                <PhotoUploadModal 
+                <PhotoUploadModal
                     visible={showPhotoModal}
                     onHide={() => setShowPhotoModal(false)}
                     initialData={initialPhotoData}
@@ -586,17 +622,17 @@ function safeSeg(str) {
 function formatCompactDate(date) {
     if (!date) return "00000000-000000";
     const d = new Date(date);
-    if(isNaN(d.getTime())) return "00000000-000000";
-    
+    if (isNaN(d.getTime())) return "00000000-000000";
+
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    
+
     // 🔥 DESCOMENTADO Y CORREGIDO:
     const h = String(d.getHours()).padStart(2, '0');
     const min = String(d.getMinutes()).padStart(2, '0');
     const s = String(d.getSeconds()).padStart(2, '0');
-    
+
     return `${y}${m}${day}-${h}${min}${s}`; // Ej: 20260218-143005
 }
 

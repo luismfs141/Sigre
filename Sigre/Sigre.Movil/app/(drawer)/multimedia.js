@@ -22,11 +22,11 @@ import { useFiles } from "../../hooks/useFiles";
 
 import { formatLocalISO, getUniqueNowMs, nowPeruISO, roundMsForSqlDatetime } from "../../utils/dateUtils";
 
+import ModalAudio from "../../components/Multimedia/ModalAudio";
+import ModalCamera from "../../components/Multimedia/ModalCamera";
 
 
 import AudioCard from "../../components/Multimedia/AudioCard";
-import ModalAudio from "../../components/Multimedia/ModalAudio";
-import ModalCamera from "../../components/Multimedia/ModalCamera";
 import PhotoCard from "../../components/Multimedia/PhotoCard";
 
 import ViewShot from "react-native-view-shot";
@@ -83,11 +83,12 @@ import {
   writeFileIntoSafDir
 } from "../../utils/Multimedia/safUtils";
 
-import { runPostSaveValidations } from "../../utils/Multimedia/postSaveValidations";
 
 export default function Multimedia() {
   const router = useRouter();
+
   const replaceTargetRef = useRef(null);
+  const initialInspeccionadoRef = useRef({ defId: null, value: null });
 
   const {
     selectedItem,
@@ -106,9 +107,12 @@ export default function Multimedia() {
   const canGeneratePlaceholders = isAdmin || isSupervisor || isInspector;
 
   //const { findFeederById } = useFeeder();
-  const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted, markArchivoAsInactive } = useFiles();
+  const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted } = useFiles();
 
-  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, recalcularPinInspeccionadoParaElemento } = useDeficiency();
+
+  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, autoSyncDeficiency } = useDeficiency();
+
+
 
   const [cameraModal, setCameraModal] = useState(false);
   const [audioModal, setAudioModal] = useState(false);
@@ -136,8 +140,185 @@ export default function Multimedia() {
   const [canEdit, setCanEdit] = useState(false);
 
 
+  // ==========================
+  // DRAFT / STAGING (PRIVADO)
+  // ==========================
+  const DRAFT_VERSION = 1;
 
-  
+  const getDraftBaseRel = (defId) => `SIGRE.DRAFT/DEF_${defId}/`;
+  const getDraftPhotosDir = (defId) =>
+    FileSystem.documentDirectory + getDraftBaseRel(defId) + "photos/";
+  const getDraftAudiosDir = (defId) =>
+    FileSystem.documentDirectory + getDraftBaseRel(defId) + "audios/";
+  const getDraftManifestUri = (defId) =>
+    FileSystem.documentDirectory + getDraftBaseRel(defId) + "manifest.json";
+
+  const safeJsonParse = (txt) => {
+    try {
+      return JSON.parse(txt);
+    } catch {
+      return null;
+    }
+  };
+
+  const readDraftManifestSafe = async (defId) => {
+    if (!defId) return null;
+    const uri = getDraftManifestUri(defId);
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) return null;
+
+      const raw = await FileSystem.readAsStringAsync(uri);
+      const data = safeJsonParse(raw);
+
+      if (!data || data.v !== DRAFT_VERSION) return null;
+      if (Number(data.defId) !== Number(defId)) return null;
+
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeDraftManifestSafe = async (defId, data) => {
+    if (!defId) return;
+    const baseDir = FileSystem.documentDirectory + getDraftBaseRel(defId);
+
+    try {
+      await ensureDirExists(baseDir);
+      const uri = getDraftManifestUri(defId);
+
+      const payload = {
+        v: DRAFT_VERSION,
+        defId: Number(defId),
+        updatedAtMs: Date.now(),
+        ...data,
+      };
+
+      await FileSystem.writeAsStringAsync(uri, JSON.stringify(payload));
+    } catch (e) {
+      console.warn("⚠️ No se pudo guardar manifest DRAFT:", e?.message ?? e);
+    }
+  };
+
+  const clearDraftSessionSafe = async (defId) => {
+    if (!defId) return;
+    try {
+      const baseDir = FileSystem.documentDirectory + getDraftBaseRel(defId);
+      await FileSystem.deleteAsync(baseDir, { idempotent: true });
+    } catch {
+      // idempotente
+    }
+  };
+
+  const buildDraftSnapshot = ({ nextPhotos, nextAudios, nextDeletedIds }) => {
+    const draftPhotos = Array(6).fill(null);
+    for (let i = 0; i < 6; i++) {
+      const p = nextPhotos?.[i];
+      if (!p) continue;
+
+      // SOLO DRAFT: no tiene id y no es placeholder
+      if (p?.id) continue;
+      if (p?.isPlaceholder) continue;
+
+      draftPhotos[i] = {
+        uri: cleanUri(p.uri),
+        capturedAtMs: Number(p?.capturedAtMs) || null,
+        fechaISO: p?.fechaISO ?? null,
+      };
+    }
+
+    const draftAudios = (nextAudios ?? [])
+      .filter((a) => a && !a.id && a.uri)
+      .map((a) => ({
+        uri: cleanUri(a.uri),
+        capturedAtMs: Number(a?.capturedAtMs) || null,
+        fechaISO: a?.fechaISO ?? null,
+        title: a?.title ?? "Audio",
+      }));
+
+    return {
+      draftPhotos,
+      draftAudios,
+      deletedIds: nextDeletedIds ?? [],
+    };
+  };
+
+  const persistDraftSnapshotSafe = async ({ nextPhotos, nextAudios, nextDeletedIds }) => {
+    const defId = selectedDeficiency?.id;
+    if (!defId) return;
+
+    const snap = buildDraftSnapshot({ nextPhotos, nextAudios, nextDeletedIds });
+
+    const hasDraftPhotos = snap.draftPhotos.some(Boolean);
+    const hasDraftAudios = (snap.draftAudios?.length ?? 0) > 0;
+    const hasDeletes = (snap.deletedIds?.length ?? 0) > 0;
+
+    if (!hasDraftPhotos && !hasDraftAudios && !hasDeletes) {
+      await clearDraftSessionSafe(defId);
+      return;
+    }
+
+    await writeDraftManifestSafe(defId, snap);
+  };
+
+  const stagePhotoToDraft = async ({ defId, slotIndex, photo }) => {
+    const raw = Number(photo?.capturedAtMs) || getUniqueNowMs();
+    const ms = roundMsForSqlDatetime(raw);
+    const fechaISO = formatLocalISO(ms);
+
+    const { date, time } = getStampPartsFromMs(ms);
+    const fileName = `DRAFT_FOT_${slotIndex + 1}_${date}_${time}.jpg`;
+
+    const dir = getDraftPhotosDir(defId);
+    await ensureDirExists(dir);
+
+    const fromUri = cleanUri(photo.uri);
+    const toUri = dir + fileName;
+
+    await FileSystem.copyAsync({ from: fromUri, to: toUri });
+
+    // limpiamos el temporal
+    try { await FileSystem.deleteAsync(fromUri, { idempotent: true }); } catch { }
+
+    return {
+      ...photo,
+      uri: toUri,
+      capturedAtMs: ms,
+      fechaISO,
+      isDraft: true,
+    };
+  };
+
+  const stageAudioToDraft = async ({ defId, audio }) => {
+    const raw = Number(audio?.capturedAtMs) || getUniqueNowMs();
+    const ms = roundMsForSqlDatetime(raw);
+    const fechaISO = formatLocalISO(ms);
+
+    const { date, time } = getStampPartsFromMs(ms);
+    const fileName = `DRAFT_AUD_${date}_${time}.m4a`;
+
+    const dir = getDraftAudiosDir(defId);
+    await ensureDirExists(dir);
+
+    const fromUri = cleanUri(audio.uri);
+    const toUri = dir + fileName;
+
+    await FileSystem.copyAsync({ from: fromUri, to: toUri });
+
+    // limpiamos el temporal
+    try { await FileSystem.deleteAsync(fromUri, { idempotent: true }); } catch { }
+
+    return {
+      ...audio,
+      uri: toUri,
+      capturedAtMs: ms,
+      fechaISO,
+      isDraft: true,
+    };
+  };
+
+
 
   const loadMedios = async () => {
     if (!selectedDeficiency?.id) return;
@@ -147,6 +328,15 @@ export default function Multimedia() {
 
     try {
       const deficiencia = await fetchDeficiencyByIdLocal(selectedDeficiency.id);
+
+      // ✅ snapshot inicial SOLO al entrar (o si cambió de deficiencia)
+      if (initialInspeccionadoRef.current.defId !== selectedDeficiency.id) {
+        initialInspeccionadoRef.current = {
+          defId: selectedDeficiency.id,
+          value: Number(deficiencia?.DefiInspeccionado) ? 1 : 0,
+        };
+      }
+
 
       const ownerId = deficiencia?.DefiUsuarioInic ?? null;
       setDefOwnerId(ownerId);
@@ -297,17 +487,89 @@ export default function Multimedia() {
         }
       }
 
-      setPhotos(photosTmp);
-      setAudios(audiosTmp);
+      // ==========================
+      // APLICAR DRAFT SI EXISTE
+      // ==========================
+      let mergedPhotos = photosTmp;
+      let mergedAudios = audiosTmp;
+      let mergedDeleted = [];
+      let appliedDraft = false;
 
+      if (_canEdit && selectedDeficiency?.id) {
+        const draft = await readDraftManifestSafe(selectedDeficiency.id);
+
+        if (draft) {
+          const dPhotos = Array.isArray(draft.draftPhotos) ? draft.draftPhotos : [];
+          const dAudios = Array.isArray(draft.draftAudios) ? draft.draftAudios : [];
+          const dDeletes = Array.isArray(draft.deletedIds) ? draft.deletedIds : [];
+
+          // merge fotos
+          const tmp = [...mergedPhotos];
+          for (let i = 0; i < 6; i++) {
+            const dp = dPhotos[i];
+            if (!dp?.uri) continue;
+
+            try {
+              const info = await FileSystem.getInfoAsync(dp.uri);
+              if (!info.exists) continue;
+
+              tmp[i] = {
+                ...(tmp[i] || {}),
+                uri: dp.uri,
+                capturedAtMs: Number(dp?.capturedAtMs) || null,
+                fechaISO: dp?.fechaISO ?? null,
+                isDraft: true,
+              };
+              appliedDraft = true;
+            } catch { }
+          }
+          mergedPhotos = tmp;
+
+          // merge audios
+          const aud = [...mergedAudios];
+          for (const da of dAudios) {
+            if (!da?.uri) continue;
+
+            try {
+              const info = await FileSystem.getInfoAsync(da.uri);
+              if (!info.exists) continue;
+
+              aud.push({
+                uri: da.uri,
+                title: da?.title ?? "Audio",
+                id: null,
+                type: 0,
+                fechaISO: da?.fechaISO ?? null,
+                capturedAtMs: Number(da?.capturedAtMs) || null,
+                isDraft: true,
+              });
+              appliedDraft = true;
+            } catch { }
+          }
+          mergedAudios = aud;
+
+          // deletes
+          mergedDeleted = dDeletes;
+          if (dDeletes.length > 0) appliedDraft = true;
+        }
+      } else {
+        // si no puede editar, limpiamos cualquier draft viejo de esa deficiencia
+        if (selectedDeficiency?.id) await clearDraftSessionSafe(selectedDeficiency.id);
+      }
+
+      setPhotos(mergedPhotos);
+      setAudios(mergedAudios);
+
+      // "original" es el baseline de BD (sin draft)
       setOriginalPhotos(photosTmp);
       setOriginalAudios(audiosTmp);
 
-      setDeletedIds([]);
-      setIsDirty(false);
+      setDeletedIds(mergedDeleted);
+      setIsDirty(appliedDraft);
 
       setPlaceholderQueue(placeholderJobs);
       setPendingOriginalSnapshot(placeholderJobs.length > 0);
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -411,18 +673,21 @@ export default function Multimedia() {
     if (!photo) return;
     if (!requireEditPermission()) return;
 
+    let nextDeleted = [...deletedIds];
+
     if (photo?.id) {
-      setDeletedIds((prev) => [
-        ...prev,
+      nextDeleted = [
+        ...nextDeleted,
         {
           id: photo.id,
           path: photo.originalPath,
           type: photo.type,
           sourceUri: photo?.isPlaceholder ? cleanUri(photo.uri) : undefined,
-          isPlaceholder: !!photo?.isPlaceholder
-        }
-      ]);
+          isPlaceholder: !!photo?.isPlaceholder,
+        },
+      ];
     } else {
+      // DRAFT: borrar físico inmediato
       try {
         const u = cleanUri(photo.uri);
         const info = await FileSystem.getInfoAsync(u);
@@ -430,22 +695,32 @@ export default function Multimedia() {
       } catch { }
     }
 
-    setPhotos((prev) => {
-      const c = [...prev];
-      c[index] = null;
-      return c;
-    });
+    const nextPhotos = [...photos];
+    nextPhotos[index] = null;
+
+    setDeletedIds(nextDeleted);
+    setPhotos(nextPhotos);
     setIsDirty(true);
+
+    await persistDraftSnapshotSafe({
+      nextPhotos,
+      nextAudios: audios,
+      nextDeletedIds: nextDeleted,
+    });
   };
+
 
   const handleDeleteAudio = async (index) => {
     const audio = audios[index];
     if (!audio) return;
     if (!requireEditPermission()) return;
 
+    let nextDeleted = [...deletedIds];
+
     if (audio?.id) {
-      setDeletedIds((prev) => [...prev, { id: audio.id, path: audio.originalPath, type: 0 }]);
+      nextDeleted = [...nextDeleted, { id: audio.id, path: audio.originalPath, type: 0 }];
     } else {
+      // DRAFT: borrar físico inmediato
       try {
         const u = cleanUri(audio.uri);
         const info = await FileSystem.getInfoAsync(u);
@@ -453,9 +728,19 @@ export default function Multimedia() {
       } catch { }
     }
 
-    setAudios((prev) => prev.filter((_, i) => i !== index));
+    const nextAudios = audios.filter((_, i) => i !== index);
+
+    setDeletedIds(nextDeleted);
+    setAudios(nextAudios);
     setIsDirty(true);
+
+    await persistDraftSnapshotSafe({
+      nextPhotos: photos,
+      nextAudios,
+      nextDeletedIds: nextDeleted,
+    });
   };
+
 
   const saveFileRecord = async ({ filename, slot, isAudio, mediaData, codTablaReal, elementId, tipiId, defiUUID }) => {
     const { tipo } = getElementoInfo();
@@ -540,9 +825,11 @@ export default function Multimedia() {
 
       const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
 
-      if (hasNewPhotos || hasNewAudios) {
+      // iOS NO tiene SAF público: guardamos final en privado
+      if (Platform.OS !== "android" && (hasNewPhotos || hasNewAudios)) {
         await ensureDirExists(carpetaBase);
       }
+
 
       let picturesTargetDir = null;
       let musicTargetDir = null;
@@ -683,25 +970,30 @@ export default function Multimedia() {
         }
       }
 
-      // 4) FOTOS NUEVAS
+      // 4) FOTOS NUEVAS (DRAFT -> COMMIT)
+      let existingPublicPics = [];
+      if (Platform.OS === "android" && picturesTargetDir) {
+        try {
+          existingPublicPics = (await SAF.readDirectoryAsync(picturesTargetDir)) ?? [];
+        } catch { }
+      }
+
+      const publicHasPic = (fileName) =>
+        (existingPublicPics ?? []).some((u) => safNameMatches(u, fileName));
+
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         if (!photo || photo.id) continue;
         if (photo?.isPlaceholder) continue;
 
-        const baseName = basenameFromAnyPath(photo.uri);
-        if (baseName.startsWith(PLACEHOLDER_PREFIX)) continue;
+        const srcUri = cleanUri(photo.uri);
 
-        const cleanSrcUri = photo.uri.split("?")[0];
-
+        // timestamp estable (para que si se reintenta no cambie el nombre)
         const capturedAtMsRaw = Number(photo?.capturedAtMs) || getUniqueNowMs();
         const capturedAtMs = roundMsForSqlDatetime(capturedAtMsRaw);
 
-        const fechaISO = formatLocalISO(capturedAtMs);
+        const fechaISO = photo?.fechaISO ?? formatLocalISO(capturedAtMs);
         const { date, time } = getStampPartsFromMs(capturedAtMs);
-
-
-
 
         const fname = buildMediaName({
           prefix: "FOT",
@@ -711,22 +1003,41 @@ export default function Multimedia() {
           suffix: i + 1,
           ext: "jpg",
           date,
-          time
-        });
-
-        const destUri = carpetaBase + fname;
-
-        await FileSystem.copyAsync({ from: cleanSrcUri, to: destUri });
-
-        await writeFileIntoSafDir({
-          dirUri: picturesTargetDir,
-          fileName: fname,
-          mimeType: "image/jpeg",
-          sourceFileUri: destUri
+          time,
         });
 
         const pathParaBD = relativeFolderPath + fname;
 
+        // ANDROID: escribir a pública (SAF) directo desde DRAFT
+        if (Platform.OS === "android") {
+          if (!picturesTargetDir) {
+            throw new Error("No hay carpeta pública (Pictures) seleccionada.");
+          }
+
+          if (!publicHasPic(fname)) {
+            await writeFileIntoSafDir({
+              dirUri: picturesTargetDir,
+              fileName: fname,
+              mimeType: "image/jpeg",
+              sourceFileUri: srcUri,
+            });
+
+            // refrescar lista local (evita duplicados si el loop repite)
+            try {
+              existingPublicPics.push(`${fname}`); // no importa el formato exacto, publicHasPic usa safNameMatches con uris reales,
+              // pero igual dejamos el control principal con readDirectoryAsync inicial.
+            } catch { }
+          }
+        } else {
+          // iOS: mover a privado final
+          const destUri = carpetaBase + fname;
+          const info = await FileSystem.getInfoAsync(destUri);
+          if (!info.exists) {
+            await FileSystem.moveAsync({ from: srcUri, to: destUri });
+          }
+        }
+
+        // guardar registro BD
         await saveFileRecord({
           filename: pathParaBD,
           slot: i + 1,
@@ -738,53 +1049,69 @@ export default function Multimedia() {
           defiUUID: defiCodUnico,
         });
 
-
-
-        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
-        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
+        // limpiar DRAFT en Android (en iOS ya se movió)
+        if (Platform.OS === "android") {
+          try { await FileSystem.deleteAsync(srcUri, { idempotent: true }); } catch { }
+        }
       }
 
-      // 5) AUDIOS NUEVOS
+
+      // 5) AUDIOS NUEVOS (DRAFT -> COMMIT)
+      let existingPublicAud = [];
+      if (Platform.OS === "android" && musicTargetDir) {
+        try {
+          existingPublicAud = (await SAF.readDirectoryAsync(musicTargetDir)) ?? [];
+        } catch { }
+      }
+
+      const publicHasAud = (fileName) =>
+        (existingPublicAud ?? []).some((u) => safNameMatches(u, fileName));
+
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
         if (!audio || audio.id) continue;
 
-        const cleanSrcUri = audio.uri.split("?")[0];
+        const srcUri = cleanUri(audio.uri);
 
         const capturedAtMsRaw = Number(audio?.capturedAtMs) || getUniqueNowMs();
         const capturedAtMs = roundMsForSqlDatetime(capturedAtMsRaw);
 
-        const fechaISO = formatLocalISO(capturedAtMs);
+        const fechaISO = audio?.fechaISO ?? formatLocalISO(capturedAtMs);
         const { date, time } = getStampPartsFromMs(capturedAtMs);
-
-
-
 
         const fname = buildMediaName({
           prefix: "AUD",
           sed: selectedSed?.SedCodigo,
           codigo,
           def: defNameSegment,
-          suffix: i + 1, // ✅ para que nunca choque si grabas varios
+          suffix: i + 1,
           ext: "m4a",
           date,
-          time
-        });
-
-
-
-        const destUri = carpetaBase + fname;
-
-        await FileSystem.copyAsync({ from: cleanSrcUri, to: destUri });
-
-        await writeFileIntoSafDir({
-          dirUri: musicTargetDir,
-          fileName: fname,
-          mimeType: "audio/mp4",
-          sourceFileUri: destUri
+          time,
         });
 
         const pathParaBD = relativeFolderPath + fname;
+
+        if (Platform.OS === "android") {
+          if (!musicTargetDir) {
+            throw new Error("No hay carpeta pública (Music) seleccionada.");
+          }
+
+          if (!publicHasAud(fname)) {
+            await writeFileIntoSafDir({
+              dirUri: musicTargetDir,
+              fileName: fname,
+              mimeType: "audio/mp4",
+              sourceFileUri: srcUri,
+            });
+          }
+        } else {
+          const destUri = carpetaBase + fname;
+          const info = await FileSystem.getInfoAsync(destUri);
+          if (!info.exists) {
+            await FileSystem.moveAsync({ from: srcUri, to: destUri });
+          }
+        }
 
         await saveFileRecord({
           filename: pathParaBD,
@@ -794,37 +1121,76 @@ export default function Multimedia() {
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
           tipiId: currentTipiInterno,
-          defiUUID: defiCodUnico
+          defiUUID: defiCodUnico,
         });
 
-
-
-        try { await FileSystem.deleteAsync(destUri, { idempotent: true }); } catch { }
-        try { await FileSystem.deleteAsync(cleanSrcUri, { idempotent: true }); } catch { }
+        if (Platform.OS === "android") {
+          try { await FileSystem.deleteAsync(srcUri, { idempotent: true }); } catch { }
+        }
       }
+
+
+
+
+
+      // ✅ limpiar staging
+      await clearDraftSessionSafe(selectedDeficiency?.id);
+
+      // =========================
+      // POST-FINALIZAR: resumen de cambios
+      // =========================
+      const prevDefiIns = Number(deficiencyData?.DefiInspeccionado) ? 1 : 0;
+
+      // Reglas: fotos obligatorias 1..4 (índices 0..3) — NO cuentan placeholders
+      const requiredIdx = [0, 1, 2, 3];
+
+      // Slot cuenta si:
+      // - ya existe en BD (tiene id), aunque sea placeholder
+      // - o es nueva foto real (sin id y no placeholder)
+      const slotOk = (p) => !!p && (p?.id || !p?.isPlaceholder);
+
+      const newDefiIns = requiredIdx.every((i) => slotOk(photos[i])) ? 1 : 0;
+
+      const initialIns =
+        initialInspeccionadoRef.current?.defId === selectedDeficiency.id
+          ? (Number(initialInspeccionadoRef.current.value) ? 1 : 0)
+          : prevDefiIns;
+
+      // ✅ 1) Actualiza SQLITE solo si cambió vs lo que estaba en la BD local en ese momento
+      if (newDefiIns !== prevDefiIns) {
+        await setDefiInspeccionadoLocal(selectedDeficiency.id, newDefiIns);
+      }
+
+      // ✅ 2) Sincroniza SOLO si cambió vs snapshot al entrar a Multimedia
+      if (newDefiIns !== initialIns) {
+        await autoSyncDeficiency(selectedDeficiency.id);
+
+        // (opcional) actualizar snapshot para evitar re-sync si el usuario no sale y vuelve a finalizar
+        initialInspeccionadoRef.current = { defId: selectedDeficiency.id, value: newDefiIns };
+      }
+
+
+      // Conteos
+      const countNewPhotos = photos.filter((p) => p && !p.id && !p.isPlaceholder).length;
+      const countNewAudios = audios.filter((a) => a && !a.id).length;
+      const countDelPhotos = deletedIds.filter((d) => Number(d?.type) !== 0).length;
+      const countDelAudios = deletedIds.filter((d) => Number(d?.type) === 0).length;
+
+      // Mensaje final
+      const lines = [];
+      lines.push("Cambios aplicados al finalizar:");
+      lines.push(`• Fotos: +${countNewPhotos} nuevas, -${countDelPhotos} eliminadas`);
+      lines.push(`• Audios: +${countNewAudios} nuevos, -${countDelAudios} eliminados`);
+      lines.push(`• DefiInspeccionado: ${prevDefiIns} → ${newDefiIns}`);
 
       setLoading({ active: false, msg: "" });
 
-      const validationReport = await runPostSaveValidations({
-        canGeneratePlaceholders,
-        isElevated,
-        selectedDeficiencyId: selectedDeficiency.id,
-
-        fetchMediosByDeficienciaId,
-        markArchivoAsInactive,
-        setDefiInspeccionadoLocal,
-        recalcularPinInspeccionadoParaElemento,
-
-        picturesRoot,
-        picturesTargetDir,
-        pathSegments,
-        deficiencyData,
-        photosSnapshot: photos,
-      });
-
-      Alert.alert(validationReport.titulo, validationReport.resumen, [
+      Alert.alert("✅ Finalizado", lines.join("\n"), [
         { text: "OK", onPress: () => router.replace("/inspection") },
       ]);
+
+
+
     } catch (err) {
       setLoading({ active: false, msg: "" });
       Alert.alert("Error", err.message);
@@ -832,8 +1198,11 @@ export default function Multimedia() {
   };
 
   const discardChanges = async () => {
+    const defId = selectedDeficiency?.id;
+
+    // borrar físicamente TODO lo que sea draft (fotos/audios sin id)
     const tempPhotoUris = photos
-      .filter((p) => p && !p.id && p.uri)
+      .filter((p) => p && !p.id && p.uri && !p.isPlaceholder)
       .map((p) => cleanUri(p.uri));
 
     const tempAudioUris = audios
@@ -847,6 +1216,12 @@ export default function Multimedia() {
       } catch { }
     }
 
+    // borrar manifest + carpeta draft completa (por si quedó algo)
+    if (defId) {
+      await clearDraftSessionSafe(defId);
+    }
+
+    // volver al baseline original (BD)
     setPhotos(originalPhotos);
     setAudios(originalAudios);
     setDeletedIds([]);
@@ -857,6 +1232,7 @@ export default function Multimedia() {
     setCameraModal(false);
     setAudioModal(false);
   };
+
 
   const onCancel = () => {
     if (!isDirty) return router.replace("/inspection");
@@ -903,6 +1279,7 @@ export default function Multimedia() {
 
       return () => {
         setPhotos(Array(6).fill(null));
+
         setAudios([]);
         setPreviewPhoto(null);
         setPhotoIndex(null);
@@ -911,6 +1288,8 @@ export default function Multimedia() {
         setDeletedIds([]);
         setPlaceholderQueue([]);
         setPendingOriginalSnapshot(false);
+
+        initialInspeccionadoRef.current = { defId: null, value: null };
       };
     }, [selectedDeficiency?.id, dbReady, currentUserId, isAdmin, isSupervisor, isInspector])
   );
@@ -1087,21 +1466,35 @@ export default function Multimedia() {
         onClose={() => closeCamera(true)}
         onRequestClose={() => closeCamera(true)}
         onPhoto={async (p) => {
+          const defId = selectedDeficiency?.id;
+          if (!defId) {
+            Alert.alert("Error", "No hay deficiencia seleccionada.");
+            return;
+          }
+          if (photoIndex == null) {
+            Alert.alert("Error", "No hay slot de foto seleccionado.");
+            return;
+          }
+
           const target = replaceTargetRef.current;
+
+          // 1) construir nextDeleted si estamos reemplazando
+          let nextDeleted = [...deletedIds];
+
           if (target?.oldPhoto) {
             const old = target.oldPhoto;
 
             if (old?.id) {
-              setDeletedIds((prev) => [
-                ...prev,
+              nextDeleted = [
+                ...nextDeleted,
                 {
                   id: old.id,
                   path: old.originalPath,
                   type: old.type,
                   sourceUri: old?.isPlaceholder ? cleanUri(old.uri) : undefined,
-                  isPlaceholder: !!old?.isPlaceholder
-                }
-              ]);
+                  isPlaceholder: !!old?.isPlaceholder,
+                },
+              ];
             } else if (old?.uri) {
               try {
                 const u = cleanUri(old.uri);
@@ -1111,14 +1504,35 @@ export default function Multimedia() {
             }
           }
 
-          setPhotos((prev) => {
-            const c = [...prev];
-            c[photoIndex] = p;
-            return c;
-          });
+          // 2) mover/copiado a DRAFT privado (staging)
+          let staged = null;
+          try {
+            staged = await stagePhotoToDraft({
+              defId,
+              slotIndex: photoIndex,
+              photo: p,
+            });
+          } catch (e) {
+            console.error("❌ Error stagePhotoToDraft:", e);
+            Alert.alert("Error", "No se pudo guardar la foto en staging.");
+            return;
+          }
 
+          // 3) aplicar en state
+          const nextPhotos = [...photos];
+          nextPhotos[photoIndex] = staged;
+
+          setDeletedIds(nextDeleted);
+          setPhotos(nextPhotos);
           setIsDirty(true);
 
+          await persistDraftSnapshotSafe({
+            nextPhotos,
+            nextAudios: audios,
+            nextDeletedIds: nextDeleted,
+          });
+
+          // UI reset
           setPreviewPhoto(null);
           setPreviewIndex(null);
 
@@ -1132,20 +1546,48 @@ export default function Multimedia() {
       <ModalAudio
         visible={audioModal}
         onClose={() => setAudioModal(false)}
-        onAudioRecorded={({ uri, capturedAtMs }) => {
-          const raw = Number(capturedAtMs) || getUniqueNowMs();
-          const ms = roundMsForSqlDatetime(raw);
+        onAudioRecorded={async ({ uri, capturedAtMs }) => {
+          const defId = selectedDeficiency?.id;
+          if (!defId) {
+            Alert.alert("Error", "No hay deficiencia seleccionada.");
+            return;
+          }
 
-          setAudios((prev) => [
-            ...prev,
-            { uri, title: `Nota ${prev.length + 1}`, fechaISO: formatLocalISO(ms), capturedAtMs: ms }
-          ]);
-          setIsDirty(true);
+          try {
+            const staged = await stageAudioToDraft({
+              defId,
+              audio: { uri, capturedAtMs, title: `Nota ${audios.length + 1}` },
+            });
+
+            const nextAudios = [
+              ...audios,
+              {
+                uri: staged.uri,
+                title: staged.title ?? `Nota ${audios.length + 1}`,
+                fechaISO: staged.fechaISO,
+                capturedAtMs: staged.capturedAtMs,
+                isDraft: true,
+              },
+            ];
+
+            setAudios(nextAudios);
+            setIsDirty(true);
+
+            await persistDraftSnapshotSafe({
+              nextPhotos: photos,
+              nextAudios,
+              nextDeletedIds: deletedIds,
+            });
+
+            setAudioModal(false);
+          } catch (e) {
+            console.error("❌ Error stageAudioToDraft:", e);
+            Alert.alert("Error", "No se pudo guardar el audio en staging.");
+          }
         }}
-
-
-
       />
+
+
 
       <PhotoModal
         visible={!!previewPhoto}

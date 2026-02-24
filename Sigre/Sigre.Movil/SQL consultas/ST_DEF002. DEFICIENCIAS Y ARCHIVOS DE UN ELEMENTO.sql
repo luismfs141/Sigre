@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = '111434'
+DECLARE @CODIGO VARCHAR(20) = 'Dos'
 
 
 
@@ -31,7 +31,7 @@ SELECT	D.DEFI_Interno,
 		CASE
 			WHEN D.DEFI_Accesibilidad = 1 THEN 'Accesible'
 			WHEN D.DEFI_Accesibilidad = 2 THEN 'No accesible'
-		END AS Criticidad,
+		END AS Accesibilidad,
 		CASE
 			WHEN D.DEFI_TipoCruce = 1 THEN 'Calle'
 			WHEN D.DEFI_TipoCruce = 2 THEN 'Avenida'
@@ -46,13 +46,15 @@ SELECT	D.DEFI_Interno,
 		US.USUA_Nombres + ' ' + US.USUA_Apellidos AS [Isp. CREADOR],
 		D.DEFI_FecModificacion,
 		US2.USUA_Nombres + ' ' + US2.USUA_Apellidos AS [Isp. MODIFICADOR],
+		D.DEFI_FecRegistro,
 		D.DEFI_Latitud,
 		D.DEFI_Longitud,
+		D.DEFI_Inspeccionado,
 		[***] = '',
 		D.*
 FROM Deficiencias AS D
 LEFT JOIN Tipificaciones AS TI
-	ON D.DEFI_Interno = TI.TIPI_Interno
+	ON D.TIPI_Interno = TI.TIPI_Interno
 LEFT JOIN Codigos AS CO
 	ON TI.CODI_Interno = CO.CODI_Interno
 LEFT JOIN Usuarios AS US
@@ -61,8 +63,6 @@ LEFT JOIN Usuarios AS US2
 	ON D.DEFI_UsuarioMod = US2.USUA_Interno
 WHERE D.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR D.DEFI_CodigoElemento = @CODIGO
-
-
 
 
 
@@ -97,4 +97,34 @@ FROM Q
 WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR Q.DEFI_CodigoElemento = @CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
+GO
+
+
+--==================================================================
+
+
+------------------------------------------------------------------
+-- BUSCA UN POSTE ------------------------------------------------
+------------------------------------------------------------------
+DECLARE @CODIGO VARCHAR(20) = 'Dos'
+
+SELECT  P.POST_Interno,
+        P.POST_Etiqueta,
+        A.ALIM_Etiqueta,
+        PM.POSMT_Nombre,
+        RT.RTNTP_Nombre,
+        P.POST_Altura,
+        P.POST_Terceros,
+        P.POST_Inspeccionado,
+        [***] = '',
+        p.*
+FROM Postes AS P
+LEFT JOIN Alimentadores AS A
+    ON P.ALIM_Interno = A.ALIM_Interno
+LEFT JOIN PosteMaterial AS PM
+    ON P.POST_Material = PM.POSMT_Interno
+LEFT JOIN RetenidaTipo AS RT
+    ON P.POST_RetenidaTipo = RT.RTNTP_Interno
+WHERE P.POST_CodigoNodo LIKE '%' + @CODIGO
+    OR P.POST_CodigoNodo = @CODIGO
 GO

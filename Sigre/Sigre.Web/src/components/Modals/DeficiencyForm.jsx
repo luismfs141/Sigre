@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo,useRef } from 'react';
 import { Dialog } from 'primereact/dialog';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
@@ -241,45 +241,68 @@ const currentConfig = useMemo(() => {
     }, [visible, deficiencyToEdit, sedId, referenceSelection]);
 
     // --- BÚSQUEDA HÍBRIDA (POSTES Y VANOS) ---
-    const searchNetworkElement = async (event) => {
-        const query = event.query.toLowerCase();
-        
-        // 1. Buscar Postes (Backend)
-        const responsePostes = await fetchPostesChunk(0, 15, query);
-        
-        // 2. Buscar Vanos (Backend - Asumiendo que tienes una función similar, si no, usa solo postes por ahora)
-        const responseVanos = await fetchVanosChunk(0, 15, query); 
-        
-        const resultados = [];
+    // Crea la referencia fuera de la función pero dentro de tu componente
+const debounceTimer = useRef(null);
 
-        // A. Procesar Postes
-        if (responsePostes.data) {
-            resultados.push(...responsePostes.data.map(p => ({
-                ...p,
-                _tipo: 'POSTE',
-                // 🔥 MAPEAMOS EL CÓDIGO AQUÍ PARA QUE SEA LA CLAVE PRINCIPAL
-                codigo: p.postCodigoNodo, 
-                label: p.postEtiqueta || 'S/N',
-                lat: p.postLatitud,
-                lng: p.postLongitud
-            })));
+const searchNetworkElement = (event) => {
+    const query = event.query.toLowerCase();
+    
+    // 1. DEBOUNCE: Limpiamos el temporizador anterior si el usuario sigue escribiendo
+    if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+    }
+
+    // 2. Iniciamos un nuevo temporizador (ej. 500ms)
+    debounceTimer.current = setTimeout(async () => {
+        try {
+            // Opcional: Si tienes un estado de "loading", actívalo aquí
+            // setLoading(true);
+
+            // 3. OPTIMIZACIÓN: Ejecutar ambas peticiones al mismo tiempo (en paralelo)
+            const [responsePostes, responseVanos] = await Promise.all([
+                fetchPostesChunk(0, 15, query),
+                fetchVanosChunk(0, 15, query)
+            ]);
+            
+            const resultados = [];
+
+            // A. Procesar Postes
+            if (responsePostes?.data) {
+                resultados.push(...responsePostes.data.map(p => ({
+                    ...p,
+                    _tipo: 'POSTE',
+                    codigo: p.postCodigoNodo, 
+                    label: p.postEtiqueta || 'S/N',
+                    lat: p.postLatitud,
+                    lng: p.postLongitud
+                })));
+            }
+
+            // B. Procesar Vanos
+            if (responseVanos?.data) {
+                resultados.push(...responseVanos.data.map(v => ({
+                    ...v,
+                    _tipo: 'VANO',
+                    codigo: v.vanoCodigo, 
+                    label: v.vanoEtiqueta || 'S/N',
+                    lat: v.vanoLatitudIni,
+                    lng: v.vanoLongitudIni
+                })));
+            } 
+
+            // 4. Actualizar estado
+            setSuggestions(resultados);
+
+        } catch (error) {
+            // 5. MANEJO DE ERRORES: Evita que el componente se quede "cargando" si falla la red
+            console.error("Error al buscar elementos de red:", error);
+            setSuggestions([]); 
+        } finally {
+            // Opcional: Apagar el estado de "loading" aquí
+            // setLoading(false);
         }
-
-        // B. Procesar Vanos (Ejemplo si tuvieras la data)
-        if (responseVanos.data) {
-            resultados.push(...responseVanos.data.map(v => ({
-                ...v,
-                _tipo: 'VANO',
-                codigo: v.vanoCodigo, // 🔥 CÓDIGO DEL VANO
-                label: v.vanoEtiqueta || 'S/N',
-                lat: v.vanoLatitudIni,
-                lng: v.vanoLongitudIni
-            })));
-        } 
-        
-
-        setSuggestions(resultados);
-    };
+    }, 500); // 500 milisegundos de espera después de la última tecla presionada
+};
     const itemTemplate = (item) => {
         const esPoste = item._tipo === 'POSTE';
         

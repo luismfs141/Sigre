@@ -36,18 +36,18 @@ export const getSourceImageFromType2 = (pin) => {
   // Si el pin tiene un tipo válido (0–8), NO usar default
   const hasValidType = type !== null && !isNaN(type);
 
-  // 1️⃣ Inspeccionado
-  if (pin.Inspeccionado) {
-    if (hasValidType && ICONS.inspected[type]) {
-      return ICONS.inspected[type];   // usa icono real
+  // 1️⃣ Tercero (PRIORIDAD MÁXIMA)
+  if (pin.Tercero) {
+    if (hasValidType && ICONS.removed[type]) {
+      return ICONS.removed[type];
     }
     return hasValidType ? null : ICONS.uninspected.default;
   }
 
-  // 2️⃣ Tercero
-  if (pin.Tercero) {
-    if (hasValidType && ICONS.removed[type]) {
-      return ICONS.removed[type];
+  // 2️⃣ Inspeccionado
+  if (pin.Inspeccionado) {
+    if (hasValidType && ICONS.inspected[type]) {
+      return ICONS.inspected[type];
     }
     return hasValidType ? null : ICONS.uninspected.default;
   }

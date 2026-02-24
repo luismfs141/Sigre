@@ -162,9 +162,11 @@ export default function DeficiencyModal({
   visible,
   deficiency,
   onClose,
+  onSaved, // ✅ NUEVO
   userId,
   selectedItem,
 }) {
+
   const [localDef, setLocalDef] = useState(null);
   const [selectConfig, setSelectConfig] = useState(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -398,114 +400,143 @@ export default function DeficiencyModal({
   };
 
   const handleSave = async () => {
-    if (isSaving) return;
+  if (isSaving) return;
 
-    // ✅ requeridos
-    const missing = fields.filter(f => f.required && isEmptyValue(f, localDef[f.key]));
-    if (missing.length) {
-      alert(`Campos obligatorios: ${missing.map(f => f.label).join(", ")}`);
-      return;
-    }
+  // ✅ si ya existía DefiInterno => es edición; si no => creación
+  const existedBeforeSave = !!(
+    localDef?.DefiInterno ??
+    deficiency?.defiInterno
+  );
 
-    setIsSaving(true);
+  // ✅ requeridos
+  const missing = fields.filter(f => f.required && isEmptyValue(f, localDef[f.key]));
+  if (missing.length) {
+    alert(`Campos obligatorios: ${missing.map(f => f.label).join(", ")}`);
+    return;
+  }
 
-    try {
-      // ✅ validaciones
-      const errors = [];
+  setIsSaving(true);
 
-      for (const f of fields) {
-        const raw = localDef[f.key];
-        if (isEmptyValue(f, raw)) continue;
+  try {
+    // ✅ validaciones
+    const errors = [];
 
-        if (f.validation?.custom) {
-          const msg = f.validation.custom(raw, localDef);
-          if (msg) errors.push(msg);
+    for (const f of fields) {
+      const raw = localDef[f.key];
+      if (isEmptyValue(f, raw)) continue;
+
+      if (f.validation?.custom) {
+        const msg = f.validation.custom(raw, localDef);
+        if (msg) errors.push(msg);
+        continue;
+      }
+
+      const hasMin = f.validation?.min !== undefined;
+      const hasMax = f.validation?.max !== undefined;
+
+      if ((hasMin || hasMax) && f.type === "number") {
+        const n = toNumber(raw);
+
+        if (!Number.isFinite(n)) {
+          errors.push(`${f.label}: Ingrese un número válido.`);
           continue;
         }
 
-        const hasMin = f.validation?.min !== undefined;
-        const hasMax = f.validation?.max !== undefined;
+        if (hasMin && n < f.validation.min) {
+          errors.push(f.validation.message || `${f.label}: mínimo ${f.validation.min}`);
+          continue;
+        }
 
-        if ((hasMin || hasMax) && f.type === "number") {
-          const n = toNumber(raw);
-
-          if (!Number.isFinite(n)) {
-            errors.push(`${f.label}: Ingrese un número válido.`);
-            continue;
-          }
-
-          if (hasMin && n < f.validation.min) {
-            errors.push(f.validation.message || `${f.label}: mínimo ${f.validation.min}`);
-            continue;
-          }
-
-          if (hasMax && n > f.validation.max) {
-            errors.push(f.validation.message || `${f.label}: máximo ${f.validation.max}`);
-            continue;
-          }
+        if (hasMax && n > f.validation.max) {
+          errors.push(f.validation.message || `${f.label}: máximo ${f.validation.max}`);
+          continue;
         }
       }
-
-      if (errors.length) {
-        alert(errors.join("\n"));
-        setIsSaving(false);
-        return;
-      }
-
-      const payload = sanitizeDefForSave(
-        ensureResponsabilidadDefault({
-          ...localDef,
-
-          DefiIdElemento:
-            localDef?.DefiIdElemento ??
-            deficiency?.elementId ??
-            localDef?.elementId,
-
-          DefiTipoElemento:
-            localDef?.DefiTipoElemento ??
-            deficiency?.typeElement ??
-            localDef?.typeElement,
-
-          elementId: localDef?.elementId ?? deficiency?.elementId,
-          typeElement: localDef?.typeElement ?? deficiency?.typeElement,
-        })
-      );
-
-
-
-
-
-      const res = await saveDeficiency(payload, userId);
-
-      //console.log("🧾 SAVE RESULT =>", res);
-
-      if (!res?.ok) {
-        Alert.alert("Error", "No se pudo guardar la deficiencia. Intente nuevamente.");
-        setIsSaving(false);
-        return;
-      }
-
-      if (res?.pinMsg) {
-        Alert.alert("📌 Estado del PIN actualizado", res.pinMsg, [
-          {
-            text: "OK",
-            onPress: () => {
-              setIsSaving(false);
-              onClose();
-            },
-          },
-        ]);
-        return;
-      }
-
-      setIsSaving(false);
-      onClose();
-    } catch (error) {
-      console.error(error);
-      alert("Error al guardar");
-      setIsSaving(false);
     }
-  };
+
+    if (errors.length) {
+      alert(errors.join("\n"));
+      setIsSaving(false);
+      return;
+    }
+
+    const payload = sanitizeDefForSave(
+      ensureResponsabilidadDefault({
+        ...localDef,
+
+        DefiIdElemento:
+          localDef?.DefiIdElemento ??
+          deficiency?.elementId ??
+          localDef?.elementId,
+
+        DefiTipoElemento:
+          localDef?.DefiTipoElemento ??
+          deficiency?.typeElement ??
+          localDef?.typeElement,
+
+        elementId: localDef?.elementId ?? deficiency?.elementId,
+        typeElement: localDef?.typeElement ?? deficiency?.typeElement,
+      })
+    );
+
+    const res = await saveDeficiency(payload, userId);
+
+    if (!res?.ok) {
+      Alert.alert("Error", "No se pudo guardar la deficiencia. Intente nuevamente.");
+      setIsSaving(false);
+      return;
+    }
+
+    // ✅ id definitivo (por si es creación y el save devuelve algo)
+    const savedDefId =
+      res?.defId ??
+      res?.DefiInterno ??
+      res?.defiInterno ??
+      payload?.DefiInterno ??
+      localDef?.DefiInterno ??
+      deficiency?.defiInterno ??
+      null;
+
+    // ✅ data para refrescar UI en padre (NO se guarda en server, es solo UI)
+    const uiData = {
+      ...localDef,
+      ...payload,
+      DefiInterno: savedDefId ?? localDef?.DefiInterno,
+      defiInterno: savedDefId ?? localDef?.DefiInterno,
+    };
+
+    // ✅ avisa al padre para patch o refresh si fue nuevo
+    onSaved?.({
+      defId: savedDefId,
+      data: uiData,
+      isNew: !existedBeforeSave,
+      pinMsg: res?.pinMsg ?? null,
+    });
+
+    if (res?.pinMsg) {
+      Alert.alert("📌 Estado del PIN actualizado", res.pinMsg, [
+        {
+          text: "OK",
+          onPress: () => {
+            setIsSaving(false);
+            setIsDirty(false);
+            onClose?.();
+          },
+        },
+      ]);
+      return;
+    }
+
+    setIsSaving(false);
+    setIsDirty(false);
+    onClose?.();
+  } catch (error) {
+    console.error(error);
+    alert("Error al guardar");
+    setIsSaving(false);
+  }
+};
+
 
   // --------------------------------------------------
   // RENDER
