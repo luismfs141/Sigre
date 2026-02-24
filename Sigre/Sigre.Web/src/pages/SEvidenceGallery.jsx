@@ -276,8 +276,8 @@ const handleUploadSave = async (dataToSave) => {
             archNombre: dbPath.substring(0, 255), 
             archCodTabla: Number(getValue('Interno')), 
             // 🟢 CAMBIO AQUÍ: Guardamos UTM Norte en latitud y UTM Este en longitud
-            archLatitud: utmCoords.northing, 
-            archLongitud: utmCoords.easting, 
+            archLatitud: rawLat, 
+            archLongitud: rawLon,
             archFecha: toLocalISOString(dataToSave.date), 
             archTipoElemento: tipoElemRaw, 
             archIdElemento: Number(getValue('IdElemento')), 

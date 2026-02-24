@@ -433,7 +433,8 @@ namespace Sigre.DataAccess
                         VanoMaterial = v.VanoMaterial,
                         AlimInterno = v.AlimInterno,
                         VanoSubestacion = v.VanoSubestacion,
-                        VanoEsBt = v.VanoEsBt
+                        VanoEsBt = v.VanoEsBt,
+                        
                     })
                     .ToList();
 

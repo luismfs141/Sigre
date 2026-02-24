@@ -977,11 +977,11 @@ namespace Sigre.DataAccess
                                       Sector = p.PostSubestacion,
                                       CodDef = d.TipiInterno,
                                       Criticidad = d.DefiEstadoCriticidad,
-                                      // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia en la BD
-                                      // NOTA: Cambia 'ArchCodigoDeficiencia', 'DefiInterno' y 'ArchActivo' por tus propiedades reales
+                                      // El estado individual de la deficiencia, controlado por el trigger
+                                      Inspeccionado = d.DefiInspeccionado,
                                       CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                   })
-                                  .ToList() // Ejecutamos la consulta SQL aquí
+                                  .ToList()
                                   .GroupBy(x => x.Id)
                                   .Select(g => new
                                   {
@@ -993,14 +993,16 @@ namespace Sigre.DataAccess
                                       details = g.Select(x => new {
                                           code = x.CodDef,
                                           crit = x.Criticidad,
-                                          // 🔥 NUEVO: Agregamos la cantidad de archivos al detalle de cada deficiencia
+                                          inspeccionado = x.Inspeccionado,
                                           archivosActivos = x.CantidadArchivos
                                       }).ToList(),
 
                                       maxCriticality = g.Max(x => x.Criticidad ?? 0),
+                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos),
 
-                                      // 🔥 OPCIONAL: Suma total de archivos activos en todo el poste
-                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos)
+                                      // 🔥 NUEVO: CÁLCULO DEL ESTADO DEL POSTE
+                                      // Si CUALQUIER deficiencia del poste tiene Inspeccionado = false, el poste entero está Pendiente.
+                                      estadoRevision = g.Any(x => !x.Inspeccionado) ? "PENDIENTE" : "COMPLETADO"
                                   }).ToList();
 
                 // -----------------------------------------------------------------------------
@@ -1016,8 +1018,8 @@ namespace Sigre.DataAccess
                                      Sector = v.VanoSubestacion,
                                      CodDef = d.TipiInterno,
                                      Criticidad = d.DefiEstadoCriticidad,
-                                     // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia
-                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo!="0")
+                                     Inspeccionado = d.DefiInspeccionado,
+                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                  })
                                  .ToList()
                                  .GroupBy(x => x.Id)
@@ -1031,14 +1033,15 @@ namespace Sigre.DataAccess
                                      details = g.Select(x => new {
                                          code = x.CodDef,
                                          crit = x.Criticidad,
-                                         // 🔥 NUEVO: Reflejamos el conteo en los detalles
+                                         inspeccionado = x.Inspeccionado,
                                          archivosActivos = x.CantidadArchivos
                                      }).ToList(),
 
                                      maxCriticality = g.Max(x => x.Criticidad ?? 0),
+                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos),
 
-                                     // 🔥 OPCIONAL: Suma total de archivos activos en todo el vano
-                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos)
+                                     // 🔥 NUEVO: CÁLCULO DEL ESTADO DEL VANO
+                                     estadoRevision = g.Any(x => !x.Inspeccionado) ? "PENDIENTE" : "COMPLETADO"
                                  }).ToList();
 
                 return new { postes = dataPostes, vanos = dataVanos };
@@ -1491,6 +1494,41 @@ namespace Sigre.DataAccess
                     .ToListAsync();
 
                 return estadisticas;
+            }
+        }
+        public void ReevaluarEstadoInspeccionDeficiencia(int defiInterno)
+        {
+            if (defiInterno <= 0) return;
+
+            using (var ctx = new SigreContext())
+            {
+                // 1. Los tipos obligatorios que mencionaste
+                var tiposRequeridos = new[] { "1", "2", "3", "4" };
+
+                // 2. Contamos cuántas fotos VÁLIDAS tiene esta deficiencia actualmente
+                int cantidadFotosValidas = ctx.Archivos
+                    .Count(a => a.ArchCodTabla == defiInterno
+                             && a.ArchActivo == true
+                             && tiposRequeridos.Contains(a.ArchTipo));
+
+                // 3. Regla de negocio: Al menos 4 fotos
+                bool nuevoEstadoInspeccionado = cantidadFotosValidas >= 4;
+
+                // 4. Actualizamos SOLO si hubo un cambio de estado
+                var deficiencia = ctx.Deficiencias.Find(defiInterno);
+                if (deficiencia != null && deficiencia.DefiInspeccionado != nuevoEstadoInspeccionado)
+                {
+                    deficiencia.DefiInspeccionado = nuevoEstadoInspeccionado;
+                    deficiencia.DefiFecModificacion = DateTime.Now;
+
+                    // Si la deficiencia pasa a false, aseguramos un rastro de auditoría
+                    if (!nuevoEstadoInspeccionado)
+                    {
+                        deficiencia.DefiUsuarioMod = "SISTEMA_AUTO";
+                    }
+
+                    ctx.SaveChanges();
+                }
             }
         }
     }
