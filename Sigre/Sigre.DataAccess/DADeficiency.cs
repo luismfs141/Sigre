@@ -843,118 +843,151 @@ namespace Sigre.DataAccess
             // 🚨 1. BLOQUE DE VALIDACIÓN ESTRICTA (FAIL-FAST) 🚨
             var errores = new List<string>();
 
-            // A. Validar Observación (Requerido en UI)
-            if (string.IsNullOrWhiteSpace(input.DefiObservacion))
+            // 🔥 Solo exigimos Observación y Suministro si ES una falla real (TipiInterno > 0)
+            if (input.TipiInterno > 0)
             {
-                errores.Add("- La 'Observación' es obligatoria.");
-            }
+                if (string.IsNullOrWhiteSpace(input.DefiObservacion))
+                {
+                    errores.Add("- La 'Observación' es obligatoria.");
+                }
 
-            // B. Validar Número de Suministro (Requerido en UI)
-            if (string.IsNullOrWhiteSpace(input.DefiNumSuministro))
-            {
-                errores.Add("- El 'Número de suministro' es obligatorio.");
+                if (string.IsNullOrWhiteSpace(input.DefiNumSuministro))
+                {
+                    errores.Add("- El 'Número de suministro' es obligatorio.");
+                }
             }
 
             // C. Regla de Negocio: Tipificación y Criticidad
             if (input.TipiInterno == 0)
             {
-                // Si no hay deficiencia, forzamos criticidad a 0 por seguridad
                 input.DefiEstadoCriticidad = 0;
+                input.DefiObservacion = input.DefiObservacion ?? "";
+                input.DefiNumSuministro = input.DefiNumSuministro ?? "";
             }
             else if (input.TipiInterno > 0 && input.DefiEstadoCriticidad <= 0)
             {
-                // Si hay una deficiencia real, la criticidad no puede ser 0
                 errores.Add("- Debe seleccionar un nivel de 'Criticidad' válido.");
             }
 
-            // Si hay errores acumulados, ABORTAMOS y disparamos el error al Frontend
-            if (errores.Any())
-            {
-                throw new ArgumentException(string.Join("\n", errores));
-            }
-
             // -------------------------------------------------------
-            // 2. PROCESO NORMAL DE GUARDADO (Base de Datos)
+            // 🔥 2. REGLA DE EXCLUSIÓN MUTUA (VALIDACIÓN EN BD) 🔥
             // -------------------------------------------------------
             using (var ctx = new SigreContext())
             {
-                Deficiencia existente = null;
+                string codigoGis = input.DefiCodigoElemento?.Trim();
 
-                if (input.DefiInterno > 0)
+                if (!string.IsNullOrEmpty(codigoGis))
                 {
-                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
-                }
-                else if (!string.IsNullOrEmpty(input.DefiCol3))
-                {
-                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
-                }
+                    var tipificacionesExistentes = ctx.Deficiencias
+                        .Where(d => d.DefiCodigoElemento == codigoGis && d.DefiActivo == true && d.DefiInterno != input.DefiInterno)
+                        .Select(d => d.TipiInterno)
+                        .ToList();
 
-                if (existente != null)
-                {
-                    existente.DefiObservacion = input.DefiObservacion;
-                    existente.DefiComentario = input.DefiComentario;
-                    existente.DefiNumSuministro = input.DefiNumSuministro;
-                    existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
-                    existente.DefiDistHorizontal = input.DefiDistHorizontal;
-                    existente.DefiDistVertical = input.DefiDistVertical;
-                    existente.DefiAccesibilidad = input.DefiAccesibilidad;
-                    existente.DefiTipoCruce = input.DefiTipoCruce;
-                    existente.DefiCol2 = input.DefiCol2;
+                    bool tieneSinDeficiencia = tipificacionesExistentes.Any(t => t == 0);
+                    bool tieneFallasReales = tipificacionesExistentes.Any(t => t > 0);
 
-                    if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
-                    if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
-
-                    if (input.DefiFecRegistro != DateTime.MinValue)
+                    if (input.TipiInterno == 0 && tieneFallasReales)
                     {
-                        existente.DefiFecRegistro = input.DefiFecRegistro;
+                        errores.Add("- Acción bloqueada: No puede registrar 'SIN DEFICIENCIA'. Ya existen fallas reales para este elemento.");
                     }
 
-                    existente.DefiFecModificacion = DateTime.Now;
-                    existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
-                    existente.DefiInspeccionado = input.DefiInspeccionado;
+                    if (input.TipiInterno > 0 && tieneSinDeficiencia)
+                    {
+                        errores.Add("- Acción bloqueada: No puede registrar la falla. El elemento está marcado como 'SIN DEFICIENCIA'.");
+                    }
 
-                    ctx.SaveChanges();
-                    return existente.DefiInterno;
+                    if (input.TipiInterno == 0 && tieneSinDeficiencia)
+                    {
+                        errores.Add("- Acción bloqueada: Ya existe un registro 'SIN DEFICIENCIA' para este elemento.");
+                    }
                 }
-                else
+
+                if (errores.Any())
                 {
-                    // INSERCIÓN
-                    input.DefiInterno = 0;
-                    input.DefiEstado = "N";
-                    input.DefiActivo = true;
-                    input.DefiInspeccionado = true;
+                    throw new ArgumentException(string.Join("\n", errores));
+                }
+                // -------------------------------------------------------
+                // 2. PROCESO NORMAL DE GUARDADO (Base de Datos)
+                // -------------------------------------------------------
+                {
+                    Deficiencia existente = null;
 
-                    var now = DateTime.Now;
-                    input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
-                    input.DefiFechaCreacion = input.DefiFecRegistro;
-                    input.DefiFecModificacion = now;
-
-                    if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
-                    if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
-                    if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
-                    if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
-
-                    int idPadreEncontrado = 0;
-                    string codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
-                    string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
-
-                    if (tipoElemento.StartsWith("POST"))
+                    if (input.DefiInterno > 0)
                     {
-                        var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
-                        if (poste != null) idPadreEncontrado = poste.PostInterno;
+                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
                     }
-                    else if (tipoElemento.StartsWith("VANO"))
+                    else if (!string.IsNullOrEmpty(input.DefiCol3))
                     {
-                        var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
-                        if (vano != null) idPadreEncontrado = vano.VanoInterno;
+                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
                     }
 
-                    input.DefiIdElemento = idPadreEncontrado;
+                    if (existente != null)
+                    {
+                        existente.DefiObservacion = input.DefiObservacion;
+                        existente.DefiComentario = input.DefiComentario;
+                        existente.DefiNumSuministro = input.DefiNumSuministro;
+                        existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
+                        existente.DefiDistHorizontal = input.DefiDistHorizontal;
+                        existente.DefiDistVertical = input.DefiDistVertical;
+                        existente.DefiAccesibilidad = input.DefiAccesibilidad;
+                        existente.DefiTipoCruce = input.DefiTipoCruce;
+                        existente.DefiCol2 = input.DefiCol2;
 
-                    ctx.Deficiencias.Add(input);
-                    ctx.SaveChanges();
+                        if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
+                        if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
 
-                    return input.DefiInterno;
+                        if (input.DefiFecRegistro != DateTime.MinValue)
+                        {
+                            existente.DefiFecRegistro = input.DefiFecRegistro;
+                        }
+
+                        existente.DefiFecModificacion = DateTime.Now;
+                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
+                        //existente.DefiInspeccionado = input.DefiInspeccionado;
+
+                        ctx.SaveChanges();
+                        return existente.DefiInterno;
+                    }
+                    else
+                    {
+                        // INSERCIÓN
+                        input.DefiInterno = 0;
+                        input.DefiEstado = "N";
+                        input.DefiActivo = true;
+                        input.DefiInspeccionado = false;
+
+                        var now = DateTime.Now;
+                        input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
+                        input.DefiFechaCreacion = input.DefiFecRegistro;
+                        input.DefiFecModificacion = now;
+
+                        if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
+                        if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "20";
+                        if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "20";
+                        if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
+
+                        int idPadreEncontrado = 0;
+                        codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
+                        string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
+
+                        if (tipoElemento.StartsWith("POST"))
+                        {
+                            var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                            if (poste != null) idPadreEncontrado = poste.PostInterno;
+                        }
+                        else if (tipoElemento.StartsWith("VANO"))
+                        {
+                            var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                            if (vano != null) idPadreEncontrado = vano.VanoInterno;
+                        }
+
+                        input.DefiIdElemento = idPadreEncontrado;
+
+                        ctx.Deficiencias.Add(input);
+                        ctx.SaveChanges();
+
+                        return input.DefiInterno;
+                    }
                 }
             }
         }
@@ -1524,7 +1557,7 @@ namespace Sigre.DataAccess
                     // Si la deficiencia pasa a false, aseguramos un rastro de auditoría
                     if (!nuevoEstadoInspeccionado)
                     {
-                        deficiencia.DefiUsuarioMod = "SISTEMA_AUTO";
+                        deficiencia.DefiUsuarioMod = "20";
                     }
 
                     ctx.SaveChanges();

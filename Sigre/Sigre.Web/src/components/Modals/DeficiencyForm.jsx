@@ -207,7 +207,7 @@ const currentConfig = useMemo(() => {
             } else {
                 // --- MODO NUEVO ---
                 const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`]) : null;
-                const initialCode = getRefValue('CodigoElemento') || '';
+                const initialCode =  '';
                 const initialType = getRefValue('TipoElemento') || 'POST';
                 const latRaw = getRefValue('Latitud') || 0;
                 const lngRaw = getRefValue('Longitud') || 0;
