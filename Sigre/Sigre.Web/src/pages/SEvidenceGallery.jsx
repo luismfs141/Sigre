@@ -207,17 +207,28 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const currentSupply = String(suministro || deficiency?.defiNumSuministro || deficiency?.suministro || "0").trim();
     const defCode = String(deficiency?.tipiCodigo || "7004").trim();
 
-    const getInitialFormData = () => {
-        const _fechaRaw = getValue('FecRegistro') || getValue('Fecha');
+const getInitialFormData = () => {
+        // 1. Buscamos la fecha directamente en el objeto de la deficiencia seleccionada.
+        // Cubrimos las posibles variaciones de serialización del backend (camelCase, PascalCase o el nombre exacto de la DB).
+        const _fechaRaw =  deficiency?.defiFecRegistro || deficiency?.FecRegistro || getValue('FecRegistro') || getValue('Fecha');
+        
         let _fecha = new Date(); 
-        if (_fechaRaw && !isNaN(new Date(_fechaRaw).getTime())) _fecha = new Date(_fechaRaw);
+        
+        // 2. Validamos que la fecha extraída sea válida antes de asignarla.
+        if (_fechaRaw) {
+            const parsedDate = new Date(_fechaRaw);
+            if (!isNaN(parsedDate.getTime())) {
+                _fecha = parsedDate;
+            }
+        }
+
         return { 
             id: Date.now(), 
             deficiencyCode: "", 
             tipo: null, 
             date: _fecha, 
-            lat: getValue('Latitud') || '', 
-            long: getValue('Longitud') || '', 
+            lat: getValue('Latitud') || deficiency?.defiLatitud || '', 
+            long: getValue('Longitud') || deficiency?.defiLongitud || '', 
             file: null, 
             preview: null 
         };
@@ -265,8 +276,8 @@ const handleUploadSave = async (dataToSave) => {
             archNombre: dbPath.substring(0, 255), 
             archCodTabla: Number(getValue('Interno')), 
             // 🟢 CAMBIO AQUÍ: Guardamos UTM Norte en latitud y UTM Este en longitud
-            archLatitud: utmCoords.northing, 
-            archLongitud: utmCoords.easting, 
+            archLatitud: rawLat, 
+            archLongitud: rawLon,
             archFecha: toLocalISOString(dataToSave.date), 
             archTipoElemento: tipoElemRaw, 
             archIdElemento: Number(getValue('IdElemento')), 

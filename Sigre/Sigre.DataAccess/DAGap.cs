@@ -372,21 +372,35 @@ namespace Sigre.DataAccess
         }
         // Asegúrate de tener la clase PagedResult<T> definida en tu proyecto (la que creamos antes).
 
-        // EN TU CLASE DE ACCESO A DATOS (DAL)
-        public PagedResult<Vano> DAGAP_GetPaginado(int skip, int take, string busqueda = "")
+        public PagedResult<Vano> DAGAP_GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
         {
             using (SigreContext ctx = new SigreContext())
             {
                 ctx.ChangeTracker.LazyLoadingEnabled = false;
                 ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
-                // 1. VALIDACIÓN
+                // 1. VALIDACIÓN DE TAKE
                 if (take <= 0) take = 5000;
                 if (take > 5000) take = 5000;
 
-                var query = ctx.Vanos.AsNoTracking().AsQueryable();
+                // 2. CONSULTA BASE CON RESTRICCIÓN OBLIGATORIA (Solo Baja Tensión)
+                var query = ctx.Vanos
+                    .AsNoTracking()
+                    .Where(v => v.VanoEsBt == true) // Aplicamos el filtro BT de inmediato
+                    .AsQueryable();
 
-                // 2. FILTRO (CRÍTICO: ANTES DEL SKIP/TAKE)
+                // 🔥 NUEVO: FILTROS JERÁRQUICOS OPCIONALES
+                if (alimentadorId.HasValue && alimentadorId.Value > 0)
+                {
+                    query = query.Where(v => v.AlimInterno == alimentadorId.Value);
+                }
+
+                if (sedId.HasValue && sedId.Value > 0)
+                {
+                    query = query.Where(v => v.VanoSubestacion == sedId.Value);
+                }
+
+                // 3. FILTRO OPCIONAL DE BÚSQUEDA
                 if (!string.IsNullOrEmpty(busqueda))
                 {
                     busqueda = busqueda.Trim();
@@ -395,11 +409,13 @@ namespace Sigre.DataAccess
                                              v.VanoNodoFinal.Contains(busqueda));
                 }
 
-                // 3. PAGINACIÓN
+                // 4. CONTEO (CRÍTICO: Ya cuenta solo los de Baja Tensión filtrados por Alim/SED)
                 int totalRecords = query.Count();
 
+                // 5. PAGINACIÓN Y ORDENAMIENTO
                 var data = query
-                    .OrderBy(v => v.VanoInterno)
+                    // Ordenamos de mayor a menor por el ID interno para traer los más recientes
+                    .OrderByDescending(v => v.VanoInterno)
                     .Skip(skip)
                     .Take(take)
                     .Select(v => new Vano
@@ -417,6 +433,8 @@ namespace Sigre.DataAccess
                         VanoMaterial = v.VanoMaterial,
                         AlimInterno = v.AlimInterno,
                         VanoSubestacion = v.VanoSubestacion,
+                        VanoEsBt = v.VanoEsBt,
+                        
                     })
                     .ToList();
 

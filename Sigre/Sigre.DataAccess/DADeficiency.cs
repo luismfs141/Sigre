@@ -840,110 +840,155 @@ namespace Sigre.DataAccess
         }
         public int DADEFI_SaveOrUpdateWeb(Deficiencia input)
         {
+            // 🚨 1. BLOQUE DE VALIDACIÓN ESTRICTA (FAIL-FAST) 🚨
+            var errores = new List<string>();
+
+            // 🔥 Solo exigimos Observación y Suministro si ES una falla real (TipiInterno > 0)
+            if (input.TipiInterno > 0)
+            {
+                if (string.IsNullOrWhiteSpace(input.DefiObservacion))
+                {
+                    errores.Add("- La 'Observación' es obligatoria.");
+                }
+
+                if (string.IsNullOrWhiteSpace(input.DefiNumSuministro))
+                {
+                    errores.Add("- El 'Número de suministro' es obligatorio.");
+                }
+            }
+
+            // C. Regla de Negocio: Tipificación y Criticidad
+            if (input.TipiInterno == 0)
+            {
+                input.DefiEstadoCriticidad = 0;
+                input.DefiObservacion = input.DefiObservacion ?? "";
+                input.DefiNumSuministro = input.DefiNumSuministro ?? "";
+            }
+            else if (input.TipiInterno > 0 && input.DefiEstadoCriticidad <= 0)
+            {
+                errores.Add("- Debe seleccionar un nivel de 'Criticidad' válido.");
+            }
+
+            // -------------------------------------------------------
+            // 🔥 2. REGLA DE EXCLUSIÓN MUTUA (VALIDACIÓN EN BD) 🔥
+            // -------------------------------------------------------
             using (var ctx = new SigreContext())
             {
-                Deficiencia existente = null;
+                string codigoGis = input.DefiCodigoElemento?.Trim();
 
-                // -------------------------------------------------------
-                // 1. LÓGICA DE BÚSQUEDA (Prioridad ID > UUID)
-                // -------------------------------------------------------
-                if (input.DefiInterno > 0)
+                if (!string.IsNullOrEmpty(codigoGis))
                 {
-                    // Búsqueda por ID (Edición Web)
-                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
-                }
-                else if (!string.IsNullOrEmpty(input.DefiCol3))
-                {
-                    // Búsqueda por UUID (Sincronización/Seguridad)
-                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
-                }
+                    var tipificacionesExistentes = ctx.Deficiencias
+                        .Where(d => d.DefiCodigoElemento == codigoGis && d.DefiActivo == true && d.DefiInterno != input.DefiInterno)
+                        .Select(d => d.TipiInterno)
+                        .ToList();
 
-                // -------------------------------------------------------
-                // 2. ACTUALIZACIÓN (UPDATE)
-                // -------------------------------------------------------
-                if (existente != null)
-                {
-                    // Mapeamos SOLO los campos editables
-                    existente.DefiObservacion = input.DefiObservacion;
-                    existente.DefiComentario = input.DefiComentario;
-                    existente.DefiNumSuministro = input.DefiNumSuministro;
-                    existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
+                    bool tieneSinDeficiencia = tipificacionesExistentes.Any(t => t == 0);
+                    bool tieneFallasReales = tipificacionesExistentes.Any(t => t > 0);
 
-                    // Datos Técnicos
-                    existente.DefiDistHorizontal = input.DefiDistHorizontal;
-                    existente.DefiDistVertical = input.DefiDistVertical;
-                    existente.DefiAccesibilidad = input.DefiAccesibilidad;
-                    existente.DefiTipoCruce = input.DefiTipoCruce;
-                    existente.DefiCol2 = input.DefiCol2;
-
-                    // Actualizar ubicación solo si viene válida
-                    if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
-                    if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
-
-                    // Fechas
-                    if (input.DefiFecRegistro != DateTime.MinValue)
+                    if (input.TipiInterno == 0 && tieneFallasReales)
                     {
-                        existente.DefiFecRegistro = input.DefiFecRegistro;
-                        
+                        errores.Add("- Acción bloqueada: No puede registrar 'SIN DEFICIENCIA'. Ya existen fallas reales para este elemento.");
                     }
 
-                    // Auditoría
-                    existente.DefiFecModificacion = DateTime.Now;
-                    existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
-                    existente.DefiInspeccionado = input.DefiInspeccionado;
+                    if (input.TipiInterno > 0 && tieneSinDeficiencia)
+                    {
+                        errores.Add("- Acción bloqueada: No puede registrar la falla. El elemento está marcado como 'SIN DEFICIENCIA'.");
+                    }
 
-                    ctx.SaveChanges();
-                    return existente.DefiInterno;
+                    if (input.TipiInterno == 0 && tieneSinDeficiencia)
+                    {
+                        errores.Add("- Acción bloqueada: Ya existe un registro 'SIN DEFICIENCIA' para este elemento.");
+                    }
                 }
 
-                // -------------------------------------------------------
-                // 3. INSERCIÓN (INSERT)
-                // -------------------------------------------------------
-                else
+                if (errores.Any())
                 {
-                    // --- A. Valores por Defecto ---
-                    input.DefiInterno = 0;
-                    input.DefiEstado = "N";
-                    input.DefiActivo = true;
-                    input.DefiInspeccionado = true;
+                    throw new ArgumentException(string.Join("\n", errores));
+                }
+                // -------------------------------------------------------
+                // 2. PROCESO NORMAL DE GUARDADO (Base de Datos)
+                // -------------------------------------------------------
+                {
+                    Deficiencia existente = null;
 
-                    var now = DateTime.Now;
-                    input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
-                    input.DefiFechaCreacion = input.DefiFecRegistro;
-                    input.DefiFecModificacion = now;
-
-                    if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
-                    if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "WEB_USER";
-                    if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "WEB_USER";
-                    if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
-
-                    // --- B. LÓGICA DE VINCULACIÓN (Poste o Vano) ---
-                    // Buscamos el ID interno del elemento padre usando el código GIS
-                    int idPadreEncontrado = 0;
-                    string codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
-                    string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
-
-                    if (tipoElemento.StartsWith("POST")) // "POST" o "POSTE"
+                    if (input.DefiInterno > 0)
                     {
-                        // Buscamos en tabla Postes (Asumiendo que tienes ctx.Postes)
-                        var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
-                        if (poste != null) idPadreEncontrado = poste.PostInterno;
+                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
                     }
-                    else if (tipoElemento.StartsWith("VANO")) // "VANO"
+                    else if (!string.IsNullOrEmpty(input.DefiCol3))
                     {
-                        // Buscamos en tabla Vanos (Asumiendo que tienes ctx.Vanos)
-                        var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
-                        if (vano != null) idPadreEncontrado = vano.VanoInterno;
+                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
                     }
 
-                    // Asignamos el ID encontrado (Si es 0, quedará huérfano o podrías lanzar error)
-                    input.DefiIdElemento = idPadreEncontrado;
+                    if (existente != null)
+                    {
+                        existente.DefiObservacion = input.DefiObservacion;
+                        existente.DefiComentario = input.DefiComentario;
+                        existente.DefiNumSuministro = input.DefiNumSuministro;
+                        existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
+                        existente.DefiDistHorizontal = input.DefiDistHorizontal;
+                        existente.DefiDistVertical = input.DefiDistVertical;
+                        existente.DefiAccesibilidad = input.DefiAccesibilidad;
+                        existente.DefiTipoCruce = input.DefiTipoCruce;
+                        existente.DefiCol2 = input.DefiCol2;
 
-                    // --- C. GUARDADO ÚNICO ---
-                    ctx.Deficiencias.Add(input);
-                    ctx.SaveChanges();
+                        if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
+                        if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
 
-                    return input.DefiInterno;
+                        if (input.DefiFecRegistro != DateTime.MinValue)
+                        {
+                            existente.DefiFecRegistro = input.DefiFecRegistro;
+                        }
+
+                        existente.DefiFecModificacion = DateTime.Now;
+                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
+                        //existente.DefiInspeccionado = input.DefiInspeccionado;
+
+                        ctx.SaveChanges();
+                        return existente.DefiInterno;
+                    }
+                    else
+                    {
+                        // INSERCIÓN
+                        input.DefiInterno = 0;
+                        input.DefiEstado = "N";
+                        input.DefiActivo = true;
+                        input.DefiInspeccionado = false;
+
+                        var now = DateTime.Now;
+                        input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
+                        input.DefiFechaCreacion = input.DefiFecRegistro;
+                        input.DefiFecModificacion = now;
+
+                        if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
+                        if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "20";
+                        if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "20";
+                        if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
+
+                        int idPadreEncontrado = 0;
+                        codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
+                        string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
+
+                        if (tipoElemento.StartsWith("POST"))
+                        {
+                            var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                            if (poste != null) idPadreEncontrado = poste.PostInterno;
+                        }
+                        else if (tipoElemento.StartsWith("VANO"))
+                        {
+                            var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                            if (vano != null) idPadreEncontrado = vano.VanoInterno;
+                        }
+
+                        input.DefiIdElemento = idPadreEncontrado;
+
+                        ctx.Deficiencias.Add(input);
+                        ctx.SaveChanges();
+                        SincronizarEstadoInspeccionElemento(input.DefiInterno);
+
+                        return input.DefiInterno;
+                    }
                 }
             }
         }
@@ -966,11 +1011,11 @@ namespace Sigre.DataAccess
                                       Sector = p.PostSubestacion,
                                       CodDef = d.TipiInterno,
                                       Criticidad = d.DefiEstadoCriticidad,
-                                      // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia en la BD
-                                      // NOTA: Cambia 'ArchCodigoDeficiencia', 'DefiInterno' y 'ArchActivo' por tus propiedades reales
+                                      // El estado individual de la deficiencia, controlado por el trigger
+                                      Inspeccionado = d.DefiInspeccionado,
                                       CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                   })
-                                  .ToList() // Ejecutamos la consulta SQL aquí
+                                  .ToList()
                                   .GroupBy(x => x.Id)
                                   .Select(g => new
                                   {
@@ -982,14 +1027,16 @@ namespace Sigre.DataAccess
                                       details = g.Select(x => new {
                                           code = x.CodDef,
                                           crit = x.Criticidad,
-                                          // 🔥 NUEVO: Agregamos la cantidad de archivos al detalle de cada deficiencia
+                                          inspeccionado = x.Inspeccionado,
                                           archivosActivos = x.CantidadArchivos
                                       }).ToList(),
 
                                       maxCriticality = g.Max(x => x.Criticidad ?? 0),
+                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos),
 
-                                      // 🔥 OPCIONAL: Suma total de archivos activos en todo el poste
-                                      totalArchivosPoste = g.Sum(x => x.CantidadArchivos)
+                                      // 🔥 NUEVO: CÁLCULO DEL ESTADO DEL POSTE
+                                      // Si CUALQUIER deficiencia del poste tiene Inspeccionado = false, el poste entero está Pendiente.
+                                      estadoRevision = g.Any(x => !x.Inspeccionado) ? "PENDIENTE" : "COMPLETADO"
                                   }).ToList();
 
                 // -----------------------------------------------------------------------------
@@ -1005,8 +1052,8 @@ namespace Sigre.DataAccess
                                      Sector = v.VanoSubestacion,
                                      CodDef = d.TipiInterno,
                                      Criticidad = d.DefiEstadoCriticidad,
-                                     // 🔥 NUEVO: Contamos los archivos activos asociados a esta deficiencia
-                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo!="0")
+                                     Inspeccionado = d.DefiInspeccionado,
+                                     CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
                                  })
                                  .ToList()
                                  .GroupBy(x => x.Id)
@@ -1020,14 +1067,15 @@ namespace Sigre.DataAccess
                                      details = g.Select(x => new {
                                          code = x.CodDef,
                                          crit = x.Criticidad,
-                                         // 🔥 NUEVO: Reflejamos el conteo en los detalles
+                                         inspeccionado = x.Inspeccionado,
                                          archivosActivos = x.CantidadArchivos
                                      }).ToList(),
 
                                      maxCriticality = g.Max(x => x.Criticidad ?? 0),
+                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos),
 
-                                     // 🔥 OPCIONAL: Suma total de archivos activos en todo el vano
-                                     totalArchivosVano = g.Sum(x => x.CantidadArchivos)
+                                     // 🔥 NUEVO: CÁLCULO DEL ESTADO DEL VANO
+                                     estadoRevision = g.Any(x => !x.Inspeccionado) ? "PENDIENTE" : "COMPLETADO"
                                  }).ToList();
 
                 return new { postes = dataPostes, vanos = dataVanos };
@@ -1480,6 +1528,82 @@ namespace Sigre.DataAccess
                     .ToListAsync();
 
                 return estadisticas;
+            }
+        }
+        public void ReevaluarEstadoInspeccionDeficiencia(int defiInterno)
+        {
+            if (defiInterno <= 0) return;
+
+            using (var ctx = new SigreContext())
+            {
+                // 1. Los tipos obligatorios que mencionaste
+                var tiposRequeridos = new[] { "1", "2", "3", "4" };
+
+                // 2. Contamos cuántas fotos VÁLIDAS tiene esta deficiencia actualmente
+                int cantidadFotosValidas = ctx.Archivos
+                    .Count(a => a.ArchCodTabla == defiInterno
+                             && a.ArchActivo == true
+                             && tiposRequeridos.Contains(a.ArchTipo));
+
+                // 3. Regla de negocio: Al menos 4 fotos
+                bool nuevoEstadoInspeccionado = cantidadFotosValidas >= 4;
+
+                // 4. Actualizamos SOLO si hubo un cambio de estado
+                var deficiencia = ctx.Deficiencias.Find(defiInterno);
+                if (deficiencia != null && deficiencia.DefiInspeccionado != nuevoEstadoInspeccionado)
+                {
+                    deficiencia.DefiInspeccionado = nuevoEstadoInspeccionado;
+                    deficiencia.DefiFecModificacion = DateTime.Now;
+
+                    // Si la deficiencia pasa a false, aseguramos un rastro de auditoría
+                    if (!nuevoEstadoInspeccionado)
+                    {
+                        deficiencia.DefiUsuarioMod = "20";
+                    }
+
+                    ctx.SaveChanges();
+                }
+            }
+        }
+        public void SincronizarEstadoInspeccionElemento(int defiInterno)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Obtener la deficiencia actual y sus datos de vinculación
+                var deficienciaActual = ctx.Deficiencias.Find(defiInterno);
+                if (deficienciaActual == null) return;
+
+                string codigoGis = deficienciaActual.DefiCodigoElemento;
+                string tipo = deficienciaActual.DefiTipoElemento?.ToUpper() ?? "";
+
+                // 2. REGLA DE ORO: Un elemento solo está "COMPLETADO" si 
+                // NO tiene ninguna deficiencia activa en estado 'false' (0)
+                bool todoInspeccionado = !ctx.Deficiencias
+                    .Any(d => d.DefiCodigoElemento == codigoGis
+                           && d.DefiActivo == true
+                           && d.DefiInspeccionado == false); // Buscamos si falta alguna
+
+                // 3. Actualizar la tabla correspondiente
+                if (tipo.Contains("POST"))
+                {
+                    var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                    if (poste != null)
+                    {
+                        // Actualizamos la columna en la tabla Postes
+                        poste.PostInspeccionado = todoInspeccionado;
+                    }
+                }
+                else if (tipo.Contains("VANO"))
+                {
+                    var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                    if (vano != null)
+                    {
+                        // Actualizamos vanoInspeccionado que vimos en tu respuesta JSON
+                        vano.VanoInspeccionado = todoInspeccionado;
+                    }
+                }
+
+                ctx.SaveChanges();
             }
         }
     }

@@ -137,7 +137,7 @@ export default function FilesTableEditor({
         // 2. Preparar datos de Ruta
         const newFeeder = isPathUpdate ? resolveCurrentFeederName() : null;
         const newSed = isPathUpdate ? safeSeg(sed.sedCodigo || sed.value || sed) : null;
-        const newType = isPathUpdate ? (structureType === 'Vano' ? 'Vano' : 'Poste') : null;
+        const newType = isPathUpdate ? (structureType === 'VANO' ? 'VANO' : 'POSTE') : null;
         const newCode = isPathUpdate ? safeSeg(structureCode || "SIN_CODIGO") : null;
 
         // 3. 🔥 CALCULAR UTM GLOBAL (Una sola vez)

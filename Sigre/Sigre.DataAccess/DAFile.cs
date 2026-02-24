@@ -298,16 +298,30 @@ namespace Sigre.DataAccess
             {
                 try
                 {
+                    // 🔥 PASO 1: Descubrir a qué deficiencia pertenece esta foto ANTES de borrarla
+                    // (Usamos Nullable int por si no se encuentra o es 0)
+                    int defiInternoAsociado = ctx.Archivos
+                        .Where(a => a.ArchInterno == idArchivo)
+                        .Select(a => a.ArchCodTabla)
+                        .FirstOrDefault();
+
                     // === SQL DIRECTO (Bypass Entity Framework) ===
-                    // Usamos UPDATE directo para no pasar por el modelo que busca DEFI_UUID.
-                    // Asumimos que la columna en BD es 'ARCH_Activo' y la llave 'ARCH_Interno' 
-                    // (basado en tus errores anteriores).
-
                     string sql = "UPDATE Archivos SET ARCH_Activo = 0 WHERE ARCH_Interno = {0}";
-
                     int filasAfectadas = ctx.Database.ExecuteSqlRaw(sql, idArchivo);
 
-                    // Si afectó al menos 1 fila, es true
+                    // 🔥 PASO 2: REACCIÓN EN TIEMPO REAL
+                    // Si se borró correctamente y pertenecía a una deficiencia, disparamos la reevaluación
+                    if (filasAfectadas > 0 && defiInternoAsociado > 0)
+                    {
+                        // Llamamos al método que creamos arriba
+                        ReevaluarEstadoInspeccionDeficiencia(defiInternoAsociado);
+                    }
+                    if (filasAfectadas > 0 && defiInternoAsociado > 0)
+                    {
+                        // Llamamos al método que creamos arriba
+                        SincronizarEstadoInspeccionElemento(defiInternoAsociado);
+                    }
+
                     return filasAfectadas > 0;
                 }
                 catch (Exception)
@@ -318,13 +332,16 @@ namespace Sigre.DataAccess
         }
         public void DAARCH_SaveInWeb(Archivo x_archivo)
         {
+            // Capturamos a qué deficiencia pertenece este archivo
+            // Lo hacemos fuera del using por si necesitamos pasarlo al método evaluador
+            int idDeficienciaAsociada = 0;
+
             using (SigreContext ctx = new SigreContext())
             {
                 // 1. Lógica para INSERTAR (Nuevo)
                 if (x_archivo.ArchInterno == 0)
                 {
                     // === GENERACIÓN DE GUID ===
-                    // "Como se debe": Si no viene un UUID, generamos uno nuevo único.
                     if (string.IsNullOrEmpty(x_archivo.DefiUUID))
                     {
                         x_archivo.DefiUUID = Guid.NewGuid().ToString().ToUpper();
@@ -334,8 +351,8 @@ namespace Sigre.DataAccess
                     x_archivo.ArchActivo = true;
                     if (x_archivo.ArchFecha == DateTime.MinValue) x_archivo.ArchFecha = DateTime.Now;
 
-                    // Al tener la columna en BD, Entity Framework ya no fallará aquí.
                     ctx.Archivos.Add(x_archivo);
+                    idDeficienciaAsociada = x_archivo.ArchCodTabla; // Capturamos el ID del padre
                 }
                 // 2. Lógica para ACTUALIZAR (Existente)
                 else
@@ -352,15 +369,30 @@ namespace Sigre.DataAccess
                         if (x_archivo.ArchFecha > DateTime.MinValue)
                             original.ArchFecha = x_archivo.ArchFecha;
 
-                        // Opcional: Si el original no tenía UUID, se lo generamos ahora
                         if (string.IsNullOrEmpty(original.DefiUUID))
                             original.DefiUUID = Guid.NewGuid().ToString().ToUpper();
+
+                        idDeficienciaAsociada = original.ArchCodTabla; // Capturamos el ID del padre
                     }
                 }
 
                 // Guardamos cambios (Esto hará el INSERT o UPDATE automáticamente)
                 ctx.SaveChanges();
             }
+
+            // 🔥 PASO REACTIVO: REEVALUAR AL PADRE 🔥
+            // Lo llamamos FUERA del 'using' anterior para que abra su propio contexto limpio,
+            // o puedes meter la lógica dentro de la misma transacción si prefieres, 
+            // pero así es más modular y seguro.
+            if (idDeficienciaAsociada > 0)
+            {
+                ReevaluarEstadoInspeccionDeficiencia(idDeficienciaAsociada);
+            }
+            if (idDeficienciaAsociada > 0)
+            {
+                SincronizarEstadoInspeccionElemento(idDeficienciaAsociada);
+            }
+
         }
         public int ARCH_ExistPhoto(string ruta)
         {
@@ -611,6 +643,82 @@ namespace Sigre.DataAccess
 
             return dt;
         }
+        public void ReevaluarEstadoInspeccionDeficiencia(int defiInterno)
+        {
+            if (defiInterno <= 0) return;
 
+            using (var ctx = new SigreContext())
+            {
+                // 1. Los tipos obligatorios que mencionaste
+                var tiposRequeridos = new[] { "1", "2", "3", "4" };
+
+                // 2. Contamos cuántas fotos VÁLIDAS tiene esta deficiencia actualmente
+                int cantidadFotosValidas = ctx.Archivos
+                    .Count(a => a.ArchCodTabla == defiInterno
+                             && a.ArchActivo == true
+                             && tiposRequeridos.Contains(a.ArchTipo));
+
+                // 3. Regla de negocio: Al menos 4 fotos
+                bool nuevoEstadoInspeccionado = cantidadFotosValidas >= 4;
+
+                // 4. Actualizamos SOLO si hubo un cambio de estado
+                var deficiencia = ctx.Deficiencias.Find(defiInterno);
+                if (deficiencia != null && deficiencia.DefiInspeccionado != nuevoEstadoInspeccionado)
+                {
+                    deficiencia.DefiInspeccionado = nuevoEstadoInspeccionado;
+                    deficiencia.DefiFecModificacion = DateTime.Now;
+
+                    // Si la deficiencia pasa a false, aseguramos un rastro de auditoría
+                    if (!nuevoEstadoInspeccionado)
+                    {
+                        deficiencia.DefiUsuarioMod = "SISTEMA_AUTO";
+                    }
+
+                    ctx.SaveChanges();
+                }
+            }
+
+        }
+        public void SincronizarEstadoInspeccionElemento(int defiInterno)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // 1. Obtener la deficiencia actual y sus datos de vinculación
+                var deficienciaActual = ctx.Deficiencias.Find(defiInterno);
+                if (deficienciaActual == null) return;
+
+                string codigoGis = deficienciaActual.DefiCodigoElemento;
+                string tipo = deficienciaActual.DefiTipoElemento?.ToUpper() ?? "";
+
+                // 2. REGLA DE ORO: Un elemento solo está "COMPLETADO" si 
+                // NO tiene ninguna deficiencia activa en estado 'false' (0)
+                bool todoInspeccionado = !ctx.Deficiencias
+                    .Any(d => d.DefiCodigoElemento == codigoGis
+                           && d.DefiActivo == true
+                           && d.DefiInspeccionado == false); // Buscamos si falta alguna
+
+                // 3. Actualizar la tabla correspondiente
+                if (tipo.Contains("POST"))
+                {
+                    var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                    if (poste != null)
+                    {
+                        // Actualizamos la columna en la tabla Postes
+                        poste.PostInspeccionado = todoInspeccionado;
+                    }
+                }
+                else if (tipo.Contains("VANO"))
+                {
+                    var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                    if (vano != null)
+                    {
+                        // Actualizamos vanoInspeccionado que vimos en tu respuesta JSON
+                        vano.VanoInspeccionado = todoInspeccionado;
+                    }
+                }
+
+                ctx.SaveChanges();
+            }
+        }
     }
 }
