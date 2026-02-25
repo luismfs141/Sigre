@@ -269,17 +269,18 @@ export const DEFICIENCY_FIELD_MAP = {
 };
 export const ALL_DEFICIENCY_OPTIONS = [
     { code: "0", name: "SIN DEFICIENCIA", type: "BOTH" },
-    { code: "6002", name: "6002 - Mal Estado / Inapropiado", type: "POST" },
-    { code: "6004", name: "6004 - Inclinado más de 5°", type: "POST" },
-    { code: "6006", name: "6006 - Cimentación descubierta", type: "POST" },
-    { code: "6008", name: "6008 - Rajado / Roto", type: "POST" },
-    { code: "6024", name: "6024 - Diferencia de nivel (Vereda)", type: "POST" },
-    { code: "6026", name: "6026 - Estructura impactada", type: "POST" },
-    { code: "6028", name: "6028 - Corrosión en estructura metálica", type: "POST" },
-    { code: "7002", name: "7002 - Conductor con hebras rotas", type: "VANO" },
-    { code: "7004", name: "7004 - Distancias de Seguridad (Edificación)", type: "VANO" },
-    { code: "7006", name: "7006 - Distancias de Seguridad (Vía/Cruce)", type: "VANO" },
-    { code: "7008", name: "7008 - Distancia Horizontal < 7.5m", type: "VANO" }
+    { code: "6002", name: "6002 - POSTE EN MAL ESTADO DE CONSERVACIÓN O INAPROPIADO PARA LA FUNCIÓN DE APOYO", type: "POST" },
+    { code: "6004", name: "6004 - POSTE INCLINADO MÁS DE 5° O CON DEFICIENCIAS EN LA CIMENTACIÓN", type: "POST" },
+    { code: "6006", name: "6006 - CAJA PORTAFUSIBLE DE POSTE CON PARTES ENERGIZADAS EXPUESTAS Y ACCESIBLES", type: "POST" },
+    { code: "6008", name: "6008 - PROTECCIÓN MECÁNICA DE CABLE ROTA, INEXISTENTE, INSUFICIENTE O MATERIAL INAPROPIADO", type: "POST" },
+    { code: "6024", name: "6024 - RETENIDA EN MAL ESTADO", type: "POST" },
+    { code: "6026", name: "6026 - PASTORAL DE AP EN MAL ESTADO O POR DESPRENDERSE", type: "POST" },
+    { code: "6028", name: "6028 - ARTEFACTO DE AP DESPRENDIDO O POR DESPRENDERSE", type: "POST" },
+    { code: "7002", name: "7002 - CONDUCTOR DESNUDO, FORRADO O AISLADO CON AISLAMIENTO DETERIORADO O INADECUADO", type: "VANO" },
+    { code: "7004", name: "7004 - CONDUCTOR DE BAJA TENSIÓN SOBRE EDIFICACIÓN O EN CONTACTO CON TECHO O SOPORTE METÁLICO", type: "VANO" },
+    { code: "7006", name: "7006 - CONDUCTOR INCUMPLE DS RESPECTO AL NIVEL DE TERRENO", type: "VANO" },
+    { code: "7008", name: "7008 - CONDUCTOR INCUMPLE DS RESPECTO A GRIFO", type: "VANO" }
 ];
+
 
 export default DEFICIENCY_FIELD_MAP;
