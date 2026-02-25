@@ -265,6 +265,7 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
                 archLatitud: utmCoords.northing, archLongitud: utmCoords.easting,
                 archFecha: dataToSave.date ? new Date(dataToSave.date).toISOString() : new Date().toISOString(),
                 archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
+                archIdElemento: selectedDeficiency ? Number(selectedDeficiency.defiIdElemento) : Number(structureIdInt),
                 tipiInterno: Number(defTipiInterno), archActivo: true, file: dataToSave.file
             };
 
@@ -375,7 +376,8 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
         sed: selectedSed,
         elementType: structureType,
         elementCode: structureCode,
-        structureType, structureCode
+        structureType, structureCode,
+        elementId: selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt
     };
 
     const initialPhotoData = {
