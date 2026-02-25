@@ -1,5 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Client;
 using Microsoft.IdentityModel.Protocols;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
@@ -178,7 +179,6 @@ namespace Sigre.DataAccess
                     existente.PostAltura = dto.PostAltura;
                     existente.PostTramo = dto.PostTramo;
 
-
                     ctx.SaveChanges();
 
                     resultado.Add((existente.PostInterno, existente.PostInterno));
@@ -253,7 +253,7 @@ namespace Sigre.DataAccess
                         existente.PostMaterial = x_poste.PostMaterial;
                         existente.PostAltura = x_poste.PostAltura;
                         existente.PostRetenidaTipo = x_poste.PostRetenidaTipo;
-                        existente.PostTerceros= x_poste.PostTerceros; 
+                        existente.PostTerceros = x_poste.PostTerceros;
 
                         // NOTA: No actualizamos 'PostInspeccionado' para no borrar el trabajo de campo si ya se hizo.
 
@@ -316,7 +316,7 @@ namespace Sigre.DataAccess
             {
                 // 🔥 OPTIMIZACIÓN: AsNoTracking + Select Manual para evitar JSON gigante
                 var postes = ctx.Postes
-                    
+
                     .Where(p => p.PostSubestacion == idSed) // Filtro por SED
                     .Select(p => new Poste()
                     {
@@ -402,6 +402,5 @@ namespace Sigre.DataAccess
                 return new PagedResult<Poste> { TotalRecords = totalRecords, Data = data };
             }
         }
-
     }
 }

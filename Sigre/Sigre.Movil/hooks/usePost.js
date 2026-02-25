@@ -7,6 +7,7 @@ import {
   getPostMaterial,
   getPostRetenidaMaterial,
   getPostRetenidaTipo,
+  getPostsPendientes,
   insertPostAndPin,
   markPostAsSynced,
   saveOrUpdatePost,
@@ -178,60 +179,7 @@ export const usePost = () => {
   };
 
   // 🔁 Auto-sync de UN poste (automático)
-  // const autoSyncPost = async (postInternoLocal) => {
-  //   const dbOk = await checkDatabase();
-  //   if (!dbOk) {
-  //     console.warn("⚠ Base de datos no disponible, auto-sync cancelado");
-  //     return;
-  //   }
-
-  //   try {
-  //     const online = await isOnline();
-  //     if (!online) {
-  //       console.log("ℹ️ Auto-sync no realizada, queda offline");
-  //       return;
-  //     }
-
-  //     const post = await getPostByIdLocal(postInternoLocal);
-  //     if (!post || post.EstadoOffLine == null) return;
-
-  //     const postToSync = normalizePostForSync(post);
-  //     console.log("📤 Payload sync:", JSON.stringify([postToSync], null, 2));
-
-  //     const response = await client.post(
-  //       "/Post/SyncFromSQLite",
-  //       [postToSync],
-  //       { timeout: 6000 }
-  //     );
-
-  //     const result = response.data;
-  //     if (!Array.isArray(result) || result.length === 0) return;
-
-  //     const map = result[0];
-  //     if (map.localId !== map.serverId) {
-  //       await updatePostIdAfterSync(map.localId, map.serverId);
-  //     } else {
-  //       await markPostAsSynced(map.serverId);
-  //     }
-
-  //     console.log("✅ Poste sincronizado correctamente");
-  //   } catch (err) {
-  //     if (err.response) {
-  //       console.log("❌ Sync error:", err.response.status, err.response.data);
-  //     } else if (err.request) {
-  //       console.log("❌ Sin respuesta del servidor");
-  //     } else {
-  //       console.log("❌ Error:", err.message);
-  //     }
-  //   }
-  // };
-
-  // Sincronizar log
-  // 🔁 Auto-sync de UN poste (automático)
   const autoSyncPost = async (postInternoLocal) => {
-    // ✅ LOG + STACK para saber QUIÉN lo llamó
-
-
     const dbOk = await checkDatabase();
     if (!dbOk) {
       console.warn("⚠ Base de datos no disponible, auto-sync cancelado");
@@ -249,8 +197,6 @@ export const usePost = () => {
       if (!post || post.EstadoOffLine == null) return;
 
       const postToSync = normalizePostForSync(post);
-      //console.log("📤 Sincronización Update info de Poste");
-
       const response = await client.post(
         "/Post/SyncFromSQLite",
         [postToSync],
@@ -279,6 +225,43 @@ export const usePost = () => {
   };
 
 
+  // ------------------- SYNC MASIVO (robusto + compatible) -------------------
+  const syncAllPosts = async () => {
+    const online = await isOnline();
+    if (!online) return { ok: false };
+
+    try {
+      const pendientes = await getPostsPendientes();
+      if (!pendientes.length) return { ok: true, synced: 0 };
+
+      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
+      if (!aSincronizar.length) return { ok: true, synced: 0 };
+
+      // 🔹 Normalizar TODAS
+      const payload = aSincronizar.map((p) => normalizePostForSync(p));
+
+      const response = await client.post("/Post/SyncFromSQLite", payload, { timeout: 20000 });
+
+      const respList = Array.isArray(response.data) ? response.data : [];
+      let syncedCount = 0;
+
+      for (const r of respList) {
+        if (!r?.localId || !r?.serverId) {
+          console.warn("⚠ Respuesta inválida:", r);
+          continue;
+        }
+
+        await updatePostIdAfterSync(r.localId, r.serverId);
+        syncedCount++;
+      }
+
+      return { ok: true, synced: syncedCount };
+    } catch (err) {
+      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
+      return { ok: false };
+    }
+  };
+
   const normalizePostForSync = (post) => ({
     ...post,
     EstadoOffLine: Number(post.EstadoOffLine ?? 1),
@@ -298,6 +281,24 @@ export const usePost = () => {
 
   });
 
+  const countPendingPostsLocal = async () => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return 0;
+
+    try {
+      const pendientes = await getPostsPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+
+      // mismo criterio que usas para sincronizar
+      return pendientes.filter((d) =>
+        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
+      ).length;
+    } catch (err) {
+      console.error("❌ Error contando posts pendientes:", err);
+      return 0;
+    }
+  };
+
 
   return {
     loading,
@@ -307,6 +308,8 @@ export const usePost = () => {
     getMaterialsPost,
     getArmadoMaterialsPost,
     getTipoRetenidasPost,
-    getMaterialsRetenidasPost
+    getMaterialsRetenidasPost,
+    syncAllPosts,
+    countPendingPostsLocal
   };
 };
