@@ -7,7 +7,7 @@ import { AutoComplete } from 'primereact/autocomplete';
 
 import { useFeeder, useSedsByFeeder } from '../../hooks/useFeeder';
 import { useElements } from '../../hooks/useElement'; 
-
+import { useNodeSearch } from '../../hooks/useNodeSearch';
 export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSave, saving = false }) {
     
     // ... (Tu estado inicial se mantiene igual) ...
@@ -20,11 +20,24 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
     };
 
     const [formData, setFormData] = useState(initialState);
-    const [suggestions, setSuggestions] = useState([]);
 
     const { feeders } = useFeeder();
     const { seds } = useSedsByFeeder(formData.alimentadorId);
-    const { fetchPostesChunk } = useElements();
+    const { fetchPostesChunk } = useElements(); 
+    // 2. Instancias el buscador pasándole las dependencias
+    const { suggestions, searchNode } = useNodeSearch(fetchPostesChunk, seds);
+    // Genera un código aleatorio de exactamente 12 caracteres
+const generateRandomGisCode = (type) => {
+    if (type === 'POSTE') {
+        // SGRPOST (7 letras) + 5 números aleatorios = 12 caracteres
+        const num = Math.floor(10000 + Math.random() * 90000); 
+        return `SGRPOST${num}`;
+    } else {
+        // SGRVBT (6 letras) + 6 números aleatorios = 12 caracteres
+        const num = Math.floor(100000 + Math.random() * 900000);
+        return `SGRVBT${num}`;
+    }
+};
 
     // ... (Tu useEffect se mantiene igual) ...
     useEffect(() => {
@@ -64,11 +77,21 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
                 });
             }
         } else {
-            setFormData(initialState);
+            setFormData({
+            ...initialState,
+            tipoElemento: typeMode,
+            codigo: generateRandomGisCode(typeMode)
+        });
         }
     }, [elementToEdit, typeMode]);
 
-    const handleInternalClear = () => setFormData(initialState);
+    const handleInternalClear = () => {
+    setFormData({
+        ...initialState,
+        tipoElemento: typeMode,
+        codigo: generateRandomGisCode(typeMode)
+    });
+};
 
     // =========================================================================
     // 🔥 NUEVA FUNCIÓN WRAPPER PARA MAPEAR Y CONSOLE LOG 🔥
@@ -128,43 +151,6 @@ const handleSaveWrapper = () => {
     };
 
         
-
-    // ... (Resto de funciones: searchPoste, itemTemplate, handleSelectPoste) ...
-// --- BÚSQUEDA UNIFICADA (POSTES + SEDS) ---
-    const searchNode = async (event) => {
-        const query = event.query.toLowerCase();
-
-        // 1. Buscar Postes (Backend)
-        const postesPromise = fetchPostesChunk(0, 15, query);
-        
-        // 2. Buscar SEDs (Local) - MEJORADO
-        // Buscamos si el texto coincide con el Label ("1887 - ...") o el Código Interno ("1887")
-        const sedsFiltradas = seds.filter(sed => {
-            const labelStr = (sed.label || "").toLowerCase();
-            const codigoStr = (sed.sedCodigo || "").toLowerCase(); // Asegúrate de tener esta prop
-            const internoStr = String(sed.sedInterno || "");
-            
-            return labelStr.includes(query) || codigoStr.includes(query) || internoStr.includes(query);
-        }).map(sed => ({
-            ...sed, 
-            _tipo: 'SED', // Marca vital
-            
-            // Normalización para visualización
-            postCodigoNodo: sed.label, // Mostramos "1887 - CHACHANI" como título
-            postEtiqueta: 'SUBESTACIÓN', // Subtítulo fijo
-            
-            // Coordenadas (Mapea las props reales de tu objeto SED)
-            postLatitud: sed.sedLatitud || sed.latitud || 0,
-            postLongitud: sed.sedLongitud || sed.longitud || 0
-        }));
-
-        // 3. Ejecutar y Combinar
-        const resPostes = await postesPromise;
-        const postesNormalizados = (resPostes.data || []).map(p => ({ ...p, _tipo: 'POSTE' }));
-
-        // SEDs primero (Naranja), luego Postes (Azul)
-        setSuggestions([...sedsFiltradas, ...postesNormalizados]);
-    };
 
 const itemTemplate = (item) => {
         const esSed = item._tipo === 'SED';
@@ -362,18 +348,26 @@ const itemTemplate = (item) => {
     <AutoComplete 
         value={formData.nodoInicial} 
         suggestions={suggestions} 
-        completeMethod={searchNode} // <--- CAMBIO AQUÍ
+        completeMethod={(e) => searchNode(e.query, formData.alimentadorId, formData.sedId)}
         itemTemplate={itemTemplate} 
         field="postCodigoNodo" 
-        onSelect={(e) => handleSelectNode(e, 'nodoInicial')} // <--- CAMBIO AQUÍ
+        onSelect={(e) => handleSelectNode(e, 'nodoInicial')} 
         onChange={(e) => {
-            // Manejo manual si el usuario escribe
-            const val = e.value.postEtiqueta || e.value.postCodigoNodo || e.value.label || e.value;
+            const val = e.value?.postEtiqueta || e.value?.postCodigoNodo || e.value?.label || e.value;
             setFormData({...formData, nodoInicial: val});
         }}
         className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
         inputClassName="w-full h-9 font-bold border-none" 
-        placeholder="Buscar Poste o SED..."
+        
+        // 1. PLACEHOLDER DINÁMICO MEJORADO
+        placeholder={
+            !formData.alimentadorId ? "Seleccione Alimentador primero..." : 
+            !formData.sedId ? "Seleccione SED primero..." : 
+            "Buscar Poste o SED..."
+        }
+        
+        // 2. BLOQUEO MÁS ESTRICTO: Se bloquea si falta el alimentador O falta la SED
+        disabled={!formData.alimentadorId || !formData.sedId} 
     />
 </div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LATITUD</label><InputNumber value={formData.latitudIni} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>
@@ -389,17 +383,26 @@ const itemTemplate = (item) => {
     <AutoComplete 
         value={formData.nodoFinal} 
         suggestions={suggestions} 
-        completeMethod={searchNode} 
-        itemTemplate={itemTemplate} 
+        completeMethod={(e) => searchNode(e.query, formData.alimentadorId, formData.sedId)}        itemTemplate={itemTemplate} 
         field="postCodigoNodo" 
         onSelect={(e) => handleSelectNode(e, 'nodoFinal')} 
         onChange={(e) => {
-            const val = e.value.postEtiqueta || e.value.postCodigoNodo || e.value.label || e.value;
+            // Se agregó ?. por seguridad al escribir libremente
+            const val = e.value?.postEtiqueta || e.value?.postCodigoNodo || e.value?.label || e.value;
             setFormData({...formData, nodoFinal: val});
         }}
         className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
         inputClassName="w-full h-9 font-bold border-none" 
-        placeholder="Buscar Poste o SED..."
+        
+        // 1. PLACEHOLDER DINÁMICO IDÉNTICO AL INICIAL
+        placeholder={
+            !formData.alimentadorId ? "Seleccione Alimentador primero..." : 
+            !formData.sedId ? "Seleccione SED primero..." : 
+            "Buscar Poste o SED..."
+        }
+        
+        // 2. BLOQUEO ESTRICTO (Alimentador y SED son obligatorios)
+        disabled={!formData.alimentadorId || !formData.sedId} 
     />
 </div>
                                     <div className="w-1/4"><label className="font-bold text-gray-500 block mb-1.5 text-[10px]">LATITUD</label><InputNumber value={formData.latitudFin} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 opacity-70 ${inputBorderClass}`} inputClassName="w-full h-9 text-xs bg-gray-100 border-none" disabled /></div>

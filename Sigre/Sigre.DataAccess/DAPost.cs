@@ -1,5 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Client;
 using Microsoft.IdentityModel.Protocols;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
@@ -178,7 +179,6 @@ namespace Sigre.DataAccess
                     existente.PostAltura = dto.PostAltura;
                     existente.PostTramo = dto.PostTramo;
 
-
                     ctx.SaveChanges();
 
                     resultado.Add((existente.PostInterno, existente.PostInterno));
@@ -253,7 +253,7 @@ namespace Sigre.DataAccess
                         existente.PostMaterial = x_poste.PostMaterial;
                         existente.PostAltura = x_poste.PostAltura;
                         existente.PostRetenidaTipo = x_poste.PostRetenidaTipo;
-                        existente.PostTerceros= x_poste.PostTerceros; 
+                        existente.PostTerceros = x_poste.PostTerceros;
 
                         // NOTA: No actualizamos 'PostInspeccionado' para no borrar el trabajo de campo si ya se hizo.
 
@@ -316,7 +316,7 @@ namespace Sigre.DataAccess
             {
                 // 🔥 OPTIMIZACIÓN: AsNoTracking + Select Manual para evitar JSON gigante
                 var postes = ctx.Postes
-                    
+
                     .Where(p => p.PostSubestacion == idSed) // Filtro por SED
                     .Select(p => new Poste()
                     {
@@ -344,39 +344,44 @@ namespace Sigre.DataAccess
                 return postes;
             }
         }
-        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string busqueda = "")
+        // Añadimos alimentadorId y sedId como parámetros opcionales (nulleables)
+        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
         {
             using (SigreContext ctx = new SigreContext())
             {
-                // --- SOLUCIÓN ERROR CS1061 (EF Core) ---
-                // Usamos ChangeTracker en lugar de Configuration
                 ctx.ChangeTracker.LazyLoadingEnabled = false;
                 ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
-                // 1. Iniciamos la consulta base
-                var query = ctx.Postes.AsNoTracking().AsQueryable();
+                // 1. Iniciamos consulta base + Restricción BT
+                var query = ctx.Postes.AsNoTracking().Where(p => p.PostEsBt == true).AsQueryable();
 
-                // 2. FILTRO OPCIONAL: Solo si el usuario escribió algo
+                // 2. FILTROS JERÁRQUICOS (NUEVO - Esto da la velocidad extrema)
+                if (alimentadorId.HasValue && alimentadorId.Value > 0)
+                {
+                    query = query.Where(p => p.AlimInterno == alimentadorId.Value);
+                }
+
+                if (sedId.HasValue && sedId.Value > 0)
+                {
+                    // Ajusta "PostSubestacion" al nombre real de tu columna en EF
+                    query = query.Where(p => p.PostSubestacion == sedId.Value);
+                }
+
+                // 3. FILTRO DE TEXTO LENTO (Ahora corre sobre un universo diminuto)
                 if (!string.IsNullOrEmpty(busqueda))
                 {
                     busqueda = busqueda.Trim();
-                    // Filtramos por Código o Etiqueta
                     query = query.Where(p => p.PostCodigoNodo.Contains(busqueda) ||
                                              (p.PostEtiqueta != null && p.PostEtiqueta.Contains(busqueda)));
                 }
 
-                // 3. Contar (Count):
-                // Si hay búsqueda, cuenta los filtrados. Si no, cuenta el total de la tabla.
                 int totalRecords = query.Count();
 
-                // 4. Paginación (Chunk):
-                // Esto evita que el navegador se crashee por "Out of Memory"
                 var data = query
-                    .OrderBy(p => p.PostCodigoNodo) // Orden obligatorio para paginar
+                    .OrderByDescending(p => p.PostInterno)
                     .Skip(skip)
                     .Take(take)
-                    .Select(p => new Poste()
-                    {
+                    .Select(p => new Poste() {
                         PostInterno = p.PostInterno,
                         PostEtiqueta = p.PostEtiqueta,
                         PostCodigoNodo = p.PostCodigoNodo,
@@ -384,24 +389,18 @@ namespace Sigre.DataAccess
                         PostLongitud = p.PostLongitud,
                         AlimInterno = p.AlimInterno,
                         PostSubestacion = p.PostSubestacion,
-
-                        // Detalles físicos
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
                         PostRetenidaTipo = p.PostRetenidaTipo,
-
-                        // Estados
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt,
+                        PostEsBt = p.PostEsBt
                     })
-            .ToList();
+                    .ToList();
 
-                // Retornamos el chunk de datos y el total para el paginador
                 return new PagedResult<Poste> { TotalRecords = totalRecords, Data = data };
             }
         }
-
     }
 }

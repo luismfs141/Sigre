@@ -2,6 +2,18 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
 
 let db = null;
+let lastDbName = null;
+let openingPromise = null;
+
+const shouldRetryReopen = (err) => {
+  const msg = String(err?.message ?? err ?? "");
+  return (
+    msg.includes("NativeDatabase.prepareAsync") ||
+    msg.includes("shared object that was already released") ||
+    msg.includes("Cannot use shared object") ||
+    msg.includes("cannot be cast to type expo.modules.sqlite.NativeDatabase")
+  );
+};
 
 /**
  * Abre la DB con el nombre indicado.
@@ -11,62 +23,119 @@ export const openDatabase = async (dbName) => {
   if (!dbName) throw new Error("openDatabase -> dbName no puede ser null");
 
   // Normaliza extensión
-  if (!dbName.endsWith(".db")) dbName = `${dbName}.db`;
+  const normalized = dbName.endsWith(".db") ? dbName : `${dbName}.db`;
+  lastDbName = normalized;
 
-  // Devuelve instancia existente si coincide
-  if (db && db._dbName === dbName) return db;
+  // ya abierta y coincide
+  if (db && db._dbName === normalized) return db;
 
-  // Reset de referencia para reabrir
-  db = null;
+  // si hay apertura en curso, espera
+  if (openingPromise) {
+    await openingPromise;
+    if (db && db._dbName === normalized) return db;
+  }
 
-  // Espera mínima por seguridad
-  await new Promise((r) => setTimeout(r, 150));
+  openingPromise = (async () => {
+    // intenta cerrar si existía (si ya está liberada, no pasa nada)
+    try {
+      if (db?.closeAsync) await db.closeAsync();
+    } catch (_) {}
 
-  db = await SQLite.openDatabaseAsync(dbName);
+    db = null;
 
-  // Guardamos el nombre en la instancia
-  try { db._dbName = dbName; } catch (e) { /* no crítico */ }
+    // espera mínima
+    await new Promise((r) => setTimeout(r, 50));
 
-  //console.log("✅ openDatabase -> abierta:", dbName);
-  return db;
+    const instance = await SQLite.openDatabaseAsync(normalized);
+
+    try {
+      instance._dbName = normalized;
+    } catch (_) {
+      // no crítico (a veces el objeto no permite props)
+    }
+
+    db = instance;
+    return db;
+  })();
+
+  try {
+    await openingPromise;
+    return db;
+  } finally {
+    openingPromise = null;
+  }
 };
 
 /**
- * Cierra la referencia en memoria
+ * Cierra la DB (libera la referencia y cierra si el driver lo soporta)
  */
 export const closeDatabase = async () => {
   if (!db) return;
-  db = null;
-  await new Promise((r) => setTimeout(r, 80));
-  //console.log("🟡 closeDatabase -> referencia liberada");
+
+  try {
+    if (db.closeAsync) await db.closeAsync();
+  } catch (_) {
+    // puede estar ya liberada: ignorar
+  } finally {
+    db = null;
+  }
+
+  await new Promise((r) => setTimeout(r, 30));
 };
 
 export const isDatabaseAvailable = async (dbName) => {
   if (!dbName) return false;
-  let fileName = dbName.endsWith(".db") ? dbName : dbName; // no agrega .db
+  const fileName = dbName.endsWith(".db") ? dbName : dbName; // no agrega .db
   const path = `${FileSystem.documentDirectory}SQLite/${fileName}`;
   const info = await FileSystem.getInfoAsync(path);
   return !!info.exists;
 };
 
-
-export const runQuery = async (sql, params = []) => {
-  try {
+/**
+ * Ejecuta query:
+ * - SELECT / PRAGMA / WITH => getAllAsync
+ * - resto => runAsync
+ * ✅ Si la DB fue liberada, reabre y reintenta 1 vez.
+ */
+export const runQuery = async (sql, params = [], forceSelect = false) => {
+  const execOnce = async () => {
     if (!db) {
-      throw new Error("DB no inicializada. Llama openDatabase primero.");
+      if (lastDbName) {
+        await openDatabase(lastDbName);
+      } else {
+        throw new Error("DB no inicializada. Llama openDatabase primero.");
+      }
     }
 
-    const sqlTrim = sql.trim().toUpperCase();
+    const sqlTrim = String(sql ?? "").trim().toUpperCase();
 
-    // 🔍 SELECT
-    if (sqlTrim.startsWith("SELECT")) {
+    const isRead =
+      forceSelect ||
+      sqlTrim.startsWith("SELECT") ||
+      sqlTrim.startsWith("PRAGMA") ||
+      sqlTrim.startsWith("WITH");
+
+    if (isRead) {
       return await db.getAllAsync(sql, params);
     }
 
-    // ✏️ INSERT / UPDATE / DELETE
     return await db.runAsync(sql, params);
+  };
 
+  try {
+    return await execOnce();
   } catch (error) {
+    // reintenta 1 vez si es el error típico de "shared object released"
+    if (shouldRetryReopen(error) && lastDbName) {
+      try {
+        await openDatabase(lastDbName);
+        return await execOnce();
+      } catch (e2) {
+        console.error("❌ Error en runQuery (reopen+retry):", e2);
+        throw e2;
+      }
+    }
+
     console.error("❌ Error en runQuery:", error);
     throw error;
   }

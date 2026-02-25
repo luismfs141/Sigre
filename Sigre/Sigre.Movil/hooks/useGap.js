@@ -7,6 +7,7 @@ import {
   getGapsByFeederLocal,
   getGapsBySedLocal,
   getVanoByIdLocal,
+  getVanosPendientes,
   markVanoAsSynced,
   saveOrUpdateVano,
   updateVanoIdAfterSync
@@ -105,21 +106,18 @@ export const useGap = () => {
   const autoSyncVano = async (vanoInternoLocal) => {
     try {
       const online = await isOnline();
-      if (!online) {
-        console.log("ℹ️ Auto-sync vano no realizada, queda offline");
-        return;
-      }
+      if (!online) return;
 
       const vano = await getVanoByIdLocal(vanoInternoLocal);
       if (!vano || vano.EstadoOffLine == null) return;
 
       const vanoToSync = normalizeVanoForSync(vano);
 
-      console.log("📤 Payload vano sync:", JSON.stringify([vanoToSync], null, 2));
+      //console.log("📤 Sincronización Update de Vano");
 
       const response = await client.post(
         "/Gap/SyncFromSQLite",
-        [vanoToSync], // 🔥 ARRAY DIRECTO (uniforme)
+        [vanoToSync],
         { timeout: 6000 }
       );
 
@@ -133,17 +131,63 @@ export const useGap = () => {
       } else {
         await markVanoAsSynced(serverId);
       }
-
-      console.log("✅ Vano sincronizado correctamente");
-
     } catch (err) {
-      if (err.response) {
-        console.log("❌ Sync vano error:", err.response.status, err.response.data);
-      } else if (err.request) {
-        console.log("❌ Sin respuesta del servidor (vano)");
-      } else {
-        console.log("❌ Error vano:", err.message);
+      // sin logs
+    }
+  };
+
+  // ------------------- SYNC MASIVO (robusto + compatible) -------------------
+  const syncAllGaps = async () => {
+    const online = await isOnline();
+    if (!online) return { ok: false };
+
+    try {
+      const pendientes = await getVanosPendientes();
+      if (!pendientes.length) return { ok: true, synced: 0 };
+
+      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
+      if (!aSincronizar.length) return { ok: true, synced: 0 };
+
+      // 🔹 Normalizar TODAS
+      const payload = aSincronizar.map((v) => normalizeVanoForSync(v));
+
+      const response = await client.post("/Gap/SyncFromSQLite", payload, { timeout: 20000 });
+
+      const respList = Array.isArray(response.data) ? response.data : [];
+      let syncedCount = 0;
+
+      for (const r of respList) {
+        if (!r?.localId || !r?.serverId) {
+          console.warn("⚠ Respuesta inválida:", r);
+          continue;
+        }
+
+        await updateVanoIdAfterSync(r.localId, r.serverId);
+        syncedCount++;
       }
+
+      return { ok: true, synced: syncedCount };
+    } catch (err) {
+      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
+      return { ok: false };
+    }
+  };
+
+  const countPendingGapsLocal = async () => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return 0;
+
+    try {
+      const pendientes = await getVanosPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+
+      // mismo criterio que usas para sincronizar
+      return pendientes.filter((d) =>
+        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
+      ).length;
+    } catch (err) {
+      console.error("❌ Error contando vanos pendientes:", err);
+      return 0;
     }
   };
 
@@ -154,5 +198,7 @@ export const useGap = () => {
     fetchGapsBySed,
     saveVano,
     fetchVanoById,
+    syncAllGaps,
+    countPendingGapsLocal
   };
 };

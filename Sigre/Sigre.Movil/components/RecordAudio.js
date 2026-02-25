@@ -1,82 +1,125 @@
-import { Audio } from 'expo-av';
-import * as MediaLibrary from 'expo-media-library';
-import * as React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import * as MediaLibrary from "expo-media-library";
+import * as React from "react";
+import { Image, StyleSheet, View } from "react-native";
 import { TouchableOpacity } from "react-native-gesture-handler";
-import { useSelector } from 'react-redux';
+import { useSelector } from "react-redux";
 import { useMultimedia } from "../hooks/useMultimedia";
 
-export const RecordAudio = ({files}) => {
+// ✅ NUEVO: expo-audio 
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 
-  const { selectedPin, selectedDeficiency ,typifications, controlSave, idDeficiency} = useSelector(state => state.AppReducer);
+export const RecordAudio = ({ files }) => {
+  const { selectedPin, selectedDeficiency, typifications, controlSave, idDeficiency } =
+    useSelector((state) => state.AppReducer);
+
   const { upLoadFile } = useMultimedia();
-  const [recording, setRecording] = React.useState();
-  const [ typification, setTypification ] = React.useState([{}]);
 
-  async function startRecording() {
-    try {
-      MediaLibrary.requestPermissionsAsync();
-      await MediaLibrary.getPermissionsAsync();      
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+  // ✅ NUEVO: recorder administrado por hook
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
 
-      console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync( Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
-    } catch (err) {
-      console.error('Failed to start recording', err);
-    }
-  }
+  const [typification, setTypification] = React.useState([{}]);
 
   function getPosition(string, subString, index) {
     return string.split(subString, index).join(subString).length;
   }
 
-  async function stopRecording() {
-    var path = "";
+  const ensurePermissions = React.useCallback(async () => {
+    // MediaLibrary (para guardar el asset)
+    const mediaPerm = await MediaLibrary.requestPermissionsAsync();
+    if (!mediaPerm?.granted) return false;
 
-    var route = String(Object.values(files)[0].archNombre);
+    // Mic (para grabar audio) -> expo-audio
+    const micPerm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!micPerm?.granted) return false;
 
-    console.log(route);
+    return true;
+  }, []);
 
-    setRecording(undefined);
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-    });
-    const uri = recording.getURI();
-    if(route.indexOf('Sin Deficiencias')>=0){
-      path = route.substring(0, getPosition(route, '/', 3));
+  const startRecording = React.useCallback(async () => {
+    try {
+      const ok = await ensurePermissions();
+      if (!ok) {
+        console.warn("Permisos denegados (MediaLibrary o Mic).");
+        return;
+      }
+
+      // ✅ NUEVO: propiedades cambiaron
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
+      console.log("Starting recording..");
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+    } catch (err) {
+      console.error("Failed to start recording", err);
     }
-    else{
-      path = route.substring(0, getPosition(route, '/', 6));
-    }
+  }, [ensurePermissions, audioRecorder]);
 
-    const asset = await MediaLibrary.createAssetAsync(uri);
-    await MediaLibrary.createAlbumAsync(path.toString(), asset);
-    console.log('Recording stopped and stored at', uri);
-  }
+  const stopRecording = React.useCallback(async () => {
+    try {
+      let path = "";
+
+      const route = String(Object.values(files ?? {})?.[0]?.archNombre ?? "");
+      console.log(route);
+
+      // ✅ NUEVO: stop() (ya no stopAndUnloadAsync)
+      // El archivo queda disponible en audioRecorder.uri
+      await audioRecorder.stop();
+
+      await setAudioModeAsync({
+        allowsRecording: false,
+      });
+
+      const uri = audioRecorder.uri;
+      if (!uri) {
+        console.warn("No se obtuvo uri de grabación.");
+        return;
+      }
+
+      if (route.indexOf("Sin Deficiencias") >= 0) {
+        path = route.substring(0, getPosition(route, "/", 3));
+      } else {
+        path = route.substring(0, getPosition(route, "/", 6));
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      await MediaLibrary.createAlbumAsync(path.toString(), asset);
+
+      console.log("Recording stopped and stored at", uri);
+    } catch (err) {
+      console.error("Failed to stop recording", err);
+    }
+  }, [audioRecorder, files]);
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={recording ? stopRecording : startRecording}>
-        <Image source={recording ?
-        require('../assets/mic-on.png')
-        : require('../assets/mic-off.png')}/>
+      <TouchableOpacity onPress={recorderState.isRecording ? stopRecording : startRecording}>
+        <Image
+          source={
+            recorderState.isRecording
+              ? require("../assets/mic-on.png")
+              : require("../assets/mic-off.png")
+          }
+        />
       </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'black',
-    alignContent: 'flex-start',
-    alignSelf:'center',
-    marginTop: 20
+    backgroundColor: "black",
+    alignContent: "flex-start",
+    alignSelf: "center",
+    marginTop: 20,
   },
 });

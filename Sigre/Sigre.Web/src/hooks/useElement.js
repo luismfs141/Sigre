@@ -4,18 +4,22 @@ import api from '../api/apiConfig';
 export const useElements = () => {
     const [loading, setLoading] = useState(false);
 
-    // Función genérica
-    const fetchBloque = useCallback(async (endpoint, skip, take, busqueda = "") => {
+    // Función genérica MEJORADA para aceptar filtros dinámicos
+    const fetchBloque = useCallback(async (endpoint, skip, take, busqueda = "", alimentadorId = null, sedId = null) => {
         setLoading(true);
         try {
             const params = {
                 skip: skip,
                 take: take,
-                busqueda: busqueda // <--- Enviamos el filtro al backend
+                busqueda: busqueda 
             };
 
+            // 🔥 Añadimos los filtros jerárquicos solo si tienen un valor
+            if (alimentadorId) params.alimentadorId = alimentadorId;
+            if (sedId) params.sedId = sedId;
+
+            // Axios automáticamente convertirá este objeto params en: ?skip=0&take=15&busqueda=...&alimentadorId=...
             const response = await api.get(endpoint, { params });
-            // Esperamos { totalRecords: 0, data: [] }
             return response.data; 
 
         } catch (err) {
@@ -26,11 +30,14 @@ export const useElements = () => {
         }
     }, []);
 
-    // Wrappers específicos
-    const fetchPostesChunk = (skip, take, busqueda) => fetchBloque('/Post/GetPaginado', skip, take, busqueda);
+    // Wrappers específicos ACTUALIZADOS
+    const fetchPostesChunk = (skip, take, busqueda, alimentadorId, sedId) => 
+        fetchBloque('/Post/GetPaginado', skip, take, busqueda, alimentadorId, sedId);
     
-    const fetchVanosChunk = (skip, take, busqueda) => fetchBloque('/Gap/GetPaginado', skip, take, busqueda);
+    const fetchVanosChunk = (skip, take, busqueda, alimentadorId, sedId) => 
+        fetchBloque('/Gap/GetPaginado', skip, take, busqueda, alimentadorId, sedId);
 
+    // ... (Tu código de saveElement y deleteElement se mantiene exactamente igual) ...
     // --- SAVE ---
     const saveElement = async (formData) => {
         setLoading(true);

@@ -8,13 +8,13 @@ import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { AutoComplete } from 'primereact/autocomplete';
 import { Toast } from 'primereact/toast';
+import { getIconFromType, getGapColor } from '../utils/mapUtils';
 
 // Hooks & Context
 import { useDatos } from '../context/DatosContext';
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder'; 
 import { usePinsBySed } from '../hooks/usePin';
 import { useGapsBySed } from '../hooks/useGap'; 
-import { getIconFromType } from '../utils/mapUtils'; // Asegúrate que esta ruta exista
 
 // Fix Leaflet Icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -207,30 +207,56 @@ const handleVisualize = async () => {
       </div>
 
       {/* MAPA */}
+      {/* MAPA */}
       <div className="flex-grow-1 relative" style={{ zIndex: 0 }}>
           <MapContainer center={[-16.409, -71.537]} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
             <MapController coords={flyToCoords} />
             <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             
-            {/* Gaps */}
-            {gaps.map((gap, i) => (
-                <Polyline 
-                    key={`gap-${gap.id || i}`} 
-                    positions={[[gap.lat1, gap.lon1], [gap.lat2, gap.lon2]]} 
-                    pathOptions={{ color: '#3b82f6', weight: 4 }}
-                />
-            ))}
+ {/* VANOS (Líneas / Cables) */}
+{gaps.map((gap, i) => {
+    // 🔥 USAMOS LOS NOMBRES DE TU C#
+    const p1 = [gap.Lat1 || gap.lat1, gap.Lon1 || gap.lon1];
+    const p2 = [gap.Lat2 || gap.lat2, gap.Lon2 || gap.lon2];
 
-            {/* Pins */}
-            {pins.map((pin, i) => (
-                <Marker 
-                    key={`pin-${pin.id || i}`} 
-                    position={[pin.Latitude, pin.Longitude]} 
-                    icon={getIconFromType(pin)}
-                >
-                    <Popup>{pin.elementCode}</Popup>
-                </Marker>
-            ))}
+    // Solo dibujamos si las coordenadas son válidas
+    if (!p1[0] || !p2[0]) return null;
+
+    return (
+        <Polyline 
+            key={`gap-${gap.Id || i}`} 
+            positions={[p1, p2]} 
+            pathOptions={{ color: gap.Inspeccionado ? '#10b981' : '#3b82f6', weight: 4 }}
+        />
+    );
+})}
+
+{/* PINES (Postes) */}
+{pins.map((pin, i) => {
+    // 🔥 USAMOS LOS NOMBRES DE TU C#
+    const lat = pin.Latitude || pin.latitude || 0;
+    const lng = pin.Longitude || pin.longitude || 0;
+
+    if (lat === 0) return null;
+
+    return (
+        <Marker 
+            key={`pin-${pin.Id || i}`} 
+            position={[lat, lng]} 
+            icon={getIconFromType(pin)} 
+        >
+            <Popup>
+                <div className="flex flex-column gap-1">
+                    {/* ElementCode de tu PinStruct */}
+                    <span className="font-bold text-gray-800">Cód: {pin.ElementCode || pin.elementCode}</span>
+                    <span className={`text-xs font-bold ${pin.Inspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
+                        {pin.Inspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
+                    </span>
+                </div>
+            </Popup>
+        </Marker>
+    );
+})}
           </MapContainer>
       </div>
     </div>

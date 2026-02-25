@@ -6,10 +6,8 @@ import { useDatos } from "../context/DatosContext";
 import { useConnectivity } from "./useConnectivity";
 import { useDeficiency } from "./useDeficiency";
 import { useFiles } from "./useFiles";
-
-// ======================= DEFICIENCIAS =======================
-
-// ======================= ARCHIVOS ===========================
+import { useGap } from "./useGap";
+import { usePost } from "./usePost";
 
 /* ==========================================================
    🧠 NORMALIZADORES
@@ -63,6 +61,52 @@ const normalizeArchivoForSync = (a, serverDefiId) => ({
   ArchFecModificacion: toIsoDate(a.ArchFecModificacion),
 });
 
+const _num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Normaliza cualquier resultado (number/array/object) a stats numéricos
+const normalizeSyncStats = (res) => {
+  if (res == null) return { ok: false, total: 0, synced: 0, remaining: 0 };
+
+  if (typeof res === "number") {
+    return { ok: true, total: res, synced: res, remaining: 0 };
+  }
+
+  if (Array.isArray(res)) {
+    return { ok: true, total: res.length, synced: res.length, remaining: 0 };
+  }
+
+  if (typeof res === "object") {
+    const ok = res.ok !== undefined ? !!res.ok : true;
+
+    const totalRaw =
+      res.totalPending ?? res.total ?? res.pending ?? res.toSync ?? res.count ?? res.totalCount;
+
+    const syncedRaw =
+      res.syncedCount ?? res.synced ?? res.sent ?? res.uploaded ?? res.success ?? res.okCount;
+
+    const remainingRaw =
+      res.remainingPending ?? res.remaining ?? res.left ?? res.pendingAfter ?? res.failed ?? res.errorCount;
+
+    let total = _num(totalRaw);
+    let synced = _num(syncedRaw);
+    let remaining = _num(remainingRaw);
+
+    // Si no viene total pero sí vienen synced/remaining, lo calculamos
+    if (total === 0 && (synced > 0 || remaining > 0)) total = synced + remaining;
+
+    // Si no viene remaining pero sí total y synced, lo calculamos
+    if (remaining === 0 && total > 0 && synced >= 0 && synced <= total) remaining = total - synced;
+
+    return { ok, total, synced, remaining };
+  }
+
+  return { ok: true, total: 0, synced: 0, remaining: 0 };
+};
+
+
 /* ==========================================================
    🪝 HOOK
 ========================================================== */
@@ -72,8 +116,10 @@ export const useOffline = () => {
   const [downloading, setDownloading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const client = api();
-  const { syncAllDeficiencies } = useDeficiency();
-  const { syncAllArchivos } = useFiles();
+  const { syncAllDeficiencies, countPendingDeficienciesLocal } = useDeficiency();
+  const { syncAllArchivos, countPendingArchivosLocal } = useFiles();
+  const { syncAllPosts, countPendingPostsLocal } = usePost();
+  const { syncAllGaps, countPendingGapsLocal } = useGap();
 
 
   const ensureOnline = () => {
@@ -123,30 +169,131 @@ export const useOffline = () => {
   };
 
   /* ============================
-     🔄 SINCRONIZACIÓN OFFLINE
-  ============================ */
+   🔄 SINCRONIZACIÓN OFFLINE
+============================ */
   const syncAllPending = async () => {
-    setSyncing(true);
+  setSyncing(true);
+
+  // 1) contar pendientes ANTES (siempre, incluso offline)
+  let defBefore = 0;
+  let archBefore = 0;
+  let postBefore = 0;
+  let gapBefore = 0;
+
+  try {
+    defBefore = await countPendingDeficienciesLocal();
+    archBefore = await countPendingArchivosLocal();
+    postBefore = await countPendingPostsLocal();
+    gapBefore = await countPendingGapsLocal();
+  } catch (e) {
+    console.log("❌ Error contando pendientes (antes):", e);
+  }
+
+  const totalPending = defBefore + archBefore + postBefore + gapBefore;
+
+  // 2) detectar online (tu hook a veces devuelve fn, a veces bool)
+  const online =
+    typeof isOnline === "function" ? await isOnline() : !!isOnline;
+
+  // 3) si NO hay internet -> NO sync, pero reporta 0 de N
+  if (!online) {
+    setSyncing(false);
+    return {
+      ok: false,
+      totalPending,
+      syncedCount: 0,
+      remainingPending: totalPending,
+      synced: 0,
+      detail: {
+        def: { before: defBefore, after: defBefore },
+        arch: { before: archBefore, after: archBefore },
+        post: { before: postBefore, after: postBefore },
+        gap: { before: gapBefore, after: gapBefore },
+        reason: "offline",
+      },
+    };
+  }
+
+  try {
+    // 4) intentar sync
+    await syncAllDeficiencies();
+    await syncAllArchivos();
+    await syncAllPosts();
+    await syncAllGaps();
+
+    // 5) contar pendientes DESPUÉS (real)
+    let defAfter = 0;
+    let archAfter = 0;
+    let postAfter = 0;
+    let gapAfter = 0;
 
     try {
-      ensureOnline();
+      defAfter = await countPendingDeficienciesLocal();
+      archAfter = await countPendingArchivosLocal();
+      postAfter = await countPendingPostsLocal();
+      gapAfter = await countPendingGapsLocal();
 
-      const syncedDef = await syncAllDeficiencies();
-      const syncedArch = await syncAllArchivos();
-
-      return {
-        ok: true,
-        synced: syncedDef + syncedArch
-      };
-
-    } catch (err) {
-      console.log("❌ Sync general falló:", err.message);
-      return { ok: false };
-
-    } finally {
-      setSyncing(false);
+      console.log(`✅ Sync completado. Pendientes antes: ${totalPending} (Def: ${defBefore}, Arch: ${archBefore}, Post: ${postBefore}, Gap: ${gapBefore}). Pendientes después: ${defAfter + archAfter + postAfter + gapAfter} (Def: ${defAfter}, Arch: ${archAfter}, Post: ${postAfter}, Gap: ${gapAfter}).`);
+    } catch (e) {
+      console.log("❌ Error contando pendientes (después):", e);
     }
-  };
+
+    const remainingPending = defAfter + archAfter;
+    const syncedCount = Math.max(totalPending - remainingPending, 0);
+    const ok = remainingPending === 0;
+
+    return {
+      ok,
+      totalPending,
+      syncedCount,
+      remainingPending,
+      synced: syncedCount,
+      detail: {
+        def: { before: defBefore, after: defAfter },
+        arch: { before: archBefore, after: archAfter },
+        post: { before: postBefore, after: postAfter },
+        gap: { before: gapBefore, after: gapAfter },
+      },
+    };
+  } catch (err) {
+    console.log("❌ Sync general falló:", err?.message ?? err);
+
+    // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
+    let defAfter = defBefore;
+    let archAfter = archBefore;
+    let postAfter = postBefore;
+    let gapAfter = gapBefore;
+
+    try {
+      defAfter = await countPendingDeficienciesLocal();
+      archAfter = await countPendingArchivosLocal();
+      postAfter = await countPendingPostsLocal();
+      gapAfter = await countPendingGapsLocal();
+    } catch (e) {
+      console.log("❌ Error contando pendientes después de sync fallido:", e);
+    }
+
+    const remainingPending = defAfter + archAfter + postAfter + gapAfter;
+    const syncedCount = Math.max(totalPending - remainingPending, 0);
+
+    return {
+      ok: false,
+      totalPending,
+      syncedCount,
+      remainingPending,
+      synced: syncedCount,
+      detail: {
+        def: { before: defBefore, after: defAfter },
+        arch: { before: archBefore, after: archAfter },
+        post: { before: postBefore, after: postAfter },
+        gap: { before: gapBefore, after: gapAfter },
+        reason: err?.message ?? "unknown_error",
+      },
+    };
+  } finally {
+    setSyncing(false);
+  }
+};
 
   return {
     downloading,

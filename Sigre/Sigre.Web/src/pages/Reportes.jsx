@@ -150,8 +150,9 @@ useEffect(() => {
                 sector: item.sector, 
                 // Calculamos totales basados en details
                 total: item.details ? item.details.length : 0, 
-                cantFotos: item.photoCount || 0,
-                criticidad: item.maxCriticality || 0
+                cantFotos: item.totalArchivosPoste || 0,
+                criticidad: item.maxCriticality || 0,
+                estadoRevision: item.estadoRevision 
             };
             
             // Rellenamos las columnas dinámicas
@@ -248,6 +249,21 @@ useEffect(() => {
         const conf = getCriticidadConfig(rowData.criticidad);
         return <Tag value={conf.label} severity={conf.severity} />;
     };
+const estadoRevisionTemplate = (rowData) => {
+    // 1. Extraemos el estado que viene del JSON del servidor
+    const estado = rowData.estadoRevision; // Valdrá "PENDIENTE" o "COMPLETADO"
+    const isPendiente = estado === 'PENDIENTE';
+
+    return (
+        <Tag 
+            value={estado} 
+            severity={isPendiente ? 'warning' : 'success'} 
+            icon={isPendiente ? 'pi pi-exclamation-triangle' : 'pi pi-check-circle'}
+            className="text-[10px] font-bold px-2"
+            rounded
+        />
+    );
+};
 
     const leftToolbarTemplate = () => {
         return (
@@ -349,6 +365,13 @@ useEffect(() => {
                     body={(r) => <Tag severity={r.total > 0 ? 'danger' : 'success'} value={r.total} />}
                     style={{ minWidth: '70px', textAlign: 'center' }} 
                 />
+<Column 
+        field="estadoRevision" // Nombre exacto que ves en el Network tab
+        header="Revisión" 
+        body={estadoRevisionTemplate} 
+        sortable 
+        style={{ width: '130px', textAlign: 'center' }} 
+    />
             </DataTable>
         );
     };

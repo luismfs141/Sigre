@@ -22,35 +22,27 @@ const getSvgMarker = (color, scale = 1) => {
 };
 
 // 📍 FUNCIÓN PRINCIPAL
-export const getIconFromType = (pin) => {
-    let color = COLORS.normal;
-    let scale = 1; // Tamaño normal
+export const getPinColorForElement = (elemento) => {
+  if (!elemento) return { status: "DESCONOCIDO", color: "gray" };
 
-    // 1. Lógica de Colores (Jerarquía: Deficiencia > Inspeccionado > Normal)
-    if (pin.hasDeficiency || pin.status === 'deficient') {
-        color = COLORS.deficiencia; // 🔴 Rojo
-        scale = 1.2; // Un poco más grande para resaltar
-    } else if (pin.inspeccionado) {
-        color = COLORS.inspeccionado; // 🟢 Verde
-    } else if (pin.tercero) {
-        color = COLORS.tercero; // ⚫ Gris
-    }
+  // 1. 🔴 GRIS: Terceros (Propiedad 'Tercero' de C#)
+  if (elemento.Tercero === true || elemento.tercero === true) {
+    return { status: "TERCEROS", color: "#6b7280" }; 
+  }
 
-    // 2. Si es una SED (Subestación), la hacemos Naranja y Grande
-    // Verificamos si es SED por tipo o si el ID del pin coincide con el de la SED buscada
-    if (pin.elementType === 'SED' || pin.idSed === pin.id) {
-        color = COLORS.sed; // 🟠 Naranja
-        scale = 1.5; // Muy grande para destacar la cabecera
-    }
+  // 2. 🟢 VERDE: Inspeccionado (Propiedad 'Inspeccionado' de C#)
+  // Agregamos redundancia por si el serializador cambia a minúsculas
+  const estaCompletado = 
+    elemento.Inspeccionado === true || 
+    elemento.inspeccionado === true ||
+    elemento.estadoRevision === 'COMPLETADO';
 
-    // 3. Generar el DivIcon de Leaflet
-    return L.divIcon({
-        className: 'custom-svg-pin', 
-        html: getSvgMarker(color, scale),
-        iconSize: [30 * scale, 42 * scale], // Espacio que ocupa
-        iconAnchor: [15 * scale, 42 * scale], // La "punta" del pin está abajo al centro
-        popupAnchor: [0, -40 * scale] // El popup sale arriba del pin
-    });
+  if (estaCompletado) {
+    return { status: "FINALIZADA", color: "#10b981" };
+  }
+
+  // 3. 🔵 AZUL: Pendiente
+  return { status: "PENDIENTE", color: "#3b82f6" }; 
 };
 
 // 📏 COLOR PARA LAS LÍNEAS (VANOS)
@@ -58,4 +50,19 @@ export const getGapColor = (gap) => {
     // Si quieres que las líneas también se vean "inspeccionadas"
     if (gap.inspeccionado) return COLORS.inspeccionado;
     return '#60a5fa'; // Un azul un poco más suave para las líneas
+};
+// Agrega esta función al final de tu archivo
+
+export const getIconFromType = (elemento) => {
+  // 1. Obtenemos color basado en estadoRevision del elemento
+  const pinData = getPinColorForElement(elemento);
+  const svgString = getSvgMarker(pinData.color);
+
+  return L.divIcon({
+    className: "custom-leaflet-pin",
+    html: svgString,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32],
+  });
 };

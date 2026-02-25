@@ -416,5 +416,37 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { success = false, message = "Error interno del servidor: " + ex.Message });
             }
         }
+        [HttpGet("del-dia-paginado")]
+        public async Task<IActionResult> GetDeficienciasDelDiaPaginado([FromQuery] int skip, [FromQuery] int take, [FromQuery] DateTime fecha)
+        {
+            try
+            {
+                var daDeficiency = new DADeficiency();
+
+                // Llamamos al método que creamos arriba
+                var result = await daDeficiency.ObtenerDeficienciasDelDiaPaginadoAsync(skip, take, fecha);
+
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error interno al paginar deficiencias del día", detalle = ex.Message });
+            }
+        }
+        [HttpGet("estadisticas-inspectores")]
+        public async Task<IActionResult> GetEstadisticasInspectores([FromQuery] DateTime fecha)
+        {
+            try
+            {
+                var daDeficiency = new DADeficiency();
+                var result = await daDeficiency.ObtenerEstadisticasInspectoresDelDiaAsync(fecha);
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error interno", detalle = ex.Message });
+            }
+        }
+
     }
 }
