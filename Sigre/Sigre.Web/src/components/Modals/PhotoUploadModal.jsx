@@ -21,6 +21,7 @@ const formatCompactDate = (date) => {
     return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 };
 
+
 export default function PhotoUploadModal({ 
     visible, 
     onHide, 
@@ -35,6 +36,7 @@ export default function PhotoUploadModal({
 }) {
     const toast = useRef(null);
     const [formData, setFormData] = useState(initialData);
+    const [isSaving, setIsSaving] = useState(false);
 useEffect(() => {
         if (visible) {
             console.group("🕵️‍♀️ DEBUG: DATOS RECIBIDOS EN MODAL");
@@ -174,7 +176,8 @@ let targetIndex = 1;
         
         return { dbPath, fileName };
     };
-    const handleSaveClick = () => {
+    // 🔥 1. Convertimos a async
+    const handleSaveClick = async () => {
         if (!formData.file && !formData.preview) { 
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta seleccionar foto.' }); 
             return; 
@@ -198,7 +201,18 @@ let targetIndex = 1;
             generatedName: fileName
         };
 
-        onSave(dataToSave);
+        // 🔥 2. Bloqueamos el botón
+        setIsSaving(true); 
+        
+        try {
+            // 🔥 3. Esperamos a que la función padre (EvidenceGallery) termine de guardar en BD y subir el archivo
+            await onSave(dataToSave);
+        } catch (error) {
+            console.error("Error al guardar:", error);
+        } finally {
+            // 🔥 4. Desbloqueamos por si la ventana no se cierra por algún error
+            setIsSaving(false); 
+        }
     };
 
     return (
@@ -244,7 +258,7 @@ let targetIndex = 1;
                             <InputText value={formData.long} onChange={(e)=>setFormData({...formData, long:e.target.value})} className="p-inputtext-sm font-mono text-xs"/>
                         </div>
                     </div>
-                    <Button label={isEditing ? "Actualizar" : "Guardar Evidencia"} icon="pi pi-save" onClick={handleSaveClick} disabled={!formData.file && !formData.preview} severity="success" className="mt-2" />
+                    <Button label={isEditing ? "Actualizar" : "Guardar Evidencia"} icon="pi pi-save" onClick={handleSaveClick} disabled={(!formData.file && !formData.preview) || isSaving} severity="success" className="mt-2" />
                 </div>
             </Dialog>
         </>

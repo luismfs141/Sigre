@@ -407,26 +407,30 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
             <ConfirmDialog />
 
            {/* A. BÚSQUEDA */}
-            <div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
-                <div className="w-full max-w-lg">
-                    <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
-                    <div className="p-inputgroup relative">
-                        <AutoComplete
-                            value={structureCode} 
-                            suggestions={gisSuggestions} 
-                            // Pasamos event.query al hook
-                            completeMethod={(e) => searchNetworkElement(e.query)}
-                            field="codigo" 
-                            itemTemplate={itemTemplate} 
-                            onChange={(e) => setStructureCode(e.value)} 
-                            onSelect={handleGisSelection}
-                            placeholder="Ej: VBT0000372026..." 
-                            className="w-full" 
-                            inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
-                            // Añadimos estas dos propiedades clave
-                            dropdown={false}
-                            disabled={isSearching}
-                        />
+<div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
+    <div className="w-full max-w-lg">
+        <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
+        <div className="p-inputgroup relative">
+            <AutoComplete
+                value={structureCode} 
+                suggestions={gisSuggestions} 
+                completeMethod={(e) => searchNetworkElement(e.query)}
+                field="codigo" 
+                itemTemplate={itemTemplate} 
+                onChange={(e) => setStructureCode(e.value)} 
+                onSelect={handleGisSelection}
+                placeholder="Ej: VBT0000372026..." 
+                className="w-full" 
+                inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
+                dropdown={false}
+                disabled={isSearching}
+                
+                // 🔥 1. DELAY: Espera 800 milisegundos después de que el usuario deja de tipear
+                delay={800} 
+                
+                // 🔥 2. MINLENGTH: Obliga a que escriban al menos 4 caracteres (ej: "PTO0") antes de buscar al backend
+                minLength={4} 
+            />
                         <Button 
                             icon={isSearching ? "pi pi-spin pi-spinner" : "pi pi-search"} 
                             onClick={handleSearchDeficiencies} 
@@ -494,7 +498,7 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
                 <div className="flex align-items-center gap-2">
                     <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
                     <span className="text-xs">
-                        <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.</strong> 
+                        <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.Y que no tengan la tipificacion 7004</strong> 
                     </span>
                 </div>
             )}
