@@ -59,7 +59,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 -- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%1459%'-- <-- tu SED_Codigo
+DECLARE @SUB_ETI VARCHAR(20) = '%2755%'-- <-- tu SED_Codigo
 (
     SELECT  
             ALI.ALIM_Interno AS [Id Alimentador],
@@ -106,16 +106,10 @@ ORDER BY 6
 
 
 
-
-
-
-
-
-
 ------------------------------------------------------------------
 -- BUSCA UN POSTE ------------------------------------------------
 ------------------------------------------------------------------
-DECLARE @CODIGO VARCHAR(20) = 'PTO000111434'
+DECLARE @CODIGO VARCHAR(20) = 'PTO000046761'
 
 SELECT  P.POST_Interno,
         P.POST_Etiqueta,
