@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
+import { useRef } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -11,6 +12,7 @@ import { InputText } from 'primereact/inputtext';
 import { Calendar } from 'primereact/calendar';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+
 
 
 
@@ -64,6 +66,9 @@ export default function FilesTableEditor({
     const [fileRows, setFileRows] = useState([]);
     const [zipLoading, setZipLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    // 🔥 NUEVOS: Para la migración directa a ZIP
+    const [isZippingFolder, setIsZippingFolder] = useState(false);
+    const folderZipInputRef = useRef(null);
 
     // ========================================================================
     // 1. CARGA INICIAL
@@ -382,6 +387,60 @@ const imageBodyTemplate = (rowData) => {
             </div>
         );
     };
+    // ========================================================================
+    // 🔥 HERRAMIENTA DIRECTA: DE CARPETA A ZIP RENOMBRADO (Sin Base de Datos)
+    // ========================================================================
+    const handleFolderToZip = async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+
+        setIsZippingFolder(true);
+        try {
+            // Obtenemos el SED de tu formulario superior
+            const { sed } = namingContext;
+            const newSed = safeSeg(sed?.sedCodigo || sed?.value || sed || "SIN_SED");
+
+            const zip = new JSZip();
+
+            files.forEach(file => {
+                // Filtramos para que solo meta imágenes al ZIP
+                if (!file.name.toLowerCase().match(/\.(jpg|jpeg|png)$/)) return;
+
+                // webkitRelativePath nos da la ruta original: "1709/VANO/SGRVBT640231/7002/FOT-1709-..."
+                const parts = file.webkitRelativePath.split('/');
+                
+                // 1. Reemplazar la carpeta raíz (Ej: '1709' se vuelve '8227')
+                if (parts.length > 0) {
+                    parts[0] = newSed; 
+                }
+
+                // 2. Reemplazar el SED en el nombre del archivo final
+                let filename = parts[parts.length - 1];
+                // Cambia FOT-XXXX-resto por FOT-NUEVO_SED-resto
+                filename = filename.replace(/^FOT-[^-]+-/, `FOT-${newSed}-`);
+                parts[parts.length - 1] = filename;
+
+                // 3. Unir todo para formar la nueva ruta interna del ZIP
+                const zipPath = parts.join('/');
+
+                // 4. Agregar el archivo físico directo al ZIP
+                zip.file(zipPath, file);
+            });
+
+            // Generar y descargar el ZIP
+            const content = await zip.generateAsync({ type: "blob" });
+            saveAs(content, `Fotos_Migradas_SED_${newSed}.zip`);
+            
+            toast.current.show({ severity: 'success', summary: '¡ZIP Listo!', detail: `Carpeta convertida al SED ${newSed}.` });
+        } catch (error) {
+            console.error(error);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Hubo un problema al generar el ZIP.' });
+        } finally {
+            setIsZippingFolder(false);
+            // Limpiamos el input por si quiere subir la misma carpeta de nuevo
+            if (folderZipInputRef.current) folderZipInputRef.current.value = "";
+        }
+    };
 
     return (
         <Card title="Editor de Archivos (Files)" className="mt-4 shadow-sm">
@@ -453,9 +512,45 @@ const imageBodyTemplate = (rowData) => {
                 <Column header="Nombre (Ruta)" body={pathTemplate} />
                 <Column body={(r) => <Button icon="pi pi-trash" rounded text severity="danger" onClick={(e) => handleRemoveRequest(e, r)} />} style={{ width: '50px' }} />
             </DataTable>
+            {/* ... Aquí termina tu <DataTable> ... */}
+
+            {/* 🔥 SECCIÓN INFERIOR: MIGRACIÓN DIRECTA A ZIP */}
+            <div className="mt-6 flex flex-col md:flex-row items-center justify-between border-t border-gray-200 pt-4 bg-purple-50 p-4 rounded-b-md">
+                <div className="flex flex-col mb-4 md:mb-0">
+                    <span className="font-bold text-sm text-purple-900">
+                        <i className="pi pi-file-zip mr-2 text-lg"></i>Convertir Carpeta a Nuevo SED
+                    </span>
+                    <span className="text-xs text-gray-600 mt-1">
+                        Sube una carpeta completa. El sistema cambiará las rutas y nombres al SED actual 
+                        <strong className="mx-1 text-purple-700">({safeSeg(namingContext?.sed?.sedCodigo || namingContext?.sed || "FALTA SED")})</strong> 
+                        y te descargará el ZIP corregido al instante. No altera la base de datos.
+                    </span>
+                </div>
+                
+                <input 
+                    type="file" 
+                    webkitdirectory="true" 
+                    directory="true" 
+                    multiple 
+                    ref={folderZipInputRef} 
+                    style={{ display: 'none' }} 
+                    onChange={handleFolderToZip} 
+                />
+                
+                <Button 
+                    label={isZippingFolder ? "Empaquetando..." : "Subir Carpeta y Descargar ZIP"} 
+                    icon={isZippingFolder ? "pi pi-spin pi-spinner" : "pi pi-cloud-download"} 
+                    severity="help" 
+                    className="p-button-sm font-bold shadow-sm hover:scale-105 transition-transform px-4"
+                    onClick={() => folderZipInputRef.current.click()} 
+                    disabled={isZippingFolder || !namingContext?.sed}
+                    tooltip={!namingContext?.sed ? "Selecciona un SED en el formulario primero" : ""}
+                />
+            </div>
         </Card>
     );
 }
+
 // ==========================================
 // 🔥🔥🔥 HELPER FUNCTIONS 🔥🔥🔥
 // ==========================================
