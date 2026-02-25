@@ -1178,14 +1178,28 @@ export default function Multimedia() {
 
       // Mensaje final
       const lines = [];
-      lines.push("Cambios aplicados al finalizar:");
+      lines.push("Cambios aplicados a la deficiencia:");
       lines.push(`• Fotos: +${countNewPhotos} nuevas, -${countDelPhotos} eliminadas`);
       lines.push(`• Audios: +${countNewAudios} nuevos, -${countDelAudios} eliminados`);
-      lines.push(`• DefiInspeccionado: ${prevDefiIns} → ${newDefiIns}`);
+      const estadoTexto = (v) => (v === 1 ? "Finalizado" : "Pendiente");
+
+      if (newDefiIns === prevDefiIns) {
+        lines.push(
+          `• Estado de deficiencia: Permanece como ${estadoTexto(newDefiIns)}`
+        );
+      } else {
+        lines.push(
+          `• Estado de deficiencia: Cambio a ${estadoTexto(newDefiIns)}`
+        );
+      }
 
       setLoading({ active: false, msg: "" });
 
-      Alert.alert("✅ Finalizado", lines.join("\n"), [
+      const tituloEstado = newDefiIns === 1
+        ? "✅ Finalizado"
+        : "⏳ Pendiente";
+
+      Alert.alert(tituloEstado, lines.join("\n"), [
         { text: "OK", onPress: () => router.replace("/inspection") },
       ]);
 

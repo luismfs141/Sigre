@@ -21,7 +21,7 @@ const getMeta = (typeElement) => {
 const num = (v) => Number(v ?? 0) || 0;
 
 export const recalcElementoInspeccionadoFromDefsLocal = async (elementId, typeElement) => {
-    console.log("📦 Actualizacion de estado")
+    //console.log("📦 Actualizacion de estado")
   try {
     const meta = getMeta(typeElement);
     if (!meta) return { ok: false, reason: "Tipo de elemento no soportado." };

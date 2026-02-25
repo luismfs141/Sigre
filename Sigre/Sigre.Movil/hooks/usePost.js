@@ -85,7 +85,7 @@ export const usePost = () => {
 
   // ------------------- DATOS AUXILIARES -------------------
   const getMaterialsPost = async () => {
-    console.log("📦 log. Lectura de material de postes");
+    //console.log("📦 log. Lectura de material de postes");
     setLoading(true);
     setError(null);
 
@@ -132,7 +132,7 @@ export const usePost = () => {
   };
 
   const getTipoRetenidasPost = async () => {
-    console.log("📦 log. Lectura tipo de retenida");
+    //console.log("📦 log. Lectura tipo de retenida");
     setLoading(true);
     setError(null);
 
