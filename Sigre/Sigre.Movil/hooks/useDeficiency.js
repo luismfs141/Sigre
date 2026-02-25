@@ -390,11 +390,6 @@ export const useDeficiency = () => {
     return normalized;
   };
 
-
-
-
-
-
   // ------------------- NORMALIZE PARA SYNC -------------------
   const normalizeDeficiencyForSync = (def) => {
     const msRaw = getUniqueNowMs();
@@ -444,7 +439,6 @@ export const useDeficiency = () => {
     };
   };
 
-
   // ------------------- AUTO SYNC (robusto + compatible) -------------------
   const autoSyncDeficiency = async (defOrId) => {
     if (syncingRef.current) return;
@@ -463,10 +457,6 @@ export const useDeficiency = () => {
 
       const normalized = normalizeDeficiencyForSync(def);
       const payload = [normalized];
-
-      //console.log("📤 Sincronización de Update de deficiencia");
-
-
       const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
         timeout: 15000,
       });
@@ -542,7 +532,6 @@ export const useDeficiency = () => {
     }
   };
 
-
   // ------------------- SAVE + AUTO SYNC (SIN PIN) -------------------
   const saveDeficiency = async (deficiency, userId) => {
     const dbOk = await checkDatabase();
@@ -569,9 +558,6 @@ export const useDeficiency = () => {
       return { ok: false, error: String(err?.message || err) };
     }
   };
-
-
-
 
   // ------------------- SET INSPECCIONADO (LOCAL + SYNC) -------------------
   const setDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
@@ -690,16 +676,6 @@ export const useDeficiency = () => {
     }
   };
 
-
-
-
-
-
-
-
-
-
-
   // ------------------- LISTADOS -------------------
   const fetchDeficienciesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
     const dbOk = await checkDatabase();
@@ -791,31 +767,20 @@ export const useDeficiency = () => {
     }
   };
 
-
   return {
     loading,
     error,
-
     fetchDeficiencyByTypificationElement,
     fetchDeficiencyByIdLocal,
-
     saveDeficiency,
     deleteDeficiency,
-
     setDefiInspeccionadoLocal,
-
-
-
     autoSyncDeficiency,
     syncAllDeficiencies,
     countPendingDeficienciesLocal,
-
     fetchDeficienciesByElementAndTypi,
     fetchDeficienciesByElement,
     deficienciesForFlatList,
     fetchComentarioEstandarTipiLocal,
-
   };
-
-
 };

@@ -289,9 +289,6 @@ export const saveOrUpdatePost = async (post) => {
         [...vals, id]
       );
     }
-
-
-
     // ✅ UPDATE pin (SIN INSERT aquí)
     await _updatePinForPostLocal({ postInterno: id, ...post });
 
@@ -438,9 +435,13 @@ export const markPostAsSynced = async (postInterno) => {
   await runQuery(query, [postInterno]);
 };
 
-
-
-
+export const getPostsPendientes = async () => {
+  return await runQuery(`
+        SELECT *
+        FROM Postes
+        WHERE EstadoOffLine IN (1, 2, 3)
+      `);
+};
 
 // 🔹 Datos de referencia (material, armado, retenidas)
 export const getPostMaterial = async () => await runQuery("SELECT * FROM PosteMaterials");

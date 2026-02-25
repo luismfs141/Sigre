@@ -62,6 +62,7 @@ export default function Subestaciones() {
     const [filteredData, setFilteredData] = useState(null);
     const [globalFilterValue, setGlobalFilterValue] = useState('');
     const [evidenceCount, setEvidenceCount] = useState(0);
+    
 
     // --- FILTROS INICIALES ---
     const initialFilters = {
@@ -87,6 +88,8 @@ export default function Subestaciones() {
     const { feeders, loading: loadingFeeders } = useFeeder();
     const feederObject = feeders.find(f => f.value === selectedFeeder);
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
+    
+    
 
     const {
         deficiencies,
@@ -625,7 +628,8 @@ export default function Subestaciones() {
                 onHide={() => setFormVisible(false)}
                 onSave={handleSaveSuccess}
                 deficiencyToEdit={deficiencyToEdit}
-                sedId={selectedSed?.sedCodigo || ''}
+                alimentadorId={selectedFeeder}
+                sedId={selectedSed}
                 existingDeficiencies={mappedDeficiencies} // Pasamos la lista completa para validar duplicados
                 referenceSelection={selectedDeficiency}   // Pasa la selección para pre-llenar (clonar)
             />

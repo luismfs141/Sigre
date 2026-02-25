@@ -85,30 +85,6 @@ export const updateDefiInspeccionadoLocal = async (
   }
 };
 
-
-
-
-
-// export const updateDefiInspeccionadoLocal = async (defiInterno, inspeccionado) => {
-//   const val = Number(inspeccionado) === 1 ? 1 : 0;
-
-//   await runQuery(
-//     `
-//     UPDATE Deficiencias
-//     SET DefiInspeccionado = ?
-//     WHERE DefiInterno = ?
-//     `,
-//     [val, defiInterno]
-//   );
-
-//   return true;
-// };
-
-
-
-
-
-
 export const getDeficiencyByTypificationElement = async (idElement, typeElement, idTypification) => {
   try {
     const deficiency = await runQuery(
@@ -418,11 +394,6 @@ export const deleteDeficiencyById = async (
   }
 };
 
-
-
-
-
-
 export const getDeficienciesPendientes = async () => {
   return await runQuery(`
         SELECT *
@@ -495,36 +466,6 @@ export const getComentarioEstandarByTypificationIdLocal = async (typificationId)
   }
 };
 
-
-// export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
-//   try {
-//     const query = `
-//       SELECT 
-//         d.DefiInterno,
-//         d.TablInterno,
-//         d.DefiIdElemento,
-//         d.DefiTipoElemento,
-//         d.DefiNumSuministro,
-//         t.TypificationId AS TipiInterno,
-//         t.Code,
-//         t.Component,
-//         t.Deficiency
-//       FROM Deficiencias d
-//       LEFT JOIN Tipificaciones t
-//         ON d.TipiInterno = t.TypificationId
-//       WHERE d.DefiIdElemento = ?
-//         AND d.DefiTipoElemento = ?
-//         AND DefiActivo = 1
-//       ORDER BY d.DefiInterno ASC;
-//     `;
-//     const results = await runQuery(query, [elementId, typeElement]);
-//     return results;
-//   } catch (error) {
-//     console.error("Error fetching deficiencies for FlatList:", error);
-//     return [];
-//   }
-// };
-
 export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
   try {
     const query = `
@@ -561,8 +502,6 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
     return [];
   }
 };
-
-
 
 export const markDeficiencyAsSyncing = async (defiInterno) => {
   await runQuery(

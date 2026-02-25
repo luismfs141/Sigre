@@ -21,7 +21,7 @@ import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useTypification } from '../hooks/useTypification';
 import { useFiles } from '../hooks/useFiles';
 import { useElements } from '../hooks/useElement';
-
+import { useGlobalElementSearch } from '../hooks/useGlobalElementSearch'; // O la ruta donde lo hayas guardado
 // --- COMPONENTES HIJOS ---
 import FilesTableEditor from './FilesTableEditor';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
@@ -46,7 +46,7 @@ export default function WebInspectionManager() {
     // --- 2. ESTADOS GIS ---
     const { fetchByGis, loading: searchLoading } = useDeficiencyByGis();
     const [structureCode, setStructureCode] = useState('');
-    const [structureType, setStructureType] = useState('Poste');
+    const [structureType, setStructureType] = useState('POST');
     // Para guardar ID numérico del elemento si es necesario
     const [structureIdInt, setStructureIdInt] = useState(0);
 
@@ -54,7 +54,6 @@ export default function WebInspectionManager() {
     const [globalDate, setGlobalDate] = useState('');
     const [globalLat, setGlobalLat] = useState('');
     const [globalLon, setGlobalLon] = useState('');
-    const [gisSuggestions, setGisSuggestions] = useState([]);
 
     // --- 3. ESTADOS DE ARCHIVOS Y MODAL ---
     const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
@@ -75,7 +74,6 @@ export default function WebInspectionManager() {
 
     // 🔥 B. MEMORIA DE SESIÓN (Nuevo: Para ZIP instantáneo y Preview)
     const sessionBlobs = useRef({});
-    const debounceTimer = useRef(null);
 
 
     const LocalFileStore = {
@@ -100,7 +98,7 @@ export default function WebInspectionManager() {
 
     // --- 4. EFECTOS ---
     useEffect(() => {
-        if (masterTypifications.length > 0) fetchTypificationsByTypeElement(structureType === 'Poste' ? 8 : 9);
+        if (masterTypifications.length > 0) fetchTypificationsByTypeElement(structureType === 'POST' ? 8 : 9);
     }, [structureType, masterTypifications]);
 
     useEffect(() => {
@@ -116,73 +114,29 @@ export default function WebInspectionManager() {
             }
         }
     }, [sedsDelAlimentador, pendingSedId]);
+    // --- 5. LÓGICA GIS (Búsqueda Global Rápida) ---
+const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearching } = useGlobalElementSearch(fetchPostesChunk, fetchVanosChunk);
 
-    // --- 5. LÓGICA GIS ---
-    const searchNetworkElement = async (event) => {
-        const query = event.query.toLowerCase();
-        // Limpiamos el timeout anterior si el usuario sigue escribiendo
-        if (debounceTimer.current) clearTimeout(debounceTimer.current);
-
-        // Esperamos 500ms después de la última tecla antes de hacer el fetch
-        debounceTimer.current = setTimeout(async () => {
-            try {
-                const [postesRes, vanosRes] = await Promise.allSettled([
-                    fetchPostesChunk(0, 10, query),
-                    fetchVanosChunk ? fetchVanosChunk(0, 10, query) : Promise.resolve({ data: [] })
-                ]);
-
-                const resultados = [];
-
-                if (postesRes.status === 'fulfilled' && postesRes.value?.data) {
-                    resultados.push(...postesRes.value.data.map(p => ({
-                        label: `POSTE: ${p.postCodigoNodo} - ${p.postEtiqueta || 'S/N'}`,
-                        codigo: p.postCodigoNodo,
-                        idInterno: p.postInterno, // Capturamos ID interno
-                        _tipo: 'Poste',
-                        lat: p.postLatitud,
-                        lng: p.postLongitud,
-                        alimentadorId: p.alimInterno,
-                        sedId: p.postSubestacion
-                    })));
-                }
-
-                if (vanosRes.status === 'fulfilled' && vanosRes.value?.data) {
-                    resultados.push(...vanosRes.value.data.map(v => ({
-                        label: `VANO: ${v.vanoCodigo} - ${v.vanoEtiqueta || 'S/N'}`,
-                        codigo: v.vanoCodigo,
-                        idInterno: v.vanoInterno, // Capturamos ID interno
-                        _tipo: 'Vano',
-                        lat: v.vanoLatitudIni,
-                        lng: v.vanoLongitudIni,
-                        alimentadorId: v.alimInterno,
-                        sedId: v.vanoSubestacion
-                    })));
-                }
-                setGisSuggestions(resultados);
-            } catch (e) {
-                console.error("Error búsqueda GIS:", e);
-            }
-        }, 500);
-    };
+   
 
     const handleGisSelection = (e) => {
         const item = e.value;
         if (!item) return;
 
         setStructureCode(item.codigo);
-        setStructureType(item._tipo);
-        setStructureIdInt(item.idInterno || 0); // Guardamos el ID interno
+        setStructureType(item.tipo); // 'POSTE' o 'VANO'
+        setStructureIdInt(item.idInterno || 0);
 
         if (item.lat) setGlobalLat(item.lat.toString());
         if (item.lng) setGlobalLon(item.lng.toString());
 
+        // (Si tu búsqueda global devuelve alimentador y sed, esto se ejecutará)
         if (item.alimentadorId) {
             setSelectedFeederId(item.alimentadorId);
             setSelectedSed(null);
             if (item.sedId) setPendingSedId(item.sedId);
         }
     };
-
     const handleFeederChange = (e) => {
         setSelectedFeederId(e.value);
         setSelectedSed(null);
@@ -235,8 +189,13 @@ export default function WebInspectionManager() {
             sedLbl = safeSeg(sedLbl);
 
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-            const tipoElemRaw = structureType || 'Poste';
-            const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
+            const tipoElemRaw = String(structureType || 'POST').toUpperCase();
+            
+            // 1. Nombre de la carpeta para la RUTA (Ej. SIGRE.MOVIL/ALIM/SED/POSTE/...)
+            const folderTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POSTE';
+            
+            // 2. Nombre corto para la BASE DE DATOS (Máximo 4 caracteres)
+            const dbTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POST';
 
             // B. Datos Deficiencia Actual
             const defId = selectedDeficiency ? selectedDeficiency.defiInterno : 0;
@@ -285,7 +244,7 @@ export default function WebInspectionManager() {
 
             // --- (Resto igual) ---
             const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${formatCompactDate(dataToSave.date || new Date())}-${dataToSave.tipo}.jpg`;
-            const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
+            const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${folderTipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
 
             const rawLat = parseFloat(dataToSave.lat) || 0;
             const rawLon = parseFloat(dataToSave.long) || 0;
@@ -305,7 +264,7 @@ export default function WebInspectionManager() {
                 archNombre: dbPath.substring(0, 255), archCodTabla: Number(defId),
                 archLatitud: utmCoords.northing, archLongitud: utmCoords.easting,
                 archFecha: dataToSave.date ? new Date(dataToSave.date).toISOString() : new Date().toISOString(),
-                archTipoElemento: tipoElem, archIdElemento: Number(structureIdInt),
+                archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
                 tipiInterno: Number(defTipiInterno), archActivo: true, file: dataToSave.file
             };
 
@@ -340,7 +299,7 @@ export default function WebInspectionManager() {
             sedLbl = safeSeg(sedLbl);
 
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-            const tipoElem = (structureType || 'Poste').toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
+            const tipoElem = (structureType || 'POST').toUpperCase() === 'VANO' ? 'VANO' : 'POST';
 
             // B. Datos de la Deficiencia
             const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
@@ -425,7 +384,7 @@ export default function WebInspectionManager() {
     };
 
     const itemTemplate = (item) => {
-        const esPoste = item._tipo === 'Poste';
+        const esPoste = item._tipo === 'POST';
         return (
             <div className={`flex flex-col border-b border-gray-100 p-2 ${esPoste ? 'hover:bg-blue-50' : 'hover:bg-green-50'}`}>
                 <div className="flex items-center justify-between">
@@ -445,17 +404,39 @@ export default function WebInspectionManager() {
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* A. BÚSQUEDA */}
+           {/* A. BÚSQUEDA */}
             <div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
                 <div className="w-full max-w-lg">
-                    <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda por Código GIS</label>
-                    <div className="p-inputgroup">
+                    <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
+                    <div className="p-inputgroup relative">
                         <AutoComplete
-                            value={structureCode} suggestions={gisSuggestions} completeMethod={searchNetworkElement}
-                            field="codigo" itemTemplate={itemTemplate} onChange={(e) => setStructureCode(e.value)} onSelect={handleGisSelection}
-                            placeholder="Ej: VBT0000372026..." className="w-full" inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
+                            value={structureCode} 
+                            suggestions={gisSuggestions} 
+                            // Pasamos event.query al hook
+                            completeMethod={(e) => searchNetworkElement(e.query)}
+                            field="codigo" 
+                            itemTemplate={itemTemplate} 
+                            onChange={(e) => setStructureCode(e.value)} 
+                            onSelect={handleGisSelection}
+                            placeholder="Ej: VBT0000372026..." 
+                            className="w-full" 
+                            inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
+                            // Añadimos estas dos propiedades clave
+                            dropdown={false}
+                            disabled={isSearching}
                         />
-                        <Button icon="pi pi-search" onClick={handleSearchDeficiencies} loading={searchLoading} />
+                        <Button 
+                            icon={isSearching ? "pi pi-spin pi-spinner" : "pi pi-search"} 
+                            onClick={handleSearchDeficiencies} 
+                            loading={searchLoading} 
+                            disabled={isSearching}
+                        />
+                        {/* Indicador visual opcional debajo del input */}
+                        {isSearching && (
+                            <small className="absolute -bottom-5 left-0 text-blue-500 font-bold animate-pulse">
+                                Buscando elementos...
+                            </small>
+                        )}
                     </div>
                 </div>
             </div>
@@ -469,7 +450,26 @@ export default function WebInspectionManager() {
                     </div>
                     <DataTable
                         value={historicalData} size="small" stripedRows rows={5} paginator selectionMode="single" selection={selectedDeficiency}
-                        onSelectionChange={(e) => { setSelectedDeficiency(e.value); if (e.value) loadFiles(e.value.defiInterno); }}
+                        onSelectionChange={(e) => { 
+    const def = e.value;
+    setSelectedDeficiency(def); 
+
+    if (def) {
+        // 1. Cargar las fotos
+        loadFiles(def.defiInterno); 
+        
+        // 2. Setear Tipo Estructura (Mapeamos de "VANO"/"POST" a "Vano"/"Poste")
+        if (def.defiTipoElemento) {
+            const tipoFormateado = String(def.defiTipoElemento).toUpperCase().includes('VANO') ? 'VANO' : 'POST';
+            setStructureType(tipoFormateado);
+        }
+
+        // 3. Setear Fecha Global convirtiendo el string a un objeto Date
+        if (def.defiFecRegistro) {
+            setGlobalDate(new Date(def.defiFecRegistro));
+        }
+    } 
+}}
                         dataKey="defiInterno" className="text-sm"
                     >
                         <Column field="defiInterno" header="ID" style={{ width: '70px' }} />
@@ -554,7 +554,7 @@ export default function WebInspectionManager() {
                         </div>
                         <div className="flex flex-col">
                             <label className="text-[10px] font-bold text-indigo-700 uppercase">Tipo Estructura</label>
-                            <Dropdown value={structureType} options={[{ label: 'Poste', value: 'Poste' }, { label: 'Vano', value: 'Vano' }]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm" />
+                            <Dropdown value={structureType} options={[{ label: 'POST', value: 'POST' }, { label: 'VANO', value: 'VANO' }]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm" />
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-4 items-end pt-3 border-t border-indigo-200">
@@ -575,6 +575,7 @@ export default function WebInspectionManager() {
                     loadingFiles={loadingFiles}
                     viewMode={viewMode}
                     sessionBlobs={sessionBlobs.current}
+                    onAddFile={addFile}
                 />
             </Card>
 
@@ -585,6 +586,7 @@ export default function WebInspectionManager() {
                     onHide={() => setShowPhotoModal(false)}
                     initialData={initialPhotoData}
                     contextData={contextData}
+                    //onAddFile={handlePhotoSave}
                     onSave={handlePhotoSave} // 🔥 Usamos la función con lógica de Nombrado y UTM
                     deficiencyData={selectedDeficiency}
                     currentPhotos={dbFiles}
