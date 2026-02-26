@@ -206,8 +206,11 @@ const currentConfig = useMemo(() => {
                 });
             } else {
                 // --- MODO NUEVO ---
-                const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`]) : null;
-                const initialCode =  '';
+const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`] ?? referenceSelection[keyBase]) : null;
+                
+                // 🔥 AQUÍ ESTÁ EL CAMBIO: 
+                // Jalamos el Código GIS del elemento seleccionado. Si no hay selección, ponemos '0'
+                const initialCode = getRefValue('CodigoElemento') || referenceSelection?.codigo ;
                 const initialType = getRefValue('TipoElemento') || 'POST';
                 const latRaw = getRefValue('Latitud') || 0;
                 const lngRaw = getRefValue('Longitud') || 0;
