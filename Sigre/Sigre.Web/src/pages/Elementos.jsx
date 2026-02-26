@@ -108,80 +108,48 @@ export default function Elementos() {
            }
        });
     };
-    // 🔥 TEMPLATE PARA LA LISTA DESPLEGABLE DEL AUTOCOMPLETE
-    const autoCompleteItemTemplate = (item) => {
-        const esPoste = item._tipo === 'POST';
-        return (
-            <div className="flex items-center gap-3 p-1 border-b border-gray-50">
-                <div className={`w-6 h-6 flex items-center justify-center rounded-full ${esPoste ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
-                    <i className={`pi ${esPoste ? 'pi-bolt' : 'pi-arrows-h'} text-xs`}></i>
-                </div>
-                <div className="flex flex-col">
-                    <span className="font-bold text-sm text-gray-800">{item.codigo}</span>
-                    <span className="text-[10px] text-gray-500">{item.label}</span>
-                </div>
-            </div>
-        );
-    };
+ 
 
     return (
         <div className="flex flex-col h-screen bg-slate-200 p-2 overflow-hidden">
             <Toast ref={toast} />
             <ConfirmDialog />
 
-{/* --- 1. CABECERA CON AUTOCOMPLETE --- */}
+{/* --- 1. CABECERA CON BÚSQUEDA SIMPLE --- */}
             <div className="bg-white p-2 rounded shadow-sm border mb-2 flex justify-between items-center flex-none">
                 <div className="flex items-center gap-2 w-full">
                     <span className="p-input-icon-left w-full max-w-lg relative flex items-center">
+                        {/* Ícono de Lupa */}
                         <i className="pi pi-search text-blue-600 z-10 ml-2" />
                         
-                        <AutoComplete
+                        {/* Input de texto limpio y directo */}
+                        <InputText
                             value={globalFilter}
-                            suggestions={suggestions}
-                            completeMethod={(e) => searchNode(e.query)}
-                            field="codigo"
-                            itemTemplate={autoCompleteItemTemplate}
                             placeholder="Buscar Código GIS..."
-                            className="w-full"
-                            inputClassName="w-full p-inputtext-sm pl-8 font-bold text-blue-900 uppercase"
-                            
-                            // Propiedades clave de rendimiento y UX
-                            delay={800} 
-                            minLength={3}
-                            disabled={isSearching && suggestions.length === 0}
-
-                            // 1. Manejo al Escribir
-                            onChange={(e) => {
-                                const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
-                                setGlobalFilter(String(valor || '').toUpperCase());
-                            }}
-
-                            // 2. Manejo al Seleccionar (Fuerza la búsqueda exacta en las tablas)
-                            onSelect={(e) => {
-                                const exactCode = e.value.codigo;
-                                setGlobalFilter(exactCode);
-                                setSearchTerm(exactCode); // Dispara las tablas inmediatamente
-                                setLazyParamsPostes(prev => ({ ...prev, first: 0 }));
-                                setLazyParamsVanos(prev => ({ ...prev, first: 0 }));
-                            }}
+                            className="w-full p-inputtext-sm pl-8 font-bold text-blue-900 uppercase"
+                            disabled={isSearching}
+                            onChange={(e) => setGlobalFilter(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => e.key === 'Enter' && globalFilter && triggerSearch()}
                         />
 
                         {/* Botón de limpiar "X" */}
                         {globalFilter && (
                             <i 
                                 className="pi pi-times cursor-pointer absolute right-3 text-red-400 z-10 hover:text-red-600" 
-                                onClick={() => {
-                                    setGlobalFilter(""); 
-                                }}
+                                onClick={() => setGlobalFilter("")}
+                                title="Limpiar búsqueda"
                             />
                         )}
                     </span>
                     
+                    {/* Botón de Acción */}
                     <Button 
                         label="Buscar" 
                         size="small" 
                         icon={isSearching ? "pi pi-spin pi-spinner" : ""} 
                         onClick={triggerSearch} 
+                        disabled={isSearching || !globalFilter}
+                        className="p-button-primary"
                     />
                 </div>
             </div>

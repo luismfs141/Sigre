@@ -56,6 +56,43 @@ export const usePosteVanoSearch = (fetchPostesChunk, fetchVanosChunk) => {
             }
         }, 500);
     }, [fetchPostesChunk, fetchVanosChunk]);
+// 🔥 2. NUEVA FUNCIÓN PARA BÚSQUEDA MANUAL DEL CÓDIGO PRINCIPAL
+    const searchExactCode = async (codigo, alimentadorId, sedId) => {
+        try {
+            const query = codigo.trim().toLowerCase();
+            const [responsePostes, responseVanos] = await Promise.all([
+                fetchPostesChunk(0, 1, query, alimentadorId, sedId),
+                fetchVanosChunk(0, 1, query, alimentadorId, sedId)
+            ]);
 
-    return { suggestions, searchNode, setSuggestions };
+            if (responsePostes?.data?.length > 0) return { ...responsePostes.data[0], _tipo: 'POSTE' };
+            if (responseVanos?.data?.length > 0) return { ...responseVanos.data[0], _tipo: 'VANO' };
+            
+            return null; // Si no hay nada, retorna null
+        } catch (error) {
+            console.error("Error buscando código exacto:", error);
+            return null;
+        }
+    };
+
+    const validateGisGlobal = async (codigoFormateado) => {
+        try {
+            const query = codigoFormateado.toLowerCase();
+            const [responsePostes, responseVanos] = await Promise.all([
+                fetchPostesChunk(0, 1, query), // Búsqueda sin filtros de SED/Alimentador
+                fetchVanosChunk(0, 1, query)
+            ]);
+
+            // Verificamos si hubo alguna coincidencia exacta
+            const existePoste = responsePostes?.data?.some(p => p.postCodigoNodo.toLowerCase() === query);
+            const existeVano = responseVanos?.data?.some(v => v.vanoCodigo.toLowerCase() === query);
+
+            return existePoste || existeVano; // Retorna true si ya existe
+        } catch (error) {
+            console.error("Error validando GIS global:", error);
+            return false; // Ante la duda, asume falso para no bloquear, o maneja el error
+        }
+    };
+
+    return { suggestions, searchNode, setSuggestions, searchExactCode, validateGisGlobal };
 };
