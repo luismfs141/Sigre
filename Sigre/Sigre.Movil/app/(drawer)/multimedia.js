@@ -1432,24 +1432,33 @@ export default function Multimedia() {
             </TouchableOpacity>
           </View>
 
-          {audios.map((audio, index) => (
-            <View key={index} style={{ marginBottom: 8 }}>
-              <AudioCard
-                title={audio.title}
-                uri={audio.uri}
-                onPress={
-                  !audio?.uri
-                    ? () =>
-                      Alert.alert(
-                        "Audio no disponible",
-                        "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
-                      )
-                    : undefined
-                }
-                onDelete={() => handleDeleteAudio(index)}
-              />
-            </View>
-          ))}
+          {audios.map((audio, index) => {
+            const k = audio?.id
+              ? `aud-${audio.id}`
+              : audio?.uri
+                ? `aud-${String(audio.uri)}`
+                : `aud-${index}`;
+
+            return (
+              <View key={k} style={{ marginBottom: 8 }}>
+                <AudioCard
+                  title={audio.title}
+                  uri={audio.uri}
+                  onPress={
+                    !audio?.uri
+                      ? () =>
+                        Alert.alert(
+                          "Audio no disponible",
+                          "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
+                        )
+                      : undefined
+                  }
+                  onDelete={() => handleDeleteAudio(index)}
+                />
+              </View>
+            );
+          })}
+          
           {audios.length === 0 && <Text style={styles.emptyText}>No hay audios grabados</Text>}
         </View>
       </ScrollView>
