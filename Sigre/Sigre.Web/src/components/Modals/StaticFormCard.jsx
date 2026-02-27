@@ -136,19 +136,33 @@ const handleVerifyElement = async () => {
             }));
         }
     } else {
-            // 🚀 SI NO EXISTE EN ESTE CIRCUITO: Formateamos y validamos a nivel GLOBAL
+           const isTakenGlobally = await validateGisGlobal(formData.codigo);
+            
+            if (isTakenGlobally) {
+                // ❌ EL CÓDIGO ORIGINAL YA EXISTE EN OTRO ALIMENTADOR/SED
+                setIsSearchingCode(false);
+                setGisError(
+                    <>
+                        <span className="block">El código {formData.codigo}</span>
+                        <span className="block">ya pertenece a otro elemento en la BD.</span>
+                    </>
+                );
+                return; // Bloqueamos el flujo aquí. NO formateamos.
+            }
+
+            // 🚀 3. SI EL CÓDIGO ORIGINAL ESTÁ LIBRE: Ahora sí, formateamos para crear
             const codigoFormateado = formatGisCode(formData.codigo, typeMode);
             
-            const isTakenGlobally = await validateGisGlobal(codigoFormateado);
+            // Hacemos una última validación de seguridad por si el código autocompletado ya existe
+            const isFormattedTakenGlobally = await validateGisGlobal(codigoFormateado);
             setIsSearchingCode(false);
 
-            if (isTakenGlobally) {
-                // ❌ EL CÓDIGO ESTÁ USADO EN OTRO LADO
-                setGisError(`El código ${codigoFormateado} ya pertenece a otro elemento en la BD.`);
+            if (isFormattedTakenGlobally) {
+                setGisError(`El código adaptado (${codigoFormateado}) ya está en uso.`);
                 setFormData(prev => ({ ...prev, codigo: codigoFormateado }));
             } else {
-                // ✅ EL CÓDIGO ESTÁ TOTALMENTE LIBRE
-                console.log(`Código libre y autocompletado a: ${codigoFormateado} para creación.`);
+                // ✅ TOTALMENTE LIBRE: Limpiamos formulario y cargamos el código formateado a 12 dígitos
+                console.log(`Código libre y adaptado a: ${codigoFormateado} para creación.`);
                 setFormData(prev => ({
                     ...prev,
                     id: 0, 

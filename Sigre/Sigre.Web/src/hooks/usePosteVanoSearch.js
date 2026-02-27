@@ -56,41 +56,60 @@ export const usePosteVanoSearch = (fetchPostesChunk, fetchVanosChunk) => {
             }
         }, 500);
     }, [fetchPostesChunk, fetchVanosChunk]);
-// 🔥 2. NUEVA FUNCIÓN PARA BÚSQUEDA MANUAL DEL CÓDIGO PRINCIPAL
+// 🔥 2. BÚSQUEDA MANUAL ESTRICTA
     const searchExactCode = async (codigo, alimentadorId, sedId) => {
         try {
             const query = codigo.trim().toLowerCase();
+            
+            // Pedimos unos 15 registros por si el backend devuelve coincidencias parciales (LIKE)
             const [responsePostes, responseVanos] = await Promise.all([
-                fetchPostesChunk(0, 1, query, alimentadorId, sedId),
-                fetchVanosChunk(0, 1, query, alimentadorId, sedId)
+                fetchPostesChunk(0, 15, query, alimentadorId, sedId),
+                fetchVanosChunk(0, 15, query, alimentadorId, sedId)
             ]);
 
-            if (responsePostes?.data?.length > 0) return { ...responsePostes.data[0], _tipo: 'POSTE' };
-            if (responseVanos?.data?.length > 0) return { ...responseVanos.data[0], _tipo: 'VANO' };
+            // 🚀 FILTRO ESTRICTO: Buscamos coincidencia exacta (===) en el código GIS
+            if (responsePostes?.data) {
+                const exactPoste = responsePostes.data.find(p => 
+                    (p.postCodigoNodo || '').toLowerCase() === query
+                );
+                if (exactPoste) return { ...exactPoste, _tipo: 'POSTE' };
+            }
+
+            if (responseVanos?.data) {
+                const exactVano = responseVanos.data.find(v => 
+                    (v.vanoCodigo || '').toLowerCase() === query
+                );
+                if (exactVano) return { ...exactVano, _tipo: 'VANO' };
+            }
             
-            return null; // Si no hay nada, retorna null
+            return null; // Si ninguno coincide exactamente, es libre/nuevo
         } catch (error) {
             console.error("Error buscando código exacto:", error);
             return null;
         }
     };
 
+    // 🔥 3. VALIDACIÓN GLOBAL ESTRICTA (Sin filtros de SED/Alimentador)
     const validateGisGlobal = async (codigoFormateado) => {
         try {
-            const query = codigoFormateado.toLowerCase();
+            const query = codigoFormateado.trim().toLowerCase();
             const [responsePostes, responseVanos] = await Promise.all([
-                fetchPostesChunk(0, 1, query), // Búsqueda sin filtros de SED/Alimentador
-                fetchVanosChunk(0, 1, query)
+                fetchPostesChunk(0, 15, query),
+                fetchVanosChunk(0, 15, query)
             ]);
 
-            // Verificamos si hubo alguna coincidencia exacta
-            const existePoste = responsePostes?.data?.some(p => p.postCodigoNodo.toLowerCase() === query);
-            const existeVano = responseVanos?.data?.some(v => v.vanoCodigo.toLowerCase() === query);
+            // 🚀 VALIDACIÓN ESTRICTA: El código exacto (===) debe existir
+            const existePoste = responsePostes?.data?.some(p => 
+                (p.postCodigoNodo || '').toLowerCase() === query
+            );
+            const existeVano = responseVanos?.data?.some(v => 
+                (v.vanoCodigo || '').toLowerCase() === query
+            );
 
-            return existePoste || existeVano; // Retorna true si ya existe
+            return existePoste || existeVano; 
         } catch (error) {
             console.error("Error validando GIS global:", error);
-            return false; // Ante la duda, asume falso para no bloquear, o maneja el error
+            return false; 
         }
     };
 
