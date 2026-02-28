@@ -297,7 +297,7 @@ const itemTemplate = (item) => {
     const inputBorderClass = "border border-gray-300 rounded shadow-sm hover:border-blue-400 focus:border-blue-500 transition-colors";
     const MATERIAL_OPTIONS = [{label:'Madera', value:1}, {label:'Concreto', value:2}, {label:'Metal', value:3}, {label:'Fibra', value:4}];
     // Verificamos que los campos obligatorios estén llenos
-    const tieneCamposBasicos = Boolean(formData.codigo && formData.alimentadorId && formData.sedId);
+    const tieneCamposBasicos = Boolean(formData.codigo && formData.alimentadorId && formData.sedId && (typeMode === 'VANO' ? formData.nodoInicial && formData.nodoFinal : true) && (typeMode === 'POSTE' ? formData.latitud !== null && formData.longitud !== null : true));
     
     // Verificamos que NO haya ningún mensaje de error
     const noHayErrorGis = gisError === '' || gisError === null;
