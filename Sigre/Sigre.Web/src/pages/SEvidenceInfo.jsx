@@ -198,7 +198,7 @@ export default function EvidenceInfo({ deficiency, onSave, loading }) {
                                 </>
                             )}
                             
-                            {/* {formData.tipoElemento === 'VANO' && (
+                            {formData.tipoElemento === 'VANO' && (
                                 <>
                                     <div className="flex flex-col">
                                         <span className="text-gray-500 text-[9px] uppercase font-semibold mb-1">Nodo Inicial</span>
@@ -217,7 +217,7 @@ export default function EvidenceInfo({ deficiency, onSave, loading }) {
                                         />
                                     </div>
                                 </>
-                            )} */}
+                            )}
                         </div>
                     </div>
                 ) : (
