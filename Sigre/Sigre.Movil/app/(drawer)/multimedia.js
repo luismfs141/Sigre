@@ -1173,7 +1173,7 @@ export default function Multimedia() {
           sed: selectedSed?.SedCodigo,
           codigo,
           def: defNameSegment,
-          suffix: i + 1,
+          suffix: 0,
           ext: "m4a",
           date,
           time,
