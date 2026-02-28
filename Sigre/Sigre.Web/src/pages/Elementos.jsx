@@ -6,8 +6,10 @@ import { InputText } from 'primereact/inputtext';
 import { Splitter, SplitterPanel } from 'primereact/splitter'; // <--- IMPORTANTE
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { AutoComplete } from 'primereact/autocomplete'; // 🔥 NUEVO IMPORT
 
 import { useElements } from '../hooks/useElement'; 
+import { useGlobalElementSearch } from '../hooks/useGlobalElementSearch';
 import StaticFormCard from '../components/Modals/StaticFormCard';
 
 export default function Elementos() {
@@ -30,7 +32,7 @@ export default function Elementos() {
     const [selectedVano, setSelectedVano] = useState(null);
 
     const { loading, fetchPostesChunk, fetchVanosChunk, saveElement, deleteElement } = useElements();
-
+    const { suggestions, searchNode, isSearching } = useGlobalElementSearch(fetchPostesChunk, fetchVanosChunk);
     // --- CARGA ---
     useEffect(() => { loadPostes(); }, [lazyParamsPostes, searchTerm]);
     useEffect(() => { loadVanos(); }, [lazyParamsVanos, searchTerm]);
@@ -46,6 +48,19 @@ export default function Elementos() {
         setVanos(data.data || []);
         setTotalVanos(data.totalRecords || 0);
     };
+    useEffect(() => {
+        // Configuramos el temporizador a 1.2 segundos
+        const timer = setTimeout(() => {
+            if (globalFilter !== searchTerm) {
+                setLazyParamsPostes(prev => ({ ...prev, first: 0 }));
+                setLazyParamsVanos(prev => ({ ...prev, first: 0 }));
+                setSearchTerm(globalFilter);
+            }
+        }, 800); 
+
+        // Limpiamos el temporizador si el usuario sigue escribiendo
+        return () => clearTimeout(timer);
+    }, [globalFilter, searchTerm]);
 
     // --- BÚSQUEDA ---
     const triggerSearch = () => {
@@ -93,27 +108,49 @@ export default function Elementos() {
            }
        });
     };
+ 
 
     return (
         <div className="flex flex-col h-screen bg-slate-200 p-2 overflow-hidden">
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            {/* --- 1. CABECERA LIMPIA (Solo Buscador) --- */}
+{/* --- 1. CABECERA CON BÚSQUEDA SIMPLE --- */}
             <div className="bg-white p-2 rounded shadow-sm border mb-2 flex justify-between items-center flex-none">
                 <div className="flex items-center gap-2 w-full">
-                    <span className="p-input-icon-left w-full max-w-lg">
-                        <i className="pi pi-search cursor-pointer text-blue-600 z-10" onClick={triggerSearch} />
-                        <InputText 
+                    <span className="p-input-icon-left w-full max-w-lg relative flex items-center">
+                        {/* Ícono de Lupa */}
+                        <i className="pi pi-search text-blue-600 z-10 ml-2" />
+                        
+                        {/* Input de texto limpio y directo */}
+                        <InputText
                             value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && triggerSearch()}
-                            placeholder="Buscar Código GIS, etiqueta..." 
-                            className="p-inputtext-sm w-full pl-10" 
+                            placeholder="Buscar Código GIS..."
+                            className="w-full p-inputtext-sm pl-8 font-bold text-blue-900 uppercase"
+                            disabled={isSearching}
+                            onChange={(e) => setGlobalFilter(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => e.key === 'Enter' && globalFilter && triggerSearch()}
                         />
-                        {searchTerm && <i className="pi pi-times cursor-pointer absolute right-3 top-3 text-red-400" onClick={() => {setGlobalFilter(""); setSearchTerm("")}}/>}
+
+                        {/* Botón de limpiar "X" */}
+                        {globalFilter && (
+                            <i 
+                                className="pi pi-times cursor-pointer absolute right-3 text-red-400 z-10 hover:text-red-600" 
+                                onClick={() => setGlobalFilter("")}
+                                title="Limpiar búsqueda"
+                            />
+                        )}
                     </span>
-                    <Button label="Buscar" size="small" onClick={triggerSearch} />
+                    
+                    {/* Botón de Acción */}
+                    <Button 
+                        label="Buscar" 
+                        size="small" 
+                        icon={isSearching ? "pi pi-spin pi-spinner" : ""} 
+                        onClick={triggerSearch} 
+                        disabled={isSearching || !globalFilter}
+                        className="p-button-primary"
+                    />
                 </div>
             </div>
 

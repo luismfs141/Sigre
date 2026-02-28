@@ -62,42 +62,65 @@ export default function FilesTableEditor({
     existingFiles, onDeleteDbFile, loadingFiles, 
     onAddFile ,viewMode, sessionBlobs
 }) {
-    
+    console.log("=== 🕵️‍♂️ DEBUG: ENTRADA A FILES TABLE EDITOR ===");
+    console.log("👉 namingContext:", namingContext);
+    console.log("👉 historicalData (array):", historicalData);
+    console.log("👉 existingFiles (array):", existingFiles);
+    console.log("=================================================");
     const [fileRows, setFileRows] = useState([]);
     const [zipLoading, setZipLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     // 🔥 NUEVOS: Para la migración directa a ZIP
     const [isZippingFolder, setIsZippingFolder] = useState(false);
     const folderZipInputRef = useRef(null);
+    
 
     // ========================================================================
     // 1. CARGA INICIAL
     // ========================================================================
+// ========================================================================
+    // 1. CARGA INICIAL CON DEBUG
+    // ========================================================================
     useEffect(() => {
         if (existingFiles && existingFiles.length > 0) {
+            
             const mappedFiles = existingFiles
                 .filter(f => f.archActivo === true)
-                .map(f => ({
-                    tempId: `db-${f.archInterno}`,
-                    isDatabase: true,
-                    archInterno: f.archInterno,
-                    previewUrl: `${API_STATIC_URL}${f.archNombre}`,
-                    originalName: f.archNombre,
-                    currentPath: f.archNombre,
+                .map((f, index) => {
+                    // 1. Protegemos el find() por si historicalData llega undefined o null
+                    const safeHistoricalData = historicalData || [];
                     
-                    selectedDeficiencyId: f.archCodTabla, 
-                    archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1), 
-                    
-                    archFecha: new Date(f.archFecha),
-                    // Convertimos a string para inputs
-                    archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
-                    archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
-                }));
+                    // 2. Declaramos parentDef ESTRICTAMENTE dentro del map
+                    const parentDef = safeHistoricalData.find(d => d.defiInterno === f.archCodTabla);
+
+                    // 4. Intentamos recuperar el ID
+                    const idElementoRecuperado = parentDef ? parentDef.defiIdElemento : (f.archIdElemento || f.IdElemento || 0);
+
+                    // 5. Retornamos el objeto para fileRows
+                    return {
+                        tempId: `db-${f.archInterno}`,
+                        isDatabase: true,
+                        archInterno: f.archInterno,
+                        
+                        // 🔥 Aquí inyectamos el ID que salvamos
+                        archIdElemento: idElementoRecuperado,
+                        
+                        previewUrl: `${API_STATIC_URL}${f.archNombre}`,
+                        originalName: f.archNombre,
+                        currentPath: f.archNombre,
+                        selectedDeficiencyId: f.archCodTabla, 
+                        archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1), 
+                        archFecha: new Date(f.archFecha),
+                        archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
+                        archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
+                    };
+                });
+                
             setFileRows(mappedFiles);
         } else {
             setFileRows([]);
         }
-    }, [existingFiles]);
+    }, [existingFiles, historicalData]);
 
     // ========================================================================
     // HELPER: RESOLVER NOMBRE DE ALIMENTADOR
@@ -258,8 +281,13 @@ const handleRemoveRequest = (event, row) => {
             }
         });
     };
-
+    
     const handleSaveAll = async () => {
+        // 1. TRAZA DEL PADRE: ¿Qué está enviando realmente WebInspectionManager?
+        console.log("🛠️ [FilesTableEditor] namingContext recibido completo:", namingContext);
+        
+        const { elementId } = namingContext;
+        
         if (fileRows.length === 0) return;
         setSaving(true);
         let successCount = 0;
@@ -267,8 +295,14 @@ const handleRemoveRequest = (event, row) => {
         const updatedRows = [...fileRows];
 
         const promises = updatedRows.map(async (row, index) => {
-            
             const fechaParaGuardar = toLocalISOString(row.archFecha);
+
+            // 2. TRAZA DE LA FILA: ¿Qué ID tiene guardado el estado local para esta foto?
+            console.log(`🛠️ [Fila ${index} - Archivo ${row.archInterno}] Evaluación de IDs:`, { 
+                archIdElemento_EnFila: row.archIdElemento, 
+                elementId_EnContextoPadre: elementId,
+                idFinalQueSeUsara: row.archIdElemento || elementId
+            });
 
             const payload = {
                 archTabla: "Deficiencias", 
@@ -276,14 +310,23 @@ const handleRemoveRequest = (event, row) => {
                 archCodTabla: row.selectedDeficiencyId, 
                 archTipo: String(row.archTipo),
                 
-                archFecha: fechaParaGuardar, 
+                // Asignación del ID
+                archIdElemento: row.archIdElemento || elementId,
                 
-                // Aseguramos float para el backend
+                // 🔥 NOTA DE SENIOR: Si ves en el console.log que el payload tiene el ID correcto, 
+                // pero en la Base de Datos sigue llegando 0, significa que tu API de C# 
+                // NO está mapeando la propiedad "archIdElemento".
+                // En ese caso, comenta la línea de arriba y usa esta:
+                // IdElemento: row.archIdElemento || elementId,
+
+                archFecha: fechaParaGuardar, 
                 archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0, 
                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
-                
                 archNombre: row.currentPath
             };
+            
+            // 3. TRAZA DEL PAYLOAD: Esto es exactamente lo que se envía a la función onAddFile
+            console.log(`🚀 [Payload Final - Archivo ${payload.archInterno}]:`, payload);
             
             const success = await onAddFile(payload);
             

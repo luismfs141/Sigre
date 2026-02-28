@@ -613,7 +613,7 @@ namespace Sigre.DataAccess
                     // Si la deficiencia pasa a false, aseguramos un rastro de auditoría
                     if (!nuevoEstadoInspeccionado)
                     {
-                        deficiencia.DefiUsuarioMod = "SISTEMA_AUTO";
+                        deficiencia.DefiUsuarioMod = "20";
                     }
 
                     ctx.SaveChanges();
