@@ -1,14 +1,19 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { ROOT_MEDIA, ROOT_TRASH } from "./constants";
 
+// ✅ AJUSTA ESTA RUTA SI EN TU PROYECTO ES DIFERENTE
+import { runQuery } from "../../database/offlineDB/db";
+
 export const extract7004IndexFromPath = (path) => {
   if (!path) return null;
   const p = String(path);
 
+  // nuevo formato: .../7004/3/...
   let m = p.match(/(?:^|\/)7004\/(\d+)(?:\/|$)/);
   if (m) return parseInt(m[1], 10);
 
-  m = p.match(/(?:^|\/)7004\.(\d+)(?:\.|\/|$)/);
+  // formatos antiguos: .../7004.3/...  o .../7004_3/...
+  m = p.match(/(?:^|\/)7004[._](\d+)(?:[._\/]|$)/);
   if (m) return parseInt(m[1], 10);
 
   return null;
@@ -38,7 +43,7 @@ const listOld7004Folders = async (elementDirUri) => {
     const nums = [];
 
     for (const name of children) {
-      const m = String(name).match(/^7004\.(\d+)(?:\.|$)/);
+      const m = String(name).match(/^7004[._](\d+)(?:[._]|$)/);
       if (m) nums.push(parseInt(m[1], 10));
     }
 
@@ -48,24 +53,60 @@ const listOld7004Folders = async (elementDirUri) => {
   }
 };
 
+// ✅ NUEVO: MAX correlativo desde BD (incluye activos + eliminados)
+const getMax7004FromDb = async (afterRoot) => {
+  try {
+    if (!afterRoot) return 0;
+
+    // OJO: buscamos por cola única del elemento, así matchea tanto ROOT_MEDIA como ROOT_TRASH
+    const likeNew = `%${afterRoot}7004/%`;   // .../ALIM/SED/POSTE/COD/7004/3/...
+    const likeOld = `%${afterRoot}7004.%`;   // .../ALIM/SED/POSTE/COD/7004.3/...
+
+    const rows = await runQuery(
+      `
+      SELECT ArchNombre
+      FROM Archivos
+      WHERE ArchTabla = 'Deficiencias'
+        AND (ArchNombre LIKE ? OR ArchNombre LIKE ?);
+      `,
+      [likeNew, likeOld]
+    );
+
+    let max = 0;
+    for (const r of rows || []) {
+      const n = extract7004IndexFromPath(r?.ArchNombre);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return max;
+  } catch {
+    return 0;
+  }
+};
+
 export const getNext7004Correlativo = async (elementBaseRel) => {
   const afterRoot = elementBaseRel.startsWith(ROOT_MEDIA)
     ? elementBaseRel.slice(ROOT_MEDIA.length)
     : elementBaseRel;
 
+  // ====== FS privado (por compatibilidad / iOS / casos antiguos) ======
   const active7004Dir = FileSystem.documentDirectory + `${elementBaseRel}7004/`;
   const trash7004Dir = FileSystem.documentDirectory + `${ROOT_TRASH}${afterRoot}7004/`;
 
   const activeElementDir = FileSystem.documentDirectory + elementBaseRel;
   const trashElementDir = FileSystem.documentDirectory + `${ROOT_TRASH}${afterRoot}`;
 
-  const nums = [
+  const numsFs = [
     ...(await listNumericSubdirs(active7004Dir)),
     ...(await listNumericSubdirs(trash7004Dir)),
     ...(await listOld7004Folders(activeElementDir)),
     ...(await listOld7004Folders(trashElementDir)),
   ];
 
-  const max = nums.length ? Math.max(...nums) : 0;
+  const maxFs = numsFs.length ? Math.max(...numsFs) : 0;
+
+  // ====== BD (la fuente más confiable en Android con SAF) ======
+  const maxDb = await getMax7004FromDb(afterRoot);
+
+  const max = Math.max(maxFs, maxDb);
   return max + 1;
 };
