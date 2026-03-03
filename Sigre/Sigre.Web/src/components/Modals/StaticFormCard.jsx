@@ -7,6 +7,7 @@ import { AutoComplete } from 'primereact/autocomplete';
 
 import { useFeeder, useSedsByFeeder } from '../../hooks/useFeeder';
 import { useElements } from '../../hooks/useElement'; 
+import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { useNodeSearch } from '../../hooks/useNodeSearch';
 export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSave, saving = false }) {
     
@@ -20,27 +21,30 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
     };
 
     const [formData, setFormData] = useState(initialState);
-
+    const [isSearchingCode, setIsSearchingCode] = useState(false);
+    const [gisError, setGisError] = useState('');
     const { feeders } = useFeeder();
     const { seds } = useSedsByFeeder(formData.alimentadorId);
-    const { fetchPostesChunk } = useElements(); 
+    const { fetchPostesChunk, fetchVanosChunk } = useElements(); 
     // 2. Instancias el buscador pasándole las dependencias
-    const { suggestions, searchNode } = useNodeSearch(fetchPostesChunk, seds);
+    const { suggestions, searchNode, searchExactCode,validateGisGlobal } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
     // Genera un código aleatorio de exactamente 12 caracteres
-const generateRandomGisCode = (type) => {
-    if (type === 'POSTE') {
-        // SGRPOST (7 letras) + 5 números aleatorios = 12 caracteres
-        const num = Math.floor(10000 + Math.random() * 90000); 
-        return `SGRPOST${num}`;
-    } else {
-        // SGRVBT (6 letras) + 6 números aleatorios = 12 caracteres
-        const num = Math.floor(100000 + Math.random() * 900000);
-        return `SGRVBT${num}`;
-    }
-};
-
-    // ... (Tu useEffect se mantiene igual) ...
-    useEffect(() => {
+// 🔥 NUEVA FUNCIÓN: Fuerza el formato exacto de 12 caracteres según el tipo
+    const formatGisCode = (code, type) => {
+        // Extraemos solo los números de lo que digitó el usuario
+        const numbers = code.replace(/[^0-9]/g, '');
+        
+        if (type === 'POSTE') {
+            // SGRPOST (7 letras) + 5 números = 12 caracteres
+            const padded = numbers.padStart(5, '0').slice(-5);
+            return `SGRPOST${padded}`;
+        } else {
+            // SGRVBT (6 letras) + 6 números = 12 caracteres
+            const padded = numbers.padStart(6, '0').slice(-6);
+            return `SGRVBT${padded}`;
+        }
+    };
+useEffect(() => {
         if (elementToEdit) {
             console.log("Cargando elemento:", typeMode, elementToEdit);
             if (typeMode === 'POSTE') {
@@ -77,21 +81,108 @@ const generateRandomGisCode = (type) => {
                 });
             }
         } else {
+            // Inicia limpio sin generar código random
             setFormData({
-            ...initialState,
-            tipoElemento: typeMode,
-            codigo: generateRandomGisCode(typeMode)
-        });
+                ...initialState,
+                tipoElemento: typeMode,
+                codigo: '' 
+            });
         }
     }, [elementToEdit, typeMode]);
 
-    const handleInternalClear = () => {
-    setFormData({
-        ...initialState,
-        tipoElemento: typeMode,
-        codigo: generateRandomGisCode(typeMode)
-    });
-};
+    // Función para verificar si el GIS existe cruzándolo con el Alimentador y SED
+const handleVerifyElement = async () => {
+    // 1. Validar que los 3 campos obligatorios estén llenos
+    if (!formData.codigo || !formData.alimentadorId || !formData.sedId) return;
+    setGisError('');
+
+    setIsSearchingCode(true);
+    
+    // 2. Ejecutar la búsqueda en el backend
+    const match = await searchExactCode(formData.codigo, formData.alimentadorId, formData.sedId);
+    
+    setIsSearchingCode(false);
+
+    if (match) {
+        // 🔥 SI EXISTE: Simulamos el comportamiento del botón "Editar" (Lápiz)
+        console.log("Elemento encontrado en BD, cargando datos para edición...", match);
+        
+        if (match._tipo === 'POSTE') {
+            setFormData(prev => ({
+                ...prev,
+                id: match.postInterno || match.id, // ID > 0 significa MODO EDICIÓN
+                tipoElemento: 'POSTE',
+                etiqueta: match.postEtiqueta || match.etiqueta || '',
+                latitud: match.postLatitud || match.latitud,
+                longitud: match.postLongitud || match.longitud,
+                altura: match.postAltura || match.altura ,
+                materialPoste: match.postMaterial || match.materialPoste || 2,
+                idRetenida: match.postRetenidaTipo || match.idRetenida,
+                terceros: match.postTerceros || false,
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                id: match.vanoInterno || match.id, // ID > 0 significa MODO EDICIÓN
+                tipoElemento: 'VANO',
+                etiqueta: match.vanoEtiqueta || match.etiqueta || '',
+                nodoInicial: match.vanoNodoInicial || match.nodoInicial || '',
+                nodoFinal: match.vanoNodoFinal || match.nodoFinal || '',
+                latitudIni: match.vanoLatitudIni || match.latitudIni,
+                longitudIni: match.vanoLongitudIni || match.longitudIni,
+                latitudFin: match.vanoLatitudFin || match.latitudFin,
+                longitudFin: match.vanoLongitudFin || match.longitudFin,
+                terceros: match.vanoTerceros || false
+            }));
+        }
+    } else {
+           const isTakenGlobally = await validateGisGlobal(formData.codigo);
+            
+            if (isTakenGlobally) {
+                // ❌ EL CÓDIGO ORIGINAL YA EXISTE EN OTRO ALIMENTADOR/SED
+                setIsSearchingCode(false);
+                setGisError(
+                    <>
+                        <span className="block">El código {formData.codigo}</span>
+                        <span className="block">ya pertenece a otro elemento en la BD.</span>
+                    </>
+                );
+                return; // Bloqueamos el flujo aquí. NO formateamos.
+            }
+
+            // 🚀 3. SI EL CÓDIGO ORIGINAL ESTÁ LIBRE: Ahora sí, formateamos para crear
+            const codigoFormateado = formatGisCode(formData.codigo, typeMode);
+            
+            // Hacemos una última validación de seguridad por si el código autocompletado ya existe
+            const isFormattedTakenGlobally = await validateGisGlobal(codigoFormateado);
+            setIsSearchingCode(false);
+
+            if (isFormattedTakenGlobally) {
+                setGisError(`El código adaptado (${codigoFormateado}) ya está en uso.`);
+                setFormData(prev => ({ ...prev, codigo: codigoFormateado }));
+            } else {
+                // ✅ TOTALMENTE LIBRE: Limpiamos formulario y cargamos el código formateado a 12 dígitos
+                console.log(`Código libre y adaptado a: ${codigoFormateado} para creación.`);
+                setFormData(prev => ({
+                    ...prev,
+                    id: 0, 
+                    codigo: codigoFormateado, 
+                    etiqueta: '', latitud: null, longitud: null, altura: null,
+                    nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
+                }));
+            }
+        }
+    };
+const handleInternalClear = () => {
+        // Limpiamos totalmente el form
+        setFormData({
+            ...initialState,
+            tipoElemento: typeMode,
+            codigo: ''
+        });
+        // 🔥 AGREGAMOS ESTO: Limpiamos también el error visual
+        setGisError('');
+    };
 
     // =========================================================================
     // 🔥 NUEVA FUNCIÓN WRAPPER PARA MAPEAR Y CONSOLE LOG 🔥
@@ -205,7 +296,15 @@ const itemTemplate = (item) => {
     const isEdit = !!formData.id;
     const inputBorderClass = "border border-gray-300 rounded shadow-sm hover:border-blue-400 focus:border-blue-500 transition-colors";
     const MATERIAL_OPTIONS = [{label:'Madera', value:1}, {label:'Concreto', value:2}, {label:'Metal', value:3}, {label:'Fibra', value:4}];
-    const isValid = formData.codigo && formData.alimentadorId; 
+    // Verificamos que los campos obligatorios estén llenos
+    const tieneCamposBasicos = Boolean(formData.codigo && formData.alimentadorId && formData.sedId && (typeMode === 'VANO' ? formData.nodoInicial && formData.nodoFinal : true) && (typeMode === 'POSTE' ? formData.latitud !== null && formData.longitud !== null : true));
+    
+    // Verificamos que NO haya ningún mensaje de error
+    const noHayErrorGis = gisError === '' || gisError === null;
+
+    // El formulario solo es válido si tiene los datos básicos Y no hay error
+    const isValid = tieneCamposBasicos && noHayErrorGis;
+    
 
     return (
         <div className="w-full max-w-4xl mx-auto h-full"> 
@@ -217,6 +316,16 @@ const itemTemplate = (item) => {
                         <i className={`pi ${isEdit ? "pi-pencil" : "pi-plus-circle"} text-lg`}></i>
                         {isEdit ? `EDITANDO ${typeMode}` : `NUEVO ${typeMode}`}
                     </span>
+<div className="col-span-2 flex justify-end mt-1 mb-2 border-b border-gray-100 pb-3">
+    <Button 
+        label={`VERIFICAR ${typeMode}`}
+        icon={isSearchingCode ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} 
+        onClick={handleVerifyElement}
+        disabled={!formData.codigo || !formData.alimentadorId || !formData.sedId || isSearchingCode}
+        className="p-button-outlined p-button-info h-9 text-xs font-bold px-5"
+        tooltip="Verifica si existe para editar, o prepara para crear uno nuevo"
+    />
+</div>
 
                     <div className="flex items-center gap-3">
                         <Button icon="pi pi-eraser" className="p-button-rounded p-button-text p-button-secondary w-9 h-9 flex items-center justify-center hover:bg-gray-200" onClick={() => {handleInternalClear(); onClear();}} tooltip="Limpiar" />
@@ -245,40 +354,48 @@ const itemTemplate = (item) => {
                  <div className="p-4 grid grid-cols-2 gap-4 text-xs flex-grow overflow-y-auto content-start">
                     
                     {/* --- DATOS GENERALES --- */}
-                    <div className="col-span-1">
-                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">CÓDIGO GIS *</label>
-                        <InputText value={formData.codigo} onChange={(e)=>setFormData({...formData, codigo:e.target.value})} className={`w-full p-inputtext-sm h-9 font-bold text-gray-700 ${inputBorderClass}`}/>
-                    </div>
-                    <div className="col-span-1">
-                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">ALIMENTADOR *</label>
-                        <Dropdown 
-                            value={formData.alimentadorId} 
-                            options={feeders} 
-                            onChange={(e)=>{
-                                setFormData({...formData, alimentadorId:e.value, sedId: null}); 
-                            }} 
-                            optionLabel="label" 
-                            optionValue="value" 
-                            className={`w-full h-9 flex items-center ${inputBorderClass}`} 
-                            placeholder="Seleccione..."
-                            filter
-                        />
-                    </div>
-                    <div className="col-span-1">
-                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">SUBESTACIÓN (SED)</label>
-                        <Dropdown 
-                            value={formData.sedId} 
-                            options={seds} 
-                            onChange={(e)=>setFormData({...formData, sedId:e.value})} 
-                            optionLabel="label" 
-                            optionValue="sedInterno" 
-                            className={`w-full h-9 flex items-center ${inputBorderClass}`} 
-                            placeholder="Seleccione..."
-                            filter
-                            disabled={!formData.alimentadorId}
-                            emptyMessage="Seleccione Alimentador primero"
-                        />
-                    </div>
+<div className="col-span-1">
+    <label className="font-bold text-gray-600 block mb-1.5 ml-1">CÓDIGO GIS *</label>
+    <InputText 
+        value={formData.codigo || ''} 
+        onChange={(e) => {
+            setFormData({...formData, codigo: e.target.value.toUpperCase()});
+            setGisError(''); // 🔥 Limpiamos el error en cuanto el usuario empiece a escribir otro código
+        }}
+onKeyDown={(e) => e.key === 'Enter' && handleVerifyElement()}
+        // Cambiamos el borde a rojo si hay un error
+        className={`w-full p-inputtext-sm h-9 font-bold text-gray-700 ${gisError ? 'border-red-500 bg-red-50 focus:border-red-600' : inputBorderClass}`}
+    />
+    {/* Mensajito de error debajo del input */}
+    {gisError && <small className="text-red-600 font-bold ml-1 mt-1 block">{gisError}</small>}
+</div>
+<div className="col-span-1">
+    <label className="font-bold text-gray-600 block mb-1.5 ml-1">ALIMENTADOR *</label>
+    <Dropdown 
+        value={formData.alimentadorId} 
+        options={feeders} 
+        onChange={(e)=>setFormData({...formData, alimentadorId:e.value, sedId: null})} 
+        optionLabel="label" 
+        optionValue="value" 
+        className={`w-full h-9 flex items-center ${inputBorderClass}`} 
+        placeholder="Seleccione..."
+        filter
+    />
+</div>
+                   <div className="col-span-1">
+    <label className="font-bold text-gray-600 block mb-1.5 ml-1">SUBESTACIÓN (SED)</label>
+    <Dropdown 
+        value={formData.sedId} 
+        options={seds} 
+        onChange={(e)=>setFormData({...formData, sedId:e.value})} 
+        optionLabel="label" 
+        optionValue="sedInterno" 
+        className={`w-full h-9 flex items-center ${inputBorderClass}`} 
+        placeholder="Seleccione..."
+        filter
+        disabled={!formData.alimentadorId}
+    />
+</div>
 {/* ESTADO DEL CAMPO (SOLO VISIBLE AL EDITAR) */}
 {isEdit && (
     <div className="col-span-1 flex items-end">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap as useLeafletMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline,Tooltip, useMap as useLeafletMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -29,7 +29,7 @@ const MapController = ({ coords }) => {
   const map = useLeafletMap();
   useEffect(() => {
     if (coords && coords[0] !== 0) {
-        map.flyTo(coords, 17, { duration: 1.5 });
+        map.flyTo(coords, 19, { duration: 1.5 });
     }
   }, [coords, map]);
   return null;
@@ -209,9 +209,10 @@ const handleVisualize = async () => {
       {/* MAPA */}
       {/* MAPA */}
       <div className="flex-grow-1 relative" style={{ zIndex: 0 }}>
-          <MapContainer center={[-16.409, -71.537]} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+          <MapContainer center={[-16.409, -71.537]} zoom={13} maxZoom={20} style={{ height: '100%', width: '100%' }} zoomControl={false}>
             <MapController coords={flyToCoords} />
-            <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxNativeZoom={19} 
+                maxZoom={20}/>
             
  {/* VANOS (Líneas / Cables) */}
 {gaps.map((gap, i) => {
@@ -238,19 +239,32 @@ const handleVisualize = async () => {
     const lng = pin.Longitude || pin.longitude || 0;
 
     if (lat === 0) return null;
-
+    const textoEtiqueta = pin.label || pin.elementCode || "S/N";
+                // Usamos 'elementCode' para el Popup
+                const textoCodigo = pin.elementCode || "S/N";
+                // Usamos 'inspeccionado' (minúscula)
+                const estaInspeccionado = pin.inspeccionado;
     return (
         <Marker 
             key={`pin-${pin.Id || i}`} 
             position={[lat, lng]} 
             icon={getIconFromType(pin)} 
         >
+            <Tooltip 
+                            direction="top" 
+                            offset={[0, -10]} 
+                            opacity={0.9} 
+                            permanent 
+                            className="font-bold text-xs" // Clases Tailwind
+                        >
+                            {textoEtiqueta}
+                        </Tooltip>
             <Popup>
                 <div className="flex flex-column gap-1">
                     {/* ElementCode de tu PinStruct */}
-                    <span className="font-bold text-gray-800">Cód: {pin.ElementCode || pin.elementCode}</span>
-                    <span className={`text-xs font-bold ${pin.Inspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
-                        {pin.Inspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
+                    <span className="font-bold text-gray-800">Cód: {textoCodigo}</span>
+                    <span className={`text-xs font-bold ${estaInspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
+                        {estaInspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
                     </span>
                 </div>
             </Popup>
