@@ -74,17 +74,39 @@ export const useDeficienciesBySed = () => {
             const toStrOrNull = (val) => (val === "" || val === null || val === undefined) ? null : String(val);
 
             // 1. OBTENER USUARIO ACTUAL (AUDITORÍA)
-            let currentUserId = "99"; // Fallback por seguridad
+// 1. OBTENER USUARIO ACTUAL (AUDITORÍA)
+            let currentUserId = "20"; // Fallback por defecto
             try {
                 const storedUser = localStorage.getItem('usuario');
+                console.log("🔍 [DEBUG] 1. Texto crudo del storage:", storedUser);
+
                 if (storedUser) {
                     const parsedUser = JSON.parse(storedUser);
-                    if (parsedUser.usuaInterno) {
+                    console.log("🔍 [DEBUG] 2. Objeto parseado:", parsedUser);
+                    console.log("🔍 [DEBUG] 3. Tipo de dato después de parsear:", typeof parsedUser);
+                    
+                    // CASO A: El fantasma del doble stringify
+                    if (typeof parsedUser === 'string') {
+                        console.warn("⚠️ ALERTA: El JSON estaba convertido a texto 2 veces. Arreglándolo...");
+                        const secondParse = JSON.parse(parsedUser);
+                        if (secondParse.usuaInterno !== undefined) {
+                            currentUserId = String(secondParse.usuaInterno);
+                        }
+                    } 
+                    // CASO B: Flujo normal correcto
+                    else if (parsedUser && parsedUser.usuaInterno !== undefined) {
                         currentUserId = String(parsedUser.usuaInterno);
+                        console.log("✅ [DEBUG] 4. ID asignado exitosamente:", currentUserId);
+                    } 
+                    // CASO C: La propiedad no se llama así o no existe
+                    else {
+                        console.warn("⚠️ [DEBUG] El JSON es un objeto válido, pero no tiene 'usuaInterno'.", parsedUser);
                     }
+                } else {
+                     console.warn("⚠️ [DEBUG] localStorage.getItem('usuario') devolvió null o vacío en este instante.");
                 }
             } catch (e) {
-                console.warn("⚠️ No se pudo leer usuario del storage, usando default '99'", e);
+                console.error("❌ [DEBUG] El parseo falló estrepitosamente:", e);
             }
 
             // 2. REGLAS AUTOMÁTICAS (TABL_INTERNO)

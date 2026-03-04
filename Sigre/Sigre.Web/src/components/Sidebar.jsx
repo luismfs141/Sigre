@@ -21,11 +21,11 @@ import { useUsuario } from '../hooks/useUsuario';
 const navItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
   { title: 'Mapas', href: '/mapas', icon: MapIcon },
-  { title: 'Nuevo Elemento', href: '/nuevo-elemento', icon: ClipboardCheck },
   { title: 'Elementos', href: '/elemento', icon: FileText },
   { title: 'Deficiencias', href: '/subestaciones', icon: Building2 },
   { title: 'Archivos', href: '/auditoria-archivo', icon: FileSearch },
   { title: 'Reportes', href: '/reportes', icon: FileText },
+  { title: 'Estadisticas', href: '/estadisticas', icon: ClipboardCheck },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
 ];

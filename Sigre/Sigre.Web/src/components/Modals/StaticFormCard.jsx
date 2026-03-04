@@ -30,9 +30,18 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
     const { suggestions, searchNode, searchExactCode,validateGisGlobal } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
     // Genera un código aleatorio de exactamente 12 caracteres
 // 🔥 NUEVA FUNCIÓN: Fuerza el formato exacto de 12 caracteres según el tipo
+// 🔥 NUEVA FUNCIÓN: Segura contra números enteros y valores nulos
     const formatGisCode = (code, type) => {
-        // Extraemos solo los números de lo que digitó el usuario
-        const numbers = code.replace(/[^0-9]/g, '');
+        if (!code) return ''; // Protección por si llega vacío
+
+        // 1. Forzamos que el valor sea un texto (String) antes de usar replace
+        const codeStr = String(code); 
+        
+        // 2. Extraemos solo los números
+        const numbers = codeStr.replace(/[^0-9]/g, '');
+        
+        // Si no ingresó ningún número (puro texto), devolvemos el texto tal cual
+        if (!numbers) return codeStr; 
         
         if (type === 'POSTE') {
             // SGRPOST (7 letras) + 5 números = 12 caracteres
@@ -91,86 +100,111 @@ useEffect(() => {
     }, [elementToEdit, typeMode]);
 
     // Función para verificar si el GIS existe cruzándolo con el Alimentador y SED
-const handleVerifyElement = async () => {
-    // 1. Validar que los 3 campos obligatorios estén llenos
-    if (!formData.codigo || !formData.alimentadorId || !formData.sedId) return;
-    setGisError('');
-
-    setIsSearchingCode(true);
-    
-    // 2. Ejecutar la búsqueda en el backend
-    const match = await searchExactCode(formData.codigo, formData.alimentadorId, formData.sedId);
-    
-    setIsSearchingCode(false);
-
-    if (match) {
-        // 🔥 SI EXISTE: Simulamos el comportamiento del botón "Editar" (Lápiz)
-        console.log("Elemento encontrado en BD, cargando datos para edición...", match);
-        
-        if (match._tipo === 'POSTE') {
-            setFormData(prev => ({
-                ...prev,
-                id: match.postInterno || match.id, // ID > 0 significa MODO EDICIÓN
-                tipoElemento: 'POSTE',
-                etiqueta: match.postEtiqueta || match.etiqueta || '',
-                latitud: match.postLatitud || match.latitud,
-                longitud: match.postLongitud || match.longitud,
-                altura: match.postAltura || match.altura ,
-                materialPoste: match.postMaterial || match.materialPoste || 2,
-                idRetenida: match.postRetenidaTipo || match.idRetenida,
-                terceros: match.postTerceros || false,
-            }));
-        } else {
-            setFormData(prev => ({
-                ...prev,
-                id: match.vanoInterno || match.id, // ID > 0 significa MODO EDICIÓN
-                tipoElemento: 'VANO',
-                etiqueta: match.vanoEtiqueta || match.etiqueta || '',
-                nodoInicial: match.vanoNodoInicial || match.nodoInicial || '',
-                nodoFinal: match.vanoNodoFinal || match.nodoFinal || '',
-                latitudIni: match.vanoLatitudIni || match.latitudIni,
-                longitudIni: match.vanoLongitudIni || match.longitudIni,
-                latitudFin: match.vanoLatitudFin || match.latitudFin,
-                longitudFin: match.vanoLongitudFin || match.longitudFin,
-                terceros: match.vanoTerceros || false
-            }));
+// 🔥 FUNCIÓN DEFINITIVA: Validaciones en ambos pasos y a prueba de [object Object]
+    const handleVerifyElement = async (overrideCode = null) => {
+        // 1. Evitar objetos rebeldes de React al hacer clic
+        let codigoAUsar = formData.codigo;
+        if (overrideCode !== null && typeof overrideCode === 'string') {
+            codigoAUsar = overrideCode;
         }
-    } else {
-           const isTakenGlobally = await validateGisGlobal(formData.codigo);
+
+        const rawCode = String(codigoAUsar || '').trim().toUpperCase();
+        
+        if (!rawCode || !formData.alimentadorId || !formData.sedId) return;
+        
+        setGisError('');
+        setIsSearchingCode(true);
+
+        // Helper interno para no repetir código al cargar datos
+        const cargarDatosBD = (match, codigoFinal) => {
+            if (match._tipo === 'POSTE') {
+                setFormData(prev => ({
+                    ...prev,
+                    id: match.postInterno || match.id, 
+                    tipoElemento: 'POSTE',
+                    codigo: codigoFinal, 
+                    etiqueta: match.postEtiqueta || match.etiqueta || '',
+                    latitud: match.postLatitud || match.latitud,
+                    longitud: match.postLongitud || match.longitud,
+                    altura: match.postAltura || match.altura ,
+                    materialPoste: match.postMaterial || match.materialPoste || 2,
+                    idRetenida: match.postRetenidaTipo || match.idRetenida,
+                    terceros: match.postTerceros || false,
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    id: match.vanoInterno || match.id, 
+                    tipoElemento: 'VANO',
+                    codigo: codigoFinal, 
+                    etiqueta: match.vanoEtiqueta || match.etiqueta || '',
+                    nodoInicial: match.vanoNodoInicial || match.nodoInicial || '',
+                    nodoFinal: match.vanoNodoFinal || match.nodoFinal || '',
+                    latitudIni: match.vanoLatitudIni || match.latitudIni,
+                    longitudIni: match.vanoLongitudIni || match.longitudIni,
+                    latitudFin: match.vanoLatitudFin || match.latitudFin,
+                    longitudFin: match.vanoLongitudFin || match.longitudFin,
+                    terceros: match.vanoTerceros || false
+                }));
+            }
+        };
+        
+        try {
+            // --- PASO 1: EVALUAR EL CÓDIGO ORIGINAL EXACTO (Ej: "PTO00008218" o "6") ---
+            let match = await searchExactCode(rawCode, formData.alimentadorId, formData.sedId);
             
-            if (isTakenGlobally) {
-                // ❌ EL CÓDIGO ORIGINAL YA EXISTE EN OTRO ALIMENTADOR/SED
-                setIsSearchingCode(false);
+            if (match) {
+                cargarDatosBD(match, rawCode);
+                return;
+            }
+
+            let isTaken = await validateGisGlobal(rawCode);
+            if (isTaken) {
                 setGisError(
                     <>
-                        <span className="block">El código {formData.codigo}</span>
+                        <span className="block">El código {rawCode}</span>
                         <span className="block">ya pertenece a otro elemento en la BD.</span>
                     </>
                 );
-                return; // Bloqueamos el flujo aquí. NO formateamos.
+                return;
             }
 
-            // 🚀 3. SI EL CÓDIGO ORIGINAL ESTÁ LIBRE: Ahora sí, formateamos para crear
-            const codigoFormateado = formatGisCode(formData.codigo, typeMode);
-            
-            // Hacemos una última validación de seguridad por si el código autocompletado ya existe
-            const isFormattedTakenGlobally = await validateGisGlobal(codigoFormateado);
+            // --- PASO 2: SI ESTÁ LIBRE, LO FORMATEAMOS (Ej: "6" -> "SGRVBT000006") ---
+            const formattedCode = formatGisCode(rawCode, typeMode);
+
+            // Si el código cambió al formatearse, volvemos a evaluar la nueva versión
+            if (formattedCode !== rawCode) {
+                match = await searchExactCode(formattedCode, formData.alimentadorId, formData.sedId);
+                
+                if (match) {
+                    cargarDatosBD(match, formattedCode);
+                    return;
+                }
+
+                isTaken = await validateGisGlobal(formattedCode);
+                if (isTaken) {
+                    setGisError(
+                        <>
+                            <span className="block">El código {formattedCode}</span>
+                            <span className="block">ya pertenece a otro elemento en la BD.</span>
+                        </>
+                    );
+                    setFormData(prev => ({ ...prev, codigo: formattedCode }));
+                    return;
+                }
+            }
+
+            // --- PASO 3: TOTALMENTE LIBRE, AUTOCOMPLETA PARA NUEVO ---
+            setFormData(prev => ({
+                ...prev,
+                id: 0, 
+                codigo: formattedCode, 
+                etiqueta: '', latitud: null, longitud: null, altura: null,
+                nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
+            }));
+
+        } finally {
             setIsSearchingCode(false);
-
-            if (isFormattedTakenGlobally) {
-                setGisError(`El código adaptado (${codigoFormateado}) ya está en uso.`);
-                setFormData(prev => ({ ...prev, codigo: codigoFormateado }));
-            } else {
-                // ✅ TOTALMENTE LIBRE: Limpiamos formulario y cargamos el código formateado a 12 dígitos
-                console.log(`Código libre y adaptado a: ${codigoFormateado} para creación.`);
-                setFormData(prev => ({
-                    ...prev,
-                    id: 0, 
-                    codigo: codigoFormateado, 
-                    etiqueta: '', latitud: null, longitud: null, altura: null,
-                    nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
-                }));
-            }
         }
     };
 const handleInternalClear = () => {
