@@ -214,63 +214,84 @@ const handleVisualize = async () => {
             <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxNativeZoom={19} 
                 maxZoom={20}/>
             
- {/* VANOS (Líneas / Cables) */}
+{/* VANOS (Líneas / Cables) */}
 {gaps.map((gap, i) => {
-    // 🔥 USAMOS LOS NOMBRES DE TU C#
-    const p1 = [gap.Lat1 || gap.lat1, gap.Lon1 || gap.lon1];
-    const p2 = [gap.Lat2 || gap.lat2, gap.Lon2 || gap.lon2];
+    // Leemos las coordenadas
+    const p1 = [gap.lat1, gap.lon1];
+    const p2 = [gap.lat2, gap.lon2];
 
-    // Solo dibujamos si las coordenadas son válidas
     if (!p1[0] || !p2[0]) return null;
+
+    // Leemos los datos extraídos gracias a la corrección del Hook
+    const isGapCompletado = gap.inspeccionado === true;
+    const gapCode = gap.code || "S/N";
 
     return (
         <Polyline 
-            key={`gap-${gap.Id || i}`} 
+            key={`gap-${gap.code || gap.id || i}`} 
             positions={[p1, p2]} 
-            pathOptions={{ color: gap.Inspeccionado ? '#10b981' : '#3b82f6', weight: 4 }}
-        />
+            pathOptions={{ 
+                color: isGapCompletado ? '#10b981' : '#3b82f6', 
+                weight: 5 // Un poco más grueso (5) para que sea más fácil darle clic
+            }}
+        >
+            {/* 1. TOOLTIP: Aparece al pasar el mouse (Hover) */}
+            <Tooltip sticky className="font-bold text-xs">
+                {gapCode}
+            </Tooltip>
+
+            {/* 2. POPUP: Aparece al darle clic a la línea */}
+            <Popup>
+                <div className="flex flex-column gap-1">
+                    <span className="font-bold text-gray-800">Cód Vano: {gapCode}</span>
+                    <span className={`text-xs font-bold ${isGapCompletado ? 'text-green-600' : 'text-blue-600'}`}>
+                        {isGapCompletado ? 'COMPLETADO' : 'PENDIENTE'}
+                    </span>
+                </div>
+            </Popup>
+        </Polyline>
     );
 })}
 
-{/* PINES (Postes) */}
-{pins.map((pin, i) => {
-    // 🔥 USAMOS LOS NOMBRES DE TU C#
-    const lat = pin.Latitude || pin.latitude || 0;
-    const lng = pin.Longitude || pin.longitude || 0;
+            {/* PINES (Postes) */}
+            {pins.map((pin, i) => {
+                // Forzamos minúsculas (camelCase de ASP.NET Core) con un respaldo por si acaso
+                const lat = pin.latitude ?? pin.Latitude ?? 0;
+                const lng = pin.longitude ?? pin.Longitude ?? 0;
 
-    if (lat === 0) return null;
-    const textoEtiqueta = pin.label || pin.elementCode || "S/N";
-                // Usamos 'elementCode' para el Popup
-                const textoCodigo = pin.elementCode || "S/N";
-                // Usamos 'inspeccionado' (minúscula)
-                const estaInspeccionado = pin.inspeccionado;
-    return (
-        <Marker 
-            key={`pin-${pin.Id || i}`} 
-            position={[lat, lng]} 
-            icon={getIconFromType(pin)} 
-        >
-            <Tooltip 
+                if (lat === 0) return null;
+                
+                // Extraemos exactamente elementCode e inspeccionado
+                const textoCodigo = pin.elementCode ?? pin.ElementCode ?? "S/N";
+                const textoEtiqueta = pin.label ?? pin.Label ?? textoCodigo;
+                const estaInspeccionado = pin.inspeccionado === true || pin.Inspeccionado === true;
+
+                return (
+                    <Marker 
+                        key={`pin-${pin.id || pin.Id || i}`} 
+                        position={[lat, lng]} 
+                        icon={getIconFromType(pin)} 
+                    >
+                        <Tooltip 
                             direction="top" 
                             offset={[0, -10]} 
                             opacity={0.9} 
                             permanent 
-                            className="font-bold text-xs" // Clases Tailwind
+                            className="font-bold text-xs"
                         >
                             {textoEtiqueta}
                         </Tooltip>
-            <Popup>
-                <div className="flex flex-column gap-1">
-                    {/* ElementCode de tu PinStruct */}
-                    <span className="font-bold text-gray-800">Cód: {textoCodigo}</span>
-                    <span className={`text-xs font-bold ${estaInspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
-                        {estaInspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
-                    </span>
-                </div>
-            </Popup>
-        </Marker>
-    );
-})}
+                        <Popup>
+                            <div className="flex flex-column gap-1">
+                                <span className="font-bold text-gray-800">Cód: {textoCodigo}</span>
+                                <span className={`text-xs font-bold ${estaInspeccionado ? 'text-green-600' : 'text-blue-600'}`}>
+                                    {estaInspeccionado ? 'COMPLETADO' : 'PENDIENTE'}
+                                </span>
+                            </div>
+                        </Popup>
+                    </Marker>
+                );
+            })}
           </MapContainer>
       </div>
     </div>

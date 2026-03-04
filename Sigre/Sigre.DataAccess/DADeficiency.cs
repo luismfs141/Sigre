@@ -942,7 +942,7 @@ namespace Sigre.DataAccess
                         }
 
                         existente.DefiFecModificacion = DateTime.Now;
-                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "WEB_USER";
+                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
                         //existente.DefiInspeccionado = input.DefiInspeccionado;
 
                         ctx.SaveChanges();
@@ -985,7 +985,7 @@ namespace Sigre.DataAccess
 
                         ctx.Deficiencias.Add(input);
                         ctx.SaveChanges();
-                        SincronizarEstadoInspeccionElemento(input.DefiInterno);
+                        //SincronizarEstadoInspeccionElemento(input.DefiInterno);
 
                         return input.DefiInterno;
                     }
@@ -1604,6 +1604,127 @@ namespace Sigre.DataAccess
                 }
 
                 ctx.SaveChanges();
+            }
+        }
+        public DashboardEstadisticasDTO DADEFI_GetEstadisticasCalidad(int sedInterno, string sedCodigo)
+        {
+            using (var ctx = new SigreContext())
+            {
+                // ==============================================================================
+                // 1. OBTENER DATOS BASE OPTIMIZADOS
+                // Quitamos "d.DefiActivo == true" de aquí para poder contar los Eliminados luego
+                // ==============================================================================
+
+                var queryPostes = from d in ctx.Deficiencias
+                                  join p in ctx.Postes on d.DefiIdElemento equals p.PostInterno
+                                  where d.DefiTipoElemento == "POST" && p.PostSubestacion == sedInterno
+                                  select new
+                                  {
+                                      d.DefiInterno,
+                                      d.DefiCodigoElemento,
+                                      d.TipiInterno,
+                                      d.DefiEstadoCriticidad,
+                                      d.DefiInspeccionado,
+                                      d.DefiNumSuministro,
+                                      d.DefiFecRegistro,
+                                      d.DefiActivo,
+                                      d.DefiDistHorizontal,
+                                      d.DefiDistVertical,
+                                      EsTercero = p.PostTerceros,
+                                      NodoIni = "",
+                                      NodoFin = ""
+                                  };
+
+                var queryVanos = from d in ctx.Deficiencias
+                                 join v in ctx.Vanos on d.DefiIdElemento equals v.VanoInterno
+                                 where d.DefiTipoElemento == "VANO" && v.VanoSubestacion == sedInterno
+                                 select new
+                                 {
+                                     d.DefiInterno,
+                                     d.DefiCodigoElemento,
+                                     d.TipiInterno,
+                                     d.DefiEstadoCriticidad,
+                                     d.DefiInspeccionado,
+                                     d.DefiNumSuministro,
+                                     d.DefiFecRegistro,
+                                     d.DefiActivo,
+                                     d.DefiDistHorizontal,
+                                     d.DefiDistVertical,
+                                     EsTercero = v.VanoTerceros,
+                                     NodoIni = v.VanoNodoInicial,
+                                     NodoFin = v.VanoNodoFinal
+                                 };
+
+                // 🔥 CORRECCIÓN CRÍTICA: Usar .Concat() en lugar de .Union() para no perder duplicados
+                var todasDeficiencias = queryPostes.Concat(queryVanos).ToList();
+
+                // Extraemos solo las activas para los KPIs donde no importan las eliminadas
+                var deficienciasActivas = todasDeficiencias.Where(d => d.DefiActivo == true).ToList();
+
+                var dto = new DashboardEstadisticasDTO();
+
+                // ==============================================================================
+                // 2. CÁLCULO DE MÉTRICAS (En Memoria)
+                // ==============================================================================
+
+                // --- A. Resumen General (Activos vs Eliminados Lógicos) ---
+                // Ahora sí podemos contarlos porque trajimos todos
+                int totalActivos = todasDeficiencias.Count(d => d.DefiActivo == true);
+                int totalEliminados = todasDeficiencias.Count(d => d.DefiActivo == false);
+
+                dto.SummaryData = new List<ResumenEliminadosDTO>
+        {
+            new ResumenEliminadosDTO { Sed = sedCodigo, Eliminado = "NO", Total = totalActivos },
+            new ResumenEliminadosDTO { Sed = sedCodigo, Eliminado = "SI", Total = totalEliminados }
+        };
+                dto.TotalGeneral = totalActivos + totalEliminados;
+
+
+                // --- B. Alertas de Calidad (KPIs) ---
+
+                // 1. No Inspeccionados (Sobre las activas)
+                dto.NoInspeccionados = deficienciasActivas.Count(d => d.DefiInspeccionado == false || d.DefiInspeccionado == null);
+
+                // 2. Deficiencias Duplicadas
+                dto.Duplicadas = deficienciasActivas
+                    .Where(d => d.TipiInterno > 0)
+                    .GroupBy(d => new { d.DefiCodigoElemento, d.TipiInterno })
+                    .Where(g => g.Count() > 1)
+                    .Sum(g => g.Count() - 1);
+
+                // 3. Sin Deff con Deff
+                var agrupadoPorElemento = deficienciasActivas.GroupBy(d => d.DefiCodigoElemento);
+                dto.SinDefConDef = agrupadoPorElemento.Count(g => g.Any(d => d.TipiInterno == 0) && g.Any(d => d.TipiInterno > 0));
+
+                // 4. Nodo Inicial/Final Faltante (Solo aplica a Vanos, excluyendo terceros)
+                dto.NodoFaltante = ctx.Vanos
+                    .Where(v => v.VanoSubestacion == sedInterno && (v.VanoTerceros == false || v.VanoTerceros == null))
+                    .Count(v => string.IsNullOrEmpty(v.VanoNodoInicial) || string.IsNullOrEmpty(v.VanoNodoFinal));
+
+                // 5. Salto de Fechas
+                DateTime fechaMinima = new DateTime(2000, 1, 1);
+                DateTime fechaMaxima = DateTime.Now.AddDays(1);
+                dto.SaltoFechas = deficienciasActivas.Count(d => d.DefiFecRegistro < fechaMinima || d.DefiFecRegistro > fechaMaxima);
+
+                // 6. Número de Suministro Erróneo 
+                dto.SuministroErroneo = deficienciasActivas.Count(d => d.TipiInterno > 0 && string.IsNullOrEmpty(d.DefiNumSuministro));
+
+                // 7. Deficiencia sin Criticidad
+                dto.SinCriticidad = deficienciasActivas.Count(d => d.TipiInterno > 0 && (d.DefiEstadoCriticidad == null || d.DefiEstadoCriticidad == 0));
+
+                // 8. Distancias en 0.00
+                
+                int id7004 = 48;
+                int id7006 = 49;
+                dto.DistanciasCero = deficienciasActivas.Count(d =>
+                    (d.TipiInterno == id7004 || d.TipiInterno == id7006) &&
+                    (d.DefiDistHorizontal == 0 || d.DefiDistVertical == 0)
+                );
+
+                // 9. Criticidad Leve
+                dto.CriticidadLeve = deficienciasActivas.Count(d => d.DefiEstadoCriticidad == 1);
+
+                return dto;
             }
         }
     }

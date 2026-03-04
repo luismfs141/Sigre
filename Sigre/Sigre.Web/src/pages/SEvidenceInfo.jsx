@@ -198,26 +198,26 @@ export default function EvidenceInfo({ deficiency, onSave, loading }) {
                                 </>
                             )}
                             
-                            {formData.tipoElemento === 'VANO' && (
-                                <>
-                                    <div className="flex flex-col">
-                                        <span className="text-gray-500 text-[9px] uppercase font-semibold mb-1">Nodo Inicial</span>
-                                        <InputText 
-                                            value={formData.nodoInicial} 
-                                            onChange={(e) => handleChange('nodoInicial', e.target.value)}
-                                            className="p-inputtext-sm font-mono text-xs h-8 text-blue-700 font-bold border border-gray-400 shadow-sm"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-gray-500 text-[9px] uppercase font-semibold mb-1">Nodo Final</span>
-                                        <InputText 
-                                            value={formData.nodoFinal} 
-                                            onChange={(e) => handleChange('nodoFinal', e.target.value)}
-                                            className="p-inputtext-sm font-mono text-xs h-8 text-blue-700 font-bold border border-gray-400 shadow-sm"
-                                        />
-                                    </div>
-                                </>
-                            )}
+{formData.tipoElemento === 'VANO' && (
+    <>
+        <div className="flex flex-col">
+            <span className="text-gray-500 text-[9px] uppercase font-semibold mb-1">Nodo Inicial</span>
+            <InputText 
+                value={formData.nodoInicial} 
+                disabled // 🔥 Bloquea el input
+                className="p-inputtext-sm font-mono text-xs h-8 text-blue-700 font-bold border border-gray-400 shadow-sm bg-gray-100 opacity-80" 
+            />
+        </div>
+        <div className="flex flex-col">
+            <span className="text-gray-500 text-[9px] uppercase font-semibold mb-1">Nodo Final</span>
+            <InputText 
+                value={formData.nodoFinal} 
+                disabled // 🔥 Bloquea el input
+                className="p-inputtext-sm font-mono text-xs h-8 text-blue-700 font-bold border border-gray-400 shadow-sm bg-gray-100 opacity-80" 
+            />
+        </div>
+    </>
+)}
                         </div>
                     </div>
                 ) : (

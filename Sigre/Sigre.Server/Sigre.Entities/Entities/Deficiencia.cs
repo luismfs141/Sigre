@@ -146,3 +146,26 @@ public class UpdateFichaTecnicaDto
     public string? NodoInicial { get; set; }
     public string? NodoFinal { get; set; }
 }
+public class DashboardEstadisticasDTO
+{
+    public List<ResumenEliminadosDTO> SummaryData { get; set; } = new List<ResumenEliminadosDTO>();
+    public int TotalGeneral { get; set; }
+
+    // Alertas de Calidad (KPIs)
+    public int NoInspeccionados { get; set; }
+    public int Duplicadas { get; set; }
+    public int SinDefConDef { get; set; }
+    public int NodoFaltante { get; set; }
+    public int SaltoFechas { get; set; }
+    public int SuministroErroneo { get; set; }
+    public int SinCriticidad { get; set; }
+    public int DistanciasCero { get; set; }
+    public int CriticidadLeve { get; set; }
+}
+
+public class ResumenEliminadosDTO
+{
+    public string Sed { get; set; }
+    public string Eliminado { get; set; } // "NO" o "SI"
+    public int Total { get; set; }
+}

@@ -41,6 +41,7 @@ export default function DeficiencyForm({
     const [submitted, setSubmitted] = useState(false);
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
+    const [isSaving, setIsSaving] = useState(false);
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
@@ -173,6 +174,7 @@ const currentConfig = useMemo(() => {
         if (visible) {
             // Reseteamos errores al abrir
             setFieldErrors({});
+            setIsSaving(false);
 
             if (deficiencyToEdit) {
                 // --- MODO EDICIÓN ---
@@ -350,7 +352,7 @@ const debounceTimer = useRef(null);
     // =========================================================================
     // 6. GUARDADO
     // =========================================================================
-const handleSubmit = () => {
+const handleSubmit = async () => {
         setSubmitted(true);
 
 // 1. Validaciones Básicas
@@ -425,7 +427,20 @@ const handleSubmit = () => {
             defiCol2: formData.defiCol2 ? String(formData.defiCol2).trim() : ''
         };
 
-        onSave(cleanPayload);
+        setIsSaving(true); 
+    
+    try {
+        // Ejecuta el guardado. Usamos Promise.resolve por si tu onSave devuelve una promesa.
+        await Promise.resolve(onSave(cleanPayload)); 
+    } catch (error) {
+        console.error("Error al guardar:", error);
+    } finally {
+        // Cooldown de seguridad: Reactivamos el botón después de 1.5s 
+        // en caso de que el modal no se cierre automáticamente tras un error.
+        setTimeout(() => {
+            setIsSaving(false);
+        }, 1500);
+    }
     };
 
     // =========================================================================
@@ -510,7 +525,22 @@ if (fieldKey === 'defiEstadoCriticidad') {
     };
 
     return (
-        <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t"><Button label="Cancelar" icon="pi pi-times" onClick={onHide} severity="danger" /><Button label="Guardar" icon="pi pi-check" onClick={handleSubmit} severity="success" disabled={hasCleanRecord && !isEditingSD} /></div>}>
+        <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t">
+            <Button 
+                label="Cancelar" 
+                icon="pi pi-times" 
+                onClick={onHide} 
+                severity="danger" 
+                disabled={isSaving} // BLOQUEADO MIENTRAS GUARDA
+            />
+            <Button 
+                label={isSaving ? "Guardando..." : "Guardar"} // TEXTO DINÁMICO
+                icon={isSaving ? "pi pi-spin pi-spinner" : "pi pi-check"} // ÍCONO DE CARGA
+                onClick={handleSubmit} 
+                severity="success" 
+                disabled={isSaving || (hasCleanRecord && !isEditingSD)} // BLOQUEADO MIENTRAS GUARDA
+            />
+        </div>}>
             <div className="flex flex-col gap-4 mt-2">
                 <div className="p-4 border rounded bg-blue-50 border-blue-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">

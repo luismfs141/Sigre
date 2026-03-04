@@ -194,9 +194,69 @@ namespace Sigre.DataAccess
         {
             using (var ctx = new SigreContext())
             {
-                var query = ctx.Vanos
+                // =================================================================================
+                // 1. OBTENER VANOS BASE (Ultra rápido)
+                // Traemos solo la geometría y datos básicos
+                // =================================================================================
+                var vanosBD = ctx.Vanos
                     .Where(v => v.VanoSubestacion == idSed && v.VanoTerceros == false)
                     .Select(v => new
+                    {
+                        v.VanoInterno,
+                        v.VanoCodigo,
+                        v.VanoLatitudIni,
+                        v.VanoLongitudIni,
+                        v.VanoLatitudFin,
+                        v.VanoLongitudFin,
+                        v.VanoInspeccionado
+                    }).ToList();
+
+                // =================================================================================
+                // 2. OBTENER MÉTRICAS DE DEFICIENCIAS Y FOTOS EN BLOQUE (Solo para esta SED)
+                // =================================================================================
+                var deficienciasVanos = (from d in ctx.Deficiencias
+                                         join v in ctx.Vanos on d.DefiCodigoElemento equals v.VanoCodigo
+                                         where v.VanoSubestacion == idSed
+                                               && d.DefiActivo == true
+                                               && v.VanoTerceros == false
+                                         select new
+                                         {
+                                             CodigoNodo = d.DefiCodigoElemento,
+                                             Inspeccionado = d.DefiInspeccionado,
+                                             // Contamos cuántos archivos válidos tiene ESTA deficiencia
+                                             CantidadArchivos = ctx.Archivos.Count(a => a.ArchCodTabla == d.DefiInterno && a.ArchActivo == true && a.ArchTipo != "0")
+                                         }).ToList();
+
+                // Agrupamos en RAM usando el Código GIS (VanoCodigo) como llave para búsqueda instantánea O(1)
+                var defsAgrupadasPorVano = deficienciasVanos
+                    .GroupBy(x => x.CodigoNodo)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                // =================================================================================
+                // 3. MAPEO FINAL Y REGLA DE NEGOCIO (Las 4 Fotos)
+                // =================================================================================
+                var result = vanosBD.Select(v =>
+                {
+                    // Estado por defecto (en caso de que el vano no tenga ninguna deficiencia registrada)
+                    // *Nota: Si VanoInspeccionado fuera nullable (bool?), cámbialo a: v.VanoInspeccionado ?? false;
+                    bool estadoFinalCompletado = v.VanoInspeccionado;
+
+                    // Si el vano tiene deficiencias, aplicamos la regla estricta
+                    if (defsAgrupadasPorVano.ContainsKey(v.VanoCodigo))
+                    {
+                        var defsDelVano = defsAgrupadasPorVano[v.VanoCodigo];
+
+                        // REGLA 1: Todas las deficiencias de este vano deben estar marcadas como Inspeccionadas
+                        bool todasInspeccionadas = defsDelVano.All(d => d.Inspeccionado == true);
+
+                        // REGLA 2: TODAS las deficiencias deben tener al menos 4 fotos
+                        bool cumplenFotos = defsDelVano.All(d => d.CantidadArchivos >= 4);
+
+                        // El vano solo está completado si cumple ambas reglas en su totalidad
+                        estadoFinalCompletado = todasInspeccionadas && cumplenFotos;
+                    }
+
+                    return new
                     {
                         Id = v.VanoInterno,
                         Code = v.VanoCodigo,
@@ -207,10 +267,13 @@ namespace Sigre.DataAccess
                         Lon2 = v.VanoLongitudFin,
 
                         Type = "Gap",
-                        Inspeccionado = v.VanoInspeccionado
-                    });
 
-                return query.ToList();
+                        // 🔥 AQUÍ SE INYECTA EL CÁLCULO ESTRICTO
+                        Inspeccionado = estadoFinalCompletado
+                    };
+                }).ToList();
+
+                return result;
             }
         }
         public int DAVANO_GuardarWeb(Vano x_vano)

@@ -258,11 +258,11 @@ namespace Sigre.DataAccess
                         // Llamamos al método que creamos arriba
                         ReevaluarEstadoInspeccionDeficiencia(defiInternoAsociado);
                     }
-                    if (filasAfectadas > 0 && defiInternoAsociado > 0)
-                    {
-                        // Llamamos al método que creamos arriba
-                        SincronizarEstadoInspeccionElemento(defiInternoAsociado);
-                    }
+                    //if (filasAfectadas > 0 && defiInternoAsociado > 0)
+                    //{
+                    //    // Llamamos al método que creamos arriba
+                    //    SincronizarEstadoInspeccionElemento(defiInternoAsociado);
+                    //}
 
                     return filasAfectadas > 0;
                 }
@@ -330,10 +330,10 @@ namespace Sigre.DataAccess
             {
                 ReevaluarEstadoInspeccionDeficiencia(idDeficienciaAsociada);
             }
-            if (idDeficienciaAsociada > 0)
-            {
-                SincronizarEstadoInspeccionElemento(idDeficienciaAsociada);
-            }
+            //if (idDeficienciaAsociada > 0)
+            //{
+            //    SincronizarEstadoInspeccionElemento(idDeficienciaAsociada);
+            //}
 
         }
         public int ARCH_ExistPhoto(string ruta)

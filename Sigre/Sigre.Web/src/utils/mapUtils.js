@@ -33,7 +33,6 @@ export const getPinColorForElement = (elemento) => {
   // 2. 🟢 VERDE: Inspeccionado (Propiedad 'Inspeccionado' de C#)
   // Agregamos redundancia por si el serializador cambia a minúsculas
   const estaCompletado = 
-    elemento.Inspeccionado === true || 
     elemento.inspeccionado === true ||
     elemento.estadoRevision === 'COMPLETADO';
 
@@ -47,11 +46,28 @@ export const getPinColorForElement = (elemento) => {
 
 // 📏 COLOR PARA LAS LÍNEAS (VANOS)
 export const getGapColor = (gap) => {
-    // Si quieres que las líneas también se vean "inspeccionadas"
-    if (gap.inspeccionado) return COLORS.inspeccionado;
-    return '#60a5fa'; // Un azul un poco más suave para las líneas
+    if (!gap) return '#60a5fa'; // Azul suave por defecto
+
+    // 1. Verificamos Terceros
+    if (gap.Tercero === true || gap.tercero === true || gap.tercero === "true") {
+        return COLORS.tercero; 
+    }
+
+    // 2. Extracción paranoica (cubre "inspeccionado", "Inspeccionado", true y "true")
+    const valorInspeccionado = gap.inspeccionado ?? gap.Inspeccionado;
+    
+    const estaCompletado = 
+        valorInspeccionado === true || 
+        String(valorInspeccionado).toLowerCase() === 'true' ||
+        gap.estadoRevision === 'COMPLETADO';
+
+    if (estaCompletado) {
+        return COLORS.inspeccionado; // Verde Esmeralda (#10b981)
+    }
+
+    // 3. Azul por defecto (Pendiente)
+    return COLORS.normal; // (#3b82f6)
 };
-// Agrega esta función al final de tu archivo
 
 export const getIconFromType = (elemento) => {
   // 1. Obtenemos color basado en estadoRevision del elemento
