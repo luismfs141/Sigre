@@ -447,6 +447,28 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { mensaje = "Error interno", detalle = ex.Message });
             }
         }
+        [HttpGet("EstadisticasCalidad")]
+        public IActionResult GetEstadisticasCalidad([FromQuery] int sedId, [FromQuery] string sedCodigo)
+        {
+            try
+            {
+                // Instanciar tu clase de Datos (DAL)
+                var daDefi = new DADeficiency(); // Ajusta el nombre si tu clase se llama diferente
 
+                // Llamar al método que construimos (si lo hiciste async, ponle el 'await' y cambia la firma)
+                var estadisticas = daDefi.DADEFI_GetEstadisticasCalidad(sedId, sedCodigo);
+
+                return Ok(new { success = true, data = estadisticas });
+            }
+            catch (System.Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    mensaje = "Error interno al generar estadísticas",
+                    detalle = ex.Message
+                });
+            }
+        }
     }
 }
