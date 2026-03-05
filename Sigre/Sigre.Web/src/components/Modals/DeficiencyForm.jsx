@@ -62,9 +62,11 @@ export default function DeficiencyForm({
         return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) === 0 // ID 0 es S/D
+            Number(d.tipiInterno) === 0 &&
+        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
         );
-    }, [formData.defiCodigoElemento, existingDeficiencies]);
+    }, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
     // B. ¿Ya existen "DEFICIENCIAS REALES" (ID > 0)?
     // Si esto es true, NO se puede crear un registro "Sin Deficiencia".
@@ -75,9 +77,11 @@ export default function DeficiencyForm({
         return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) > 0 // Cualquier ID mayor a 0 es una falla real
-        );
-    }, [formData.defiCodigoElemento, existingDeficiencies]);
+            Number(d.tipiInterno) > 0 &&
+        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+    );
+}, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
     // Helper para saber si estamos editando el registro S/D actual
     const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
@@ -312,6 +316,11 @@ const debounceTimer = useRef(null);
         setFormData(prev => {
             const newData = { ...prev, [key]: value };
             if (key === 'defiTipoElemento') newData.tipiInterno = null;
+            if (key === 'tipiInterno' && Number(value) === 0) {
+            newData.defiEstadoCriticidad = 0;
+            newData.defiNumSuministro = '';
+            newData.defiObservacion = '';
+        }
             return newData;
         });
 
@@ -376,11 +385,11 @@ const handleSubmit = async () => {
         const isSavingSD = Number(formData.tipiInterno) === 0;
 
 // 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
-        if (isSavingSD && hasCleanRecord && !isEditingSD) {
-            alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
-            setSubmitted(false); 
-            return;
-        }
+        if (isSavingSD && hasCleanRecord) { // <-- Quitamos el && !isEditingSD
+    alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
+    setSubmitted(false); 
+    return;
+}
 
         // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
         if (isSavingSD && hasRealDeficiencies) {
@@ -390,7 +399,7 @@ const handleSubmit = async () => {
         }
 
         // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
-        if (!isSavingSD && hasCleanRecord && !isEditingSD) {
+        if (!isSavingSD && hasCleanRecord ) {
             alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
             setSubmitted(false);
             return;
@@ -407,7 +416,8 @@ const handleSubmit = async () => {
 
         const cleanPayload = {
             defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
-            sedCodigo: sedId,
+            // Si sedId es un objeto, extraemos el sedInterno, sino usamos el valor directo
+            sedCodigo: typeof sedId === 'object' ? sedId.sedInterno : sedId,
             defiUsuarioInic: formData.defiUsuarioInic,
             defiCodigoElemento: formData.defiCodigoElemento.trim(),
             defiTipoElemento: formData.defiTipoElemento,

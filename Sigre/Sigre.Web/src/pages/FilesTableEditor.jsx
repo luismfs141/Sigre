@@ -143,98 +143,134 @@ export default function FilesTableEditor({
     // ========================================================================
     // 2. LÓGICA DE APLICACIÓN DE CAMBIOS (Ruta y Metadatos)
     // ========================================================================
-    const applyPathUpdates = () => {
-        const { feeder, sed, structureCode, structureType, globalDate, globalLat, globalLon } = namingContext;
+const applyPathUpdates = () => {
+    // 1. 🔥 EXTRAEMOS globalTipificacion del contexto
+    const { feeder, sed, structureCode, structureType, globalDate, globalLat, globalLon, globalTipificacion } = namingContext;
 
-        // 1. Validaciones básicas
-        const isPathUpdate = !!feeder; 
-        if (isPathUpdate && !sed) {
-            toast.current.show({ severity: 'warn', summary: 'Falta SED', detail: 'Para cambiar la ruta, el campo SED es obligatorio.' });
-            return;
+    // 2. Validaciones básicas de actualización
+    const isPathUpdate = !!feeder; 
+    if (isPathUpdate && !sed) {
+        toast.current.show({ severity: 'warn', summary: 'Falta SED', detail: 'Para cambiar la ruta, el campo SED es obligatorio.' });
+        return;
+    }
+
+    const isDateUpdate = !!globalDate;
+    const isGeoUpdate = (globalLat && String(globalLat).trim() !== '') || (globalLon && String(globalLon).trim() !== '');
+    
+    // 🔥 NUEVO: Verificamos si se solicitó un cambio de Tipificación
+    const isTipiUpdate = !!globalTipificacion;
+
+    // Si no hay NINGÚN cambio
+    if (!isPathUpdate && !isDateUpdate && !isGeoUpdate && !isTipiUpdate) {
+        toast.current.show({ severity: 'info', summary: 'Sin Cambios', detail: 'Ingrese datos globales para aplicar.' });
+        return;
+    }
+
+    // 3. Preparar datos base de Ruta
+    const newFeeder = isPathUpdate ? resolveCurrentFeederName() : null;
+    const newSed = isPathUpdate ? safeSeg(sed.sedCodigo || sed.value || sed) : null;
+    const newType = isPathUpdate ? (structureType === 'VANO' ? 'VANO' : 'POSTE') : null;
+    const newCode = isPathUpdate ? safeSeg(structureCode || "SIN_CODIGO") : null;
+
+    // 4. 🔥 PREPARAR CARPETAS DE TIPIFICACIÓN
+    let globalTipiFolder = "";
+    let globalTipiFilePart = "";
+    
+    if (isTipiUpdate) {
+        const tipiCodeStr = String(getCodeById(globalTipificacion) || "0000").trim();
+        
+        if (tipiCodeStr === "7004") {
+            globalTipiFolder = "7004/1"; // Asumimos subcarpeta 1 para aplicación global
+            globalTipiFilePart = "7004_1";
+        } else if (tipiCodeStr === "0000" || tipiCodeStr === "0") {
+            globalTipiFolder = "SINDEF";
+            globalTipiFilePart = "0000";
+        } else {
+            globalTipiFolder = safeSeg(tipiCodeStr);
+            globalTipiFilePart = safeSeg(tipiCodeStr);
         }
+    }
 
-        const isDateUpdate = !!globalDate;
-        // Verificamos si hay coordenadas globales para aplicar
-        const isGeoUpdate = (globalLat && String(globalLat).trim() !== '') || (globalLon && String(globalLon).trim() !== '');
+    // 5. Calcular UTM Global (Una sola vez)
+    let globalUtm = { northing: 0, easting: 0 };
+    if (isGeoUpdate) {
+        globalUtm = latLonToUTM(parseFloat(globalLat), parseFloat(globalLon));
+    }
 
-        if (!isPathUpdate && !isDateUpdate && !isGeoUpdate) {
-            toast.current.show({ severity: 'info', summary: 'Sin Cambios', detail: 'Ingrese datos globales para aplicar.' });
-            return;
-        }
+    // 6. Aplicar a las filas y RECONSTRUIR LA RUTA
+    const updatedRows = fileRows.map(row => {
+        const isAudio = row.archTipo === 0;
 
-        // 2. Preparar datos de Ruta
-        const newFeeder = isPathUpdate ? resolveCurrentFeederName() : null;
-        const newSed = isPathUpdate ? safeSeg(sed.sedCodigo || sed.value || sed) : null;
-        const newType = isPathUpdate ? (structureType === 'VANO' ? 'VANO' : 'POSTE') : null;
-        const newCode = isPathUpdate ? safeSeg(structureCode || "SIN_CODIGO") : null;
+        const finalDate = isDateUpdate ? new Date(globalDate) : row.archFecha;
+const finalLat = isAudio ? 0 : (isGeoUpdate ? globalUtm.northing : row.archLatitud);
+const finalLon = isAudio ? 0 : (isGeoUpdate ? globalUtm.easting : row.archLongitud);
 
-        // 3. 🔥 CALCULAR UTM GLOBAL (Una sola vez)
-        let globalUtm = { northing: 0, easting: 0 };
-        if (isGeoUpdate) {
-            // Convertimos las entradas globales (Lat/Lon) a UTM (Norte/Este)
-            globalUtm = latLonToUTM(parseFloat(globalLat), parseFloat(globalLon));
-        }
+        let currentPathParts = row.currentPath.split('/');
+        let newPath = row.currentPath; // Fallback por si acaso
 
-        // 4. Aplicar a las filas
-        const updatedRows = fileRows.map(row => {
-            const isAudio = row.archTipo === 0;
-
-            // Actualizar Fecha
-            const finalDate = isDateUpdate ? new Date(globalDate) : row.archFecha;
+        if (currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
             
-            // 🔥 Actualizar GEO: Si hay update global y no es audio, usamos el valor convertido a UTM
-            // Mapeamos: Latitud -> Norte (UTM Northing), Longitud -> Este (UTM Easting)
-            const finalLat = (!isAudio && isGeoUpdate) ? globalUtm.northing : row.archLatitud;
-            const finalLon = (!isAudio && isGeoUpdate) ? globalUtm.easting : row.archLongitud;
+            // A. Valores efectivos (Si hay cambio global usamos el nuevo, sino el actual)
+            const effectiveFeeder = isPathUpdate ? newFeeder : currentPathParts[1];
+            const effectiveSed = isPathUpdate ? newSed : currentPathParts[2];
+            const effectiveType = isPathUpdate ? newType : currentPathParts[3];
+            const effectiveCode = isPathUpdate ? newCode : currentPathParts[4];
 
-            // Actualizar Ruta (Nombre)
-            let currentPathParts = row.currentPath.split('/');
+            let fileName = currentPathParts[currentPathParts.length - 1];
             
-            if (currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
-                if (isPathUpdate) {
-                    currentPathParts[1] = newFeeder; 
-                    currentPathParts[2] = newSed;    
-                    currentPathParts[3] = newType;   
-                    currentPathParts[4] = newCode;   
-                }
+            if (fileName.startsWith("FOT-") || fileName.startsWith("AUD-")) {
+                let folderPart = "";
+                let fileTipiPart = "";
 
-                let fileName = currentPathParts[currentPathParts.length - 1];
-                if (fileName.startsWith("FOT-")) {
-                    const effectiveSed  = isPathUpdate ? newSed : currentPathParts[2];
-                    const effectiveCode = isPathUpdate ? newCode : currentPathParts[4];
-                    
+                // B. Definir Tipificación Efectiva
+                if (isTipiUpdate) {
+                    folderPart = globalTipiFolder;
+                    fileTipiPart = globalTipiFilePart;
+                } else {
+                    // Rescatar la tipificación histórica si no hay update global
                     const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
                     const defCodeRaw = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
-                    let defPart = safeSeg(defCodeRaw || "0000");
-                    if (defPart === '7004') defPart = `7004_1`;
-
-                    const compactDate = formatCompactDate(finalDate);
-
-                    const newFileName = `FOT-${effectiveSed}-${effectiveCode}-${defPart}-${compactDate}-${row.archTipo}.jpg`;
-                    currentPathParts[currentPathParts.length - 1] = newFileName;
+                    fileTipiPart = safeSeg(defCodeRaw || "0000");
+                    
+                    if (fileTipiPart === '7004') {
+                        folderPart = "7004/1";
+                        fileTipiPart = "7004_1";
+                    } else if (fileTipiPart === '0000') {
+                        folderPart = "SINDEF";
+                    } else {
+                        folderPart = fileTipiPart;
+                    }
                 }
+
+                // C. Armar el nuevo nombre de archivo
+                const compactDate = formatCompactDate(finalDate);
+                const newFileName = `FOT-${effectiveSed}-${effectiveCode}-${fileTipiPart}-${compactDate}-${row.archTipo}.jpg`;
+                
+                // D. Reconstruir la ruta completa (Evita errores de índices con 7004)
+                newPath = `SIGRE.MOVIL/${effectiveFeeder}/${effectiveSed}/${effectiveType}/${effectiveCode}/${folderPart}/${newFileName}`;
             }
+        }
 
-            const newPath = currentPathParts.join('/');
+        return { 
+            ...row, 
+            currentPath: newPath,
+            archFecha: finalDate,     
+            archLatitud: finalLat,    
+            archLongitud: finalLon    
+        };
+    });
 
-            return { 
-                ...row, 
-                currentPath: newPath,
-                archFecha: finalDate,     
-                archLatitud: finalLat,     // Valor UTM
-                archLongitud: finalLon     // Valor UTM
-            };
-        });
+    setFileRows(updatedRows);
 
-        setFileRows(updatedRows);
-
-        const changes = [];
-        if (isPathUpdate) changes.push("Rutas");
-        if (isDateUpdate) changes.push("Fecha");
-        if (isGeoUpdate) changes.push("Ubicación (UTM)");
-        
-        toast.current.show({ severity: 'success', summary: 'Actualizado', detail: `Aplicado: ${changes.join(', ')}.` });
-    };
+    // 7. Notificación dinámica
+    const changes = [];
+    if (isPathUpdate) changes.push("Rutas base");
+    if (isDateUpdate) changes.push("Fecha");
+    if (isGeoUpdate) changes.push("Ubicación (UTM)");
+    if (isTipiUpdate) changes.push("Tipificación");
+    
+    toast.current.show({ severity: 'success', summary: 'Actualizado', detail: `Aplicado: ${changes.join(', ')}.` });
+};
 
     // ========================================================================
     // 🔥 3. HANDLERS (AQUÍ ESTÁ LA FUNCIÓN QUE FALTABA)
@@ -390,10 +426,19 @@ const handleRemoveRequest = (event, row) => {
             </span>
         );
     };
-
-    const defTemplate = (r) => {
+        const defiInternoTemplate = (r) => {
         const def = historicalData.find(d => d.defiInterno === r.selectedDeficiencyId);
-        const displayLabel = def ? `${def.defiInterno} | ${getCodeById(def.tipiInterno)}` : r.selectedDeficiencyId;
+        const displayLabel = def ? `${def.defiInterno}` : r.selectedDeficiencyId;
+        return (
+            <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">{displayLabel}</span>
+            </div>
+        );
+    };
+
+    const defiTipiTemplate = (r) => {
+        const def = historicalData.find(d => d.defiInterno === r.selectedDeficiencyId);
+        const displayLabel = def ? ` ${getCodeById(def.tipiInterno)}` : r.selectedDeficiencyId;
         return (
             <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-700">{displayLabel}</span>
@@ -504,9 +549,9 @@ const imageBodyTemplate = (rowData) => {
                     <Column header="Foto" body={imageBodyTemplate} style={{width:'80px'}} />
                 )}
                 <Column header="Id" body={(r) => <span className="text-xs">{r.archInterno}</span>} style={{ width: '60px' }} />
-                
+                <Column header="DefiInterno" body={defiInternoTemplate} style={{ minWidth: '160px' }} />
                 {/* Deficiencia y Tipo (Solo Lectura) */}
-                <Column header="Deficiencia" body={defTemplate} style={{ minWidth: '160px' }} />
+                <Column header="Tipificacion" body={defiTipiTemplate} style={{ minWidth: '160px' }} />
                 <Column header="Tipo" body={typeTemplate} style={{ width: '120px' }} />
                 
                 {/* 🔥 FECHA EDITABLE */}
