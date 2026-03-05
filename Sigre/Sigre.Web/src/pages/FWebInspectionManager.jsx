@@ -51,6 +51,7 @@ export default function WebInspectionManager() {
     const [structureIdInt, setStructureIdInt] = useState(0);
 
     // Datos Globales
+    const [globalTipificacion, setGlobalTipificacion] = useState('');
     const [globalDate, setGlobalDate] = useState('');
     const [globalLat, setGlobalLat] = useState('');
     const [globalLon, setGlobalLon] = useState('');
@@ -115,9 +116,9 @@ export default function WebInspectionManager() {
         }
     }, [sedsDelAlimentador, pendingSedId]);
     // --- 5. LÓGICA GIS (Búsqueda Global Rápida) ---
-const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearching } = useGlobalElementSearch(fetchPostesChunk, fetchVanosChunk);
+    const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearching } = useGlobalElementSearch(fetchPostesChunk, fetchVanosChunk);
 
-   
+
 
     const handleGisSelection = (e) => {
         const item = e.value;
@@ -190,10 +191,10 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
 
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
             const tipoElemRaw = String(structureType || 'POST').toUpperCase();
-            
+
             // 1. Nombre de la carpeta para la RUTA (Ej. SIGRE.MOVIL/ALIM/SED/POSTE/...)
             const folderTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POSTE';
-            
+
             // 2. Nombre corto para la BASE DE DATOS (Máximo 4 caracteres)
             const dbTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POST';
 
@@ -400,41 +401,50 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
 
     const dateTemplate = (r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-';
     const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Def"}</span>;
+    const defiTipiTemplate = (r) => {
+        const def = historicalData.find(d => d.defiInterno === r.selectedDeficiencyId);
+        const displayLabel = def ? `${getCodeById(def.tipiInterno)}` : r.selectedDeficiencyId;
+        return (
+            <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">{displayLabel}</span>
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
             <Toast ref={toast} />
             <ConfirmDialog />
 
-           {/* A. BÚSQUEDA */}
-<div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
-    <div className="w-full max-w-lg">
-        <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
-        <div className="p-inputgroup relative">
-            <AutoComplete
-                value={structureCode} 
-                suggestions={gisSuggestions} 
-                completeMethod={(e) => searchNetworkElement(e.query)}
-                field="codigo" 
-                itemTemplate={itemTemplate} 
-                onChange={(e) => setStructureCode(e.value)} 
-                onSelect={handleGisSelection}
-                placeholder="Ej: VBT0000372026..." 
-                className="w-full" 
-                inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
-                dropdown={false}
-                disabled={isSearching}
-                
-                // 🔥 1. DELAY: Espera 800 milisegundos después de que el usuario deja de tipear
-                delay={800} 
-                
-                // 🔥 2. MINLENGTH: Obliga a que escriban al menos 4 caracteres (ej: "PTO0") antes de buscar al backend
-                minLength={4} 
-            />
-                        <Button 
-                            icon={isSearching ? "pi pi-spin pi-spinner" : "pi pi-search"} 
-                            onClick={handleSearchDeficiencies} 
-                            loading={searchLoading} 
+            {/* A. BÚSQUEDA */}
+            <div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
+                <div className="w-full max-w-lg">
+                    <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
+                    <div className="p-inputgroup relative">
+                        <AutoComplete
+                            value={structureCode}
+                            suggestions={gisSuggestions}
+                            completeMethod={(e) => searchNetworkElement(e.query)}
+                            field="codigo"
+                            itemTemplate={itemTemplate}
+                            onChange={(e) => setStructureCode(e.value)}
+                            onSelect={handleGisSelection}
+                            placeholder="Ej: VBT0000372026..."
+                            className="w-full"
+                            inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
+                            dropdown={false}
+                            disabled={isSearching}
+
+                            // 🔥 1. DELAY: Espera 800 milisegundos después de que el usuario deja de tipear
+                            delay={800}
+
+                            // 🔥 2. MINLENGTH: Obliga a que escriban al menos 4 caracteres (ej: "PTO0") antes de buscar al backend
+                            minLength={4}
+                        />
+                        <Button
+                            icon={isSearching ? "pi pi-spin pi-spinner" : "pi pi-search"}
+                            onClick={handleSearchDeficiencies}
+                            loading={searchLoading}
                             disabled={isSearching}
                         />
                         {/* Indicador visual opcional debajo del input */}
@@ -456,26 +466,31 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
                     </div>
                     <DataTable
                         value={historicalData} size="small" stripedRows rows={5} paginator selectionMode="single" selection={selectedDeficiency}
-                        onSelectionChange={(e) => { 
-    const def = e.value;
-    setSelectedDeficiency(def); 
+                        onSelectionChange={(e) => {
+                            const def = e.value;
+                            setSelectedDeficiency(def);
 
-    if (def) {
-        // 1. Cargar las fotos
-        loadFiles(def.defiInterno); 
-        
-        // 2. Setear Tipo Estructura (Mapeamos de "VANO"/"POST" a "Vano"/"Poste")
-        if (def.defiTipoElemento) {
-            const tipoFormateado = String(def.defiTipoElemento).toUpperCase().includes('VANO') ? 'VANO' : 'POST';
-            setStructureType(tipoFormateado);
-        }
+                            if (def) {
+                                // 1. Cargar las fotos
+                                loadFiles(def.defiInterno);
 
-        // 3. Setear Fecha Global convirtiendo el string a un objeto Date
-        if (def.defiFecRegistro) {
-            setGlobalDate(new Date(def.defiFecRegistro));
-        }
-    } 
-}}
+                                // 2. Setear Tipo Estructura (Mapeamos de "VANO"/"POST" a "Vano"/"Poste")
+                                if (def.defiTipoElemento) {
+                                    const tipoFormateado = String(def.defiTipoElemento).toUpperCase().includes('VANO') ? 'VANO' : 'POST';
+                                    setStructureType(tipoFormateado);
+                                }
+
+                                // 3. Setear Fecha Global convirtiendo el string a un objeto Date
+                                if (def.defiFecRegistro) {
+                                    setGlobalDate(new Date(def.defiFecRegistro));
+                                }
+                                if (def.tipiInterno) {
+                                    setGlobalTipificacion(def.tipiInterno);
+                                } else {
+                                    setGlobalTipificacion(''); // Limpiamos por si acaso
+                                }
+                            }
+                        }}
                         dataKey="defiInterno" className="text-sm"
                     >
                         <Column field="defiInterno" header="ID" style={{ width: '70px' }} />
@@ -487,59 +502,59 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
                 </div>
             )}
             {/* CONTENEDOR DE GESTIÓN DE ARCHIVOS / FOTOS */}
-<div className="surface-card p-3 border-round-xl shadow-1 mt-4 border-1 border-200">
-    
-    {/* Instrucciones usando el componente Message de PrimeReact */}
-    <div className="mb-3">
-        <Message 
-            severity="info" 
-            className="w-full justify-content-start border-none bg-blue-50 text-blue-800"
-            content={(
-                <div className="flex align-items-center gap-2">
-                    <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
-                    <span className="text-xs">
-                        <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.Y que no tengan la tipificacion 7004</strong> 
-                    </span>
+            <div className="surface-card p-3 border-round-xl shadow-1 mt-4 border-1 border-200">
+
+                {/* Instrucciones usando el componente Message de PrimeReact */}
+                <div className="mb-3">
+                    <Message
+                        severity="info"
+                        className="w-full justify-content-start border-none bg-blue-50 text-blue-800"
+                        content={(
+                            <div className="flex align-items-center gap-2">
+                                <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
+                                <span className="text-xs">
+                                    <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.Y que no tengan la tipificacion 7004</strong>
+                                </span>
+                            </div>
+                        )}
+                    />
                 </div>
-            )}
-        />
-    </div>
 
-    {/* HEADER Y BOTONES DE ACCIÓN */}
-    <div className="flex flex-column md:flex-row justify-content-end align-items-center gap-3">
+                {/* HEADER Y BOTONES DE ACCIÓN */}
+                <div className="flex flex-column md:flex-row justify-content-end align-items-center gap-3">
 
-        
-        <div className="flex flex-wrap justify-content-center gap-2">
-            <Button 
-                label="Descargar ZIP" 
-                icon="pi pi-download" 
-                className="p-button-sm p-button-secondary p-button-outlined" 
-                onClick={handleDownloadZip}
-                loading={zipLoading}
-                disabled={dbFiles.length === 0}
-            />
 
-            <Button 
-                label="Añadir Fotos" 
-                icon="pi pi-camera" 
-                className="p-button-sm p-button-success shadow-1 p-2 " 
-                onClick={() => setShowPhotoModal(true)} 
-            />
+                    <div className="flex flex-wrap justify-content-center gap-2">
+                        <Button
+                            label="Descargar ZIP"
+                            icon="pi pi-download"
+                            className="p-button-sm p-button-secondary p-button-outlined"
+                            onClick={handleDownloadZip}
+                            loading={zipLoading}
+                            disabled={dbFiles.length === 0}
+                        />
 
-            <SelectButton 
-                value={viewMode} 
-                onChange={(e) => e.value && setViewMode(e.value)} 
-                options={viewOptions} 
-                itemTemplate={(option) => (
-                    <div className="flex align-items-center px-2 py-1">
-                        <i className={`${option.icon} mr-2`}></i>
-                        <span className="text-xs">{option.label}</span>
+                        <Button
+                            label="Añadir Fotos"
+                            icon="pi pi-camera"
+                            className="p-button-sm p-button-success shadow-1 p-2 "
+                            onClick={() => setShowPhotoModal(true)}
+                        />
+
+                        <SelectButton
+                            value={viewMode}
+                            onChange={(e) => e.value && setViewMode(e.value)}
+                            options={viewOptions}
+                            itemTemplate={(option) => (
+                                <div className="flex align-items-center px-2 py-1">
+                                    <i className={`${option.icon} mr-2`}></i>
+                                    <span className="text-xs">{option.label}</span>
+                                </div>
+                            )}
+                        />
                     </div>
-                )} 
-            />
-        </div>
-    </div>
-</div>
+                </div>
+            </div>
 
             {/* C. FORMULARIO PRINCIPAL */}
             <Card className="border-t-4 border-indigo-500 shadow-sm">
@@ -564,6 +579,15 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-4 items-end pt-3 border-t border-indigo-200">
+<div className="flex flex-col">
+    <label className="text-[10px] font-bold text-slate-600 uppercase">Tipificación</label>
+    <InputText 
+        // 👇 Convierte el ID 58 al Código '6004'
+        value={globalTipificacion ? (getCodeById(globalTipificacion) || globalTipificacion) : ''} 
+        placeholder="Tipificación..." 
+        className="w-36 p-inputtext-sm font-bold text-indigo-700 bg-indigo-50/50" 
+    />
+</div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Fecha Global</label><Calendar value={globalDate} onChange={(e) => setGlobalDate(e.value)} showTime showSeconds placeholder="Original..." className="w-48 p-inputtext-sm" showIcon /></div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Latitud</label><InputText value={globalLat} onChange={(e) => setGlobalLat(e.target.value)} placeholder="-16.35..." className="w-36 p-inputtext-sm" /></div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Longitud</label><InputText value={globalLon} onChange={(e) => setGlobalLon(e.target.value)} placeholder="-71.54..." className="w-36 p-inputtext-sm" /></div>

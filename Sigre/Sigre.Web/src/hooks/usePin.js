@@ -18,13 +18,13 @@ export const usePinsBySed = () => {
 
             const cleanData = rawData.map(p => ({
                 id: p.Id || p.IdPoste || p.PostInterno,
-                elementCode: p.ElementCode || p.PostCodigo,
-                label: p.Label || p.PostEtiqueta,
+                elementCode: p.elementCode || p.ElementCode || p.PostCodigoNodo || "S/N",
+                label: p.label || p.Label || p.PostEtiqueta,
                 
                 // 🔥 MAPEO ROBUSTO (Cualquier nombre de variable funciona)
                 Latitude: Number(p.Latitude ?? p.Latitud ?? p.latitude ?? p.PostLatitud ?? 0),
                 Longitude: Number(p.Longitude ?? p.Longitud ?? p.longitude ?? p.PostLongitud ?? 0),
-                inspeccionado: p.inspeccionado || p.Inspeccionado,
+                inspeccionado: p.inspeccionado === true || p.Inspeccionado === true,
                 status: p.status || 'pending',
                 elementType: 'Poste',
                 type: 5

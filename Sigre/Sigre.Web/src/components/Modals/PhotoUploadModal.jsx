@@ -258,7 +258,17 @@ let targetIndex = 1;
                             <InputText value={formData.long} onChange={(e)=>setFormData({...formData, long:e.target.value})} className="p-inputtext-sm font-mono text-xs"/>
                         </div>
                     </div>
-                    <Button label={isEditing ? "Actualizar" : "Guardar Evidencia"} icon="pi pi-save" onClick={handleSaveClick} disabled={(!formData.file && !formData.preview) || isSaving} severity="success" className="mt-2" />
+<Button 
+                        label={isSaving ? "Guardando..." : (isEditing ? "Actualizar" : "Guardar Evidencia")} 
+                        icon="pi pi-save" 
+                        onClick={handleSaveClick} 
+                        // Desactivar si no hay foto O si ya se está guardando
+                        disabled={(!formData.file && !formData.preview) || isSaving} 
+                        // Mostrar spinner de PrimeReact
+                        loading={isSaving} 
+                        severity="success" 
+                        className="mt-2" 
+                    />
                 </div>
             </Dialog>
         </>

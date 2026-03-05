@@ -18,17 +18,7 @@ export const useGapsBySed = () => {
             });
             
             const rawData = response.data || [];
-            console.log("📥 RESPUESTA RAW DEL BACKEND:", rawData);
-
-            if (rawData.length > 0) {
-                // Chequeo de diagnóstico
-                const sample = rawData[0];
-                console.log("🧐 Analizando primer vano:");
-                console.log(`   - Lat1: ${sample.Lat1} (Esperado: coordenada)`);
-                console.log(`   - Lat2: ${sample.Lat2} (Esperado: coordenada)`);
-                console.log(`   - latitude: ${sample.latitude} (Si esto es 0, ignorar)`);
-            }
-
+            
             const cleanGaps = rawData.map(g => ({
                 id: g.Id || g.id,
                 code: g.Code || g.code,
@@ -40,7 +30,7 @@ export const useGapsBySed = () => {
                 lat2: Number(g.Lat2 ?? g.lat2 ?? 0),
                 lon2: Number(g.Lon2 ?? g.lon2 ?? 0),
                 
-                color: (g.Inspeccionado === true) ? '#10b981' : '#3b82f6',
+                inspeccionado: g.inspeccionado === true || g.Inspeccionado === true,
             }))
             // Filtramos solo si tienen coordenadas válidas
             .filter(g => {
