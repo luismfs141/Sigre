@@ -555,9 +555,9 @@ export default function FilesTableEditor({
             <div className="mt-6 flex flex-col md:flex-row items-center justify-between border-t border-gray-200 pt-4 bg-blue-50 p-4 rounded-b-md">
                 <div className="flex flex-col mb-4 md:mb-0">
                     <span className="font-bold text-sm text-blue-900"><i className="pi pi-sync mr-2 text-lg"></i>Descargar ZIP con Rutas Corregidas</span>
-                    <span className="text-xs text-gray-600 mt-1 max-w-2xl">El sistema buscará las fotos físicas en todas las rutas históricas, y generará un ZIP con las <strong className="text-blue-800"> rutas y nombres actualizados </strong> automáticamente.</span>
+                    <span className="text-xs text-gray-600 mt-1 max-w-2xl">El sistema buscará las fotos físicas en todas las rutas históricas, y generará un ZIP con las <strong className="text-blue-800"> rutas y nombres actualizados  </strong> automáticamente al GUARDAR CAMBIOS.</span>
                 </div>
-                <Button label={zipLoading ? "Empaquetando..." : "Descargar ZIP Renombrado"} icon={zipLoading ? "pi pi-spin pi-spinner" : "pi pi-cloud-download"} severity="info" className="p-button-sm font-bold shadow-sm hover:scale-105 transition-transform px-4" onClick={handleDownloadRenamedZip} disabled={zipLoading || fileRows.length === 0} tooltip={fileRows.length === 0 ? "No hay evidencias" : "Descarga usando las rutas de la tabla"} />
+                {/* <Button label={zipLoading ? "Empaquetando..." : "Descargar ZIP Renombrado"} icon={zipLoading ? "pi pi-spin pi-spinner" : "pi pi-cloud-download"} severity="info" className="p-button-sm font-bold shadow-sm hover:scale-105 transition-transform px-4" onClick={handleDownloadRenamedZip} disabled={zipLoading || fileRows.length === 0} tooltip={fileRows.length === 0 ? "No hay evidencias" : "Descarga usando las rutas de la tabla"} /> */}
             </div>
         </Card>
     );

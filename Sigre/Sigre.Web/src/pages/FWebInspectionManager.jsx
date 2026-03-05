@@ -513,7 +513,7 @@ export default function WebInspectionManager() {
                             <div className="flex align-items-center gap-2">
                                 <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
                                 <span className="text-xs">
-                                    <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.Y que no tengan la tipificacion 7004</strong>
+                                    <strong>Instrucciones:Use esta opcion únicamente para subir imágenes nuevas que no han sido registradas.</strong>
                                 </span>
                             </div>
                         )}
@@ -525,32 +525,13 @@ export default function WebInspectionManager() {
 
 
                     <div className="flex flex-wrap justify-content-center gap-2">
-                        <Button
-                            label="Descargar ZIP"
-                            icon="pi pi-download"
-                            className="p-button-sm p-button-secondary p-button-outlined"
-                            onClick={handleDownloadZip}
-                            loading={zipLoading}
-                            disabled={dbFiles.length === 0}
-                        />
+ 
 
                         <Button
                             label="Añadir Fotos"
                             icon="pi pi-camera"
                             className="p-button-sm p-button-success shadow-1 p-2 "
                             onClick={() => setShowPhotoModal(true)}
-                        />
-
-                        <SelectButton
-                            value={viewMode}
-                            onChange={(e) => e.value && setViewMode(e.value)}
-                            options={viewOptions}
-                            itemTemplate={(option) => (
-                                <div className="flex align-items-center px-2 py-1">
-                                    <i className={`${option.icon} mr-2`}></i>
-                                    <span className="text-xs">{option.label}</span>
-                                </div>
-                            )}
                         />
                     </div>
                 </div>
