@@ -107,64 +107,6 @@ namespace Sigre.DataAccess
             return archivoTabla;
         }
 
-        //    public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(
-        //List<ArchivoSyncDto> archivosOffline)
-        //    {
-        //        using var ctx = new SigreContext();
-        //        var resultado = new List<(int, int)>();
-
-        //        DADeficiency daDef = new DADeficiency();
-
-        //        foreach (var dto in archivosOffline)
-        //        {
-        //            // 🔹 Resolver Deficiencia padre
-        //            int idDeficiency;
-
-        //            if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
-        //            {
-        //                idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
-        //            }
-        //            else
-        //            {
-        //                idDeficiency = daDef.DADEFI_GetDeficiencyIDByElementAndType(
-        //                    dto.ArchIdElemento ?? 0,
-        //                    dto.ArchTipoElemento ?? string.Empty,
-        //                    dto.TipiInterno ?? 0
-        //                );
-        //            }
-
-        //            dto.ArchCodTabla = idDeficiency;
-
-        //            // 🔍 Buscar archivo existente (UUID recomendado)
-        //            var existente = ctx.Archivos
-        //                .FirstOrDefault(a => a.ArchNombre == dto.ArchNombre);
-
-        //            if (existente != null)
-        //            {
-        //                // 🔁 UPDATE
-
-        //                existente.ArchLongitud = dto.ArchLongitud;
-        //                existente.ArchLatitud = dto.ArchLatitud;
-        //                existente.ArchActivo = dto.ArchActivo;
-        //                existente.ArchFecha = dto.ArchFecha;
-
-        //                resultado.Add((dto.ArchInterno, existente.ArchInterno));
-        //            }
-        //            else
-        //            {
-        //                // ➕ INSERT
-        //                var archivo = DAARCH_ConvertFile(dto);
-        //                ctx.Archivos.Add(archivo);
-
-        //                ctx.SaveChanges(); // necesario para obtener ID
-
-        //                resultado.Add((dto.ArchInterno, archivo.ArchInterno));
-        //            }
-        //        }
-
-        //        return resultado;
-        //    }
-
         public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
