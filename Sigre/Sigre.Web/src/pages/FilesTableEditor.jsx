@@ -13,8 +13,8 @@ import { saveAs } from 'file-saver';
 import { latLonToUTM } from '../utils/geoUtils';
 
 // 🔥 CONEXIÓN AL SERVIDOR NGROK / CLOUDFLARE
-const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//const API_BASE_URL = "http://localhost:8080/";
+//const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
+const API_BASE_URL = "http://localhost:8080/";
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 
@@ -88,43 +88,103 @@ export default function FilesTableEditor({
         return String(rawFeederLabel).split(' - ')[0].trim().toUpperCase();
     };
 
+
     // ========================================================================
-    // 🔥 BUSCADOR UNIVERSAL DE RUTAS HISTÓRICAS
+    // 🔥 BUSCADOR UNIVERSAL DE RUTAS (Clon de ResilientImage)
     // ========================================================================
     const getCandidateUrls = (row) => {
-    // ✅ CORRECTO: Usamos 'let' para poder modificar el string en la siguiente línea
-    let cleanPath = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/\/0000\//g, '/SINDEF/');
-    cleanPath = cleanPath.replace(/^\/+/, '');
-    
-    const primaryUrl = `${API_BASE_URL}${cleanPath.split('/').map(encodeURIComponent).join('/')}`;
-        const urls = [primaryUrl]; 
+        if (!row.originalName) return [];
+        
+        let base = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
+        base = base.replace(/^\/+/, ''); // Limpiar barra inicial
+        
+        const candidates = new Set();
+        const parts = base.split('/');
+        const originalFileName = parts.pop();
+        const rootPathWithoutFile = parts.length > 0 ? parts.join('/') + '/' : '';
+        
+        // Extraer nombre corto (ej: "1.jpg" o "2.m4a")
+        let shortFileName = null;
+        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
 
-        const historicalCodes = [...new Set((historicalData || []).map(d => {
-            const codeRaw = getCodeById(d.tipiInterno);
-            return codeRaw ? String(codeRaw).trim() : null;
-        }).filter(Boolean))];
+        const addPathVariations = (folderPath) => {
+            if (!folderPath) return;
+            const formatUrl = (pathStr) => `${API_BASE_URL}${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+            
+            candidates.add(formatUrl(folderPath + originalFileName));
+            if (shortFileName) candidates.add(formatUrl(folderPath + shortFileName));
+        };
 
+        // Obtenemos el código y el suministro de la BD
         const fileDef = historicalData?.find(d => d.defiInterno === row.selectedDeficiencyId);
         const dbCodeRaw = fileDef ? getCodeById(fileDef.tipiInterno) : "0000";
-        const dbCode = String(dbCodeRaw || "0000").trim();
+        let dbCode = String(dbCodeRaw || "0000").trim();
+        if (dbCode === "0000" || dbCode === "0") dbCode = "SINDEF";
 
-        let dbFolderPart = dbCode; let dbNamePart = dbCode;
-        if (dbCode === "7004") { dbFolderPart = "7004/1"; dbNamePart = "7004_1"; }
-        if (dbCode === "0000") { dbFolderPart = "SINDEF"; dbNamePart = "0000"; }
+        const currentSupply = fileDef?.defiNumSuministro || '0';
 
-        historicalCodes.forEach(histCode => {
-            if (histCode !== dbCode) {
-                let folderPart = histCode; let namePart = histCode;
-                if (histCode === "7004") { folderPart = "7004/1"; namePart = "7004_1"; }
-                if (histCode === "0000") { folderPart = "SINDEF"; namePart = "0000"; }
-
-                let fallbackPath = cleanPath.replace(`/${dbFolderPart}/`, `/${folderPart}/`);
-                fallbackPath = fallbackPath.replace(`-${dbNamePart}-`, `-${namePart}-`);
-                urls.push(`${API_BASE_URL}/${fallbackPath.split('/').map(encodeURIComponent).join('/')}`);
+        const processDeficiencyFolder = (currentPath) => {
+            // Evaluar formato complejo ej: /7004.1.1111/
+            const complexRegex = new RegExp(`\/(${dbCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
+            const matchComplex = currentPath.match(complexRegex);
+            
+            addPathVariations(currentPath);
+            
+            if (currentSupply && currentSupply !== '0') {
+                if (matchComplex) { 
+                    const fullStr = matchComplex[0]; 
+                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}.1.${currentSupply}/`)); 
+                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${currentSupply}/`)); 
+                } else { 
+                    const simpleDefRegex = new RegExp(`\/${dbCode}\/`); 
+                    if (currentPath.match(simpleDefRegex)) { 
+                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}.1.${currentSupply}/`)); 
+                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}/${currentSupply}/`)); 
+                    } 
+                }
             }
-        });
+            
+            if (matchComplex) { 
+                const fullStr = matchComplex[0]; 
+                addPathVariations(currentPath.replace(fullStr, `/${dbCode}/`)); 
+                for(let i=1; i<=20; i++) {
+                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${i}/`)); 
+                }
+            } else { 
+                const simpleDefRegex = new RegExp(`\/${dbCode}\/`); 
+                if (currentPath.match(simpleDefRegex)) { 
+                    for(let i=1; i<=20; i++) { 
+                        if (!currentPath.includes(`/${dbCode}/${i}/`)) { 
+                            const split = currentPath.split(`/${dbCode}/`); 
+                            if (split.length > 1) {
+                                addPathVariations(`${split[0]}/${dbCode}/${i}/${split[1]}`); 
+                            }
+                        } 
+                    } 
+                } 
+            }
+        };
+
+        const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
+        processDeficiencyFolder(pathNoType); 
+        processDeficiencyFolder(rootPathWithoutFile);
         
-        return urls;
+        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+        if (pathUpper !== rootPathWithoutFile) {
+            processDeficiencyFolder(pathUpper);
+        }
+
+        // Caso extremo: si la ruta física es 7004.x.x pero el DB Code cambió a otra tipificación
+        const match7004 = rootPathWithoutFile.match(/\/(7004)\.(\d+)\.([a-zA-Z0-9]+)\//);
+        if (match7004 && dbCode !== "7004") {
+            const tempDbCode = dbCode;
+            dbCode = "7004";
+            processDeficiencyFolder(rootPathWithoutFile);
+            dbCode = tempDbCode; // restaurar
+        }
+
+        return Array.from(candidates);
     };
 
     // ========================================================================
@@ -185,18 +245,37 @@ export default function FilesTableEditor({
                     const filePrefix = isAudio ? "AUD" : "FOT";
                     const fileExt = isAudio ? "m4a" : "jpg";
 
+                    // 🔥 1. FUNCIÓN INTERNA PARA CALCULAR CORRELATIVO 7004
+                    const getCorrelativo = (defId) => {
+                        const defs7004 = (historicalData || []).filter(d => {
+                            const code = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
+                            return String(code).trim() === "7004" || String(d.tipiInterno) === "60";
+                        });
+                        defs7004.sort((a, b) => a.defiInterno - b.defiInterno);
+                        const idx = defs7004.findIndex(d => d.defiInterno === defId);
+                        return idx !== -1 ? idx + 1 : (defs7004.length > 0 ? defs7004.length + 1 : 1);
+                    };
+
+                    // 🔥 2. DETERMINAR EL CÓDIGO FINAL (Global o el que ya tenía)
+                    const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
+                    const originalTipi = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
+                    const tipiCodeStr = isTipiUpdate ? String(getCodeById(globalTipificacion) || "0000").trim() : String(originalTipi).trim();
+
                     let folderPart = ""; let fileTipiPart = "";
 
-                    if (isTipiUpdate) {
-                        folderPart = globalTipiFolder; fileTipiPart = globalTipiFilePart;
-                    } else {
-                        const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
-                        const defCodeRaw = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
-                        fileTipiPart = safeSeg(defCodeRaw || "0000");
-                        
-                        if (fileTipiPart === '7004') { folderPart = "7004/1"; fileTipiPart = "7004_1"; } 
-                        else if (fileTipiPart === '0000') { folderPart = "SINDEF"; } 
-                        else { folderPart = fileTipiPart; }
+                    // 🔥 3. ASIGNACIÓN DE CARPETAS Y NOMBRES
+                    if (tipiCodeStr === "7004") {
+                        const correlativo = getCorrelativo(row.selectedDeficiencyId);
+                        folderPart = `7004/${correlativo}`; 
+                        fileTipiPart = `7004_${correlativo}`;
+                    } 
+                    else if (tipiCodeStr === "0000" || tipiCodeStr === "0" || tipiCodeStr === "") {
+                        folderPart = "0000"; 
+                        fileTipiPart = "0000";
+                    } 
+                    else {
+                        folderPart = safeSeg(tipiCodeStr); 
+                        fileTipiPart = safeSeg(tipiCodeStr);
                     }
 
                     const compactDate = formatCompactDate(finalDate);
@@ -288,8 +367,8 @@ export default function FilesTableEditor({
         }
     };
 
-    // ========================================================================
-    // 🔥 4. DESCARGA ZIP CON RECONSTRUCCIÓN DE RUTAS
+// ========================================================================
+    // 🔥 4. DESCARGA ZIP CON RECONSTRUCCIÓN DE RUTAS (CORREGIDO)
     // ========================================================================
     const handleDownloadRenamedZip = async () => {
         if (fileRows.length === 0) return;
@@ -302,6 +381,17 @@ export default function FilesTableEditor({
                 const row = fileRows[i];
                 const zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
                 
+                // Extraemos el nombre final del archivo (Ej: FOT-1887-PTO...-1.jpg)
+                const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+
+                // 🔥 PASO 1: Verificar si es una FOTO NUEVA (está en memoria)
+                if (sessionBlobs && sessionBlobs[originalFileName]) {
+                    // Si está en memoria, la metemos directamente al ZIP
+                    zip.file(zipPath, sessionBlobs[originalFileName]);
+                    continue; // Saltamos al siguiente archivo del bucle
+                }
+
+                // 🔥 PASO 2: Si no es nueva, buscarla en el servidor físico (Fotos viejas)
                 const urlsToTry = getCandidateUrls(row);
                 let downloaded = false;
 
@@ -317,12 +407,12 @@ export default function FilesTableEditor({
                     } catch (e) { }
                 }
 
-                if (!downloaded) console.warn(`No se pudo encontrar la foto: ${row.originalName}`);
+                if (!downloaded) console.warn(`No se pudo encontrar la foto en disco: ${row.originalName}`);
             }
 
             const content = await zip.generateAsync({ type: "blob" });
             saveAs(content, `Evidencias_Renombradas_${namingContext.structureCode || "LOTE"}.zip`);
-            toast.current.show({ severity: 'success', summary: 'ZIP Descargado', detail: 'Fotos renombradas correctamente.' });
+            toast.current.show({ severity: 'success', summary: 'ZIP Descargado', detail: 'Fotos empaquetadas correctamente.' });
         } catch (error) {
             console.error(error);
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al empaquetar el ZIP.' });
@@ -360,10 +450,11 @@ export default function FilesTableEditor({
         const urls = getCandidateUrls(row);
         const [srcIndex, setSrcIndex] = useState(0);
 
-        const fileName = (row.currentPath || "").split(/[/\\]/).pop();
-        if (sessionBlobs && sessionBlobs[fileName]) {
+        const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+        
+        if (sessionBlobs && sessionBlobs[originalFileName]) {
             return <Image 
-                src={URL.createObjectURL(sessionBlobs[fileName])} 
+                src={URL.createObjectURL(sessionBlobs[originalFileName])} 
                 alt="Foto" 
                 preview 
                 className="absolute inset-0 w-full h-full block" 
@@ -434,26 +525,39 @@ export default function FilesTableEditor({
                 }
             />
             
-            {viewMode === 'gallery' ? renderGalleryView() : (
-                <DataTable value={fileRows} size="small" emptyMessage="No hay archivos asociados." loading={loadingFiles} stripedRows showGridlines className="text-sm">
-                    <Column header="Id" body={(r) => <span className="text-xs">{r.archInterno}</span>} style={{ width: '60px' }} />
-                    <Column header="DefiInterno" body={defiInternoTemplate} style={{ minWidth: '160px' }} />
-                    <Column header="Tipificacion" body={defiTipiTemplate} style={{ minWidth: '160px' }} />
-                    <Column header="Tipo" body={typeTemplate} style={{ width: '120px' }} />
-                    <Column header="Fecha" body={(r) => <Calendar value={r.archFecha} onChange={(e) => updateFileField(r.tempId, 'archFecha', e.value)} showTime showSeconds className="w-full" inputClassName="text-xs p-1" appendTo="self" />} style={{ width: '170px' }} />
-                    <Column header="Lat" body={(r) => <InputText value={r.archLatitud} onChange={(e) => updateFileField(r.tempId, 'archLatitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
-                    <Column header="Long" body={(r) => <InputText value={r.archLongitud} onChange={(e) => updateFileField(r.tempId, 'archLongitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
-                    <Column header="Nombre (Ruta)" body={pathTemplate} />
-                    <Column body={(r) => <Button icon="pi pi-trash" rounded text severity="danger" onClick={(e) => handleRemoveRequest(e, r)} />} style={{ width: '50px' }} />
-                </DataTable>
-            )}
+            {/* 🔥 CONTENEDOR FLEX PARA MOSTRAR AMBOS A LA VEZ */}
+            <div className="flex flex-col gap-6">
+                
+                {/* 1. SECCIÓN DE GALERÍA (Arriba) */}
+                <div>
+                    <h5 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1"><i className="pi pi-images mr-2"></i>Vista de Evidencias</h5>
+                    {renderGalleryView()}
+                </div>
+
+                {/* 2. SECCIÓN DE TABLA DE DATOS (Abajo) */}
+                <div>
+                    <h5 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1"><i className="pi pi-list mr-2"></i>Detalle de Metadatos</h5>
+                    <DataTable value={fileRows} size="small" emptyMessage="No hay archivos asociados." loading={loadingFiles} stripedRows showGridlines className="text-sm">
+                        <Column header="Id" body={(r) => <span className="text-xs">{r.archInterno}</span>} style={{ width: '60px' }} />
+                        <Column header="DefiInterno" body={defiInternoTemplate} style={{ minWidth: '160px' }} />
+                        <Column header="Tipificacion" body={defiTipiTemplate} style={{ minWidth: '160px' }} />
+                        <Column header="Tipo" body={typeTemplate} style={{ width: '120px' }} />
+                        <Column header="Fecha" body={(r) => <Calendar value={r.archFecha} onChange={(e) => updateFileField(r.tempId, 'archFecha', e.value)} showTime showSeconds className="w-full" inputClassName="text-xs p-1" appendTo="self" />} style={{ width: '170px' }} />
+                        <Column header="Lat" body={(r) => <InputText value={r.archLatitud} onChange={(e) => updateFileField(r.tempId, 'archLatitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
+                        <Column header="Long" body={(r) => <InputText value={r.archLongitud} onChange={(e) => updateFileField(r.tempId, 'archLongitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
+                        <Column header="Nombre (Ruta)" body={pathTemplate} />
+                        <Column body={(r) => <Button icon="pi pi-trash" rounded text severity="danger" onClick={(e) => handleRemoveRequest(e, r)} />} style={{ width: '50px' }} />
+                    </DataTable>
+                </div>
+
+            </div>
 
             <div className="mt-6 flex flex-col md:flex-row items-center justify-between border-t border-gray-200 pt-4 bg-blue-50 p-4 rounded-b-md">
                 <div className="flex flex-col mb-4 md:mb-0">
-                    <span className="font-bold text-sm text-blue-900"><i className="pi pi-sync mr-2 text-lg"></i>La descarga ZIP con Rutas Corregidas</span>
+                    <span className="font-bold text-sm text-blue-900"><i className="pi pi-sync mr-2 text-lg"></i>Descargar ZIP con Rutas Corregidas</span>
                     <span className="text-xs text-gray-600 mt-1 max-w-2xl">El sistema buscará las fotos físicas en todas las rutas históricas, y generará un ZIP con las <strong className="text-blue-800"> rutas y nombres actualizados </strong> automáticamente.</span>
                 </div>
-
+                <Button label={zipLoading ? "Empaquetando..." : "Descargar ZIP Renombrado"} icon={zipLoading ? "pi pi-spin pi-spinner" : "pi pi-cloud-download"} severity="info" className="p-button-sm font-bold shadow-sm hover:scale-105 transition-transform px-4" onClick={handleDownloadRenamedZip} disabled={zipLoading || fileRows.length === 0} tooltip={fileRows.length === 0 ? "No hay evidencias" : "Descarga usando las rutas de la tabla"} />
             </div>
         </Card>
     );
