@@ -12,8 +12,11 @@ import { InputText } from 'primereact/inputtext';
 import { Calendar } from 'primereact/calendar';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { latLonToUTM } from '../utils/geoUtils';
 
-
+const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//servidor estatico enlocal
+//const API_BASE_URL = "http://localhost:8080/";
 
 
 // --- UTILIDADES ---
@@ -198,12 +201,12 @@ const applyPathUpdates = () => {
     }
 
     // 6. Aplicar a las filas y RECONSTRUIR LA RUTA
-    const updatedRows = fileRows.map(row => {
-        const isAudio = row.archTipo === 0;
+const updatedRows = fileRows.map(row => {
+        const isAudio = parseInt(row.archTipo) === 0;
 
         const finalDate = isDateUpdate ? new Date(globalDate) : row.archFecha;
-const finalLat = isAudio ? 0 : (isGeoUpdate ? globalUtm.northing : row.archLatitud);
-const finalLon = isAudio ? 0 : (isGeoUpdate ? globalUtm.easting : row.archLongitud);
+        const finalLat = isAudio ? 0 : (isGeoUpdate ? globalUtm.northing : row.archLatitud);
+        const finalLon = isAudio ? 0 : (isGeoUpdate ? globalUtm.easting : row.archLongitud);
 
         let currentPathParts = row.currentPath.split('/');
         let newPath = row.currentPath; // Fallback por si acaso
@@ -219,6 +222,11 @@ const finalLon = isAudio ? 0 : (isGeoUpdate ? globalUtm.easting : row.archLongit
             let fileName = currentPathParts[currentPathParts.length - 1];
             
             if (fileName.startsWith("FOT-") || fileName.startsWith("AUD-")) {
+                
+                // 🔥 SEGURIDAD MÁXIMA: Forzar prefijo y extensión basado en archTipo
+                const filePrefix = isAudio ? "AUD" : "FOT";
+                const fileExt = isAudio ? "m4a" : "jpg";
+
                 let folderPart = "";
                 let fileTipiPart = "";
 
@@ -242,9 +250,9 @@ const finalLon = isAudio ? 0 : (isGeoUpdate ? globalUtm.easting : row.archLongit
                     }
                 }
 
-                // C. Armar el nuevo nombre de archivo
+                // C. Armar el nuevo nombre de archivo (Usando el prefijo y extensión correctos)
                 const compactDate = formatCompactDate(finalDate);
-                const newFileName = `FOT-${effectiveSed}-${effectiveCode}-${fileTipiPart}-${compactDate}-${row.archTipo}.jpg`;
+                const newFileName = `${filePrefix}-${effectiveSed}-${effectiveCode}-${fileTipiPart}-${compactDate}-${row.archTipo}.${fileExt}`;
                 
                 // D. Reconstruir la ruta completa (Evita errores de índices con 7004)
                 newPath = `SIGRE.MOVIL/${effectiveFeeder}/${effectiveSed}/${effectiveType}/${effectiveCode}/${folderPart}/${newFileName}`;
@@ -639,46 +647,3 @@ const imageBodyTemplate = (rowData) => {
     );
 }
 
-// ==========================================
-// 🔥🔥🔥 HELPER FUNCTIONS 🔥🔥🔥
-// ==========================================
-// --- CONVERSIÓN LAT/LON A UTM (WGS84) ---
-function latLonToUTM(lat, lon) {
-    if (!lat || !lon) return { northing: 0, easting: 0, zone: 0 };
-
-    const a = 6378137; // Semi-eje mayor WGS84
-    const f = 1 / 298.257223563; // Aplanamiento
-    const k0 = 0.9996; // Factor de escala
-
-    const phi = lat * (Math.PI / 180);
-    const lambda = lon * (Math.PI / 180);
-    const zone = Math.floor((lon + 180) / 6) + 1;
-    const lambda0 = ((zone - 1) * 6 - 180 + 3) * (Math.PI / 180);
-
-    const e2 = 2 * f - f * f; // Excentricidad al cuadrado
-    const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
-    const T = Math.tan(phi) * Math.tan(phi);
-    const C = (e2 / (1 - e2)) * Math.cos(phi) * Math.cos(phi);
-    const A = (lambda - lambda0) * Math.cos(phi);
-
-    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi
-        - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi)
-        + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi)
-        - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
-
-    const easting = 500000 + k0 * N * (A + (1 - T + C) * A * A * A / 6
-        + (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A * A / 120);
-
-    const northing = k0 * (M + N * Math.tan(phi) * (A * A / 2
-        + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24
-        + (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720));
-
-    // Para hemisferio sur (Latitud negativa), sumar 10,000,000 al norte
-    const finalNorthing = lat < 0 ? northing + 10000000 : northing;
-
-    return {
-        easting: parseFloat(easting.toFixed(3)),
-        northing: parseFloat(finalNorthing.toFixed(3)),
-        zone: zone
-    };
-}
