@@ -26,6 +26,7 @@ import { useUsuario } from '../hooks/useUsuario';
 import EvidenceView from './SEvidenceView';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
 import EstadoBadge from '../utils/estadoBadge';
+import DuplicateDeficiencyModal from '../components/Modals/DuplicateDeficiencyModal';
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
@@ -57,6 +58,8 @@ export default function Subestaciones() {
     const [selectedDeficiency, setSelectedDeficiency] = useState(null);
     const [formVisible, setFormVisible] = useState(false);
     const [deficiencyToEdit, setDeficiencyToEdit] = useState(null);
+    const [duplicateVisible, setDuplicateVisible] = useState(false);
+    const [duplicateId, setDuplicateId] = useState(null);
 
     // Estado para exportación WYSIWYG
     const [filteredData, setFilteredData] = useState(null);
@@ -98,7 +101,8 @@ export default function Subestaciones() {
         clearData,
         saveDeficiency,
         softDeleteDeficiency,
-        restoreDeficiency
+        restoreDeficiency,
+        getDeficiencyById
     } = useDeficienciesBySed();
 
     const { getCodeById, loading: loadingTypos } = useTypification();
@@ -483,7 +487,23 @@ export default function Subestaciones() {
 
     };
 
-    // -------------------------------------------------------------------
+    const duplicateDeficiency = () => {
+
+        if (!selectedDeficiency) {
+
+            toast.current.show({
+                severity: 'warn',
+                summary: 'Atención',
+                detail: 'Seleccione una deficiencia.'
+            });
+
+            return;
+        }
+
+        setDuplicateId(selectedDeficiency.defiInterno);
+        setDuplicateVisible(true);
+    };
+        // -------------------------------------------------------------------
     // 7. RENDERIZADO
     // -------------------------------------------------------------------
     return (
@@ -525,6 +545,10 @@ export default function Subestaciones() {
                     <Button onClick={openNew} disabled={!selectedSed} className="p-button-sm px-3 h-10 shadow-lg bg-green-600 border-none flex items-center gap-2 hover:scale-105 transition-transform" style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: '#fff' }}>
                         <i className="pi pi-plus text-lg font-bold"></i>
                         <div className="flex flex-col items-start leading-none"><span className="font-extrabold text-[10px]">NUEVA</span><span className="text-[9px] font-medium">DEFICIENCIA</span></div>
+                    </Button>
+                    <Button onClick={duplicateDeficiency} disabled={!selectedDeficiency} className="p-button-sm px-3 h-10 shadow-lg bg-green-600 border-none flex items-center gap-2 hover:scale-105 transition-transform" style={{ background: 'linear-gradient(135deg, #2256c5 0%, #168ea3 100%)', color: '#fff' }}>
+                        <i className="pi pi-clone text-lg font-bold"></i>
+                        <div className="flex flex-col items-start leading-none"><span className="font-extrabold text-[10px]">CLONAR</span><span className="text-[9px] font-medium">DEFICIENCIA</span></div>
                     </Button>
                 </div>
             </div>
@@ -632,6 +656,13 @@ export default function Subestaciones() {
                 sedId={selectedSed}
                 existingDeficiencies={mappedDeficiencies} // Pasamos la lista completa para validar duplicados
                 referenceSelection={selectedDeficiency}   // Pasa la selección para pre-llenar (clonar)
+            />
+            <DuplicateDeficiencyModal
+                visible={duplicateVisible}
+                deficiencyId={duplicateId}
+                onHide={() => setDuplicateVisible(false)}
+                getDeficiencyById={getDeficiencyById}
+                onSave={handleSaveSuccess}
             />
         </div>
     );

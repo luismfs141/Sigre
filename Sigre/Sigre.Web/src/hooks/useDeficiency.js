@@ -250,6 +250,37 @@ export const useDeficienciesBySed = () => {
         }
     };
 
+    const getDeficiencyById = useCallback(async (defiInterno) => {
+
+        if (!defiInterno) {
+            console.warn("⚠️ defiInterno es requerido");
+            return null;
+        }
+
+        try {
+
+            setLoading(true);
+
+            const response = await api.get('/Deficiency/GetById', {
+                params: { x_defiInterno: defiInterno }
+            });
+
+            return response.data;
+
+        } catch (error) {
+
+            console.error("❌ Error obteniendo deficiencia:", error);
+            setError(error);
+            return null;
+
+        } finally {
+
+            setLoading(false);
+
+        }
+
+    }, []);
+
     const clearData = () => { setDeficiencies([]); setError(null); };
 
     return {
@@ -258,6 +289,7 @@ export const useDeficienciesBySed = () => {
         saveDeficiency,
         softDeleteDeficiency,
         restoreDeficiency,
-        clearData, setDeficiencies
+        clearData, setDeficiencies,
+        getDeficiencyById
     };
 };
