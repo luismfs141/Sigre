@@ -870,7 +870,7 @@ namespace Sigre.DataAccess
             }
 
             // -------------------------------------------------------
-            // 🔥 2. REGLA DE EXCLUSIÓN MUTUA (VALIDACIÓN EN BD) 🔥
+            // 🔥 2. REGLA DE EXCLUSIÓN MUTUA Y GUARDADO 🔥
             // -------------------------------------------------------
             using (var ctx = new SigreContext())
             {
@@ -906,93 +906,136 @@ namespace Sigre.DataAccess
                 {
                     throw new ArgumentException(string.Join("\n", errores));
                 }
+
                 // -------------------------------------------------------
-                // 2. PROCESO NORMAL DE GUARDADO (Base de Datos)
+                // 3. PROCESO NORMAL DE GUARDADO (Base de Datos)
                 // -------------------------------------------------------
+
+                Deficiencia existente = null;
+
+                if (input.DefiInterno > 0)
                 {
-                    Deficiencia existente = null;
+                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
+                }
+                else if (!string.IsNullOrEmpty(input.DefiCol3))
+                {
+                    existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
+                }
 
-                    if (input.DefiInterno > 0)
+                if (existente != null)
+                {
+                    using (var transaction = ctx.Database.BeginTransaction())
                     {
-                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == input.DefiInterno);
-                    }
-                    else if (!string.IsNullOrEmpty(input.DefiCol3))
-                    {
-                        existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == input.DefiCol3);
-                    }
-
-                    if (existente != null)
-                    {
-                        existente.DefiObservacion = input.DefiObservacion;
-                        existente.DefiComentario = input.DefiComentario;
-                        existente.DefiNumSuministro = input.DefiNumSuministro;
-                        existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
-                        existente.DefiDistHorizontal = input.DefiDistHorizontal;
-                        existente.DefiDistVertical = input.DefiDistVertical;
-                        existente.DefiAccesibilidad = input.DefiAccesibilidad;
-                        existente.DefiTipoCruce = input.DefiTipoCruce;
-                        existente.DefiCol2 = input.DefiCol2;
-
-                        if (input.DefiLatitud != 0) existente.DefiLatitud = input.DefiLatitud;
-                        if (input.DefiLongitud != 0) existente.DefiLongitud = input.DefiLongitud;
-
-                        if (input.DefiFecRegistro != DateTime.MinValue)
+                        try
                         {
-                            existente.DefiFecRegistro = input.DefiFecRegistro;
+                            // 1. "Apagamos" el registro histórico
+                            existente.DefiActivo = false;
+                            existente.DefiFecModificacion = DateTime.Now;
+                            existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
+
+                            // 2. Reciclamos el 'input' para que sea el nuevo registro
+                            // (Ya trae TipiInterno, Observacion, Criticidad, etc. del Frontend)
+                            input.DefiInterno = 0; // Fuerza a la BD a insertarlo como nuevo
+                            input.DefiActivo = true;
+                            input.DefiEstado = "N";
+                            input.DefiFecModificacion = DateTime.Now;
+
+                            // 3. Heredamos los datos estructurales fijos del original para que la BD no rechace el Insert
+                            input.DefiCodigoElemento = existente.DefiCodigoElemento;
+                            input.DefiTipoElemento = existente.DefiTipoElemento;
+                            input.DefiIdElemento = existente.DefiIdElemento;
+                            input.DefiCol3 = Guid.NewGuid().ToString();
+                            input.DefiInspeccionado = existente.DefiInspeccionado;
+                            input.DefiFechaCreacion = existente.DefiFechaCreacion;
+                            input.DefiUsuarioInic = existente.DefiUsuarioInic;
+
+                            // Si las coordenadas no se movieron en el mapa, mantenemos las originales
+                            input.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
+                            input.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
+                            input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFecRegistro;
+
+                            // 4. Insertamos el input reciclado
+                            ctx.Deficiencias.Add(input);
+                            ctx.SaveChanges();
+                            // 🔥 2. EL TRUCO: TRASPASO AUTOMÁTICO DE ARCHIVOS 🔥
+                            // Buscamos todas las fotos vinculadas al ID viejo
+                            var archivosViejos = ctx.Archivos.Where(a => a.ArchCodTabla == existente.DefiInterno).ToList();
+                            foreach (var arch in archivosViejos)
+                            {
+                                // Actualizamos la llave foránea para que apunten al nuevo ID
+                                arch.ArchCodTabla = input.DefiInterno;
+                            }
+                            ctx.SaveChanges(); // Guardamos los cambios de los archivos
+
+                            // 3. Confirmamos toda la transacción
+
+                            transaction.Commit();
+
+                            return input.DefiInterno; // Retorna el nuevo ID
                         }
+                        catch (Exception ex)
+                        {
+                            // 1. Deshacemos los cambios para proteger la base de datos
+                            transaction.Rollback();
 
-                        existente.DefiFecModificacion = DateTime.Now;
-                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
-                        //existente.DefiInspeccionado = input.DefiInspeccionado;
+                            // 2. Escarbamos hasta llegar al error original de SQL Server
+                            Exception realError = ex;
+                            while (realError.InnerException != null)
+                            {
+                                realError = realError.InnerException;
+                            }
 
-                        ctx.SaveChanges();
-                        return existente.DefiInterno;
+                            // 3. Lanzamos el error hacia tu Frontend (React)
+                            throw new Exception($"Error SQL Detallado: {realError.Message}");
+                        }
                     }
-                    else
+                }
+                else
+                {
+                    // -------------------------------------------------------
+                    // INSERCIÓN DE REGISTRO NUEVO
+                    // -------------------------------------------------------
+                    input.DefiInterno = 0;
+                    input.DefiEstado = "N";
+                    input.DefiActivo = true;
+                    input.DefiInspeccionado = false;
+
+                    var now = DateTime.Now;
+                    input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
+                    input.DefiFechaCreacion = input.DefiFecRegistro;
+                    input.DefiFecModificacion = now;
+
+                    if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
+                    if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "20";
+                    if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "20";
+                    if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
+
+                    int idPadreEncontrado = 0;
+                    codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
+                    string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
+
+                    if (tipoElemento.StartsWith("POST"))
                     {
-                        // INSERCIÓN
-                        input.DefiInterno = 0;
-                        input.DefiEstado = "N";
-                        input.DefiActivo = true;
-                        input.DefiInspeccionado = false;
-
-                        var now = DateTime.Now;
-                        input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : now;
-                        input.DefiFechaCreacion = input.DefiFecRegistro;
-                        input.DefiFecModificacion = now;
-
-                        if (string.IsNullOrEmpty(input.DefiCol2)) input.DefiCol2 = "SEAL";
-                        if (string.IsNullOrEmpty(input.DefiUsuarioInic)) input.DefiUsuarioInic = "20";
-                        if (string.IsNullOrEmpty(input.DefiUsuarioMod)) input.DefiUsuarioMod = "20";
-                        if (string.IsNullOrEmpty(input.DefiCol3)) input.DefiCol3 = Guid.NewGuid().ToString();
-
-                        int idPadreEncontrado = 0;
-                        codigoGis = input.DefiCodigoElemento != null ? input.DefiCodigoElemento.Trim() : "";
-                        string tipoElemento = input.DefiTipoElemento != null ? input.DefiTipoElemento.ToUpper().Trim() : "";
-
-                        if (tipoElemento.StartsWith("POST"))
-                        {
-                            var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
-                            if (poste != null) idPadreEncontrado = poste.PostInterno;
-                        }
-                        else if (tipoElemento.StartsWith("VANO"))
-                        {
-                            var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
-                            if (vano != null) idPadreEncontrado = vano.VanoInterno;
-                        }
-
-                        input.DefiIdElemento = idPadreEncontrado;
-
-                        ctx.Deficiencias.Add(input);
-                        ctx.SaveChanges();
-                        //SincronizarEstadoInspeccionElemento(input.DefiInterno);
-
-                        return input.DefiInterno;
+                        var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGis);
+                        if (poste != null) idPadreEncontrado = poste.PostInterno;
                     }
+                    else if (tipoElemento.StartsWith("VANO"))
+                    {
+                        var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGis);
+                        if (vano != null) idPadreEncontrado = vano.VanoInterno;
+                    }
+
+                    input.DefiIdElemento = idPadreEncontrado;
+
+                    ctx.Deficiencias.Add(input);
+                    ctx.SaveChanges();
+                    //SincronizarEstadoInspeccionElemento(input.DefiInterno);
+
+                    return input.DefiInterno;
                 }
             }
         }
-        // DADeficiency.cs
+        
 
         public object DADEFI_ObtenerReportePorSED(int sedInterno)
         {
