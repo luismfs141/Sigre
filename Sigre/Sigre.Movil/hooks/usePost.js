@@ -268,6 +268,7 @@ export const usePost = () => {
     AlimInterno: Number(post.AlimInterno),
 
     // ✅ este es el correcto para campos 0/1
+    PostVereda: Number(post.PostVereda) === 1,
     PostTerceros: Number(post.PostTerceros) === 1,
 
     PostInspeccionado: Boolean(post.PostInspeccionado),

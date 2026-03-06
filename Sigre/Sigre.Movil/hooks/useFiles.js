@@ -101,40 +101,118 @@ export function useFiles() {
   // ===============================
   // 🔄 AUTO SYNC
   // ===============================
+  // const autoSyncArchivo = useCallback(async (archInternoLocal) => {
+  //   if (syncingRef.current) return;
+  //   syncingRef.current = true;
+
+  //   try {
+  //     //console.log("📤 Sincronización de Update de archivo");
+  //     // 🔐 CLAVE: garantizar DB
+  //     const dbOk = await checkDatabase();
+  //     if (!dbOk) return;
+
+  //     const online = await isOnline();
+  //     if (!online) return;
+
+  //     const arch = await getArchivoByIdLocal(archInternoLocal);
+  //     if (!arch) return;
+
+  //     const payload = [normalizeArchivoForSync(arch)];
+
+  //     const response = await client.post("/File/SyncFromSQLite", payload, {
+  //       timeout: 15000,
+  //     });
+
+  //     const map = response.data?.[0];
+  //     if (!map) return;
+
+  //     if (map.localId !== map.serverId) {
+  //       await updateArchivoIdAfterSync(map.localId, map.serverId);
+  //     }
+  //   } catch (err) {
+  //     console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
+  //   } finally {
+  //     syncingRef.current = false;
+  //   }
+  // }, [checkDatabase, isOnline, client]);
+
   const autoSyncArchivo = useCallback(async (archInternoLocal) => {
-    if (syncingRef.current) return;
-    syncingRef.current = true;
+  const log = (...a) => console.log("[AUTO-SYNC][FILE]", ...a);
 
-    try {
-      //console.log("📤 Sincronización de Update de archivo");
-      // 🔐 CLAVE: garantizar DB
-      const dbOk = await checkDatabase();
-      if (!dbOk) return;
+  if (syncingRef.current) return;
+  syncingRef.current = true;
 
-      const online = await isOnline();
-      if (!online) return;
+  try {
+    log("start archInternoLocal =", archInternoLocal);
 
-      const arch = await getArchivoByIdLocal(archInternoLocal);
-      if (!arch) return;
+    const dbOk = await checkDatabase();
+    log("dbOk =", dbOk);
+    if (!dbOk) return;
 
-      const payload = [normalizeArchivoForSync(arch)];
+    const online = await isOnline();
+    log("online =", online);
+    if (!online) return;
 
-      const response = await client.post("/File/SyncFromSQLite", payload, {
-        timeout: 15000,
-      });
-
-      const map = response.data?.[0];
-      if (!map) return;
-
-      if (map.localId !== map.serverId) {
-        await updateArchivoIdAfterSync(map.localId, map.serverId);
-      }
-    } catch (err) {
-      console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
-    } finally {
-      syncingRef.current = false;
+    const arch = await getArchivoByIdLocal(archInternoLocal);
+    if (!arch) {
+      log("no existe archivo local");
+      return;
     }
-  }, [checkDatabase, isOnline, client]);
+
+    log("local EstadoOffLine =", arch?.EstadoOffLine, "ArchActivo =", arch?.ArchActivo);
+
+    const payload = [normalizeArchivoForSync(arch)];
+
+    let response;
+    try {
+      response = await client.post("/File/SyncFromSQLite", payload, { timeout: 15000 });
+      log("POST OK status =", response?.status, "data =", response?.data);
+    } catch (err) {
+      log(
+        "POST FAIL status=",
+        err?.response?.status,
+        "data=",
+        err?.response?.data,
+        "msg=",
+        err?.message
+      );
+      return;
+    }
+
+    const map = Array.isArray(response?.data) ? response.data?.[0] : null;
+    if (!map) {
+      log("respuesta sin item [0]");
+      return;
+    }
+
+    const localId = map?.localId;
+    const serverId = map?.serverId;
+
+    log("map =", map);
+
+    if (!localId) {
+      log("sin localId => NO se puede actualizar SQLite");
+      return;
+    }
+    if (serverId == null) {
+      log("sin serverId => NO se limpia EstadoOffLine (ojo deletes)");
+      return;
+    }
+
+    await updateArchivoIdAfterSync(localId, serverId);
+    log("✅ update ok localId->serverId", localId, "->", serverId);
+
+    const pendingAfter = await getArchivosPendientes();
+    log("pendientes DESPUÉS =", pendingAfter?.length ?? 0);
+  } catch (err) {
+    console.error("❌ [autoSyncArchivo]", err?.response?.data || err?.message || err);
+  } finally {
+    syncingRef.current = false;
+  }
+}, [checkDatabase, isOnline, client]);
+
+
+
 
   // ===============================
   // 💾 SAVE / UPDATE (SQLite)
@@ -262,64 +340,150 @@ export function useFiles() {
 }, [checkDatabase]);
 
 
+  // const syncAllArchivos = useCallback(async () => {
+  //   const online = await isOnline();
+  //   if (!online) return { ok: false };
+
+  //   try {
+  //     const dbOk = await checkDatabase();
+  //     if (!dbOk) return { ok: false };
+
+  //     const pendientes = await getArchivosPendientes();
+  //     if (!pendientes.length) return { ok: true, synced: 0 };
+
+  //     const aSincronizar = pendientes.filter((a) =>
+  //       [1, 2, 3].includes(Number(a.EstadoOffLine))
+  //     );
+
+  //     if (!aSincronizar.length) return { ok: true, synced: 0 };
+
+  //     const payload = aSincronizar.map(normalizeArchivoForSync);
+
+
+  //     const response = await client.post(
+  //       "/File/SyncFromSQLite",
+  //       payload,
+  //       { timeout: 20000 }
+  //     );
+
+  //     const respList = Array.isArray(response.data) ? response.data : [];
+  //     let syncedCount = 0;
+
+  //     for (const r of respList) {
+  //       if (!r?.localId || !r?.serverId) {
+  //         console.warn("⚠ Respuesta inválida:", r);
+  //         continue;
+  //       }
+
+  //       await updateArchivoIdAfterSync(r.localId, r.serverId);
+  //       syncedCount++;
+  //     }
+
+  //     return { ok: true, synced: syncedCount };
+
+  //   } catch (err) {
+  //     console.error(
+  //       "❌ Sync masivo archivos falló:",
+  //       err?.response?.data || err?.message || err
+  //     );
+  //     return { ok: false };
+  //   }
+  // }, [checkDatabase, isOnline, client]);
+
+
   const syncAllArchivos = useCallback(async () => {
-    const online = await isOnline();
-    if (!online) return { ok: false };
+  const log = (...a) => console.log("[SYNC][FILES]", ...a);
 
+  const online = await isOnline();
+  log("online =", online);
+  if (!online) return { ok: false };
+
+  try {
+    const dbOk = await checkDatabase();
+    log("dbOk =", dbOk);
+    if (!dbOk) return { ok: false };
+
+    const pendientes = await getArchivosPendientes();
+    log("pendientes total (EstadoOffLine IN 1,2,3) =", pendientes?.length ?? 0);
+
+    if (!pendientes?.length) return { ok: true, synced: 0 };
+
+    const aSincronizar = pendientes.filter((a) =>
+      [1, 2, 3].includes(Number(a?.EstadoOffLine))
+    );
+
+    log("aSincronizar =", aSincronizar.length);
+    if (!aSincronizar.length) return { ok: true, synced: 0 };
+
+    const payload = aSincronizar.map(normalizeArchivoForSync);
+
+    // log mini del payload
+    log(
+      "payload sample =",
+      payload.slice(0, 2).map((p) => ({
+        ArchInterno: p.ArchInterno,
+        EstadoOffLine: p.EstadoOffLine,
+        ArchActivo: p.ArchActivo,
+        ArchCodTabla: p.ArchCodTabla,
+        DefiUUID: p.DefiUUID,
+      }))
+    );
+
+    let response;
     try {
-      const dbOk = await checkDatabase();
-      if (!dbOk) return { ok: false };
-
-      const pendientes = await getArchivosPendientes();
-      if (!pendientes.length) return { ok: true, synced: 0 };
-
-      const aSincronizar = pendientes.filter((a) =>
-        [1, 2, 3].includes(Number(a.EstadoOffLine))
-      );
-
-      if (!aSincronizar.length) return { ok: true, synced: 0 };
-
-      const payload = aSincronizar.map(normalizeArchivoForSync);
-
-
-
-
-
-
-
-
-
-
-
-      const response = await client.post(
-        "/File/SyncFromSQLite",
-        payload,
-        { timeout: 20000 }
-      );
-
-      const respList = Array.isArray(response.data) ? response.data : [];
-      let syncedCount = 0;
-
-      for (const r of respList) {
-        if (!r?.localId || !r?.serverId) {
-          console.warn("⚠ Respuesta inválida:", r);
-          continue;
-        }
-
-        await updateArchivoIdAfterSync(r.localId, r.serverId);
-        syncedCount++;
-      }
-
-      return { ok: true, synced: syncedCount };
-
+      response = await client.post("/File/SyncFromSQLite", payload, { timeout: 20000 });
+      log("POST OK status =", response?.status);
     } catch (err) {
-      console.error(
-        "❌ Sync masivo archivos falló:",
-        err?.response?.data || err?.message || err
+      log(
+        "POST FAIL status=",
+        err?.response?.status,
+        "data=",
+        err?.response?.data,
+        "msg=",
+        err?.message
       );
       return { ok: false };
     }
-  }, [checkDatabase, isOnline, client]);
+
+    const respList = Array.isArray(response?.data) ? response.data : [];
+    log("response.data len =", respList.length, "sample =", respList.slice(0, 3));
+
+    let syncedCount = 0;
+
+    for (const r of respList) {
+      const localId = r?.localId;
+      const serverId = r?.serverId;
+
+      if (!localId) {
+        log("⚠ item sin localId:", r);
+        continue;
+      }
+
+      // OJO: si serverId viene null/0 en deletes, aquí lo vas a ver clarito en el log
+      if (serverId == null) {
+        log("⚠ item sin serverId:", r);
+        continue;
+      }
+
+      try {
+        await updateArchivoIdAfterSync(localId, serverId);
+        syncedCount++;
+        log("✅ updated localId -> serverId =", localId, "->", serverId);
+      } catch (e) {
+        log("❌ updateArchivoIdAfterSync falló:", e?.message ?? e);
+      }
+    }
+
+    // Verificación final en SQLite
+    const pendingAfter = await getArchivosPendientes();
+    log("pendientes DESPUÉS =", pendingAfter?.length ?? 0);
+
+    return { ok: true, synced: syncedCount };
+  } catch (err) {
+    console.error("❌ Sync masivo archivos falló:", err?.response?.data || err?.message || err);
+    return { ok: false };
+  }
+}, [checkDatabase, isOnline, client]);
 
 
   return {

@@ -708,6 +708,9 @@ public partial class SigreContext : DbContext
     .IsUnicode(false)
     .HasColumnName("POST_Tramo");
 
+            entity.Property(e => e.PostVereda).HasColumnName("POST_Vereda");
+
+
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostArmadoMaterial)
                 .HasConstraintName("FK_Postes_ArmadoMaterial");
@@ -727,8 +730,8 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.PostRetenidaTipoNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostRetenidaTipo)
                 .HasConstraintName("FK_Postes_RetenidaTipo");
-            
-            
+
+
 
         });
 

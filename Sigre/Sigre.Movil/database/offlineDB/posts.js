@@ -272,6 +272,11 @@ export const saveOrUpdatePost = async (post) => {
     setIfHas("PostInspeccionado", post.PostInspeccionado == null ? null : _toInt01(post.PostInspeccionado));
     setIfHas("PostTerceros", post.PostTerceros == null ? null : _toInt01(post.PostTerceros));
 
+
+
+
+
+
     if (cols.has("EstadoOffLine")) {
       const estado = post.EstadoOffLine == null ? 1 : post.EstadoOffLine;
       sets.push(`EstadoOffLine = ?`);
@@ -282,10 +287,32 @@ export const saveOrUpdatePost = async (post) => {
       sets.push(`PostAltura = ?`);
       vals.push(post.PostAltura ?? null);
     }
+
+
     if (cols.has("PostTramo") && _hasOwn(post, "PostTramo")) {
       sets.push(`PostTramo = ?`);
       vals.push(post.PostTramo ?? null);
     }
+
+
+
+
+
+
+
+    if (cols.has("PostVereda") && _hasOwn(post, "PostVereda")) {
+      sets.push(`PostVereda = ?`);
+      vals.push(post.PostVereda ?? 1);
+    }
+
+
+
+
+
+
+
+
+
 
     if (sets.length) {
       await runQuery(
@@ -317,6 +344,7 @@ export const insertPostAndPin = async (post) => {
   const payload = {
     EstadoOffLine: 2,
     PostTerceros: _toInt01(post?.PostTerceros, 0),
+     PostVereda: _toInt01(post?.PostVereda, 1),
     PostInspeccionado: _toInt01(post?.PostInspeccionado, 0),
     PostEsMt: post?.PostEsMt == null ? 0 : _toInt01(post.PostEsMt, 0),
     PostEsBt: post?.PostEsBt == null ? 1 : _toInt01(post.PostEsBt, 1),
@@ -336,6 +364,7 @@ export const insertPostAndPin = async (post) => {
 
     PostAltura: post?.PostAltura ?? null,
     PostTramo: post?.PostTramo ?? null,
+    
   };
 
   // mínimos
