@@ -105,7 +105,7 @@ export default forwardRef(function NewPoste(_, ref) {
   const [seds, setSeds] = useState([]);
 
   const [PostMaterial, setPostMaterial] = useState(null);       // PosmtInterno
-  const [PostRetenidaTipo, setPostRetenidaTipo] = useState(null); // RtntpInterno
+  const [PostRetenidaTipo, setPostRetenidaTipo] = useState(5); // RtntpInterno
   const [PostSubestacion, setPostSubestacion] = useState(null); // SedInterno
 
   // modal selector genérico
@@ -232,7 +232,7 @@ export default forwardRef(function NewPoste(_, ref) {
     setPostLongitud("");
 
     setPostMaterial(null);
-    setPostRetenidaTipo(null);
+    setPostRetenidaTipo(5);
     setPostSubestacion(null);
 
     setMarkerCoord(defaultCenter);
@@ -740,7 +740,7 @@ export default forwardRef(function NewPoste(_, ref) {
 
 
 
-      
+
 
       {/* Lat/Lng + flechas */}
       <View style={styles.row2}>
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  selectText: { color: "#333", fontWeight: "700", paddingRight: 10 },
+  selectText: { color: "#333", paddingRight: 10 },
 
   row2: { flexDirection: "row", alignItems: "center" },
 

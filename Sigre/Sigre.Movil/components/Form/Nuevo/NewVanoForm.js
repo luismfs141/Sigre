@@ -1072,7 +1072,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "space-between",
     },
-    selectText: { color: "#333", fontWeight: "700", paddingRight: 10 },
+    selectText: { color: "#333",  paddingRight: 10 },
 
     row2: { flexDirection: "row", alignItems: "center" },
 
