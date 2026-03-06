@@ -22,6 +22,21 @@ export const useFiles = () => {
         }
     }, []);
 
+    // 1.5 NUEVO: CARGAR DIRECTO (Para bucles e Importación Masiva)
+    // No usa setLoadingFiles ni setFiles para no trabar la interfaz
+    const fetchFilesData = useCallback(async (defiInterno) => {
+        if (!defiInterno) return [];
+        try {
+            const response = await api.get('/File/GetByDeficiencyWeb', {
+                params: { x_deficiency: defiInterno }
+            });
+            return response.data || []; // Retorna la data directamente
+        } catch (error) {
+            console.error(`Error obteniendo archivos directos (Def: ${defiInterno}):`, error);
+            return []; // Retorna un array vacío en caso de error para que no rompa el for
+        }
+    }, []);
+
     // 2. ELIMINAR (POST SoftDelete)
     const deleteFile = async (archInterno) => {
         try {
@@ -55,5 +70,6 @@ export const useFiles = () => {
         loadFiles, 
         deleteFile, 
         addFile, 
+        fetchFilesData,
     };
 };
