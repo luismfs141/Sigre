@@ -57,37 +57,45 @@ export const usePosteVanoSearch = (fetchPostesChunk, fetchVanosChunk) => {
         }, 500);
     }, [fetchPostesChunk, fetchVanosChunk]);
 // 🔥 2. BÚSQUEDA MANUAL ESTRICTA
-    const searchExactCode = async (codigo, alimentadorId, sedId) => {
-        try {
-            const query = codigo.trim().toLowerCase();
-            
-            // Pedimos unos 15 registros por si el backend devuelve coincidencias parciales (LIKE)
-            const [responsePostes, responseVanos] = await Promise.all([
-                fetchPostesChunk(0, 15, query, alimentadorId, sedId),
-                fetchVanosChunk(0, 15, query, alimentadorId, sedId)
-            ]);
+    // 🔥 CORRECCIÓN 1: Agregamos 'etiqueta' a los parámetros
+const searchExactCode = async (codigo, etiqueta, alimentadorId, sedId) => {
+    try {
+        const queryCodigo = String(codigo || '').trim().toLowerCase();
+        const queryEtiqueta = String(etiqueta || '').trim().toLowerCase();
+        
+        // 🔥 CORRECCIÓN 2: Pasamos queryCodigo y queryEtiqueta en el orden correcto a tus fetch
+        const [responsePostes, responseVanos] = await Promise.all([
+            fetchPostesChunk(0, 15, queryCodigo, queryEtiqueta, alimentadorId, sedId),
+            fetchVanosChunk(0, 15, queryCodigo, queryEtiqueta, alimentadorId, sedId)
+        ]);
 
-            // 🚀 FILTRO ESTRICTO: Buscamos coincidencia exacta (===) en el código GIS
-            if (responsePostes?.data) {
-                const exactPoste = responsePostes.data.find(p => 
-                    (p.postCodigoNodo || '').toLowerCase() === query
-                );
-                if (exactPoste) return { ...exactPoste, _tipo: 'POSTE' };
-            }
-
-            if (responseVanos?.data) {
-                const exactVano = responseVanos.data.find(v => 
-                    (v.vanoCodigo || '').toLowerCase() === query
-                );
-                if (exactVano) return { ...exactVano, _tipo: 'VANO' };
-            }
-            
-            return null; // Si ninguno coincide exactamente, es libre/nuevo
-        } catch (error) {
-            console.error("Error buscando código exacto:", error);
-            return null;
+        // 🚀 FILTRO ESTRICTO: Buscamos coincidencia exacta en el código GIS O en la etiqueta
+        if (responsePostes?.data) {
+            const exactPoste = responsePostes.data.find(p => {
+                const matchCodigo = queryCodigo && (p.postCodigoNodo || '').toLowerCase() === queryCodigo;
+                const matchEtiqueta = queryEtiqueta && (p.postEtiqueta || '').toLowerCase() === queryEtiqueta;
+                return matchCodigo || matchEtiqueta; // Si coincide uno u otro, ¡lo encontramos!
+            });
+            if (exactPoste) return { ...exactPoste, _tipo: 'POSTE' };
         }
-    };
+
+        // 🔥 CORRECCIÓN 3: Aplicamos la misma lógica para los VANOS
+        if (responseVanos?.data) {
+            const exactVano = responseVanos.data.find(v => {
+                const matchCodigo = queryCodigo && (v.vanoCodigo || '').toLowerCase() === queryCodigo;
+                // Asumo que tu campo en vanos se llama vanoEtiqueta, ajústalo si es distinto
+                const matchEtiqueta = queryEtiqueta && (v.vanoEtiqueta || '').toLowerCase() === queryEtiqueta; 
+                return matchCodigo || matchEtiqueta;
+            });
+            if (exactVano) return { ...exactVano, _tipo: 'VANO' };
+        }
+        
+        return null; // Si ninguno coincide exactamente, es libre/nuevo
+    } catch (error) {
+        console.error("Error buscando código exacto:", error);
+        return null;
+    }
+};
 
     // 🔥 3. VALIDACIÓN GLOBAL ESTRICTA (Sin filtros de SED/Alimentador)
     const validateGisGlobal = async (codigoFormateado) => {

@@ -5,13 +5,14 @@ export const useElements = () => {
     const [loading, setLoading] = useState(false);
 
     // Función genérica MEJORADA para aceptar filtros dinámicos
-    const fetchBloque = useCallback(async (endpoint, skip, take, busqueda = "", alimentadorId = null, sedId = null) => {
+const fetchBloque = useCallback(async (endpoint, skip, take, codigo = "", etiqueta = "", alimentadorId = null, sedId = null) => {
         setLoading(true);
         try {
             const params = {
                 skip: skip,
                 take: take,
-                busqueda: busqueda 
+                codigo: codigo,      // Se envía a C#
+                etiqueta: etiqueta   // Se envía a C#
             };
 
             // 🔥 Añadimos los filtros jerárquicos solo si tienen un valor
@@ -31,11 +32,11 @@ export const useElements = () => {
     }, []);
 
     // Wrappers específicos ACTUALIZADOS
-    const fetchPostesChunk = (skip, take, busqueda, alimentadorId, sedId) => 
-        fetchBloque('/Post/GetPaginado', skip, take, busqueda, alimentadorId, sedId);
+    const fetchPostesChunk = (skip, take, codigo, etiqueta, alimentadorId, sedId) => 
+        fetchBloque('/Post/GetPaginado', skip, take, codigo, etiqueta, alimentadorId, sedId);
     
-    const fetchVanosChunk = (skip, take, busqueda, alimentadorId, sedId) => 
-        fetchBloque('/Gap/GetPaginado', skip, take, busqueda, alimentadorId, sedId);
+    const fetchVanosChunk = (skip, take, codigo, etiqueta, alimentadorId, sedId) => 
+        fetchBloque('/Gap/GetPaginado', skip, take, codigo, etiqueta, alimentadorId, sedId);
 
     // ... (Tu código de saveElement y deleteElement se mantiene exactamente igual) ...
     // --- SAVE ---
