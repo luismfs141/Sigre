@@ -142,7 +142,8 @@ namespace Sigre.DataAccess
                         PostEsBt = dto.PostEsBt,
                         PostEsMt = dto.PostEsMt,
                         PostAltura = dto.PostAltura,
-                        PostTramo = dto.PostTramo
+                        PostTramo = dto.PostTramo,
+                        PostVereda = dto.PostVereda
 
                     };
 
@@ -178,6 +179,7 @@ namespace Sigre.DataAccess
                     existente.PostEsMt = dto.PostEsMt;
                     existente.PostAltura = dto.PostAltura;
                     existente.PostTramo = dto.PostTramo;
+                    existente.PostVereda = dto.PostVereda;
 
                     ctx.SaveChanges();
 
@@ -288,12 +290,12 @@ namespace Sigre.DataAccess
                         PostLatitud = p.PostLatitud,
                         PostLongitud = p.PostLongitud,
                         AlimInterno = p.AlimInterno,
-                        // NO incluyas p.AlimInternoNavigation aquí
 
                         PostSubestacion = p.PostSubestacion,
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
+                        PostVereda = p.PostVereda,
 
                         PostArmadoTipo = p.PostArmadoTipo,
                         PostArmadoMaterial = p.PostArmadoMaterial,
@@ -302,8 +304,9 @@ namespace Sigre.DataAccess
 
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt, // Cuidado con mayúsculas/minúsculas exactas de tu modelo
-                        PostEsMt = p.PostEsMt // Si existe en tu modelo
+                        PostEsBt = p.PostEsBt,
+                        PostEsMt = p.PostEsMt,
+
                     })
                     .ToList(); // La consulta se ejecuta aquí
 
@@ -332,6 +335,7 @@ namespace Sigre.DataAccess
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
+
                         PostRetenidaTipo = p.PostRetenidaTipo,
 
                         // Estados

@@ -10,6 +10,7 @@ const NewPostForm = forwardRef((props, ref) => {
     PostCodigoNodo: "",
     PostMaterial: "",
     PostAltura: "",
+    PostVereda: "1",
     PostTerceros: "0",
     PostEsMT: 1,
     PostEsBT: 0
@@ -31,6 +32,7 @@ const NewPostForm = forwardRef((props, ref) => {
       PostLatitud: form.PostLatitud ? Number(form.PostLatitud) : null,
       PostLongitud: form.PostLongitud ? Number(form.PostLongitud) : null,
       PostAltura: form.PostAltura ? Number(form.PostAltura) : null,
+      PostVereda: Number(form.PostVereda),
       PostTerceros: Number(form.PostTerceros),
     }),
     reset: () => {
@@ -41,6 +43,7 @@ const NewPostForm = forwardRef((props, ref) => {
         PostCodigoNodo: "",
         PostMaterial: "",
         PostAltura: "",
+        PostVereda: "1",
         PostTerceros: "0",
         PostEsMT: 1,
         PostEsBT: 0
@@ -94,6 +97,14 @@ const NewPostForm = forwardRef((props, ref) => {
         keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
         value={form.PostAltura}
         onChangeText={v => update("PostAltura", sanitizeDecimal(v))}
+      />
+
+      <Text style={styles.label}>Poste en vereda</Text>
+      <TextInput
+        style={styles.input}
+        value={form.PostVereda}
+        onChangeText={v => update("PostVereda", v === "0" ? "0" : "1")}
+        placeholder="1 = Sí, 0 = No"
       />
 
     </View>

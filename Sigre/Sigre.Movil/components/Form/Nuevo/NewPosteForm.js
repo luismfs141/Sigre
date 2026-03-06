@@ -94,6 +94,7 @@ export default forwardRef(function NewPoste(_, ref) {
   const [PostCodigoNodo, setPostCodigoNodo] = useState("");
   const [PostEtiqueta, setPostEtiqueta] = useState("");
   const [PostAltura, setPostAltura] = useState(""); // se guarda solo si existe columna
+  const [PostVereda, setPostVereda] = useState(1);
 
   const [PostLatitud, setPostLatitud] = useState("");
   const [PostLongitud, setPostLongitud] = useState("");
@@ -104,7 +105,7 @@ export default forwardRef(function NewPoste(_, ref) {
   const [seds, setSeds] = useState([]);
 
   const [PostMaterial, setPostMaterial] = useState(null);       // PosmtInterno
-  const [PostRetenidaTipo, setPostRetenidaTipo] = useState(null); // RtntpInterno
+  const [PostRetenidaTipo, setPostRetenidaTipo] = useState(5); // RtntpInterno
   const [PostSubestacion, setPostSubestacion] = useState(null); // SedInterno
 
   // modal selector genérico
@@ -116,6 +117,11 @@ export default forwardRef(function NewPoste(_, ref) {
   });
 
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  const veredaOptions = [
+    { value: 0, label: "No" },
+    { value: 1, label: "Sí" },
+  ];
 
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeSearching, setPlaceSearching] = useState(false);
@@ -220,12 +226,13 @@ export default forwardRef(function NewPoste(_, ref) {
     setPostCodigoNodo("");
     setPostEtiqueta("");
     setPostAltura("");
+    setPostVereda(1);
 
     setPostLatitud("");
     setPostLongitud("");
 
     setPostMaterial(null);
-    setPostRetenidaTipo(null);
+    setPostRetenidaTipo(5);
     setPostSubestacion(null);
 
     setMarkerCoord(defaultCenter);
@@ -249,6 +256,7 @@ export default forwardRef(function NewPoste(_, ref) {
       PostSubestacion: PostSubestacion == null ? null : Number(PostSubestacion),
 
       PostAltura: altura, // ⚠ se guardará solo si existe la columna en SQLite
+      PostVereda: Number(PostVereda),
 
       PostLatitud: lat,
       PostLongitud: lng,
@@ -262,7 +270,8 @@ export default forwardRef(function NewPoste(_, ref) {
       PostArmadoMaterial: null,
       PostEsMt: 0,
       PostEsBt: 1,
-      PostTramo: null, // si tu DB no tiene esta columna, se ignora en DAL
+      PostTramo: null,
+      PostVereda: 1,
 
       PostArmadoMaterialNavigationArmmtInterno: null,
       PostArmadoTipoNavigationArmtpInterno: null,
@@ -612,6 +621,11 @@ export default forwardRef(function NewPoste(_, ref) {
     return it?.label ?? "";
   }, [seds, PostSubestacion]);
 
+  const displayVereda = useMemo(() => {
+    const it = veredaOptions.find((x) => Number(x.value) === Number(PostVereda));
+    return it?.label ?? "";
+  }, [PostVereda]);
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Nuevo Poste</Text>
@@ -707,6 +721,26 @@ export default forwardRef(function NewPoste(_, ref) {
         placeholder="Ej: 12"
         keyboardType="numeric"
       />
+
+      <Text style={styles.label}>Poste en vereda</Text>
+      <TouchableOpacity
+        style={styles.select}
+        onPress={() =>
+          openSelect("Seleccione opción", veredaOptions, (it) => {
+            setPostVereda(it.value);
+            closeSelect();
+          })
+        }
+      >
+        <Text style={styles.selectText}>
+          {displayVereda || "Seleccionar..."}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color="#444" />
+      </TouchableOpacity>
+
+
+
+
 
       {/* Lat/Lng + flechas */}
       <View style={styles.row2}>
@@ -992,7 +1026,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  selectText: { color: "#333", fontWeight: "700", paddingRight: 10 },
+  selectText: { color: "#333", paddingRight: 10 },
 
   row2: { flexDirection: "row", alignItems: "center" },
 

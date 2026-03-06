@@ -4,6 +4,10 @@ import { recalcElementoInspeccionadoFromDefsLocal } from "../../database/offline
 import { useGap } from "../../hooks/useGap";
 import { usePost } from "../../hooks/usePost";
 
+import { useFiles } from "../../hooks/useFiles";
+import { KEY_MUSIC_DIR, KEY_PICTURES_DIR } from "../../utils/Multimedia/constants";
+
+
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import {
@@ -19,6 +23,20 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+
+
+import {
+  SAF,
+  cleanupEmptyAncestorsSaf,
+  getSavedPublicDir,
+  safDirForRelativeFileReadOnly,
+  safNameMatches,
+  safTrashDirForRelativeFile,
+  writeFileIntoSafDir,
+} from "../../utils/Multimedia/safUtils";
+
+import { basenameFromAnyPath, normalizeRelativePath } from "../../utils/Multimedia/pathUtils";
+
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -45,7 +63,8 @@ export default function Inspection() {
   const [loading, setLoading] = useState({ active: false, msg: "" });
 
 
-  const { deleteDeficiency, deficienciesForFlatList } = useDeficiency();
+  const { deleteDeficiency, deficienciesForFlatList, fetchDeficiencyByIdLocal } = useDeficiency();
+  const { fetchMediosByDeficienciaId } = useFiles();
   const { getPostData, savePost } = usePost();
   const { fetchVanoById, saveVano } = useGap();
 
@@ -474,21 +493,43 @@ export default function Inspection() {
     setModalDeficiencyVisible(true);
   };
 
+
+
+  const pickNum = (obj, keys) => {
+    for (const k of keys) {
+      const v = obj?.[k];
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  };
+
+  const getArchLookupIdsFromItem = (itemToDelete) => {
+    const d = itemToDelete?.data ?? {};
+
+    const serverId = pickNum(d, ["defiServerId", "DefiServerId", "DEFI_ServerId"]);
+    const interno = pickNum(d, ["defiInterno", "DefiInterno", "DEFI_Interno"]);
+
+    const defId = Number(itemToDelete?.defId ?? itemToDelete?.id ?? 0);
+
+    // ids candidatos para buscar en Archivos (en orden)
+    const ids = [serverId, interno, defId].filter((x) => Number.isFinite(x) && x > 0);
+
+    // unique
+    return [...new Set(ids)];
+  };
+
+
+
   /* =======================
       ELIMINAR DEFICIENCIA
      ======================= */
   const handleLocalDelete = async (itemToDelete) => {
     if (!itemToDelete) return;
-
-    // ✅ Evitar doble click / re-entradas
     if (loading.active) return;
 
-    // ✅ PERMISOS
     if (!canDeleteItem(itemToDelete)) {
-      Alert.alert(
-        "No permitido",
-        "Como inspector solo puedes eliminar tus propias deficiencias."
-      );
+      Alert.alert("No permitido", "Como inspector solo puedes eliminar tus propias deficiencias.");
       return;
     }
 
@@ -503,23 +544,84 @@ export default function Inspection() {
           onPress: async () => {
             setLoading({ active: true, msg: "Eliminando deficiencia..." });
 
+            // ✅ 1) Leer def real (para saber DefiServerId y obtener medios correctos)
+            let defReal = null;
             try {
+              defReal = await fetchDeficiencyByIdLocal(itemToDelete.defId);
+            } catch { }
+
+            const codTabla = Number(defReal?.DefiServerId) > 0
+              ? Number(defReal.DefiServerId)
+              : Number(defReal?.DefiInterno ?? itemToDelete.defId);
+
+            // ✅ 2) Captura archivos activos ANTES (rutas originales)
+            let oldPaths = [];
+            try {
+              const medios = await fetchMediosByDeficienciaId(codTabla);
+              oldPaths = (medios ?? [])
+                .filter((m) => Number(m?.ArchActivo) === 1)
+                .map((m) => m?.ArchNombre)
+                .filter(Boolean);
+
+              oldPaths = [...new Set(oldPaths.map((p) => normalizeRelativePath(p)))];
+            } catch (e) {
+              console.warn("⚠ oldPaths error:", e?.message ?? e);
+            }
+
+            try {
+              // ✅ 3) BORRADO BD (lógico)
               const delRes = await deleteDeficiency(itemToDelete.defId);
+
+              // ✅ 4) MOVER FÍSICO EN SAF -> ELIMINADOS + LIMPIAR CARPETAS
+              if (Platform.OS === "android" && oldPaths.length > 0) {
+                const picsRoot = await getSavedPublicDir(KEY_PICTURES_DIR);
+                const musicRoot = await getSavedPublicDir(KEY_MUSIC_DIR);
+
+                for (const relPath of oldPaths) {
+                  const fileName = basenameFromAnyPath(relPath);
+                  if (!fileName) continue;
+
+                  const isAudio = /\.m4a$/i.test(fileName) || /\.mp3$/i.test(fileName);
+                  const rootUri = isAudio ? musicRoot : picsRoot;
+                  if (!rootUri) continue;
+
+                  try {
+                    const srcDir = await safDirForRelativeFileReadOnly(rootUri, relPath);
+                    if (srcDir) {
+                      const children = (await SAF.readDirectoryAsync(srcDir)) ?? [];
+                      const srcFile = children.find((u) => safNameMatches(u, fileName));
+
+                      if (srcFile) {
+                        const dstDir = await safTrashDirForRelativeFile(rootUri, relPath);
+
+                        await writeFileIntoSafDir({
+                          dirUri: dstDir,
+                          fileName,
+                          mimeType: isAudio ? "audio/mp4" : "image/jpeg",
+                          sourceFileUri: srcFile,
+                        });
+
+                        await SAF.deleteAsync(srcFile);
+                      }
+                    }
+
+                    // ✅ limpiar carpetas vacías del ORIGEN (SIGRE.MOVIL/...)
+                    await cleanupEmptyAncestorsSaf(rootUri, relPath, "SIGRE.MOVIL");
+                  } catch (e) {
+                    console.warn("⚠ move+cleanup SAF:", relPath, e?.message ?? e);
+                  }
+                }
+              }
 
               if (delRes?.pinMsg) {
                 Alert.alert("Estado del pin actualizado", delRes.pinMsg);
               }
 
               setModalDeficiencyVisible(false);
-
-              // ✅ IMPORTANTE: espera el refresh antes de soltar el loading
               await refreshList();
 
               if (Platform.OS === "android") {
-                ToastAndroid.show(
-                  "Deficiencia eliminada correctamente",
-                  ToastAndroid.SHORT
-                );
+                ToastAndroid.show("Deficiencia eliminada correctamente", ToastAndroid.SHORT);
               }
             } catch (err) {
               console.error("❌ Error eliminando deficiencia:", err);
@@ -527,8 +629,8 @@ export default function Inspection() {
             } finally {
               setLoading({ active: false, msg: "" });
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
