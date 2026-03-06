@@ -13,8 +13,8 @@ import { saveAs } from 'file-saver';
 import { latLonToUTM } from '../utils/geoUtils';
 
 // 🔥 CONEXIÓN AL SERVIDOR NGROK / CLOUDFLARE
-//const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
-const API_BASE_URL = "http://localhost:8080/";
+const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL = "http://localhost:8080/";
 // --- UTILIDADES ---
 const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 
