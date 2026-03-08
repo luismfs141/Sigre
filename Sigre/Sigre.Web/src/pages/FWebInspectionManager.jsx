@@ -111,8 +111,10 @@ export default function WebInspectionManager() {
     const [globalLon, setGlobalLon] = useState('');
     // --- ESTADOS PARA ACTUALIZACIÓN MASIVA ---
     const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+    const [bulkNewGis, setBulkNewGis] = useState('');
     const [bulkOptions, setBulkOptions] = useState({
         path: false, // Alimentador, SED, Código, Tipo
+        gisCode: false,
         date: false, // Fecha Global
         tipi: false, // Tipificación
         geo: false   // GPS (Protegido)
@@ -341,19 +343,20 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
         // Pre-marcamos inteligentemente las opciones si el usuario llenó los campos arriba
         // 🚨 EL GPS SIEMPRE ESTARÁ EN FALSE POR SEGURIDAD 🚨
+        setBulkNewGis('');
         setBulkOptions({
             path: !!selectedFeederId && !!selectedSed,
             date: !!globalDate,
             tipi: !!globalTipificacion,
-            geo: false 
+            geo: false,
+            gisCode: false
         });
 
         setShowBulkUpdateModal(true);
     };
 
     const executeBulkUpdate = () => {
-        const { path: applyPath, date: applyDate, geo: applyGeo, tipi: applyTipi } = bulkOptions;
-
+    const { path: applyPath, date: applyDate, geo: applyGeo, tipi: applyTipi, gisCode: applyGisCode } = bulkOptions;
         // Validaciones de seguridad si marcaron la casilla pero no hay datos
         if (applyPath && (!selectedFeederId || !selectedSed)) {
              toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta Alimentador o SED para actualizar la ruta.' });
@@ -368,6 +371,8 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
         if (newType && newType.includes('VANO')) newType = 'VANO';
         else if (newType && newType.includes('POST')) newType = 'POSTE';
         const newCode = applyPath ? safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode || "SIN_CODIGO") : null;
+        const currentGlobalCode = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
+        const cleanNewGis = applyGisCode ? safeSeg(currentGlobalCode) : null;
 
         let globalUtm = { northing: 0, easting: 0 };
         if (applyGeo && globalLat && globalLon) {
@@ -386,11 +391,13 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
             let currentPathParts = row.currentPath.split('/');
 
             // Reconstrucción de la ruta si aplican cambios de Ruta o Tipificación
-            if ((applyPath || applyTipi) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
+            if ((applyPath || applyTipi || applyGisCode) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
                 const effectiveFeeder = applyPath ? newFeeder : currentPathParts[1];
                 const effectiveSed = applyPath ? newSed : currentPathParts[2];
                 const effectiveType = applyPath ? newType : String(currentPathParts[3]).toUpperCase();
-                const effectiveCode = applyPath ? newCode : currentPathParts[4];
+                
+                // 🔥 4. Si marcó GIS manual, usamos el código limpio de la barra superior
+                const effectiveCode = applyGisCode ? cleanNewGis : (applyPath ? newCode : currentPathParts[4]);
 
                 let fileName = currentPathParts[currentPathParts.length - 1];
 
@@ -921,7 +928,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 footer={
                     <div className="flex justify-end gap-2 mt-4">
                         <Button label="Cancelar" icon="pi pi-times" onClick={() => setShowBulkUpdateModal(false)} className="p-button-text p-button-secondary" />
-                        <Button label="Aplicar a Todas" icon="pi pi-check" onClick={executeBulkUpdate} className="p-button-primary font-bold" disabled={!bulkOptions.path && !bulkOptions.date && !bulkOptions.tipi && !bulkOptions.geo} />
+                        <Button label="Aplicar a Todas" icon="pi pi-check" onClick={executeBulkUpdate} className="p-button-primary font-bold" disabled={!bulkOptions.path && !bulkOptions.date && !bulkOptions.tipi && !bulkOptions.geo && !bulkOptions.gisCode} />
                     </div>
                 }
             >
@@ -935,6 +942,25 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                         <Checkbox inputId="cb_path" checked={bulkOptions.path} onChange={e => setBulkOptions({...bulkOptions, path: e.checked})} />
                         <label htmlFor="cb_path" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Ubicación y Ruta</label>
                         <span className="ml-2 text-xs text-gray-500">(Alimentador, SED, Código GIS)</span>
+                    </div>
+{/* 🔥 NUEVO BLOQUE MEJORADO: Renombrar Código GIS (Usa el global) */}
+                    <div className="flex flex-col bg-blue-50 p-3 rounded-md border border-blue-200 mt-2 mb-2">
+                        <div className="flex items-center">
+                            <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({...bulkOptions, gisCode: e.checked})} />
+                            <label htmlFor="cb_gisCode" className="ml-2 text-sm font-bold text-blue-800 cursor-pointer">
+                                Actualizar Ruta y Archivo con el Código GIS actual
+                            </label>
+                        </div>
+                        {bulkOptions.gisCode && (
+                            <div className="mt-2 ml-7">
+                                <span className="text-xs font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300 shadow-sm">
+                                    Nuevo Código: {typeof structureCode === 'object' ? structureCode.codigo : (structureCode || 'NINGUNO')}
+                                </span>
+                                <small className="text-[10px] text-gray-500 block mt-2 leading-tight">
+                                    Se actualizará el nombre en la ruta de las fotos usando el código que está en la barra de búsqueda principal.
+                                </small>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center">

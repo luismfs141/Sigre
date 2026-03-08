@@ -933,6 +933,10 @@ namespace Sigre.DataAccess
                             existente.DefiFecModificacion = DateTime.Now;
                             existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
 
+                            string codigoGisOriginal = existente.DefiCodigoElemento?.Trim() ?? "";
+                            string codigoGisNuevo = !string.IsNullOrWhiteSpace(input.DefiCodigoElemento) ? input.DefiCodigoElemento.Trim() : codigoGisOriginal;
+                            bool cambioGis = codigoGisOriginal != codigoGisNuevo && !string.IsNullOrEmpty(codigoGisOriginal);
+
                             // 2. Reciclamos el 'input' para que sea el nuevo registro
                             // (Ya trae TipiInterno, Observacion, Criticidad, etc. del Frontend)
                             input.DefiInterno = 0; // Fuerza a la BD a insertarlo como nuevo
@@ -940,10 +944,40 @@ namespace Sigre.DataAccess
                             input.DefiEstado = "N";
                             input.DefiFecModificacion = DateTime.Now;
 
-                            // 3. Heredamos los datos estructurales fijos del original para que la BD no rechace el Insert
-                            input.DefiCodigoElemento = existente.DefiCodigoElemento;
-                            input.DefiTipoElemento = existente.DefiTipoElemento;
-                            input.DefiIdElemento = existente.DefiIdElemento;
+                            
+                            // 3. Heredamos los datos estructurales o aplicamos los nuevos si hubo cambio GIS
+                            input.DefiCodigoElemento = codigoGisNuevo;
+                            input.DefiTipoElemento = !string.IsNullOrWhiteSpace(input.DefiTipoElemento) ? input.DefiTipoElemento : existente.DefiTipoElemento;
+
+                            if (cambioGis)
+                            {
+                                // Si el GIS cambió, buscamos el nuevo DefiIdElemento
+                                int nuevoIdPadre = 0;
+                                string tipoElementoEval = input.DefiTipoElemento?.ToUpper().Trim() ?? "";
+
+                                if (tipoElementoEval.StartsWith("POST"))
+                                {
+                                    var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGisNuevo);
+                                    if (poste != null) nuevoIdPadre = poste.PostInterno;
+                                }
+                                else if (tipoElementoEval.StartsWith("VANO"))
+                                {
+                                    var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGisNuevo);
+                                    if (vano != null) nuevoIdPadre = vano.VanoInterno;
+                                }
+
+                                // 🔥 VALIDACIÓN ESTRICTA: El nuevo elemento DEBE existir 🔥
+                                if (nuevoIdPadre == 0)
+                                {
+                                    throw new ArgumentException($"- Acción bloqueada: El nuevo código GIS '{codigoGisNuevo}' no fue encontrado en el catálogo de {tipoElementoEval}s.");
+                                }
+
+                                input.DefiIdElemento = nuevoIdPadre;
+                            }
+                            else
+                            {
+                                input.DefiIdElemento = existente.DefiIdElemento;
+                            }
                             input.DefiCol3 = Guid.NewGuid().ToString();
                             input.DefiInspeccionado = existente.DefiInspeccionado;
                             input.DefiFechaCreacion = existente.DefiFechaCreacion;
@@ -958,14 +992,24 @@ namespace Sigre.DataAccess
                             ctx.Deficiencias.Add(input);
                             ctx.SaveChanges();
                             // 🔥 2. EL TRUCO: TRASPASO AUTOMÁTICO DE ARCHIVOS 🔥
-                            // Buscamos todas las fotos vinculadas al ID viejo
+                            // Buscamos todas las fotos vinculadas al ID de deficiencia viejo
                             var archivosViejos = ctx.Archivos.Where(a => a.ArchCodTabla == existente.DefiInterno).ToList();
+
                             foreach (var arch in archivosViejos)
                             {
-                                // Actualizamos la llave foránea para que apunten al nuevo ID
+                                // 1. Actualizamos la llave foránea principal (Apunta a la nueva Deficiencia)
                                 arch.ArchCodTabla = input.DefiInterno;
+
+                                // 2. Si hubo un cambio de elemento en el mapa, actualizamos las llaves del padre
+                                if (cambioGis)
+                                {
+                                    arch.ArchIdElemento = input.DefiIdElemento; // Nuevo ID del Vano/Poste
+                                    arch.ArchTipoElemento = input.DefiTipoElemento; // 'VANO' o 'POST'
+
+
+                                }
                             }
-                            ctx.SaveChanges(); // Guardamos los cambios de los archivos
+                            ctx.SaveChanges(); // Guardamos los cambios de los archivos // Guardamos los cambios de los archivos
 
                             // 3. Confirmamos toda la transacción
 
