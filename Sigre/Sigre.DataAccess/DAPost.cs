@@ -142,7 +142,8 @@ namespace Sigre.DataAccess
                         PostEsBt = dto.PostEsBt,
                         PostEsMt = dto.PostEsMt,
                         PostAltura = dto.PostAltura,
-                        PostTramo = dto.PostTramo
+                        PostTramo = dto.PostTramo,
+                        PostVereda = dto.PostVereda
 
                     };
 
@@ -178,6 +179,7 @@ namespace Sigre.DataAccess
                     existente.PostEsMt = dto.PostEsMt;
                     existente.PostAltura = dto.PostAltura;
                     existente.PostTramo = dto.PostTramo;
+                    existente.PostVereda = dto.PostVereda;
 
                     ctx.SaveChanges();
 
@@ -288,12 +290,12 @@ namespace Sigre.DataAccess
                         PostLatitud = p.PostLatitud,
                         PostLongitud = p.PostLongitud,
                         AlimInterno = p.AlimInterno,
-                        // NO incluyas p.AlimInternoNavigation aquí
 
                         PostSubestacion = p.PostSubestacion,
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
+                        PostVereda = p.PostVereda,
 
                         PostArmadoTipo = p.PostArmadoTipo,
                         PostArmadoMaterial = p.PostArmadoMaterial,
@@ -302,8 +304,9 @@ namespace Sigre.DataAccess
 
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt, // Cuidado con mayúsculas/minúsculas exactas de tu modelo
-                        PostEsMt = p.PostEsMt // Si existe en tu modelo
+                        PostEsBt = p.PostEsBt,
+                        PostEsMt = p.PostEsMt,
+
                     })
                     .ToList(); // La consulta se ejecuta aquí
 
@@ -332,6 +335,7 @@ namespace Sigre.DataAccess
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
+
                         PostRetenidaTipo = p.PostRetenidaTipo,
 
                         // Estados
@@ -345,7 +349,8 @@ namespace Sigre.DataAccess
             }
         }
         // Añadimos alimentadorId y sedId como parámetros opcionales (nulleables)
-        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
+        // 🔥 CAMBIO AQUÍ: Reemplazamos 'string busqueda = ""' por 'string codigo = "", string etiqueta = ""'
+        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string codigo = "", string etiqueta = "", int? alimentadorId = null, int? sedId = null)
         {
             using (SigreContext ctx = new SigreContext())
             {
@@ -363,16 +368,32 @@ namespace Sigre.DataAccess
 
                 if (sedId.HasValue && sedId.Value > 0)
                 {
-                    // Ajusta "PostSubestacion" al nombre real de tu columna en EF
                     query = query.Where(p => p.PostSubestacion == sedId.Value);
                 }
 
-                // 3. FILTRO DE TEXTO LENTO (Ahora corre sobre un universo diminuto)
-                if (!string.IsNullOrEmpty(busqueda))
+                // 3. 🔥 FILTROS DE TEXTO INTELIGENTES (Código y Etiqueta separados)
+                bool hasCodigo = !string.IsNullOrWhiteSpace(codigo);
+                bool hasEtiqueta = !string.IsNullOrWhiteSpace(etiqueta);
+
+                if (hasCodigo && hasEtiqueta)
                 {
-                    busqueda = busqueda.Trim();
-                    query = query.Where(p => p.PostCodigoNodo.Contains(busqueda) ||
-                                             (p.PostEtiqueta != null && p.PostEtiqueta.Contains(busqueda)));
+                    // Si desde el frontend envían AMBOS, buscamos que coincida uno U otro (OR)
+                    codigo = codigo.Trim();
+                    etiqueta = etiqueta.Trim();
+                    query = query.Where(p => p.PostCodigoNodo.Contains(codigo) ||
+                                             (p.PostEtiqueta != null && p.PostEtiqueta.Contains(etiqueta)));
+                }
+                else if (hasCodigo)
+                {
+                    // Si solo envían el Código GIS
+                    codigo = codigo.Trim();
+                    query = query.Where(p => p.PostCodigoNodo.Contains(codigo));
+                }
+                else if (hasEtiqueta)
+                {
+                    // Si solo envían la Etiqueta
+                    etiqueta = etiqueta.Trim();
+                    query = query.Where(p => p.PostEtiqueta != null && p.PostEtiqueta.Contains(etiqueta));
                 }
 
                 int totalRecords = query.Count();
@@ -381,7 +402,8 @@ namespace Sigre.DataAccess
                     .OrderByDescending(p => p.PostInterno)
                     .Skip(skip)
                     .Take(take)
-                    .Select(p => new Poste() {
+                    .Select(p => new Poste()
+                    {
                         PostInterno = p.PostInterno,
                         PostEtiqueta = p.PostEtiqueta,
                         PostCodigoNodo = p.PostCodigoNodo,

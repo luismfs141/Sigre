@@ -114,35 +114,54 @@ const _toInt01 = (v, fallback = 0) => {
   return Number(v) ? 1 : 0;
 };
 
-const _updatePinForPostLocal = async ({
-  postInterno,
-  PostEtiqueta,
-  PostCodigoNodo,
-  PostLatitud,
-  PostLongitud,
-  AlimInterno,
-  PostSubestacion,
-  PostInspeccionado,
-  PostTerceros,
-}) => {
-  const id = Number(postInterno);
+const _updatePinForPostLocal = async (post) => {
+  const id = Number(post?.postInterno ?? post?.PostInterno);
   if (!Number.isFinite(id)) return 0;
 
-  const label =
-    String(PostEtiqueta ?? "").trim() ||
-    String(PostCodigoNodo ?? "").trim() ||
-    `${id}`;
+  // ✅ leer pin actual para no pisar IdSed / IdAlimentador con null/0 si el payload viene parcial
+  const oldRows = await runQuery(
+    `SELECT Label, Latitude, Longitude, IdAlimentador, IdSed, ElementCode, Inspeccionado, Tercero
+     FROM Pines
+     WHERE IdOriginal = ? AND Type = 5
+     LIMIT 1;`,
+    [id]
+  );
 
-  const elementCode =
-    String(PostCodigoNodo ?? "").trim() ||
-    `PTO_${id}`;
+  const old = oldRows?.[0] ?? null;
+  if (!old) return 0;
 
-  const lat = Number(PostLatitud);
-  const lng = Number(PostLongitud);
+  const has = (k) => Object.prototype.hasOwnProperty.call(post, k);
+
+  const oldLabel = String(old?.Label ?? "").trim();
+  const oldCode = String(old?.ElementCode ?? "").trim();
+
+  const postEtiqueta = has("PostEtiqueta") ? String(post?.PostEtiqueta ?? "").trim() : "";
+  const postCodigo = has("PostCodigoNodo") ? String(post?.PostCodigoNodo ?? "").trim() : "";
+
+  const label = postEtiqueta || postCodigo || oldLabel || `${id}`;
+  const elementCode = postCodigo || oldCode || `PTO_${id}`;
+
+  const lat = has("PostLatitud") ? Number(post?.PostLatitud) : Number(old?.Latitude);
+  const lng = has("PostLongitud") ? Number(post?.PostLongitud) : Number(old?.Longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 0;
 
-  const feederId = Number(AlimInterno);
-  const sedId = PostSubestacion == null ? null : Number(PostSubestacion);
+  const feederCandidate = has("AlimInterno") ? Number(post?.AlimInterno) : Number(old?.IdAlimentador);
+  const feederId = Number.isFinite(feederCandidate) ? feederCandidate : Number(old?.IdAlimentador ?? 0);
+
+  // ✅ solo cambia IdSed si viene PostSubestacion en el payload
+  let sedId = old?.IdSed == null ? null : Number(old?.IdSed);
+  if (has("PostSubestacion")) {
+    sedId = post.PostSubestacion == null ? null : Number(post.PostSubestacion);
+    if (sedId != null && !Number.isFinite(sedId)) sedId = old?.IdSed == null ? null : Number(old?.IdSed);
+  }
+
+  const inspeccionado = has("PostInspeccionado")
+    ? _toInt01(post?.PostInspeccionado, _toInt01(old?.Inspeccionado, 0))
+    : _toInt01(old?.Inspeccionado, 0);
+
+  const tercero = has("PostTerceros")
+    ? _toInt01(post?.PostTerceros, _toInt01(old?.Tercero, 0))
+    : _toInt01(old?.Tercero, 0);
 
   const upd = await runQuery(
     `UPDATE Pines
@@ -155,17 +174,7 @@ const _updatePinForPostLocal = async ({
          Inspeccionado = ?,
          Tercero = ?
      WHERE IdOriginal = ? AND Type = 5;`,
-    [
-      label,
-      lat,
-      lng,
-      Number.isFinite(feederId) ? feederId : 0,
-      sedId,
-      elementCode,
-      _toInt01(PostInspeccionado, 0),
-      _toInt01(PostTerceros, 0),
-      id,
-    ]
+    [label, lat, lng, feederId, sedId, elementCode, inspeccionado, tercero, id]
   );
 
   return Number(upd?.changes ?? 0);
@@ -230,7 +239,6 @@ export const saveOrUpdatePost = async (post) => {
   try {
     const cols = await _getPostesCols();
 
-    // ✅ UPDATE ONLY
     if (post?.PostInterno == null) {
       throw new Error("saveOrUpdatePost: este método es SOLO UPDATE (falta PostInterno).");
     }
@@ -243,7 +251,7 @@ export const saveOrUpdatePost = async (post) => {
 
     const setIfHas = (col, value) => {
       if (!cols.has(col)) return;
-      if (!_hasOwn(post, col)) return; // ✅ solo si viene en el payload (null permitido)
+      if (!_hasOwn(post, col)) return;
       sets.push(`${col} = ?`);
       vals.push(value);
     };
@@ -264,22 +272,47 @@ export const saveOrUpdatePost = async (post) => {
     setIfHas("PostInspeccionado", post.PostInspeccionado == null ? null : _toInt01(post.PostInspeccionado));
     setIfHas("PostTerceros", post.PostTerceros == null ? null : _toInt01(post.PostTerceros));
 
-    // EstadoOffLine: update = 1
+
+
+
+
+
     if (cols.has("EstadoOffLine")) {
       const estado = post.EstadoOffLine == null ? 1 : post.EstadoOffLine;
       sets.push(`EstadoOffLine = ?`);
       vals.push(estado);
     }
 
-    // PostAltura / PostTramo si existen
     if (cols.has("PostAltura") && _hasOwn(post, "PostAltura")) {
       sets.push(`PostAltura = ?`);
       vals.push(post.PostAltura ?? null);
     }
+
+
     if (cols.has("PostTramo") && _hasOwn(post, "PostTramo")) {
       sets.push(`PostTramo = ?`);
       vals.push(post.PostTramo ?? null);
     }
+
+
+
+
+
+
+
+    if (cols.has("PostVereda") && _hasOwn(post, "PostVereda")) {
+      sets.push(`PostVereda = ?`);
+      vals.push(post.PostVereda ?? 1);
+    }
+
+
+
+
+
+
+
+
+
 
     if (sets.length) {
       await runQuery(
@@ -289,8 +322,10 @@ export const saveOrUpdatePost = async (post) => {
         [...vals, id]
       );
     }
-    // ✅ UPDATE pin (SIN INSERT aquí)
-    await _updatePinForPostLocal({ postInterno: id, ...post });
+
+    // ✅ clave: refresca desde SQLite para tener AlimInterno/PostSubestacion aunque el payload venga parcial
+    const full = await getPostByIdLocal(id);
+    await _updatePinForPostLocal({ postInterno: id, ...(full ?? post) });
 
     return id;
   } catch (error) {
@@ -309,6 +344,7 @@ export const insertPostAndPin = async (post) => {
   const payload = {
     EstadoOffLine: 2,
     PostTerceros: _toInt01(post?.PostTerceros, 0),
+     PostVereda: _toInt01(post?.PostVereda, 1),
     PostInspeccionado: _toInt01(post?.PostInspeccionado, 0),
     PostEsMt: post?.PostEsMt == null ? 0 : _toInt01(post.PostEsMt, 0),
     PostEsBt: post?.PostEsBt == null ? 1 : _toInt01(post.PostEsBt, 1),
@@ -328,6 +364,7 @@ export const insertPostAndPin = async (post) => {
 
     PostAltura: post?.PostAltura ?? null,
     PostTramo: post?.PostTramo ?? null,
+    
   };
 
   // mínimos

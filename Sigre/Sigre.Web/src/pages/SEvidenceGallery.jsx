@@ -9,6 +9,7 @@ import { Toast } from 'primereact/toast';
 import { useFiles } from '../hooks/useFiles'; 
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { useTypification } from '../hooks/useTypification';
+import { latLonToUTM } from '../utils/geoUtils'; // Importamos la función de conversión a UTM
 
 // 🔥 CONEXIÓN AL SERVIDOR CLOUDFLARE
 //cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
@@ -62,49 +63,7 @@ const getUtmBandLetter = (lat) => {
     return 'S'; 
 };
 
-const latLonToUTM = (lat, lon) => {
-    if (!lat || !lon) return { zone: "--", easting: 0, northing: 0, letter: "-" };
 
-    const a = 6378137.0; 
-    const f = 1 / 298.257223563; 
-    const k0 = 0.9996; 
-
-    const phi = lat * (Math.PI / 180);
-    const lambda = lon * (Math.PI / 180);
-    
-    const zoneNumber = Math.floor((lon + 180) / 6) + 1;
-    const lambda0 = ((zoneNumber - 1) * 6 - 180 + 3) * (Math.PI / 180);
-
-    const e2 = 2 * f - f * f;
-    const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
-    const T = Math.tan(phi) * Math.tan(phi);
-    const C = e2 * Math.cos(phi) * Math.cos(phi) / (1 - e2);
-    const A = (lambda - lambda0) * Math.cos(phi);
-
-    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi
-        - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi)
-        + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi)
-        - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
-
-    const easting = 500000 + k0 * N * (A + (1 - T + C) * A * A * A / 6
-        + (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A / 120);
-
-    let northing = k0 * M + k0 * N * Math.tan(phi) * (A * A / 2
-        + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24
-        + (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720);
-
-    if (lat < 0) northing += 10000000.0;
-
-    const letter = getUtmBandLetter(lat);
-
-    return {
-        zone: zoneNumber,
-        letter: letter,
-        // 🟢 CAMBIO AQUÍ: Usamos toFixed(2) para 2 decimales y parseFloat para que siga siendo número
-        easting: parseFloat(easting.toFixed(2)),
-        northing: parseFloat(northing.toFixed(2))
-    };
-};
 
 // --- COMPONENTE IMAGEN ---
 const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode,onDelete }) => {

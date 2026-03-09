@@ -1,41 +1,63 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useEffect, useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
-// ✅ NUEVO: expo-audio
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+export default function AudioCard(props) {
+  // ✅ Si no hay uri (placeholder), NO creamos AudioPlayer (evita useAudioPlayer(null))
+  if (!props?.uri) return <AudioCardPlaceholder {...props} />;
+  return <AudioCardPlayer {...props} />;
+}
 
-export default function AudioCard({ uri, title: titleProp, onDelete, onPress }) {
-  // ✅ Creamos el player una sola vez y vamos reemplazando la fuente
-  const player = useAudioPlayer(null, { updateInterval: 250 });
+function AudioCardPlaceholder({ title: titleProp, onDelete, onPress }) {
+  const title = titleProp || "🎙️ AUDIO NO DISPONIBLE EN ESTE DISPOSITIVO";
+
+  const confirmDelete = () => {
+    Alert.alert("Eliminar audio", "¿Seguro que deseas eliminar este audio?", [
+      { text: "No", style: "cancel" },
+      { text: "Sí, eliminar", style: "destructive", onPress: () => onDelete?.() },
+    ]);
+  };
+
+  return (
+    <View style={styles.card}>
+      <Pressable
+        style={styles.info}
+        onPress={() => {
+          if (onPress) return onPress();
+          Alert.alert(
+            "Audio no disponible",
+            "La BD tiene el registro, pero el archivo no está en la carpeta pública (Music)."
+          );
+        }}
+      >
+        <MaterialIcons name="play-circle-filled" size={28} color="#9CA3AF" />
+        <Text style={styles.title}>{title}</Text>
+      </Pressable>
+
+      {!!onDelete && (
+        <Pressable onPress={confirmDelete} hitSlop={10}>
+          <MaterialIcons name="delete" size={22} color="#d32f2f" />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function AudioCardPlayer({ uri, title: titleProp, onDelete, onPress }) {
+  // ✅ Creamos el player directamente con source real (NO null + replace)
+  const player = useAudioPlayer(uri, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
-    // Para que suene incluso si el iPhone está en silencio (si ya lo haces en otro lado, igual no molesta)
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    // Cada vez que cambie el uri, cargamos esa fuente
-    if (uri) {
-      player.replace(uri);
-      player.seekTo(0);
-      player.pause();
-    }
-    return () => {
-      // Evita que siga sonando si el componente se desmonta
-      player.pause();
-    };
-  }, [uri, player]);
-
-  /* ======================
-     TITULO FECHA / HORA
-  ====================== */
   const title = useMemo(() => {
     if (titleProp) return titleProp;
     if (!uri) return "Audio";
 
-    const match = uri.match(/(\d{13})/);
+    const match = String(uri).match(/(\d{13})/);
     const date = match ? new Date(Number(match[1])) : new Date();
 
     return `🎙️ ${date.toLocaleString("es-PE", {
@@ -57,10 +79,9 @@ export default function AudioCard({ uri, title: titleProp, onDelete, onPress }) 
         return;
       }
 
-      // ✅ En expo-audio, al terminar NO se resetea solo: hay que hacer seekTo(0) para replay
+      // replay cuando ya terminó
       const dur = Number(status.duration || 0);
       const cur = Number(status.currentTime || 0);
-
       if (dur > 0 && cur >= dur - 0.05) {
         player.seekTo(0);
       }
@@ -78,7 +99,7 @@ export default function AudioCard({ uri, title: titleProp, onDelete, onPress }) 
         text: "Sí, eliminar",
         style: "destructive",
         onPress: () => {
-          // opcional: parar antes de borrar
+          // parar antes de borrar (try/catch para no reventar si el player se liberó por navegación)
           try {
             player.pause();
             player.seekTo(0);

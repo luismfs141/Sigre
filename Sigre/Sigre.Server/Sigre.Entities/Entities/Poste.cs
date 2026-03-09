@@ -41,6 +41,8 @@ public partial class Poste
     public decimal? PostAltura { get; set; }
     public string? PostTramo { get; set; }
 
+    public bool PostVereda { get; set; }
+
 
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 

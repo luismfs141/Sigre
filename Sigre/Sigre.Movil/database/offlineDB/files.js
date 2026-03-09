@@ -133,15 +133,16 @@ export const getArchivosByBasePathLocal = async (basePathPrefix) => {
         ArchNombre,
         ArchLatitud,
         ArchLongitud,
-        ArchFecha,
+        ArchFecha,r
         ArchActivo,
         EstadoOffLine,
-         DefiUUID
+        DefiUUID
       FROM Archivos
       WHERE ArchTabla = 'Deficiencias'
-        AND ArchActivo = 1
+        -- ✅ IMPORTANTE: NO filtrar por ArchActivo
+        -- porque para correlativos (7004) necesitamos ver también los movidos a ELIMINADOS
         AND ArchNombre LIKE ?;
-    `,
+      `,
       [`${basePathPrefix}%`]
     );
 

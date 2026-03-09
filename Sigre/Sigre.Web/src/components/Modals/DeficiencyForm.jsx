@@ -10,10 +10,9 @@ import { classNames } from 'primereact/utils';
 import { Message } from 'primereact/message';
 import { Calendar } from 'primereact/calendar';
 import { AutoComplete } from 'primereact/autocomplete';
-
+import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { useTypification } from '../../hooks/useTypification';
 import { useElements } from '../../hooks/useElement'; 
-import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
@@ -42,13 +41,50 @@ export default function DeficiencyForm({
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSaving, setIsSaving] = useState(false);
+    const [isSearchingGis, setIsSearchingGis] = useState(false);
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
-    const { suggestions, searchNode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
+    const { searchExactCode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
 
     
+const handleGisSearch = async (codigoBuscado) => {
+    if (!codigoBuscado || codigoBuscado.trim() === '') return;
 
+    setIsSearchingGis(true);
+    try {
+        const exactMatch = await searchExactCode(codigoBuscado, '', alimentadorId, sedId);
+
+        if (exactMatch) {
+            const isPoste = exactMatch._tipo === 'POSTE';
+            // Intentamos leer las coordenadas de manera segura
+            const latEncontrada = isPoste ? (exactMatch.postLatitud || exactMatch.lat) : (exactMatch.vanoLatitudIni || exactMatch.lat);
+            const lngEncontrada = isPoste ? (exactMatch.postLongitud || exactMatch.lng) : (exactMatch.vanoLongitudIni || exactMatch.lng);
+
+            setFormData(prev => {
+                // 🔥 REGLA 1: Si es edición, CONSERVAMOS las coordenadas originales.
+                const finalLat = deficiencyToEdit ? prev.defiLatitud : (Number(latEncontrada) || prev.defiLatitud);
+                const finalLng = deficiencyToEdit ? prev.defiLongitud : (Number(lngEncontrada) || prev.defiLongitud);
+
+                // 🔥 REGLA 2: Si es edición, CONSERVAMOS el Tipo (VANO/POSTE) para NO borrar la Tipificación.
+                const finalTipo = deficiencyToEdit ? prev.defiTipoElemento : (isPoste ? 'POST' : 'VANO');
+
+                return {
+                    ...prev,
+                    // Usamos exactamente el texto que el usuario buscó para que jamás desaparezca
+                    defiCodigoElemento: codigoBuscado.toUpperCase(),
+                    defiTipoElemento: finalTipo,
+                    defiLatitud: finalLat,
+                    defiLongitud: finalLng,
+                };
+            });
+        }
+    } catch (error) {
+        console.error("Error buscando coordenadas del GIS:", error);
+    } finally {
+        setIsSearchingGis(false);
+    }
+};
 // =========================================================================
     // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
     // =========================================================================
@@ -62,9 +98,11 @@ export default function DeficiencyForm({
         return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) === 0 // ID 0 es S/D
+            Number(d.tipiInterno) === 0 &&
+        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
         );
-    }, [formData.defiCodigoElemento, existingDeficiencies]);
+    }, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
     // B. ¿Ya existen "DEFICIENCIAS REALES" (ID > 0)?
     // Si esto es true, NO se puede crear un registro "Sin Deficiencia".
@@ -75,9 +113,11 @@ export default function DeficiencyForm({
         return existingDeficiencies.some(d =>
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
-            Number(d.tipiInterno) > 0 // Cualquier ID mayor a 0 es una falla real
-        );
-    }, [formData.defiCodigoElemento, existingDeficiencies]);
+            Number(d.tipiInterno) > 0 &&
+        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+    );
+}, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
     // Helper para saber si estamos editando el registro S/D actual
     const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
@@ -312,6 +352,11 @@ const debounceTimer = useRef(null);
         setFormData(prev => {
             const newData = { ...prev, [key]: value };
             if (key === 'defiTipoElemento') newData.tipiInterno = null;
+            if (key === 'tipiInterno' && Number(value) === 0) {
+            newData.defiEstadoCriticidad = 0;
+            newData.defiNumSuministro = '';
+            newData.defiObservacion = '';
+        }
             return newData;
         });
 
@@ -376,11 +421,11 @@ const handleSubmit = async () => {
         const isSavingSD = Number(formData.tipiInterno) === 0;
 
 // 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
-        if (isSavingSD && hasCleanRecord && !isEditingSD) {
-            alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
-            setSubmitted(false); 
-            return;
-        }
+        if (isSavingSD && hasCleanRecord) { // <-- Quitamos el && !isEditingSD
+    alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
+    setSubmitted(false); 
+    return;
+}
 
         // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
         if (isSavingSD && hasRealDeficiencies) {
@@ -390,7 +435,7 @@ const handleSubmit = async () => {
         }
 
         // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
-        if (!isSavingSD && hasCleanRecord && !isEditingSD) {
+        if (!isSavingSD && hasCleanRecord ) {
             alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
             setSubmitted(false);
             return;
@@ -407,7 +452,8 @@ const handleSubmit = async () => {
 
         const cleanPayload = {
             defiInterno: deficiencyToEdit ? deficiencyToEdit.defiInterno : 0,
-            sedCodigo: sedId,
+            // Si sedId es un objeto, extraemos el sedInterno, sino usamos el valor directo
+            sedCodigo: typeof sedId === 'object' ? sedId.sedInterno : sedId,
             defiUsuarioInic: formData.defiUsuarioInic,
             defiCodigoElemento: formData.defiCodigoElemento.trim(),
             defiTipoElemento: formData.defiTipoElemento,
@@ -554,67 +600,55 @@ if (fieldKey === 'defiEstadoCriticidad') {
         className="bg-gray-100 opacity-90 cursor-not-allowed" 
     />
 </div>
-                        <div className="field">
+<div className="field">
     <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
     
-    {/* CONDICIONAL: Si es NUEVO (!deficiencyToEdit) mostramos el Buscador */}
-    {!deficiencyToEdit ? (
-<AutoComplete 
-    value={formData.defiCodigoElemento} 
-    suggestions={suggestions} 
-    completeMethod={(e) => searchNode(e.query, alimentadorId, sedId)}
-    field="codigo"
-    itemTemplate={itemTemplate} 
+    <span className="p-input-icon-right w-full">
+        {/* Mostramos un spinner de PrimeReact si está buscando */}
+        {isSearchingGis && <i className="pi pi-spin pi-spinner" />}
+        
+<InputText 
+    value={formData.defiCodigoElemento || ''} 
+    className={`w-full p-inputtext-sm font-bold uppercase ${deficiencyToEdit ? 'bg-yellow-50 border-yellow-300' : ''}`}
+    placeholder="Ingrese el código y presione Enter..."
     
-    // 1. ESTO ES LO QUE FALTABA: Permitir escribir
     onChange={(e) => {
-        const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
-        const texto = String(valor || '').toUpperCase(); // Forzamos a mayúsculas
+        const texto = e.target.value.toUpperCase(); // Forzamos a mayúsculas
         
         setFormData(prev => {
             let nuevoTipo = prev.defiTipoElemento;
             
-            // Si el código contiene VBT o VANO, es un VANO
-            if (texto.includes('VBT') || texto.includes('VANO')) {
-                nuevoTipo = 'VANO';
-            } 
-            // Si el código contiene PTO o POST, es un POSTE
-            else if (texto.includes('PTO') || texto.includes('POST')) {
-                nuevoTipo = 'POST';
+            // 🔥 REGLA 3: Bloqueo estricto. Si estamos editando, prohibimos que 
+            // el sistema cambie el tipo. Así blindamos la Tipificación.
+            if (!deficiencyToEdit) {
+                if (texto.includes('VBT') || texto.includes('VANO')) nuevoTipo = 'VANO';
+                else if (texto.includes('PTO') || texto.includes('POST')) nuevoTipo = 'POST';
             }
 
             return { 
                 ...prev, 
                 defiCodigoElemento: texto, 
-                defiTipoElemento: nuevoTipo // Se actualiza solo
+                defiTipoElemento: nuevoTipo 
             };
         });
     }}
-
-    // 2. AL SELECCIONAR: Autocompletar Tipo y Coordenadas (Tu lógica actual)
-    onSelect={(e) => {
-        const item = e.value;
-        const tipoParaDropdown = item._tipo === 'POSTE' ? 'POST' : 'VANO';
-        setFormData(prev => ({
-            ...prev,
-            defiCodigoElemento: item.codigo,
-            defiTipoElemento: tipoParaDropdown,
-            defiLatitud: item.lat,        
-            defiLongitud: item.lng
-        }));
-    }}
     
-    placeholder="Buscar Poste o Vano..."
-    className="w-full"
-    inputClassName="w-full p-inputtext-sm font-bold uppercase"
+    onBlur={(e) => handleGisSearch(e.target.value)}
+    
+    onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); 
+            handleGisSearch(e.target.value);
+        }
+    }}
 />
-    ) : (
-        // CONDICIONAL: Si es EDICIÓN, mostramos el Input bloqueado (tu código original)
-        <InputText 
-            value={formData.defiCodigoElemento} 
-            disabled={!!deficiencyToEdit}
-            className="w-full p-inputtext-sm bg-gray-100 font-bold text-gray-700"
-        />
+    </span>
+    
+    {/* Pequeña ayuda visual para el usuario */}
+    {!deficiencyToEdit && (
+        <small className="text-gray-400 text-[10px]">
+            Presione Enter o salga del campo para buscar lat/lng automáticamente.
+        </small>
     )}
 </div>
                     </div>

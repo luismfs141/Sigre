@@ -109,8 +109,16 @@ useEffect(() => {
         }
 
         const rawCode = String(codigoAUsar || '').trim().toUpperCase();
+        const rawEtiqueta = String(formData.etiqueta || '').trim(); // Sacamos la etiqueta limpia
         
-        if (!rawCode || !formData.alimentadorId || !formData.sedId) return;
+        // 🔥 NUEVA REGLA: Alimentador y SED obligatorios + (Código O Etiqueta)
+        const tieneUbicacion = formData.alimentadorId && formData.sedId;
+        const tieneIdentificador = rawCode !== '' || rawEtiqueta !== '';
+
+        if (!tieneUbicacion || !tieneIdentificador) {
+            // Si no cumple, cancelamos la función
+            return; 
+        }
         
         setGisError('');
         setIsSearchingCode(true);
@@ -151,10 +159,11 @@ useEffect(() => {
         
         try {
             // --- PASO 1: EVALUAR EL CÓDIGO ORIGINAL EXACTO (Ej: "PTO00008218" o "6") ---
-            let match = await searchExactCode(rawCode, formData.alimentadorId, formData.sedId);
+            let match = await searchExactCode(rawCode,rawEtiqueta, formData.alimentadorId, formData.sedId);
             
             if (match) {
-                cargarDatosBD(match, rawCode);
+            const codigoEncontrado = match.postCodigoNodo || match.codigo || rawCode; 
+                cargarDatosBD(match, codigoEncontrado);
                 return;
             }
 
@@ -199,7 +208,7 @@ useEffect(() => {
                 ...prev,
                 id: 0, 
                 codigo: formattedCode, 
-                etiqueta: '', latitud: null, longitud: null, altura: null,
+                etiqueta: rawEtiqueta, latitud: null, longitud: null, altura: null,
                 nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null
             }));
 
@@ -355,7 +364,7 @@ const itemTemplate = (item) => {
         label={`VERIFICAR ${typeMode}`}
         icon={isSearchingCode ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} 
         onClick={handleVerifyElement}
-        disabled={!formData.codigo || !formData.alimentadorId || !formData.sedId || isSearchingCode}
+        disabled={(!formData.codigo && !formData.etiqueta)|| !formData.alimentadorId || !formData.sedId || isSearchingCode}
         className="p-button-outlined p-button-info h-9 text-xs font-bold px-5"
         tooltip="Verifica si existe para editar, o prepara para crear uno nuevo"
     />

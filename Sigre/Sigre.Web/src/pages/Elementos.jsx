@@ -123,9 +123,11 @@ export default function Elementos() {
                         <i className="pi pi-search text-blue-600 z-10 ml-2" />
                         
                         {/* Input de texto limpio y directo */}
+{/* Input de texto limpio y directo */}
                         <InputText
                             value={globalFilter}
-                            placeholder="Buscar Código GIS..."
+                            // 🔥 CAMBIO: Actualizamos el texto de ayuda
+                            placeholder="Buscar Código GIS o Etiqueta..." 
                             className="w-full p-inputtext-sm pl-8 font-bold text-blue-900 uppercase"
                             disabled={isSearching}
                             onChange={(e) => setGlobalFilter(e.target.value.toUpperCase())}

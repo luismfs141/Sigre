@@ -491,7 +491,7 @@ const MapScreen = () => {
   };
 
   const handleRefreshMap = async () => {
-    console.log("[REFRESH] tap");
+    //console.log("[REFRESH] tap");
 
     endDragGap();
 

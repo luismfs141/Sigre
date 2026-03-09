@@ -49,6 +49,16 @@ export const getOrRequestPublicDir = async (rootFolderName, storageKey) => {
   }
 };
 
+export const getSavedPublicDir = async (storageKey) => {
+  if (Platform.OS !== "android") return null;
+  try {
+    const saved = await AsyncStorage.getItem(storageKey);
+    return saved || null;
+  } catch {
+    return null;
+  }
+};
+
 const ensureSafSubdir = async (parentUri, dirNameRaw) => {
   const dirName = safeSeg(dirNameRaw);
   try {
@@ -157,4 +167,34 @@ export const resolvePublicUriFromDbPath = async ({ rootUri, archNombre, listDirC
 
   const children = await listDirCached(dirUri);
   return children.find((u) => safNameMatches(u, fileName)) ?? null;
+};
+
+export const cleanupEmptyAncestorsSaf = async (rootUri, relativeFilePath, stopAtSeg = "SIGRE.MOVIL") => {
+  try {
+    if (Platform.OS !== "android") return;
+    if (!rootUri || !relativeFilePath) return;
+
+    const rel = normalizeRelativePath(relativeFilePath);
+    const segs = rel.split("?")[0].split("/").filter(Boolean);
+
+    // quitamos el archivo (último segmento)
+    segs.pop();
+    if (!segs.length) return;
+
+    const stopIdx = segs.indexOf(stopAtSeg);
+    const minLen = stopIdx >= 0 ? stopIdx + 1 : 1; // nunca borres stopAtSeg
+
+    for (let i = segs.length; i > minLen; i--) {
+      const currentSegs = segs.slice(0, i);
+      const dirUri = await findSafPath(rootUri, currentSegs); // ✅ usa el helper interno
+      if (!dirUri) break;
+
+      const children = (await SAF.readDirectoryAsync(dirUri)) ?? [];
+      if (children.length > 0) break; // ya no está vacía
+
+      await SAF.deleteAsync(dirUri);
+    }
+  } catch {
+    // silencioso
+  }
 };

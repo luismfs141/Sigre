@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog } from 'primereact/confirmdialog';
+import { ConfirmPopup, confirmPopup } from 'primereact/confirmpopup';
 import { Dropdown } from 'primereact/dropdown';
 import { AutoComplete } from 'primereact/autocomplete';
 import { InputText } from 'primereact/inputtext';
@@ -10,31 +11,87 @@ import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
 import { Card } from 'primereact/card';
 import { Calendar } from 'primereact/calendar';
-import JSZip from 'jszip'; // 📦 Requiere: npm install jszip
-import { saveAs } from 'file-saver'; // 📦 Requiere: npm install file-saver
-import { SelectButton } from 'primereact/selectbutton'; // 👈 AGREGAR ESTO
+import { Image } from 'primereact/image';
+import { Toolbar } from 'primereact/toolbar';
 import { Message } from 'primereact/message';
+import { Dialog } from 'primereact/dialog';
+import JSZip from 'jszip'; 
+import { saveAs } from 'file-saver'; 
 
-// --- HOOKS (Tus hooks existentes) ---
+// --- HOOKS ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useTypification } from '../hooks/useTypification';
 import { useFiles } from '../hooks/useFiles';
 import { useElements } from '../hooks/useElement';
-import { useGlobalElementSearch } from '../hooks/useGlobalElementSearch'; // O la ruta donde lo hayas guardado
-// --- COMPONENTES HIJOS ---
-import FilesTableEditor from './FilesTableEditor';
+import { usePosteVanoSearch } from '../hooks/usePosteVanoSearch'; 
+
+// --- COMPONENTES HIJOS Y UTILIDADES ---
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
+import { latLonToUTM } from '../utils/geoUtils';
+import { Checkbox } from 'primereact/checkbox';
+// 🔥 CONEXIÓN AL SERVIDOR NGROK
+const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL = "http://localhost:8080/";
+// --- DICCIONARIOS Y AYUDANTES ---
+const photoTypes = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' };
 
+const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/:*?"<>|]/g, '_') : "SIN_DATA";
 
-// --- UTILIDADES ---
-// URL base para descargas si no es local (ajusta según tu config)
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+function formatCompactDate(date) {
+    if (!date) return "00000000-000000";
+    const d = new Date(date);
+    if(isNaN(d.getTime())) return "00000000-000000";
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; 
+}
 
+const toLocalISOString = (date) => {
+    if (!date) return null;
+    const tzOffset = date.getTimezoneOffset() * 60000; 
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, -1);
+};
+
+function resolveFeederName(feederVal, feedersArray) {
+    if (!feederVal) return "SIN_ALIMENTADOR";
+    let raw = "SIN_ALIMENTADOR";
+    if (typeof feederVal === 'object') {
+        raw = feederVal.label || "SIN_ALIMENTADOR";
+    } else {
+        const found = (feedersArray || []).find(f => String(f.value) === String(feederVal));
+        if (found) raw = found.label || "SIN_ALIMENTADOR";
+        else raw = String(feederVal);
+    }
+    raw = raw.replace(/[0-9]/g, '').replace(/-/g, '').trim();
+    return safeSeg(raw);
+}
+
+function resolveSedLabel(sedVal, sedsArray) {
+    if (!sedVal) return "SIN_SED";
+    let raw = "SIN_SED";
+    
+    if (typeof sedVal === 'object') {
+        raw = sedVal.sedCodigo || sedVal.label || sedVal.codigo || "SIN_SED";
+    } else {
+        const found = (sedsArray || []).find(s => 
+            String(s.sedInterno) === String(sedVal) || 
+            String(s.value) === String(sedVal) ||
+            String(s.id) === String(sedVal)
+        );
+        if (found) raw = found.sedCodigo || found.label || found.codigo || "SIN_SED";
+        else raw = String(sedVal);
+    }
+
+    if (typeof raw === 'string' && raw.includes(" - ")) raw = raw.split(" - ")[0];
+    return safeSeg(raw);
+}
+// ==============================================================================
+// 🚀 COMPONENTE PRINCIPAL UNIFICADO
+// ==============================================================================
 export default function WebInspectionManager() {
     const toast = useRef(null);
 
-    // --- 1. ESTADOS DE DATOS ---
+    // --- 1. ESTADOS DE BÚSQUEDA Y CONFIGURACIÓN ---
     const { feeders } = useFeeder();
     const [selectedFeederId, setSelectedFeederId] = useState(null);
     const [selectedSed, setSelectedSed] = useState(null);
@@ -43,19 +100,27 @@ export default function WebInspectionManager() {
 
     const { seds: sedsDelAlimentador } = useSedsByFeeder(selectedFeederId);
 
-    // --- 2. ESTADOS GIS ---
     const { fetchByGis, loading: searchLoading } = useDeficiencyByGis();
     const [structureCode, setStructureCode] = useState('');
     const [structureType, setStructureType] = useState('POST');
-    // Para guardar ID numérico del elemento si es necesario
     const [structureIdInt, setStructureIdInt] = useState(0);
 
-    // Datos Globales
+    const [globalTipificacion, setGlobalTipificacion] = useState('');
     const [globalDate, setGlobalDate] = useState('');
     const [globalLat, setGlobalLat] = useState('');
     const [globalLon, setGlobalLon] = useState('');
+    // --- ESTADOS PARA ACTUALIZACIÓN MASIVA ---
+    const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+    const [bulkNewGis, setBulkNewGis] = useState('');
+    const [bulkOptions, setBulkOptions] = useState({
+        path: false, // Alimentador, SED, Código, Tipo
+        gisCode: false,
+        date: false, // Fecha Global
+        tipi: false, // Tipificación
+        geo: false   // GPS (Protegido)
+    });
 
-    // --- 3. ESTADOS DE ARCHIVOS Y MODAL ---
+    // --- 2. ESTADOS DE DATOS E HISTORIAL ---
     const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
     const { getCodeById, fetchTypificationsByTypeElement, masterTypifications } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
@@ -63,40 +128,14 @@ export default function WebInspectionManager() {
     const [historicalData, setHistoricalData] = useState([]);
     const [selectedDeficiency, setSelectedDeficiency] = useState(null);
 
-    const [showPhotoModal, setShowPhotoModal] = useState(false);
+    // --- 3. ESTADOS DE LA TABLA/GALERÍA DE ARCHIVOS ---
+    const [fileRows, setFileRows] = useState([]);
+    const [saving, setSaving] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
-    // 🔥 A. MODO DE VISTA (Nuevo: Toggle Lista/Galería)
-    const [viewMode, setViewMode] = useState('list');
-    const viewOptions = [
-        { label: 'Datos', value: 'list', icon: 'pi pi-list' },
-        { label: 'Galería', value: 'gallery', icon: 'pi pi-images' }
-    ];
-
-    // 🔥 B. MEMORIA DE SESIÓN (Nuevo: Para ZIP instantáneo y Preview)
+    const [showPhotoModal, setShowPhotoModal] = useState(false);
     const sessionBlobs = useRef({});
 
-
-    const LocalFileStore = {
-        dbName: "SigreTempPhotos", storeName: "photos",
-        async open() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(this.dbName, 1);
-                request.onupgradeneeded = (e) => { if (!e.target.result.objectStoreNames.contains(this.storeName)) e.target.result.createObjectStore(this.storeName); };
-                request.onsuccess = (e) => resolve(e.target.result); request.onerror = (e) => reject(e);
-            });
-        },
-        async save(fileName, fileBlob) {
-            try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).put(fileBlob, fileName); return true; } catch (e) { return false; }
-        },
-        async get(fileName) {
-            try { const db = await this.open(); return new Promise((resolve) => { const req = db.transaction(this.storeName, "readonly").objectStore(this.storeName).get(fileName); req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); }); } catch (e) { return null; }
-        },
-        async clear() {
-            try { const db = await this.open(); const tx = db.transaction(this.storeName, "readwrite"); tx.objectStore(this.storeName).clear(); return true; } catch (e) { return false; }
-        }
-    };
-
-    // --- 4. EFECTOS ---
+    // --- 4. EFECTOS GLOBALES ---
     useEffect(() => {
         if (masterTypifications.length > 0) fetchTypificationsByTypeElement(structureType === 'POST' ? 8 : 9);
     }, [structureType, masterTypifications]);
@@ -114,279 +153,543 @@ export default function WebInspectionManager() {
             }
         }
     }, [sedsDelAlimentador, pendingSedId]);
-    // --- 5. LÓGICA GIS (Búsqueda Global Rápida) ---
-const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearching } = useGlobalElementSearch(fetchPostesChunk, fetchVanosChunk);
 
-   
+    // 🔥 MAPEO DE ARCHIVOS DE LA BD A LA TABLA INTERNA 🔥
+    useEffect(() => {
+        if (dbFiles && dbFiles.length > 0) {
+            const mappedFiles = dbFiles
+                .filter(f => f.archActivo === true)
+                .map((f) => {
+                    const safeHistoricalData = historicalData || [];
+                    const parentDef = safeHistoricalData.find(d => d.defiInterno === f.archCodTabla);
+                    const tipiActual = parentDef ? parentDef.tipiInterno : 0;
+                    const idElementoRecuperado = parentDef ? parentDef.defiIdElemento : (f.archIdElemento || f.IdElemento || 0);
+
+                    return {
+                        tempId: `db-${f.archInterno}`,
+                        isDatabase: true,
+                        archInterno: f.archInterno,
+                        archIdElemento: idElementoRecuperado,
+                        originalName: f.archNombre,
+                        currentPath: f.archNombre,
+                        selectedDeficiencyId: f.archCodTabla, 
+                        archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1), 
+                        archFecha: new Date(f.archFecha),
+                        archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
+                        archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
+                        tipiInterno: tipiActual,
+                    };
+                });
+            setFileRows(mappedFiles);
+        } else {
+            setFileRows([]);
+        }
+    }, [dbFiles, historicalData]);
+
+    // --- 5. LÓGICA DE BÚSQUEDA GIS ---
+    const { suggestions, searchNode, searchExactCode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
 
     const handleGisSelection = (e) => {
         const item = e.value;
         if (!item) return;
 
         setStructureCode(item.codigo);
-        setStructureType(item.tipo); // 'POSTE' o 'VANO'
-        setStructureIdInt(item.idInterno || 0);
+        setStructureType(item._tipo); 
+        setStructureIdInt(item.postInterno || item.vanoInterno || item.id || 0);
 
         if (item.lat) setGlobalLat(item.lat.toString());
         if (item.lng) setGlobalLon(item.lng.toString());
+        setGlobalTipificacion('');
+        setGlobalDate('');
 
-        // (Si tu búsqueda global devuelve alimentador y sed, esto se ejecutará)
-        if (item.alimentadorId) {
-            setSelectedFeederId(item.alimentadorId);
+        const itemAlimId = item.alimInterno || item.alimentadorId;
+        const itemSedId = item.postSubestacion || item.vanoSubestacion || item.sedId;
+
+        if (itemAlimId) {
+            setSelectedFeederId(itemAlimId);
             setSelectedSed(null);
-            if (item.sedId) setPendingSedId(item.sedId);
+            if (itemSedId) setPendingSedId(itemSedId);
         }
-    };
-    const handleFeederChange = (e) => {
-        setSelectedFeederId(e.value);
-        setSelectedSed(null);
-        setFilteredSeds([]);
     };
 
     const searchSeds = (event) => {
         const query = event.query.toLowerCase();
         if (sedsDelAlimentador) {
             setFilteredSeds(sedsDelAlimentador.filter(sed =>
-                (sed.label || "").toLowerCase().includes(query) ||
-                (sed.sedCodigo || "").toLowerCase().includes(query)
+                (sed.label || "").toLowerCase().includes(query) || (sed.sedCodigo || "").toLowerCase().includes(query)
             ));
         }
     };
 
     const handleSearchDeficiencies = async () => {
-        const cod = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
-        if (!cod) {
+        const rawCode = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
+        if (!rawCode) {
             toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'Ingrese un código GIS' });
             return;
         }
 
-        const data = await fetchByGis(cod);
+        const sedId = selectedSed ? (selectedSed.sedInterno || selectedSed.id || selectedSed.value) : null;
+        const validElement = await searchExactCode(rawCode, null, selectedFeederId, sedId);
 
-        // 🔥 CAMBIO: Filtramos solo las deficiencias donde defiActivo no sea 0 ni false
-        const activeData = (data || []).filter(d => d.defiActivo !== 0 && d.defiActivo !== false);
+        if (!validElement) {
+             toast.current.show({ severity: 'error', summary: 'No Encontrado', detail: `El elemento no existe en el Alimentador/SED seleccionados.` });
+             setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
+             return;
+        }
+
+        const realType = validElement._tipo === 'POSTE' ? 'POST' : 'VANO';
+        if (realType !== structureType) {
+            setStructureType(realType);
+            toast.current.show({ severity: 'info', summary: 'Ajustado', detail: `Tipo corregido a ${realType}.` });
+        }
+
+        const elLat = validElement.postLatitud || validElement.vanoLatitudIni || validElement.latitud || validElement.lat;
+        const elLon = validElement.postLongitud || validElement.vanoLongitudIni || validElement.longitud || validElement.lng;
+        if (elLat) setGlobalLat(elLat.toString());
+        if (elLon) setGlobalLon(elLon.toString());
+
+        const data = await fetchByGis(rawCode);
+        const activeData = (data || []).filter(d => {
+            const isActivo = d.defiActivo === 1 || d.defiActivo === true || d.defiActivo === '1' || d.defiActivo === 'true';
+            const matchTipo = String(d.defiTipoElemento).toUpperCase().includes(realType);
+            return isActivo && matchTipo;
+        });
 
         setHistoricalData(activeData);
 
         if (activeData.length > 0) {
             setSelectedDeficiency(activeData[0]);
             loadFiles(activeData[0].defiInterno);
-            toast.current.show({ severity: 'success', summary: 'Encontrado', detail: `${activeData.length} registros activos` });
+            toast.current.show({ severity: 'success', summary: 'Historial', detail: `${activeData.length} registros activos` });
         } else {
-            toast.current.show({ severity: 'info', summary: 'Sin historial', detail: `0 registros activos` });
+            setSelectedDeficiency(null);
+            toast.current.show({ severity: 'info', summary: 'Sin historial', detail: `Elemento verificado, sin deficiencias previas.` });
         }
     };
-
-
-    // --- 6. LÓGICA DE GUARDADO (Corrección: Correlativo basado en conteo de la tabla) ---
+    // ==============================================================================
+    // 🔥 6. LÓGICA DE GUARDADO DESDE EL MODAL (LA QUE NO ENCONTRABAS) 🔥
+    // ==============================================================================
     const handlePhotoSave = async (dataToSave) => {
         try {
-            // A. Contexto y Nombres
-            const feederObj = feeders.find(f => f.value === selectedFeederId);
-            const feederLbl = resolveFeederName(feederObj);
+            // A. Contexto
+const feederLbl = resolveFeederName(selectedFeederId, feeders);
+            const sedLbl = resolveSedLabel(selectedSed, sedsDelAlimentador);
 
-            let sedLbl = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || selectedSed.codigo || "SIN_SED") : "SIN_SED";
-            if (sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
-            sedLbl = safeSeg(sedLbl);
+            const codeElemLbl = safeSeg(structureCode);
+            const folderTipoElem = structureType === 'VANO' ? 'VANO' : 'POSTE';
+            const dbTipoElem = structureType === 'VANO' ? 'VANO' : 'POST';
 
-            const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-            const tipoElemRaw = String(structureType || 'POST').toUpperCase();
-            
-            // 1. Nombre de la carpeta para la RUTA (Ej. SIGRE.MOVIL/ALIM/SED/POSTE/...)
-            const folderTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POSTE';
-            
-            // 2. Nombre corto para la BASE DE DATOS (Máximo 4 caracteres)
-            const dbTipoElem = tipoElemRaw.includes('VANO') ? 'VANO' : 'POST';
-
-            // B. Datos Deficiencia Actual
+            // B. Deficiencia y Carpeta
             const defId = selectedDeficiency ? selectedDeficiency.defiInterno : 0;
             const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
-            const defCodeRaw = selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000";
-            const defCodeBase = String(defCodeRaw).trim();
+            const defCodeBase = String(selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000").trim();
 
-            // Identificar tipos especiales
-            const is7004 = defCodeBase === "7004" || String(defTipiInterno) === "60";
-            const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(defTipiInterno) === "0";
+            let defFolder = defCodeBase === "7004" ? "7004/1" : (defCodeBase === "0000" ? "SINDEF" : defCodeBase);
+            let namePart = defCodeBase === "0000" ? "0000" : defCodeBase;
 
-            // C. Lógica de Carpetas
-            let defFolder = "", namePart = "";
-
-            if (is7004) {
-                // 🔥 LÓGICA CORREGIDA: Contar deficiencias en la tabla histórica
-
-                // 1. Filtramos de la tabla 'historicalData' solo las que sean 7004
+            // Manejo especial correlativos 7004
+            if (defCodeBase === "7004") {
                 const defs7004 = historicalData.filter(d => {
-                    const code = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
-                    return String(code).trim() === "7004" || String(d.tipiInterno) === "60";
+                    const c = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
+                    return String(c).trim() === "7004" || String(d.tipiInterno) === "60";
                 });
-
-                // 2. Ordenamos por ID (antiguo a nuevo) para que el orden sea consistente
-                // Así la deficiencia más vieja siempre será la carpeta 1
                 defs7004.sort((a, b) => a.defiInterno - b.defiInterno);
-
-                // 3. Buscamos en qué posición está la deficiencia que tenemos seleccionada
                 const index = defs7004.findIndex(d => d.defiInterno === defId);
-
-                // 4. El número de carpeta es su posición + 1
-                // Si la deficiencia es la única (índice 0), la carpeta será 1.
                 const folderNum = index !== -1 ? index + 1 : (defs7004.length + 1);
-
                 defFolder = `7004/${folderNum}`;
                 namePart = `7004_${folderNum}`;
             }
-            else if (isSinDef) {
-                defFolder = "SINDEF";
-                namePart = "0000";
-            }
-            else {
-                defFolder = defCodeBase;
-                namePart = defCodeBase;
-            }
 
-            // --- (Resto igual) ---
-            const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${formatCompactDate(dataToSave.date || new Date())}-${dataToSave.tipo}.jpg`;
+            // C. Archivo y UTM
+            const compactDate = formatCompactDate(dataToSave.date || new Date());
+            const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${compactDate}-${dataToSave.tipo}.jpg`;
             const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${folderTipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
 
-            const rawLat = parseFloat(dataToSave.lat) || 0;
-            const rawLon = parseFloat(dataToSave.long) || 0;
-            const utmCoords = latLonToUTM(rawLat, rawLon);
+            const utm = latLonToUTM(parseFloat(dataToSave.lat), parseFloat(dataToSave.long));
 
-            if (typeof LocalFileStore !== 'undefined' && LocalFileStore.save) {
-                await LocalFileStore.save(fileName, dataToSave.file);
-            }
-
-            if (dataToSave.file) {
-                const pureName = dbPath.split('/').pop();
-                sessionBlobs.current[pureName] = dataToSave.file;
-            }
+            // D. Registro de Blobs para ZIP sin recargar
+            if (dataToSave.file) { sessionBlobs.current[fileName] = dataToSave.file; }
 
             const payload = {
                 archTabla: "Deficiencias", archInterno: 0, archTipo: String(dataToSave.tipo),
-                archNombre: dbPath.substring(0, 255), archCodTabla: Number(defId),
-                archLatitud: utmCoords.northing, archLongitud: utmCoords.easting,
-                archFecha: dataToSave.date ? new Date(dataToSave.date).toISOString() : new Date().toISOString(),
+                archNombre: dbPath, archCodTabla: Number(defId),
+                archLatitud: utm.northing, archLongitud: utm.easting,
+                archFecha: new Date(dataToSave.date || new Date()).toISOString(),
                 archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
-                archIdElemento: selectedDeficiency ? Number(selectedDeficiency.defiIdElemento) : Number(structureIdInt),
-                tipiInterno: Number(defTipiInterno), archActivo: true, file: dataToSave.file
+                tipiInterno: Number(defTipiInterno), archActivo: true,
+                file: dataToSave.file
             };
 
             const result = await addFile(payload);
             if (result) {
                 toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada' });
                 setShowPhotoModal(false);
-                setViewMode('gallery');
-                if (selectedDeficiency) loadFiles(selectedDeficiency.defiInterno);
+                if (defId) loadFiles(defId);
             }
         } catch (error) {
-            console.error(error); toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar' });
+            console.error(error);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar la foto.' });
         }
     };
-    // --- 7. LÓGICA ZIP ---
-    // --- 7. LÓGICA ZIP CORREGIDA (Agrupación Correcta 7004) ---
-    const handleDownloadZip = async () => {
-        if (dbFiles.length === 0) {
-            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'Sin fotos' });
+
+    // --- 6. LÓGICA DE APLICACIÓN DE CAMBIOS MASIVOS A LAS FOTOS ---
+    // --- LÓGICA DE ACTUALIZACIÓN MASIVA SELECTIVA ---
+    
+    const openBulkUpdateModal = () => {
+        if (fileRows.length === 0) {
+            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay evidencias en la tabla.' });
             return;
         }
+
+        // Pre-marcamos inteligentemente las opciones si el usuario llenó los campos arriba
+        // 🚨 EL GPS SIEMPRE ESTARÁ EN FALSE POR SEGURIDAD 🚨
+        setBulkNewGis('');
+        setBulkOptions({
+            path: !!selectedFeederId && !!selectedSed,
+            date: !!globalDate,
+            tipi: !!globalTipificacion,
+            geo: false,
+            gisCode: false
+        });
+
+        setShowBulkUpdateModal(true);
+    };
+
+    const executeBulkUpdate = () => {
+    const { path: applyPath, date: applyDate, geo: applyGeo, tipi: applyTipi, gisCode: applyGisCode } = bulkOptions;
+        // Validaciones de seguridad si marcaron la casilla pero no hay datos
+        if (applyPath && (!selectedFeederId || !selectedSed)) {
+             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta Alimentador o SED para actualizar la ruta.' });
+             return;
+        }
+
+        const newFeeder = applyPath ? resolveFeederName(selectedFeederId, feeders) : null;
+        let rawSed = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || selectedSed.codigo || "SIN_SED") : "SIN_SED";
+        if (typeof rawSed === 'string' && rawSed.includes(" - ")) rawSed = rawSed.split(" - ")[0];
+        const newSed = applyPath ? safeSeg(rawSed) : null;
+        let newType = applyPath ? String(structureType).toUpperCase() : null;
+        if (newType && newType.includes('VANO')) newType = 'VANO';
+        else if (newType && newType.includes('POST')) newType = 'POSTE';
+        const newCode = applyPath ? safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode || "SIN_CODIGO") : null;
+        const currentGlobalCode = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
+        const cleanNewGis = applyGisCode ? safeSeg(currentGlobalCode) : null;
+
+        let globalUtm = { northing: 0, easting: 0 };
+        if (applyGeo && globalLat && globalLon) {
+            globalUtm = latLonToUTM(parseFloat(globalLat), parseFloat(globalLon));
+        }
+
+        const updatedRows = fileRows.map(row => {
+            const isAudio = parseInt(row.archTipo) === 0;
+            
+            // 💡 SOLO sobrescribe si la casilla está marcada
+            const finalDate = (applyDate && globalDate) ? new Date(globalDate) : row.archFecha;
+            const finalLat = isAudio ? 0 : ((applyGeo && globalLat) ? globalUtm.northing : row.archLatitud);
+            const finalLon = isAudio ? 0 : ((applyGeo && globalLon) ? globalUtm.easting : row.archLongitud);
+
+            let newPath = row.currentPath;
+            let currentPathParts = row.currentPath.split('/');
+
+            // Reconstrucción de la ruta si aplican cambios de Ruta o Tipificación
+            if ((applyPath || applyTipi || applyGisCode) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
+                const effectiveFeeder = applyPath ? newFeeder : currentPathParts[1];
+                const effectiveSed = applyPath ? newSed : currentPathParts[2];
+                const effectiveType = applyPath ? newType : String(currentPathParts[3]).toUpperCase();
+                
+                // 🔥 4. Si marcó GIS manual, usamos el código limpio de la barra superior
+                const effectiveCode = applyGisCode ? cleanNewGis : (applyPath ? newCode : currentPathParts[4]);
+
+                let fileName = currentPathParts[currentPathParts.length - 1];
+
+                if (fileName.startsWith("FOT-") || fileName.startsWith("AUD-")) {
+                    const filePrefix = isAudio ? "AUD" : "FOT";
+                    const fileExt = isAudio ? "m4a" : "jpg";
+
+                    const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
+                    const originalTipi = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
+                    
+                    // Si el usuario marcó Tipificación, usamos la global, si no, mantenemos la original de la foto
+                    const tipiCodeStr = applyTipi ? String(getCodeById(globalTipificacion) || "0000").trim() : String(originalTipi).trim();
+
+                    let folderPart = ""; let fileTipiPart = "";
+
+                    if (tipiCodeStr === "7004") {
+                        const defs7004 = historicalData.filter(d => String(d.tipiCodigo || getCodeById(d.tipiInterno)).trim() === "7004" || String(d.tipiInterno) === "60");
+                        defs7004.sort((a, b) => a.defiInterno - b.defiInterno);
+                        const idx = defs7004.findIndex(d => d.defiInterno === row.selectedDeficiencyId);
+                        const correlativo = idx !== -1 ? idx + 1 : 1;
+                        
+                        folderPart = `7004/${correlativo}`;
+                        fileTipiPart = `7004_${correlativo}`;
+                    } else if (tipiCodeStr === "0000" || tipiCodeStr === "0" || tipiCodeStr === "") {
+                        folderPart = "0000"; fileTipiPart = "0000";
+                    } else {
+                        folderPart = safeSeg(tipiCodeStr); fileTipiPart = safeSeg(tipiCodeStr);
+                    }
+
+                    const compactDate = formatCompactDate(finalDate);
+                    const newFileName = `${filePrefix}-${effectiveSed}-${effectiveCode}-${fileTipiPart}-${compactDate}-${row.archTipo}.${fileExt}`;
+                    newPath = `SIGRE.MOVIL/${effectiveFeeder}/${effectiveSed}/${effectiveType}/${effectiveCode}/${folderPart}/${newFileName}`;
+                }
+            }
+            return { ...row, currentPath: newPath, archFecha: finalDate, archLatitud: finalLat, archLongitud: finalLon };
+        });
+
+        setFileRows(updatedRows);
+        setShowBulkUpdateModal(false);
+        toast.current.show({ severity: 'success', summary: 'Actualizado', detail: 'Datos aplicados a la tabla de evidencias.' });
+    };
+
+   
+
+ // ==============================================================================
+    // 🔥 8. LÓGICA DE GUARDADO EN BD Y DESCARGA ZIP REPARADA 🔥
+    // ==============================================================================
+    // ==============================================================================
+    // 🔥 8. LÓGICA DE DESCARGA ZIP (REPARADA USANDO ENDPOINT SEGURO) 🔥
+    // ==============================================================================
+    
+    // Función auxiliar para fallbacks físicos si el endpoint de API falla
+    const getCandidateUrls = (row) => {
+        if (!row.originalName) return [];
+        let base = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
+        base = base.replace(/^\/+/, '');
+        
+        const candidates = new Set();
+        const parts = base.split('/');
+        const originalFileName = parts.pop();
+        const rootPathWithoutFile = parts.length > 0 ? parts.join('/') + '/' : '';
+        
+        let shortFileName = null;
+        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+
+        const addPathVariations = (folderPath) => {
+            if (!folderPath) return;
+            const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+            const formatUrl = (pathStr) => `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+            candidates.add(formatUrl(folderPath + originalFileName));
+            if (shortFileName) candidates.add(formatUrl(folderPath + shortFileName));
+        };
+
+        // Obtenemos el dbCode original para no depender de la ruta si ya se sobreescribió
+        const fileDef = historicalData?.find(d => d.defiInterno === row.selectedDeficiencyId);
+        let dbCode = String((fileDef ? getCodeById(fileDef.tipiInterno) : "0000") || "0000").trim();
+        if (dbCode === "0000" || dbCode === "0") dbCode = "SINDEF";
+        const currentSupply = fileDef?.defiNumSuministro || '0';
+
+        const processDeficiencyFolder = (currentPath) => {
+            const complexRegex = new RegExp(`\/(${dbCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
+            const matchComplex = currentPath.match(complexRegex);
+            addPathVariations(currentPath);
+            
+            if (currentSupply && currentSupply !== '0') {
+                if (matchComplex) {
+                    const fullStr = matchComplex[0];
+                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}.1.${currentSupply}/`));
+                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${currentSupply}/`));
+                } else {
+                    const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
+                    if (currentPath.match(simpleDefRegex)) {
+                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}.1.${currentSupply}/`));
+                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}/${currentSupply}/`));
+                    }
+                }
+            }
+            if (matchComplex) {
+                const fullStr = matchComplex[0];
+                addPathVariations(currentPath.replace(fullStr, `/${dbCode}/`));
+                for(let i=1; i<=20; i++) addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${i}/`));
+            } else {
+                const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
+                if (currentPath.match(simpleDefRegex)) {
+                    for(let i=1; i<=20; i++) {
+                        if (!currentPath.includes(`/${dbCode}/${i}/`)) {
+                            const split = currentPath.split(`/${dbCode}/`);
+                            if (split.length > 1) addPathVariations(`${split[0]}/${dbCode}/${i}/${split[1]}`);
+                        }
+                    }
+                }
+            }
+        };
+
+        const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
+        processDeficiencyFolder(pathNoType);
+        processDeficiencyFolder(rootPathWithoutFile);
+        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+        if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
+
+        const match7004 = rootPathWithoutFile.match(/\/(7004)\.(\d+)\.([a-zA-Z0-9]+)\//);
+        if (match7004 && dbCode !== "7004") {
+            const tempDbCode = dbCode; dbCode = "7004";
+            processDeficiencyFolder(rootPathWithoutFile);
+            dbCode = tempDbCode;
+        }
+
+        return Array.from(candidates);
+    };
+
+    const handleDownloadRenamedZip = async () => {
+        if (fileRows.length === 0) {
+            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay archivos para descargar.' });
+            return;
+        }
+        
         setZipLoading(true);
+        let filesAdded = 0; 
+
         try {
             const zip = new JSZip();
+            
 
-            // A. Preparar Contexto Global (Una sola vez)
-            const feederObj = feeders.find(f => f.value === selectedFeederId);
-            const feederLbl = resolveFeederName(feederObj);
 
-            let sedLbl = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || "SIN_SED") : "SIN_SED";
-            if (sedLbl.includes(" - ")) sedLbl = sedLbl.split(" - ")[0];
-            sedLbl = safeSeg(sedLbl);
+            // Usamos map para crear las promesas de descarga en paralelo
+            const downloadPromises = fileRows.map(async (row) => {
+                let zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
+                const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
 
-            const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-            const tipoElem = (structureType || 'POST').toUpperCase() === 'VANO' ? 'VANO' : 'POST';
-
-            // B. Datos de la Deficiencia
-            const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
-            const defCodeRaw = selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000";
-            const defCodeBase = String(defCodeRaw).trim();
-            const is7004 = defCodeBase === "7004" || String(defTipiInterno) === "60";
-
-            // 🔥 C. CALCULAR NÚMERO DE CARPETA (FUERA DEL BUCLE)
-            // Calculamos 'folderNum' una sola vez para todas las fotos de esta deficiencia.
-            let folderNum = 1;
-
-            if (is7004) {
-                // 1. Filtramos las 7004 del historial
-                const defs7004 = historicalData.filter(d => {
-                    const code = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
-                    return String(code).trim() === "7004" || String(d.tipiInterno) === "60";
-                });
-                // 2. Ordenamos
-                defs7004.sort((a, b) => a.defiInterno - b.defiInterno);
-                // 3. Buscamos índice de la actual
-                const index = defs7004.findIndex(d => d.defiInterno === selectedDeficiency?.defiInterno);
-                // 4. Asignamos número
-                folderNum = index !== -1 ? index + 1 : 1;
-            }
-
-            // D. Iterar archivos y agregar al ZIP
-            for (let i = 0; i < dbFiles.length; i++) {
-                const f = dbFiles[i];
-                let folderPath = "";
-
-                if (is7004) {
-                    // Usamos el 'folderNum' calculado arriba (EJ: 7004/1 para TODAS las fotos)
-                    folderPath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/7004/${folderNum}`;
-                } else {
-                    folderPath = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeBase}`;
+                // 1. Verificar si es una foto subida recientemente (en la memoria RAM)
+                if (sessionBlobs.current && sessionBlobs.current[originalFileName]) {
+                    zip.file(zipPath, sessionBlobs.current[originalFileName]);
+                    filesAdded++;
+                    return true;
                 }
 
-                const originalName = (f.archNombre || `foto_${i}.jpg`).split(/[/\\]/).pop();
-                const fullPathInZip = `${folderPath}/${originalName}`;
-
-                // Intentar Memoria o Red
-                const sessionFile = sessionBlobs.current[originalName];
-
-                if (sessionFile) {
-                    zip.file(fullPathInZip, sessionFile);
-                } else {
-                    const fileUrl = f.url || `${API_BASE_URL}/api/files/download/${f.archInterno}`;
+                // 2. 🚀 MÉTODO PRINCIPAL: Usar el endpoint API Oficial del Backend (No pierde la pista de los nombres cambiados)
+                if (row.archInterno && row.archInterno > 0) {
+                    const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+                    const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
+                    
                     try {
-                        const response = await fetch(fileUrl);
-                        if (response.ok) {
+                        const response = await fetch(apiUrl);
+                        const contentType = response.headers.get("content-type");
+                        
+                        if (response.ok && contentType && !contentType.includes("text/html")) {
                             const blob = await response.blob();
-                            zip.file(fullPathInZip, blob);
+                            zip.file(zipPath, blob);
+                            filesAdded++;
+                            return true; // Éxito, no hacer el fallback
                         }
-                    } catch (err) { console.warn(`Error zip fetch ${i}`, err); }
+                    } catch (e) {
+                        console.warn(`Falló la API de descarga para ID ${row.archInterno}, intentando rutas físicas...`);
+                    }
                 }
+
+                // 3. FALLBACK: Intentar URLs físicas crudas
+                const urlsToTry = getCandidateUrls(row);
+                
+                for (const url of urlsToTry) {
+                    try {
+                        const response = await fetch(url);
+                        const contentType = response.headers.get("content-type");
+                        
+                        if (response.ok && contentType && !contentType.includes("text/html")) {
+                            const blob = await response.blob();
+                            zip.file(zipPath, blob);
+                            filesAdded++;
+                            return true;
+                        }
+                    } catch (e) {
+                        // Sigue el bucle intentando
+                    }
+                }
+                
+                console.warn(`Fracaso total: No se encontró en servidor: ${row.originalName}`);
+                return false;
+            });
+
+            // Esperar que finalicen TODAS las descargas antes de comprimir el ZIP
+            await Promise.all(downloadPromises);
+
+            if (filesAdded === 0) {
+                toast.current.show({ severity: 'error', summary: 'ZIP Vacío', detail: 'El servidor no devolvió ninguna foto.' });
+                return;
             }
 
             const content = await zip.generateAsync({ type: "blob" });
-            saveAs(content, `Deficiencia_${codeElemLbl}.zip`);
-            toast.current.show({ severity: 'success', summary: 'ZIP', detail: 'Descarga iniciada' });
-
-        } catch (e) {
-            console.error("ZIP Error:", e);
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo generando ZIP' });
+            const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
+            saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
+            
+            toast.current.show({ severity: 'success', summary: 'Descargado', detail: `Se empaquetaron ${filesAdded} de ${fileRows.length} archivos.` });
+            
+        } catch (error) {
+            console.error(error);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo crítico al generar el ZIP.' });
         } finally {
             setZipLoading(false);
         }
     };
 
-    // --- TEMPLATES Y RENDER ---
-    const contextData = {
-        feeder: feeders.find(f => f.value === selectedFeederId),
-        sed: selectedSed,
-        elementType: structureType,
-        elementCode: structureCode,
-        structureType, structureCode,
-        elementId: selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt
+    // ==============================================================================
+    // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
+    // ==============================================================================
+    const handleSaveAll = async () => {
+         const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
+         if (fileRows.length === 0) return;
+         setSaving(true);
+         
+         // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
+         toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
+         await handleDownloadRenamedZip(); 
+
+         // 2. Guardar en Base de Datos
+         let successCount = 0; let failCount = 0;
+         const updatedRows = [...fileRows];
+
+         const promises = updatedRows.map(async (row, index) => {
+             const payload = {
+                 archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
+                 archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
+                 archFecha: toLocalISOString(row.archFecha), archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0,
+                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
+                 archNombre: row.currentPath, tipiInterno: row.tipiInterno
+             };
+             const success = await addFile(payload);
+             if (success) {
+                 successCount++;
+                 updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
+             } else {
+                 failCount++;
+             }
+         });
+
+         await Promise.all(promises);
+         setFileRows(updatedRows);
+         setSaving(false);
+
+         if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
+         else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+    };
+    const handleRemoveRequest = (event, row) => {
+        confirmPopup({
+            target: event.currentTarget,
+            message: '¿Eliminar archivo permanentemente?',
+            icon: 'pi pi-exclamation-triangle',
+            acceptClassName: 'p-button-danger',
+            accept: async () => {
+                let success = false;
+                if (row.archInterno && row.archInterno > 0) {
+                    success = await deleteFile(row.archInterno);
+                } else success = true;
+
+                if (success) {
+                    toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Archivo eliminado.' });
+                    setFileRows(prev => prev.filter(r => r.tempId !== row.tempId));
+                } else {
+                    toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar de la BD.' });
+                }
+            }
+        });
     };
 
-    const initialPhotoData = {
-        tipo: 1, lat: globalLat, long: globalLon,
-        date: globalDate || new Date(), file: null, preview: null
+
+    const updateFileField = (tempId, field, value) => {
+        setFileRows(prev => prev.map(row => row.tempId === tempId ? { ...row, [field]: value } : row));
     };
 
+    // --- 8. TEMPLATES PARA TABLAS Y GALERÍA ---
     const itemTemplate = (item) => {
-        const esPoste = item._tipo === 'POST';
+        const esPoste = item._tipo === 'POSTE' || item._tipo === 'POST';
         return (
             <div className={`flex flex-col border-b border-gray-100 p-2 ${esPoste ? 'hover:bg-blue-50' : 'hover:bg-green-50'}`}>
                 <div className="flex items-center justify-between">
@@ -398,289 +701,293 @@ const { suggestions: gisSuggestions, searchNode: searchNetworkElement, isSearchi
         );
     };
 
-    const dateTemplate = (r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-';
-    const typeBodyTemplate = (rowData) => <span className="font-bold text-gray-700 text-xs">{getCodeById(rowData.tipiInterno) || "Sin Def"}</span>;
+    const FallbackImage = ({ row }) => {
+        const isAudio = parseInt(row.archTipo) === 0;
+        const urls = getCandidateUrls(row);
+        const [srcIndex, setSrcIndex] = useState(0);
+        const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+        
+        if (sessionBlobs && sessionBlobs.current[originalFileName]) {
+            return <Image src={URL.createObjectURL(sessionBlobs.current[originalFileName])} alt="Foto" preview className="absolute inset-0 w-full h-full block" imageClassName="w-full h-full object-cover block" />;
+        } 
+
+        if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
+
+        return (
+            <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block"
+                onError={(e) => {
+                    if (srcIndex < urls.length - 1) setSrcIndex(srcIndex + 1);
+                    else { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto'; }
+                }}
+            />
+        );
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
             <Toast ref={toast} />
+            <ConfirmPopup />
             <ConfirmDialog />
 
-           {/* A. BÚSQUEDA */}
-<div className="bg-white p-4 rounded-lg shadow-md mb-4 border border-slate-200 flex justify-center">
-    <div className="w-full max-w-lg">
-        <label className="text-xs font-bold text-gray-500 mb-1 uppercase block">Búsqueda Rápida Global</label>
-        <div className="p-inputgroup relative">
-            <AutoComplete
-                value={structureCode} 
-                suggestions={gisSuggestions} 
-                completeMethod={(e) => searchNetworkElement(e.query)}
-                field="codigo" 
-                itemTemplate={itemTemplate} 
-                onChange={(e) => setStructureCode(e.value)} 
-                onSelect={handleGisSelection}
-                placeholder="Ej: VBT0000372026..." 
-                className="w-full" 
-                inputClassName="w-full p-inputtext-lg font-bold text-blue-900 uppercase"
-                dropdown={false}
-                disabled={isSearching}
+            {/* 💡 A. CONFIGURACIÓN Y BÚSQUEDA UNIFICADA */}
+            <Card className="border-t-4 border-indigo-500 shadow-sm mb-4">
+                <h4 className="text-sm font-bold text-indigo-800 mb-3 flex items-center">
+                    <i className="pi pi-search mr-2"></i>Búsqueda y Configuración Global de Elemento
+                </h4>
                 
-                // 🔥 1. DELAY: Espera 800 milisegundos después de que el usuario deja de tipear
-                delay={800} 
-                
-                // 🔥 2. MINLENGTH: Obliga a que escriban al menos 4 caracteres (ej: "PTO0") antes de buscar al backend
-                minLength={4} 
-            />
-                        <Button 
-                            icon={isSearching ? "pi pi-spin pi-spinner" : "pi pi-search"} 
-                            onClick={handleSearchDeficiencies} 
-                            loading={searchLoading} 
-                            disabled={isSearching}
-                        />
-                        {/* Indicador visual opcional debajo del input */}
-                        {isSearching && (
-                            <small className="absolute -bottom-5 left-0 text-blue-500 font-bold animate-pulse">
-                                Buscando elementos...
-                            </small>
-                        )}
+                <div className="flex flex-wrap gap-4 items-end mb-4">
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-indigo-700 uppercase">Alimentador *</label>
+                        <Dropdown value={selectedFeederId} onChange={(e) => { setSelectedFeederId(e.value); setSelectedSed(null); setFilteredSeds([]); }} options={feeders} optionLabel="label" optionValue="value" filter placeholder="Seleccione..." className="w-56 p-inputtext-sm border-blue-200" />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-indigo-700 uppercase">SED *</label>
+                        <AutoComplete value={selectedSed} suggestions={filteredSeds} completeMethod={searchSeds} field="label" dropdown onChange={(e) => setSelectedSed(e.value)} placeholder="Buscar SED..." className="w-56 p-inputtext-sm font-bold border-blue-200" disabled={!selectedFeederId} />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-indigo-700 uppercase">Filtro Tipo</label>
+                        <Dropdown value={structureType} options={[{ label: 'POSTE', value: 'POST' }, { label: 'VANO', value: 'VANO' }]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm font-bold text-indigo-900 bg-indigo-50" />
+                    </div>
+
+                    <div className="flex flex-col flex-1 min-w-[250px]">
+                        <label className="text-[10px] font-bold text-indigo-700 uppercase mb-1">Código GIS (Autocompletar o Enter)</label>
+                        <div className="p-inputgroup relative">
+                            <AutoComplete
+                                value={structureCode} suggestions={suggestions}
+                                completeMethod={(e) => {
+                                    const extractedSedId = selectedSed ? (selectedSed.sedInterno || selectedSed.id || selectedSed.value) : null;
+                                    searchNode(e.query, selectedFeederId, extractedSedId);
+                                }}
+                                field="codigo" itemTemplate={itemTemplate} onSelect={handleGisSelection}
+                                onChange={(e) => {
+                                    const texto = typeof e.value === 'string' ? e.value.toUpperCase() : (e.value?.codigo || '');
+                                    setStructureCode(texto);
+                                    if (texto.includes('VBT') || texto.includes('VANO')) setStructureType('VANO');
+                                    else if (texto.includes('PTO') || texto.includes('POST')) setStructureType('POST');
+                                }}
+                                placeholder="Escriba para buscar..." className="w-full" inputClassName="w-full p-inputtext-sm font-bold text-blue-900 uppercase" dropdown={false} delay={500} disabled={!selectedFeederId || !selectedSed} 
+                            />
+                            <Button icon={searchLoading ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} onClick={handleSearchDeficiencies} loading={searchLoading} disabled={!selectedFeederId || !selectedSed || !structureCode} severity="info" tooltip="Verificar Elemento y Buscar Historial" />
+                        </div>
+                        {(!selectedFeederId || !selectedSed) && <small className="text-orange-500 font-bold mt-1 text-[10px]">Seleccione Alimentador y SED primero.</small>}
                     </div>
                 </div>
-            </div>
 
-            {/* B. HISTORIAL */}
+                {/* Atributos Globales Extra */}
+                <div className="flex flex-wrap gap-4 items-end pt-3 border-t border-indigo-100 bg-slate-50/50 p-2 rounded">
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Tipificación Default</label>
+                        <InputText value={globalTipificacion ? (getCodeById(globalTipificacion) || globalTipificacion) : ''} placeholder="Tipificación..." className="w-36 p-inputtext-sm font-bold text-indigo-700" />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Fecha Global</label>
+                        <Calendar value={globalDate} onChange={(e) => setGlobalDate(e.value)} showTime showSeconds placeholder="Original..." className="w-48 p-inputtext-sm" showIcon />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Latitud (GPS)</label>
+                        <InputText value={globalLat} onChange={(e) => setGlobalLat(e.target.value)} placeholder="-16.35..." className="w-36 p-inputtext-sm" />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Longitud (GPS)</label>
+                        <InputText value={globalLon} onChange={(e) => setGlobalLon(e.target.value)} placeholder="-71.54..." className="w-36 p-inputtext-sm" />
+                    </div>
+                </div>
+            </Card>
+
+            {/* 💡 B. HISTORIAL ENCONTRADO */}
             {historicalData.length > 0 && (
-                <div className="card border-l-4 border-blue-500 shadow-md bg-white rounded-lg mb-6">
+                <div className="card border-l-4 border-blue-500 shadow-md bg-white rounded-lg mb-4">
                     <div className="p-3 bg-blue-50 flex justify-between items-center border-b border-blue-100">
-                        <h3 className="font-bold text-blue-800 m-0 text-sm">Historial</h3>
+                        <h3 className="font-bold text-blue-800 m-0 text-sm">Historial Encontrado ({structureType === 'POST' ? 'Postes' : 'Vanos'})</h3>
                         <Tag value={`${historicalData.length} Reg.`} severity="info" rounded />
                     </div>
                     <DataTable
                         value={historicalData} size="small" stripedRows rows={5} paginator selectionMode="single" selection={selectedDeficiency}
-                        onSelectionChange={(e) => { 
-    const def = e.value;
-    setSelectedDeficiency(def); 
-
-    if (def) {
-        // 1. Cargar las fotos
-        loadFiles(def.defiInterno); 
-        
-        // 2. Setear Tipo Estructura (Mapeamos de "VANO"/"POST" a "Vano"/"Poste")
-        if (def.defiTipoElemento) {
-            const tipoFormateado = String(def.defiTipoElemento).toUpperCase().includes('VANO') ? 'VANO' : 'POST';
-            setStructureType(tipoFormateado);
-        }
-
-        // 3. Setear Fecha Global convirtiendo el string a un objeto Date
-        if (def.defiFecRegistro) {
-            setGlobalDate(new Date(def.defiFecRegistro));
-        }
-    } 
-}}
+                        onSelectionChange={(e) => {
+                            const def = e.value;
+                            setSelectedDeficiency(def);
+                            if (def) {
+                                loadFiles(def.defiInterno);
+                                if (def.defiFecRegistro) setGlobalDate(new Date(def.defiFecRegistro));
+                                if (def.tipiInterno) setGlobalTipificacion(def.tipiInterno);
+                            }
+                        }}
                         dataKey="defiInterno" className="text-sm"
                     >
                         <Column field="defiInterno" header="ID" style={{ width: '70px' }} />
                         <Column field="defiCodigoElemento" header="Cód. GIS" />
-                        <Column field="defiFecRegistro" header="Fecha" body={dateTemplate} />
-                        <Column header="Tipificacion" body={typeBodyTemplate} />
+                        <Column field="defiFecRegistro" header="Fecha" body={(r) => r.defiFecRegistro ? new Date(r.defiFecRegistro).toLocaleDateString() : '-'} />
+                        <Column header="Tipificacion" body={(r) => <span className="font-bold text-gray-700 text-xs">{getCodeById(r.tipiInterno) || "Sin Def"}</span>} />
                         <Column field="defiObservacion" header="Obs" className="truncate" style={{ maxWidth: '150px' }} />
                     </DataTable>
                 </div>
             )}
-            {/* CONTENEDOR DE GESTIÓN DE ARCHIVOS / FOTOS */}
-<div className="surface-card p-3 border-round-xl shadow-1 mt-4 border-1 border-200">
-    
-    {/* Instrucciones usando el componente Message de PrimeReact */}
-    <div className="mb-3">
-        <Message 
-            severity="info" 
-            className="w-full justify-content-start border-none bg-blue-50 text-blue-800"
-            content={(
-                <div className="flex align-items-center gap-2">
-                    <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
-                    <span className="text-xs">
-                        <strong>Instrucciones:Use esta opciones únicamente para subir imágenes nuevas que no han sido registradas.Y que no tengan la tipificacion 7004</strong> 
-                    </span>
-                </div>
-            )}
-        />
-    </div>
 
-    {/* HEADER Y BOTONES DE ACCIÓN */}
-    <div className="flex flex-column md:flex-row justify-content-end align-items-center gap-3">
-
-        
-        <div className="flex flex-wrap justify-content-center gap-2">
-            <Button 
-                label="Descargar ZIP" 
-                icon="pi pi-download" 
-                className="p-button-sm p-button-secondary p-button-outlined" 
-                onClick={handleDownloadZip}
-                loading={zipLoading}
-                disabled={dbFiles.length === 0}
-            />
-
-            <Button 
-                label="Añadir Fotos" 
-                icon="pi pi-camera" 
-                className="p-button-sm p-button-success shadow-1 p-2 " 
-                onClick={() => setShowPhotoModal(true)} 
-            />
-
-            <SelectButton 
-                value={viewMode} 
-                onChange={(e) => e.value && setViewMode(e.value)} 
-                options={viewOptions} 
-                itemTemplate={(option) => (
-                    <div className="flex align-items-center px-2 py-1">
-                        <i className={`${option.icon} mr-2`}></i>
-                        <span className="text-xs">{option.label}</span>
-                    </div>
-                )} 
-            />
+            {/* 💡 C. GESTIÓN DE ARCHIVOS INTEGRADA */}
+            <Card title="Editor de Evidencias y Metadatos" className="mt-4 shadow-sm border-t-4 border-green-500">
+                <div className="mb-3">
+                    <Message severity="info" className="w-full justify-content-start border-none bg-blue-50 text-blue-800"
+                        content={(
+                            <div className="flex align-items-center gap-2">
+                                <i className="pi pi-info-circle" style={{ fontSize: '1.2rem' }}></i>
+                                <span className="text-xs">
+                                    <strong>Instrucciones:</strong> Configura la tipificación, fecha o GPS arriba y usa "Aplicar Cambios" para actualizar en masa las fotos de abajo.
+                                </span>
+                            </div>
+                        )}
+                    />
+                    <Toolbar className="mb-4 bg-transparent border-none p-0" 
+    left={
+        <div className="flex gap-2">
+            {/* 🔥 ACTUALIZADO 🔥 */}
+            <Button label="Aplicar Globales" icon="pi pi-arrow-down" severity="info" outlined onClick={openBulkUpdateModal} />
+            <Button label={saving ? "Guardando..." : "Guardar en BD"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-save"} severity="success" onClick={handleSaveAll} disabled={fileRows.length === 0 || saving} />
         </div>
-    </div>
-</div>
+    } 
+/>
+                </div>
+                
+               
 
-            {/* C. FORMULARIO PRINCIPAL */}
-            <Card className="border-t-4 border-indigo-500 shadow-sm">
-
-                {/* C.1 UBICACIÓN */}
-                <div className="mb-4 p-4 bg-indigo-50 rounded border border-indigo-100">
-                    <h4 className="text-sm font-bold text-indigo-800 mb-3 flex items-center">
-                        <i className="pi pi-map-marker mr-2"></i>Configuración de Ubicación
-                    </h4>
-                    <div className="flex flex-wrap gap-4 items-end mb-3">
-                        <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-indigo-700 uppercase">Alimentador</label>
-                            <Dropdown value={selectedFeederId} onChange={handleFeederChange} options={feeders} optionLabel="label" optionValue="value" filter placeholder="Seleccione..." className="w-64 p-inputtext-sm" />
-                        </div>
-                        <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-indigo-700 uppercase">SED</label>
-                            <AutoComplete value={selectedSed} suggestions={filteredSeds} completeMethod={searchSeds} field="label" dropdown onChange={(e) => setSelectedSed(e.value)} placeholder="Buscar SED..." className="w-56 p-inputtext-sm font-bold" disabled={!selectedFeederId} />
-                        </div>
-                        <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-indigo-700 uppercase">Tipo Estructura</label>
-                            <Dropdown value={structureType} options={[{ label: 'POST', value: 'POST' }, { label: 'VANO', value: 'VANO' }]} onChange={(e) => setStructureType(e.value)} className="w-32 p-inputtext-sm" />
+                <div className="flex flex-col gap-6">
+                    {/* GALERÍA */}
+                    <div>
+                        <h5 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1"><i className="pi pi-images mr-2"></i>Vista de Evidencias</h5>
+                        <div className="flex-1 overflow-y-auto p-3 bg-gray-100/50 rounded-md border border-gray-200 mt-2">
+                            <div className="flex flex-wrap gap-3 content-start">
+                                <div onClick={() => setShowPhotoModal(true)} className="h-28 w-28 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 group transition-all bg-white shadow-sm">
+                                    <i className="pi pi-camera text-3xl text-gray-400 group-hover:text-blue-500 mb-1 transition-colors"></i>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider group-hover:text-blue-600">Añadir Foto</span>
+                                </div>
+                                {fileRows.map((row) => (
+                                    <div key={row.tempId} className="h-28 w-28 rounded-lg border border-gray-200 overflow-hidden relative group hover:shadow-md transition-shadow bg-white flex flex-col">
+                                        <div className="flex-1 flex items-center justify-center bg-gray-50 relative">
+                                            <FallbackImage row={row} />
+                                            <button onClick={(e) => { e.stopPropagation(); handleRemoveRequest(e, row); }} className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded border border-white flex items-center justify-center shadow-md transition-all z-10" title="Eliminar archivo">
+                                                <i className="pi pi-trash text-[10px] font-bold"></i>
+                                            </button>
+                                        </div>
+                                        <div className="h-6 w-full bg-slate-800 text-white text-[9px] font-bold flex items-center justify-center uppercase tracking-tighter shrink-0 z-10 relative">
+                                            {photoTypes[row.archTipo] || `Tipo ${row.archTipo}`}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-4 items-end pt-3 border-t border-indigo-200">
-                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Fecha Global</label><Calendar value={globalDate} onChange={(e) => setGlobalDate(e.value)} showTime showSeconds placeholder="Original..." className="w-48 p-inputtext-sm" showIcon /></div>
-                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Latitud</label><InputText value={globalLat} onChange={(e) => setGlobalLat(e.target.value)} placeholder="-16.35..." className="w-36 p-inputtext-sm" /></div>
-                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-600 uppercase">Longitud</label><InputText value={globalLon} onChange={(e) => setGlobalLon(e.target.value)} placeholder="-71.54..." className="w-36 p-inputtext-sm" /></div>
+
+                    {/* TABLA DE DETALLES */}
+                    <div>
+                        <h5 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1"><i className="pi pi-list mr-2"></i>Detalle de Metadatos</h5>
+                        <DataTable value={fileRows} size="small" emptyMessage="No hay archivos asociados." loading={loadingFiles} stripedRows showGridlines className="text-sm">
+                            <Column header="Id" body={(r) => <span className="text-xs">{r.archInterno}</span>} style={{ width: '60px' }} />
+                            <Column header="DefiInterno" body={(r) => <span className="text-xs font-bold text-slate-700">{r.selectedDeficiencyId}</span>} style={{ minWidth: '100px' }} />
+                            <Column header="Tipificacion" body={(r) => { const def = historicalData.find(d => d.defiInterno === r.selectedDeficiencyId); return <span className="text-xs font-bold text-slate-700">{def ? getCodeById(def.tipiInterno) : r.selectedDeficiencyId}</span>; }} style={{ minWidth: '120px' }} />
+                            <Column header="Tipo" body={(r) => <span className="text-xs font-medium text-gray-600">{photoTypes[r.archTipo] || `Tipo ${r.archTipo}`} ({r.archTipo})</span>} style={{ width: '120px' }} />
+                            <Column header="Fecha" body={(r) => <Calendar value={r.archFecha} onChange={(e) => updateFileField(r.tempId, 'archFecha', e.value)} showTime showSeconds className="w-full" inputClassName="text-xs p-1" appendTo="self" />} style={{ width: '170px' }} />
+                            <Column header="Lat" body={(r) => <InputText value={r.archLatitud} onChange={(e) => updateFileField(r.tempId, 'archLatitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
+                            <Column header="Long" body={(r) => <InputText value={r.archLongitud} onChange={(e) => updateFileField(r.tempId, 'archLongitud', e.target.value)} className="w-full text-xs p-1" />} style={{ width: '110px' }} />
+                            <Column header="Nombre (Ruta)" body={(r) => {
+                                const isModified = r.originalName !== r.currentPath;
+                                return (
+                                    <div className="flex flex-col" style={{maxWidth:'450px'}}>
+                                        <code className={`text-[10px] p-1 border rounded break-all font-mono leading-tight ${isModified ? 'bg-yellow-50 border-yellow-300 text-yellow-900' : 'bg-white border-gray-200 text-gray-600'}`}>
+                                            {r.currentPath}
+                                        </code>
+                                        {isModified && <span className="text-[9px] text-orange-600 font-bold mt-1"><i className="pi pi-pencil mr-1"></i>Cambio pendiente</span>}
+                                    </div>
+                                );
+                            }} />
+                            <Column body={(r) => <Button icon="pi pi-trash" rounded text severity="danger" onClick={(e) => handleRemoveRequest(e, r)} />} style={{ width: '50px' }} />
+                        </DataTable>
                     </div>
                 </div>
-
-
-                <FilesTableEditor
-                    namingContext={contextData}
-                    historicalData={historicalData}
-                    getCodeById={getCodeById}
-                    toast={toast}
-                    existingFiles={dbFiles}
-                    onDeleteDbFile={deleteFile}
-                    loadingFiles={loadingFiles}
-                    viewMode={viewMode}
-                    sessionBlobs={sessionBlobs.current}
-                    onAddFile={addFile}
-                />
             </Card>
 
-            {/* MODAL CON EL MANEJADOR PERSONALIZADO */}
+            {/* MODAL PARA SUBIR NUEVA FOTO */}
             {showPhotoModal && (
                 <PhotoUploadModal
                     visible={showPhotoModal}
                     onHide={() => setShowPhotoModal(false)}
-                    initialData={initialPhotoData}
-                    contextData={contextData}
-                    //onAddFile={handlePhotoSave}
-                    onSave={handlePhotoSave} // 🔥 Usamos la función con lógica de Nombrado y UTM
+                    initialData={{ tipo: 1, lat: globalLat, long: globalLon, date: globalDate || new Date(), file: null, preview: null }}
+                    contextData={{ feeder: feeders.find(f => f.value === selectedFeederId), sed: selectedSed, elementType: structureType, elementCode: structureCode, elementId: selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt }}
+                    onSave={handlePhotoSave}
                     deficiencyData={selectedDeficiency}
                     currentPhotos={dbFiles}
                 />
             )}
+
+            
+            {/* 🔥 MODAL DE ACTUALIZACIÓN MASIVA SELECTIVA 🔥 */}
+            <Dialog 
+                header="¿Qué datos deseas sobrescribir?" 
+                visible={showBulkUpdateModal} 
+                style={{ width: '450px' }} 
+                modal 
+                onHide={() => setShowBulkUpdateModal(false)}
+                footer={
+                    <div className="flex justify-end gap-2 mt-4">
+                        <Button label="Cancelar" icon="pi pi-times" onClick={() => setShowBulkUpdateModal(false)} className="p-button-text p-button-secondary" />
+                        <Button label="Aplicar a Todas" icon="pi pi-check" onClick={executeBulkUpdate} className="p-button-primary font-bold" disabled={!bulkOptions.path && !bulkOptions.date && !bulkOptions.tipi && !bulkOptions.geo && !bulkOptions.gisCode} />
+                    </div>
+                }
+            >
+                <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                    Selecciona qué configuraciones globales deseas aplicar a las <strong>{fileRows.length}</strong> fotos en la tabla. 
+                    <br/><span className="text-red-500 font-bold">Atención:</span> Esta acción sobrescribirá los datos actuales de las fotos.
+                </p>
+
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center">
+                        <Checkbox inputId="cb_path" checked={bulkOptions.path} onChange={e => setBulkOptions({...bulkOptions, path: e.checked})} />
+                        <label htmlFor="cb_path" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Ubicación y Ruta</label>
+                        <span className="ml-2 text-xs text-gray-500">(Alimentador, SED, Código GIS)</span>
+                    </div>
+{/* 🔥 NUEVO BLOQUE MEJORADO: Renombrar Código GIS (Usa el global) */}
+                    <div className="flex flex-col bg-blue-50 p-3 rounded-md border border-blue-200 mt-2 mb-2">
+                        <div className="flex items-center">
+                            <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({...bulkOptions, gisCode: e.checked})} />
+                            <label htmlFor="cb_gisCode" className="ml-2 text-sm font-bold text-blue-800 cursor-pointer">
+                                Actualizar Ruta y Archivo con el Código GIS actual
+                            </label>
+                        </div>
+                        {bulkOptions.gisCode && (
+                            <div className="mt-2 ml-7">
+                                <span className="text-xs font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300 shadow-sm">
+                                    Nuevo Código: {typeof structureCode === 'object' ? structureCode.codigo : (structureCode || 'NINGUNO')}
+                                </span>
+                                <small className="text-[10px] text-gray-500 block mt-2 leading-tight">
+                                    Se actualizará el nombre en la ruta de las fotos usando el código que está en la barra de búsqueda principal.
+                                </small>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex items-center">
+                        <Checkbox inputId="cb_tipi" checked={bulkOptions.tipi} onChange={e => setBulkOptions({...bulkOptions, tipi: e.checked})} />
+                        <label htmlFor="cb_tipi" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Tipificación</label>
+                        <span className="ml-2 text-xs text-gray-500">({getCodeById(globalTipificacion) || "Ninguna seleccionada"})</span>
+                    </div>
+
+                    <div className="flex items-center">
+                        <Checkbox inputId="cb_date" checked={bulkOptions.date} onChange={e => setBulkOptions({...bulkOptions, date: e.checked})} />
+                        <label htmlFor="cb_date" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Fecha de Captura</label>
+                    </div>
+
+                    <div className="flex items-start bg-red-50 p-3 rounded-md border border-red-200 mt-2">
+                        <Checkbox inputId="cb_geo" checked={bulkOptions.geo} onChange={e => setBulkOptions({...bulkOptions, geo: e.checked})} />
+                        <div className="ml-2 flex flex-col">
+                            <label htmlFor="cb_geo" className="text-sm font-extrabold text-red-700 cursor-pointer mb-1">
+                                Coordenadas GPS (Peligro)
+                            </label>
+                            <span className="text-[11px] text-red-600 leading-tight">
+                                Sobrescribirá la latitud y longitud individual de cada foto con el valor global superior. <strong>Úsalo solo si todas las fotos fueron tomadas exactamente en el mismo punto físico.</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </Dialog>
         </div>
+        
     );
-}
-
-// ==========================================
-// 🔥🔥🔥 HELPER FUNCTIONS 🔥🔥🔥
-// ==========================================
-
-function resolveFeederName(feederObj) {
-    if (!feederObj) return "SIN_ALIMENTADOR";
-    let lbl = feederObj.label || "";
-
-    // 🔥 CAMBIO AQUÍ: 
-    // 1. .replace(/[0-9]/g, '') -> Elimina TODOS los números (0, 1, 2...)
-    // 2. .replace(/[-]/g, '')   -> Elimina los guiones
-    // 3. .trim()                -> Quita los espacios que sobren al inicio o final
-    lbl = lbl.replace(/[0-9]/g, '').replace(/-/g, '').trim();
-
-    return safeSeg(lbl);
-}
-
-function safeSeg(str) {
-    if (!str) return "XXX";
-    return String(str)
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '_') // Reemplazar caracteres raros con _
-        .replace(/_+/g, '_');       // Evitar _____
-}
-
-function formatCompactDate(date) {
-    if (!date) return "00000000-000000";
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return "00000000-000000";
-
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-
-    // 🔥 DESCOMENTADO Y CORREGIDO:
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const s = String(d.getSeconds()).padStart(2, '0');
-
-    return `${y}${m}${day}-${h}${min}${s}`; // Ej: 20260218-143005
-}
-
-// --- CONVERSIÓN LAT/LON A UTM (WGS84) ---
-function latLonToUTM(lat, lon) {
-    if (!lat || !lon) return { northing: 0, easting: 0, zone: 0 };
-
-    const a = 6378137; // Semi-eje mayor WGS84
-    const f = 1 / 298.257223563; // Aplanamiento
-    const k0 = 0.9996; // Factor de escala
-
-    const phi = lat * (Math.PI / 180);
-    const lambda = lon * (Math.PI / 180);
-    const zone = Math.floor((lon + 180) / 6) + 1;
-    const lambda0 = ((zone - 1) * 6 - 180 + 3) * (Math.PI / 180);
-
-    const e2 = 2 * f - f * f; // Excentricidad al cuadrado
-    const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
-    const T = Math.tan(phi) * Math.tan(phi);
-    const C = (e2 / (1 - e2)) * Math.cos(phi) * Math.cos(phi);
-    const A = (lambda - lambda0) * Math.cos(phi);
-
-    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi
-        - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi)
-        + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi)
-        - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
-
-    const easting = 500000 + k0 * N * (A + (1 - T + C) * A * A * A / 6
-        + (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A * A / 120);
-
-    const northing = k0 * (M + N * Math.tan(phi) * (A * A / 2
-        + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24
-        + (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720));
-
-    // Para hemisferio sur (Latitud negativa), sumar 10,000,000 al norte
-    const finalNorthing = lat < 0 ? northing + 10000000 : northing;
-
-    return {
-        easting: parseFloat(easting.toFixed(3)),
-        northing: parseFloat(finalNorthing.toFixed(3)),
-        zone: zone
-    };
 }

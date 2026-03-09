@@ -109,7 +109,7 @@ namespace Sigre.Server.Controllers
             }
         }
         [HttpGet("GetPaginado")]
-        public IActionResult GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
+        public IActionResult GetPaginado(int skip, int take, string codigo = "", string etiqueta = "", int? alimentadorId = null, int? sedId = null)
         {
             try
             {
@@ -117,7 +117,7 @@ namespace Sigre.Server.Controllers
                 DAPost da = new DAPost();
 
                 // 2. Le pasamos el pedido completo (¡AQUÍ LE PASAMOS LOS FILTROS!)
-                var resultado = da.DAPoste_GetPaginado(skip, take, busqueda, alimentadorId, sedId);
+                var resultado = da.DAPoste_GetPaginado(skip, take, codigo, etiqueta, alimentadorId, sedId);
 
                 // 3. Entregamos el plato
                 return Ok(resultado);

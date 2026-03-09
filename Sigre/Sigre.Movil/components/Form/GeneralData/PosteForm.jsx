@@ -24,13 +24,13 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     PostLongitud: src?.PostLongitud ?? "",
     PostCodigoNodo: src?.PostCodigoNodo ?? "",
 
-    // 👇 IMPORTANTES para el UI
+    PostVereda: src?.PostVereda == null ? "" : String(Number(src.PostVereda)), // "0" / "1"
     PostTerceros: src?.PostTerceros == null ? "" : String(Number(src.PostTerceros)), // "0" / "1"
     PostMaterial: src?.PostMaterial ?? "",
     PostRetenidaTipo: src?.PostRetenidaTipo ?? "",
     PostRetenidaMaterial: src?.PostRetenidaMaterial ?? "",
     PostArmadoMaterial: src?.PostArmadoMaterial ?? "",
-    PostAltura: src?.PostAltura == null ? "" : String(src.PostAltura), // siempre string
+    PostAltura: src?.PostAltura == null ? "" : String(src.PostAltura),
   });
 
 
@@ -48,6 +48,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     PostLatitud: data?.PostLatitud ?? "",
     PostLongitud: data?.PostLongitud ?? "",
     PostCodigoNodo: data?.PostCodigoNodo ?? "",
+    PostVereda: data?.PostVereda ?? "",
     PostTerceros: data?.PostTerceros ?? "",
     PostMaterial: data?.PostMaterial ?? "",
     PostRetenidaTipo: data?.PostRetenidaTipo ?? "",
@@ -90,6 +91,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
 
       const id = await savePost({
         ...form,
+        PostVereda: Number(form.PostVereda),
         PostTerceros: Number(form.PostTerceros),
         PostAltura: form.PostAltura === "" ? null : Number(form.PostAltura),
 
@@ -147,6 +149,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     PostRetenidaMaterial: obj?.PostRetenidaMaterial ?? "",
     PostArmadoMaterial: obj?.PostArmadoMaterial ?? "",
     PostAltura: obj?.PostAltura ?? "",
+    PostVereda: obj?.PostVereda ?? "",
     PostTerceros: obj?.PostTerceros ?? "",
 
     // si quieres incluir más campos editables, agrégalos aquí
@@ -223,6 +226,11 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     { label: "No", value: 1 }
   ];
 
+  const veredaOptions = [
+    { label: "No", value: 0 },
+    { label: "Sí", value: 1 }
+  ];
+
   const lockedFields = [
     "PostInterno",
     "PostLatitud",
@@ -242,6 +250,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     //"PostLongitud",
     //"PostInterno",
     "PostAltura",
+    "PostVereda",
     "PostTerceros"
   ];
 
@@ -252,6 +261,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
     PostArmadoMaterial: "Material armado",
     PostRetenidaTipo: "Tipo de retenida",
     PostRetenidaMaterial: "Material de retenida",
+    PostVereda: "Poste en vereda",
     PostTerceros: "Poste existente", //Antes TERCEROS
     // PostTerceros: "Cod. poste", 
     PostLatitud: "Latitud",
@@ -289,6 +299,28 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
 
   const renderField = (key) => {
     const locked = lockedFields.includes(key);
+
+    if (key === "PostVereda") {
+      return (
+        <SelectInput
+          key={key}
+          label={labels[key]}
+          value={veredaOptions.find(i => String(i.value) === String(form.PostVereda))?.label}
+          placeholder="Seleccione opción"
+          locked={locked}
+          onPress={() =>
+            setSelectConfig({
+              field: key,
+              title: labels[key],
+              items: veredaOptions,
+              labelKey: "label",
+              valueKey: "value"
+            })
+          }
+        />
+      );
+    }
+
     if (key === "PostTerceros") {
       return (
         <SelectInput

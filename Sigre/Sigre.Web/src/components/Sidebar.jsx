@@ -28,6 +28,7 @@ const navItems = [
   { title: 'Estadisticas', href: '/estadisticas', icon: ClipboardCheck },
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
+  { title: 'Importación Masiva Inversa', href: '/importacion-masiva-inversa', icon: FileSearch },
 ];
 
 export function Sidebar({ className, onClose, onLogout }) {
