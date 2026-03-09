@@ -86,6 +86,48 @@ const handleGisSearch = async (codigoBuscado) => {
     }
 };
 // =========================================================================
+    // 1. REGLAS DE NEGOCIO EN TIEMPO REAL (Evaluando el Elemento Destino)
+    // =========================================================================
+    
+    const currentCode = formData.defiCodigoElemento?.trim().toUpperCase() || "";
+    const currentTipiCode = getCodeById(formData.tipiInterno);
+
+    // A. ¿El elemento destino YA TIENE un registro "SIN DEFICIENCIA" (0)?
+    const targetHasCleanRecord = useMemo(() => {
+        if (!currentCode) return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) === 0 &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, existingDeficiencies, deficiencyToEdit]);
+
+    // B. ¿El elemento destino YA TIENE "DEFICIENCIAS REALES" (>0)?
+    const targetHasRealDeficiencies = useMemo(() => {
+        if (!currentCode) return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) > 0 &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, existingDeficiencies, deficiencyToEdit]);
+
+    // C. ¿El elemento destino YA TIENE la misma Tipificación exacta? (Evitar Duplicados en destino)
+    const targetHasDuplicateTipi = useMemo(() => {
+        if (!currentCode || !currentTipiCode || currentTipiCode === "0" || currentTipiCode === "7004") return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            getCodeById(d.tipiInterno) === currentTipiCode &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, currentTipiCode, existingDeficiencies, deficiencyToEdit, getCodeById]);
+
+   
+
+// =========================================================================
     // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
     // =========================================================================
     
@@ -440,6 +482,19 @@ const handleSubmit = async () => {
             setSubmitted(false);
             return;
         }
+        // 🔥 VALIDACIONES ESTRICTAS AL GUARDAR 🔥
+        if (isSinDeficiencia && targetHasRealDeficiencies) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) ya tiene fallas reales reportadas.\n\nElimine las fallas existentes primero.`);
+            setSubmitted(false); return;
+        }
+        if (!isSinDeficiencia && targetHasCleanRecord) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) está marcado como 'SIN DEFICIENCIA'.\n\nElimine el registro S/D primero.`);
+            setSubmitted(false); return;
+        }
+        if (targetHasDuplicateTipi) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) ya tiene registrada una falla del tipo ${currentTipiCode}.`);
+            setSubmitted(false); return;
+        }
 
         const now = new Date();
         const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
@@ -584,7 +639,12 @@ if (fieldKey === 'defiEstadoCriticidad') {
                 icon={isSaving ? "pi pi-spin pi-spinner" : "pi pi-check"} // ÍCONO DE CARGA
                 onClick={handleSubmit} 
                 severity="success" 
-                disabled={isSaving || (hasCleanRecord && !isEditingSD)} // BLOQUEADO MIENTRAS GUARDA
+                disabled={
+                            isSaving || 
+                            (targetHasCleanRecord && !isSinDeficiencia) ||  // Caso 1: Intentar Falla en elemento S/D
+                            (targetHasRealDeficiencies && isSinDeficiencia) || // Caso 2: Intentar S/D en elemento con Fallas
+                            targetHasDuplicateTipi // Caso 3: Tipificación duplicada
+                        }
             />
         </div>}>
             <div className="flex flex-col gap-4 mt-2">
@@ -653,12 +713,41 @@ if (fieldKey === 'defiEstadoCriticidad') {
 </div>
                     </div>
 
-                    {hasCleanRecord && (
+                    {/* {hasCleanRecord && (
                         <Message
                             severity="warn"
                             text="Este elemento está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente."
                             className="w-full mb-3 shadow-sm"
                             style={{ borderLeft: '5px solid #f59e0b' }}
+                        />
+                    )} */}
+                    {/* ALERTA 1: El elemento destino es S/D y se intenta guardar una Falla */}
+                    {targetHasCleanRecord && !isSinDeficiencia && (
+                        <Message
+                            severity="warn"
+                            text="El elemento destino está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente."
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #f59e0b' }}
+                        />
+                    )}
+
+                    {/* ALERTA 2: El elemento destino tiene Fallas y se intenta guardar como S/D */}
+                    {targetHasRealDeficiencies && isSinDeficiencia && (
+                        <Message
+                            severity="error"
+                            text="ACCIÓN BLOQUEADA: El elemento destino ya tiene fallas reales registradas. No puede marcarse como 'SIN DEFICIENCIA'."
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #ef4444' }}
+                        />
+                    )}
+
+                    {/* ALERTA 3 (CASO 1): Evitar duplicar la misma tipificación en el nuevo elemento */}
+                    {targetHasDuplicateTipi && (
+                        <Message
+                            severity="error"
+                            text={`ACCIÓN BLOQUEADA: El elemento destino ya tiene registrada una deficiencia tipo ${currentTipiCode}. Solo se permite una de este tipo.`}
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #ef4444' }}
                         />
                     )}
 

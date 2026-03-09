@@ -948,7 +948,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                         <div className="flex items-center">
                             <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({...bulkOptions, gisCode: e.checked})} />
                             <label htmlFor="cb_gisCode" className="ml-2 text-sm font-bold text-blue-800 cursor-pointer">
-                                Actualizar Ruta y Archivo con el Código GIS actual
+                                Código GIS actual
                             </label>
                         </div>
                         {bulkOptions.gisCode && (
