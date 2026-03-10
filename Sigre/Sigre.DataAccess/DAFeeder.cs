@@ -339,7 +339,8 @@ namespace Sigre.DataAccess
                         NodoFinal = p.NodoFinal,
                         Inspeccionado = p.Inspeccionado,
                         ElementCode = string.IsNullOrWhiteSpace(p.ElementCode) ? $"PIN_{Guid.NewGuid():N}" : p.ElementCode,
-                        IdSed = p.IdSed
+                        IdSed = p.IdSed,
+                        Tercero = p.Tercero
 
                     }).ToList();
 
