@@ -35,13 +35,9 @@ const styles = StyleSheet.create({
 
 const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
     
-    // 🔥 MAGIA APLICADA: Ahora lee directamente "CIR. 3" desde lo que guardamos en memoria
     const getCircuito = (def, globalFeeder) => {
-        // Prioridad 1: Si encontramos el 'CIR. 3' en la DB del poste
         if (def?.circuitoCalculado) return def.circuitoCalculado.toUpperCase();
         if (def?.tramCodigoCalculado) return def.tramCodigoCalculado.toUpperCase();
-        
-        // Prioridad 2: El Alimentador general (Global)
         const val = def?.alimentador || def?.Alimentador || def?.defiAlimentador || def?.nombreAlimentador || globalFeeder;
         return val ? String(val).toUpperCase() : "-";
     };
@@ -58,7 +54,7 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
 
         if (isStart) {
             const code = String(def?.tipificacionLabel || "0").split(' ')[0].trim();
-            const isSinDef = code === "0" || code === "0000" || code === "S/D" || code === "-" || code === "";
+            const isSinDef = code === "0" || code === "0000";
             let subtractMinutes = 4;
             if (isSinDef) {
                 const id = Number(def?.defiInterno) || 0;
@@ -69,21 +65,29 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
         return date.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
     };
 
+    // 🔥 EL NUEVO PARSEADOR ANTI-CORRUPCIÓN
     const getTipificacionData = (def) => {
         let rawVal = String(def?.tipificacionLabel || def?.tipiCodigo || def?.tipiInterno || "").trim();
         let rawCode = rawVal.split(' ')[0].replace(/[^0-9]/g, '');
 
-        if (!rawCode || rawCode === "0" || rawCode === "0000") {
-            return { code: "SIN DEFICIENCIA", description: "EL ELEMENTO FUE INSPECCIONADO Y NO PRESENTA DEFICIENCIAS OBSERVABLES." };
+        // 1. Si es explícitamente un CERO
+        if (rawCode === "0" || rawCode === "0000") {
+            return { code: "SIN DEFICIENCIA", description: "EL ELEMENTO FUE INSPECCIONADO Y NO PRESENTA DEFICIENCIAS OBSERVABLES.", color: '#16a34a' }; // Verde
         }
 
+        // 2. Si viene VACÍO, NULO o CORRUPTO
+        if (!rawCode || rawVal === "null" || rawVal === "undefined" || rawVal === "-" || rawVal === "CORRUPTO") {
+            return { code: "NO SE PUDO LEER", description: "REGISTRO CORRUPTO O SIN INFORMACIÓN DE TIPIFICACIÓN.", color: '#ea580c' }; // Naranja
+        }
+
+        // 3. Flujo normal (si encontró un código válido)
         const found = ALL_DEFICIENCY_OPTIONS.find(opt => opt.code === rawCode);
         if (found) {
             const parts = found.name.split('-');
             const soloTexto = parts.length > 1 ? parts.slice(1).join('-').trim() : found.name;
-            return { code: rawCode, description: soloTexto };
+            return { code: rawCode, description: soloTexto, color: '#dc2626' }; // Rojo
         }
-        return { code: rawCode, description: rawVal };
+        return { code: rawCode, description: rawVal, color: '#dc2626' };
     };
 
     if (!dataList || dataList.length === 0) {
@@ -95,10 +99,14 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
             {dataList.map((item, idx) => {
                 const tipificacion = getTipificacionData(item.deficiencia);
                 const isSinDef = tipificacion.code === "SIN DEFICIENCIA";
+                const isCorrupto = tipificacion.code === "NO SE PUDO LEER";
 
+                // CRITICIDAD
                 let criticidadTexto = item.deficiencia?.criticidadLabel || '-';
                 if (isSinDef || criticidadTexto.toUpperCase() === 'N/A') {
                     criticidadTexto = 'NO APLICA';
+                } else if (isCorrupto) {
+                    criticidadTexto = 'ILEGIBLE'; // Si está corrupto no sabemos su criticidad
                 }
 
                 let originalName = item.deficiencia?.inspectorLabel || "_____________________";
@@ -106,12 +114,11 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
 
                 if (originalName !== "_____________________") {
                     const cleanName = originalName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, ' ');
-
-                    if (cleanName.includes("ERICK YERAL CASTANON") || cleanName.includes("ERICK YERAL")) {
-                        inspectorName = "JOSEPH ROMULO TINTA MAMANI";
+                    if (cleanName.includes("DIEGO INFANTES") ) {
+                        inspectorName = "RONALD RENZO RIOS VERGARA";
                     } 
-                    else if (cleanName.includes("JOSEPH")) {
-                        inspectorName = "ADMINISTRADOR GENERAL";
+                    else if (cleanName.includes("ADMINISTRADOR GENERAL")) {
+                        inspectorName = "RONALD RENZO RIOS VERGARA";
                     } 
                     else {
                         inspectorName = originalName.toUpperCase();
@@ -127,7 +134,6 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                                 <Text style={[styles.headerCell, { width: '15%' }]}>SED:</Text>
                                 <Text style={[styles.valueCell, { width: '15%' }]}>{empresaInfo?.sed || "-"}</Text>
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Circuito:</Text>
-                                {/* AQUÍ IMPRIME CIR. 3 */}
                                 <Text style={[styles.valueCell, { width: '25%', fontWeight: 'bold' }]}>
                                     {getCircuito(item.deficiencia, empresaInfo?.alimentador)}
                                 </Text>
@@ -138,13 +144,10 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                             <View style={styles.row}>
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Secuencia:</Text>
                                 <Text style={[styles.valueCell, { width: '15%' }]}>{item.deficiencia?.defiInterno || "0"}</Text>
-                                
-                                {/* AQUÍ SE MUESTRA EL NÚMERO DE TRAMO ORDENADO */}
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Tramo:</Text>
                                 <Text style={[styles.valueCell, { width: '25%', color: '#2563eb', fontWeight: 'bold' }]}>
                                     {item.deficiencia?.tramoCalculado || '-'}
                                 </Text>
-                                
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Hora Inicio:</Text>
                                 <Text style={[styles.valueCell, { width: '15%', borderRight: 0 }]}>{formatTime(item.deficiencia?.defiFecRegistro, true, item.deficiencia)}</Text>
                             </View>
@@ -152,12 +155,10 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                             <View style={styles.rowNoBorder}>
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Tipo Elem:</Text>
                                 <Text style={[styles.valueCell, { width: '15%' }]}>{item.deficiencia?.defiTipoElemento === 'POST' ? 'POSTE' : 'VANO'}</Text>
-                                
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Criticidad:</Text>
-                                <Text style={[styles.valueCell, { width: '25%', color: isSinDef || criticidadTexto === 'NO APLICA' ? '#16a34a' : '#dc2626', fontWeight: 'bold' }]}>
+                                <Text style={[styles.valueCell, { width: '25%', color: tipificacion.color, fontWeight: 'bold' }]}>
                                     {criticidadTexto}
                                 </Text>
-                                
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Hora Fin:</Text>
                                 <Text style={[styles.valueCell, { width: '15%', borderRight: 0 }]}>{formatTime(item.deficiencia?.defiFecRegistro, false, null)}</Text>
                             </View>
@@ -168,7 +169,7 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                                 <Text style={[styles.headerCell, { width: '20%' }]}>Código GIS / Nodo:</Text>
                                 <Text style={[styles.valueCell, { width: '30%', fontWeight: 'bold' }]}>{item.deficiencia?.defiCodigoElemento || '-'}</Text>
                                 <Text style={[styles.headerCell, { width: '20%' }]}>Tipificación:</Text>
-                                <Text style={[styles.valueCell, { width: '30%', borderRight: 0, color: isSinDef ? '#16a34a' : '#dc2626', fontWeight: 'bold' }]}>
+                                <Text style={[styles.valueCell, { width: '30%', borderRight: 0, color: tipificacion.color, fontWeight: 'bold' }]}>
                                     {tipificacion.code}
                                 </Text>
                             </View>
@@ -211,7 +212,7 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                             </View>
                             <View style={styles.signBox}>
                                 <Text style={{ fontWeight: 'bold', fontSize: 10 }}>Firma Supervisor de Obra</Text>
-                                <Text style={{ marginTop: 15, fontSize: 8 }}>Nombre: RIOS VERGARA RONALD RENZO</Text>
+                                <Text style={{ marginTop: 15, fontSize: 8 }}>Nombre: RONALD RENZO RIOS VERGARA</Text>
                             </View>
                         </View>
 
