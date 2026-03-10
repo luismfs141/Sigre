@@ -1,4 +1,5 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -372,6 +373,57 @@ namespace Sigre.DataAccess
                 if (ex.InnerException != null)
                     Console.WriteLine($"🔍 Inner: {ex.InnerException.Message}");
                 throw;
+            }
+        }
+        // Nota: Cambiamos 'List<Sed>' por 'IActionResult' para poder devolver el molde JSON limpio
+        public List<Sed> DAFE_GetSedsByFeederWeb(int x_feeder_id)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var seds = ctx.Seds
+                    .Where(s => s.AlimInterno == x_feeder_id)
+                    .Select(s => new Sed
+                    {
+                        // Mapeamos solo los campos básicos que React necesita.
+                        // AL NO mapear las listas virtuales (como los Postes), 
+                        // rompemos la referencia circular que causaba el Error 500.
+                        SedInterno = s.SedInterno,
+                        SedCodigo = s.SedCodigo,
+                        SedEtiqueta = s.SedEtiqueta,
+                        AlimInterno = s.AlimInterno
+                    })
+                    .ToList();
+
+                return seds; // Devolvemos la lista limpia directamente
+            }
+        }
+        public List<Tramo> DAFE_GetTramosPorSed(int sedId)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var tramos = ctx.Tramos
+                    .Where(t =>
+                        // Condición 1: El tramo tiene algún Poste en esta SED
+                        t.Postes.Any(p => p.PostSubestacion == sedId && p.PostEsBt == true)
+                        ||
+                        // Condición 2: O el tramo tiene algún Vano en esta SED
+                        t.Vanos.Any(v => v.VanoSubestacion == sedId && v.VanoEsBt == true)
+                    )
+                    .Select(t => new Tramo
+                    {
+                        // Mapeamos SOLO las propiedades escalares de tu tabla Tramos.
+                        // Al NO mapear las colecciones (Postes, Vanos), evitamos 
+                        // el Error 500 de referencias circulares.
+                        TramInterno = t.TramInterno,
+                        TramCodigo = t.TramCodigo,
+                        TramOrden = t.TramOrden,
+                        TramActivo = t.TramActivo
+                    })
+                    .Distinct() // Aseguramos que no vengan tramos repetidos
+                    .OrderBy(t => t.TramOrden) // Los ordenamos correctamente
+                    .ToList();
+
+                return tramos;
             }
         }
     }

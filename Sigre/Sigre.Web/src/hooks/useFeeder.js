@@ -82,7 +82,7 @@ export const useSedsByFeeder = (selectedFeeder) => {
             try {
                 // Ahora la petición solo sale si tenemos un ID real
                 console.log(`📡 Buscando SEDs para Feeder ID: ${idFeeder}`);
-                const response = await api.get(`/Feeder/GetSedsByFeeder`, { params: { x_feeder: idFeeder } });
+                const response = await api.get(`/Feeder/GetSedsByFeederWeb`, { params: { x_feeder: idFeeder } });
                 
                 const data = response.data || [];
                 const listaReal = (data.result) ? data.result : data;
