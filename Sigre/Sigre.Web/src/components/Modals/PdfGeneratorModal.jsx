@@ -6,10 +6,11 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import JSZip from 'jszip'; // 🔥 REGRESA EL ZIP
+import JSZip from 'jszip'; 
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
 import { useTramosMap } from '../../hooks/useTramosMap';
+
 const API_BASE_URL = "http://localhost:8080/"; 
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
@@ -18,9 +19,10 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     
     const [missingPhotosLog, setMissingPhotosLog] = useState([]);
     const [showMissingModal, setShowMissingModal] = useState(false);
-    const [zipBlob, setZipBlob] = useState(null); // 🔥 ESTADO PARA EL ZIP
+    const [zipBlob, setZipBlob] = useState(null); 
     
     const isCancelled = useRef(false);
+    const { fetchTramosDictionary } = useTramosMap();
     
     useEffect(() => {
         if (visible) {
@@ -33,67 +35,57 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         }
     }, [visible, dataToPrint]);
 
+    // 🔥 GENERADOR DE RUTAS AVANZADO (Ingeniería Inversa para 7004)
     const generateCandidates = (rawPath, defCode, currentSupply, my7004Correlativo) => {
         if (!rawPath) return [];
-        let base = rawPath.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
-        const candidates = [];
+
+        let base = String(rawPath).replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        const rootPathWithoutFile = parts.join('/') + '/';
-        let shortFileName = null;
-        
-        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+        let rootPathWithoutFile = parts.join('/') + '/';
 
-        const addPathVariations = (folderPath) => { 
-            candidates.push(folderPath + originalFileName); 
-            if (shortFileName) candidates.push(folderPath + shortFileName); 
+        const candidates = new Set(); 
+        const add = (path, fileName) => {
+            candidates.add(path + fileName);
         };
 
-        const processDeficiencyFolder = (currentPath) => {
-            const complexRegex = new RegExp(`\/(${defCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
-            const matchComplex = currentPath.match(complexRegex);
-            addPathVariations(currentPath);
+        const is7004 = defCode === "7004" || defCode === "60";
+
+        if (is7004) {
+            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1;
+            let cleanBaseDir = rootPathWithoutFile.replace(/\/7004(\.[^/]+|\/\d+)?\//i, '/7004/');
+            const exactFolder = cleanBaseDir.replace(/\/7004\//i, `/7004/${folderNum}/`);
+            let exactFileName = originalFileName.replace(/7004(_\d+)?/i, `7004_${folderNum}`);
+
+            // Rutas exactas según guardado móvil
+            add(exactFolder, exactFileName);
+            add(exactFolder, originalFileName); 
+
+            // Rutas de respaldo
+            add(cleanBaseDir, originalFileName); 
+            for (let i = 1; i <= 6; i++) {
+                add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName);
+                add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName.replace(/7004(_\d+)?/i, `7004_${i}`));
+            }
+        } else {
+            add(rootPathWithoutFile, originalFileName);
+            
+            const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+            if (typeMatch) add(rootPathWithoutFile, `${typeMatch[1]}.${typeMatch[2]}`);
+
             if (currentSupply && currentSupply !== '0') {
-                 if (matchComplex) { 
-                     const fullStr = matchComplex[0]; 
-                     addPathVariations(currentPath.replace(fullStr, `/${defCode}.1.${currentSupply}/`)); 
-                     addPathVariations(currentPath.replace(fullStr, `/${defCode}/${currentSupply}/`)); 
-                 } else { 
-                     const simpleDefRegex = new RegExp(`\/${defCode}\/`); 
-                     if (currentPath.match(simpleDefRegex)) { 
-                         addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}.1.${currentSupply}/`)); 
-                         addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}/${currentSupply}/`)); 
-                     } 
-                 }
+                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}.1.${currentSupply}/`), originalFileName);
+                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}/${currentSupply}/`), originalFileName);
             }
-            if (matchComplex) { 
-                const fullStr = matchComplex[0]; 
-                addPathVariations(currentPath.replace(fullStr, `/${defCode}/`)); 
-                for(let i=1; i<=5; i++) addPathVariations(currentPath.replace(fullStr, `/${defCode}/${i}/`)); 
-            } else { 
-                const simpleDefRegex = new RegExp(`\/${defCode}\/`); 
-                if (currentPath.match(simpleDefRegex)) { 
-                    for(let i=1; i<=5; i++) { 
-                        if (!currentPath.includes(`/${defCode}/${i}/`)) { 
-                            const split = currentPath.split(`/${defCode}/`); 
-                            if (split.length > 1) addPathVariations(`${split[0]}/${defCode}/${i}/${split[1]}`); 
-                        } 
-                    } 
-                } 
-            }
-        };
-
-        processDeficiencyFolder(rootPathWithoutFile);
-        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
-        if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
-
-        if ((defCode === "7004" || defCode === "60") && my7004Correlativo > 0) {
-            const specific7004Path = rootPathWithoutFile.replace(/\/7004\//i, `/7004/${my7004Correlativo}/`);
-            candidates.unshift(specific7004Path + originalFileName);
         }
 
-        return candidates.map(c => `${API_BASE_URL}/${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
+        const candidatesArray = Array.from(candidates);
+        candidatesArray.forEach(cand => {
+            const upperCand = cand.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+            if (upperCand !== cand) candidates.add(upperCand);
+        });
+
+        return Array.from(candidates).map(c => `${API_BASE_URL}${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
     };
 
     const getWorkingImageUrl = async (candidates) => {
@@ -118,14 +110,18 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         return null;
     };
 
+    // 🔥 CÁLCULO DE CORRELATIVO REFORZADO
     const calculate7004Correlativo = (def) => {
         const targetGis = def.defiCodigoElemento;
-        const sameElement7004s = (allData || []).filter(d => d.defiCodigoElemento === targetGis && (String(d.tipiCodigo || d.tipificacionLabel || "").includes("7004") || String(d.tipiInterno) === "60"));
+        const sameElement7004s = (dataToPrint || []).filter(d => 
+            d.defiCodigoElemento === targetGis && 
+            (String(d.tipiCodigo || d.tipificacionLabel || "").includes("7004") || String(d.tipiInterno) === "60")
+        );
         sameElement7004s.sort((a, b) => a.defiInterno - b.defiInterno);
         const myIndex = sameElement7004s.findIndex(d => d.defiInterno === def.defiInterno) + 1;
         return myIndex > 0 ? myIndex : 1;
     };
-const { fetchTramosDictionary } = useTramosMap();
+
     const startProcessing = async () => {
         if (!dataToPrint || dataToPrint.length === 0) return;
         setStep(1);
@@ -135,13 +131,12 @@ const { fetchTramosDictionary } = useTramosMap();
         let resolvedData = [];
         const tempUrls = []; 
 
-        // 🔥 3. NUEVA SINCRONIZACIÓN ULTRA RÁPIDA CON EL HOOK
         setProgress(p => ({ ...p, detail: `Sincronizando Tramos y Circuitos...` }));
         
         // Llamamos al hook y esperamos el diccionario listo
         const tramosMap = await fetchTramosDictionary(empresaInfo?.sedId);
 
-        // 2. PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
+        // PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
         for (let i = 0; i < dataToPrint.length; i++) {
             if (isCancelled.current) break;
             
@@ -183,7 +178,6 @@ const { fetchTramosDictionary } = useTramosMap();
                     currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: missing.join(', ') });
                 }
 
-                // 🔥 4. NUEVA ASIGNACIÓN DE VARIABLES DE ORDENAMIENTO
                 const tipoDefNormalizado = def.defiTipoElemento.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
                 const keyBusqueda = `${tipoDefNormalizado}_${def.defiIdElemento}`;
                 
@@ -209,21 +203,17 @@ const { fetchTramosDictionary } = useTramosMap();
 
         if (isCancelled.current) return;
 
-        // 🔥 5. MOTOR DE ORDENAMIENTO ACTUALIZADO
-// 🔥 MOTOR DE ORDENAMIENTO: Primero CIRCUITO, luego SECUENCIA
+        // 🔥 MOTOR DE ORDENAMIENTO (Circuito -> Secuencia)
         setProgress(p => ({ ...p, detail: `Ordenando registros por Circuito y Secuencia...` }));
         
         resolvedData.sort((a, b) => {
-            // 1. ORDENAMOS POR CIRCUITO (tramCodigoCalculado)
             const circuitoA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
             const circuitoB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
             
             if (circuitoA !== circuitoB) {
-                // El { numeric: true } asegura que "Cir.2" vaya ANTES que "Cir.10"
                 return circuitoA.localeCompare(circuitoB, undefined, { numeric: true, sensitivity: 'base' });
             }
 
-            // 2. SI ES EL MISMO CIRCUITO, ORDENAMOS POR SECUENCIA (tramOrdenCalculado)
             const seqA = Number(a.deficiencia.tramOrdenCalculado || 0);
             const seqB = Number(b.deficiencia.tramOrdenCalculado || 0);
             
@@ -231,24 +221,21 @@ const { fetchTramosDictionary } = useTramosMap();
         });
 
 
-        // 🔥🔥🔥 ESTO ES LO QUE FALTABA: GENERACIÓN DEL PDF Y EL ZIP 🔥🔥🔥
+        // 🔥 GENERACIÓN DEL PDF Y EL ZIP
         if (resolvedData.length > 0) {
             setProgress(p => ({ ...p, detail: `Ensamblando y comprimiendo PDF...` }));
             try {
-                const zip = new JSZip(); // Instanciamos ZIP
+                const zip = new JSZip(); 
                 const docElement = <DeficiencyPdfDocument dataList={resolvedData} empresaInfo={empresaInfo} />;
                 const pdfInstance = pdf();
                 pdfInstance.updateContainer(docElement);
                 const blob = await pdfInstance.toBlob();
                 
-                // Metemos el PDF al ZIP
                 zip.file(`Reporte_SEAL_SED_${empresaInfo?.sed || 'SED'}_Completo.pdf`, blob);
                 
-                // Generamos el .zip final
                 const finalZip = await zip.generateAsync({ type: "blob" });
                 setZipBlob(finalZip);
                 
-                // Limpieza masiva de RAM al final
                 tempUrls.forEach(u => URL.revokeObjectURL(u));
             } catch (err) {
                 console.error(`Error generando el PDF unificado:`, err);
@@ -257,7 +244,7 @@ const { fetchTramosDictionary } = useTramosMap();
 
         setMissingPhotosLog(currentMissingLog);
         setStep(2);
-    }; // 🔥 FIN DE LA FUNCIÓN STARTPROCESSING
+    };
 
     const cancelProcess = () => {
         isCancelled.current = true;
@@ -292,7 +279,6 @@ const { fetchTramosDictionary } = useTramosMap();
                             <span className="font-bold text-lg">¡Proceso Finalizado!</span>
                             <p className="text-sm text-gray-600">El reporte ordenado ha sido comprimido. Descárgalo a continuación.</p>
                             
-                            {/* 🔥 BOTÓN DEL QA DE FOTOS FALTANTES */}
                             {missingPhotosLog.length > 0 && (
                                 <div className="w-full mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
                                     <p className="text-xs text-orange-800 font-bold mb-2">
@@ -308,7 +294,6 @@ const { fetchTramosDictionary } = useTramosMap();
                                 </div>
                             )}
 
-                            {/* 🔥 BOTÓN PARA DESCARGAR EL ZIP */}
                             <Button 
                                 label="Descargar Archivo ZIP" 
                                 icon="pi pi-download" 
