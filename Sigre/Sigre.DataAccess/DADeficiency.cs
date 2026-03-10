@@ -1007,6 +1007,7 @@ namespace Sigre.DataAccess
                                 foreach (var arch in archivosViejos)
                                 {
                                     arch.ArchCodTabla = input.DefiInterno;
+                                    arch.DefiUUID = input.DefiCol3;
                                     if (cambioGis)
                                     {
                                         arch.ArchIdElemento = input.DefiIdElemento;

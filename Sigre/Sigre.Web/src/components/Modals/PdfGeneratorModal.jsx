@@ -23,11 +23,19 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     
     const isCancelled = useRef(false);
     const { fetchTramosDictionary } = useTramosMap();
-    
+    const filterOnlyActive = (list) => {
+        return (list || []).filter(def => 
+            def.defiActivo === 1 || 
+            def.defiActivo === true || 
+            String(def.defiActivo) === '1' || 
+            String(def.defiActivo) === 'true'
+        );
+    };
     useEffect(() => {
         if (visible) {
+            const activeData = filterOnlyActive(dataToPrint);
             setStep(0);
-            setProgress({ current: 0, total: dataToPrint?.length || 0, detail: 'Iniciando...' });
+            setProgress({ current: 0, total: activeData.length || 0, detail: 'Iniciando...' });
             setMissingPhotosLog([]);
             setShowMissingModal(false);
             setZipBlob(null);
@@ -123,7 +131,12 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     };
 
     const startProcessing = async () => {
-        if (!dataToPrint || dataToPrint.length === 0) return;
+const activeData = filterOnlyActive(dataToPrint);
+
+        if (activeData.length === 0) {
+            onHide();
+            return;
+        }
         setStep(1);
         
         let totalProcessed = 0;
@@ -137,25 +150,51 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         const tramosMap = await fetchTramosDictionary(empresaInfo?.sedId);
 
         // PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
-        for (let i = 0; i < dataToPrint.length; i++) {
+        for (let i = 0; i < activeData.length; i++) {
             if (isCancelled.current) break;
             
-            const def = dataToPrint[i];
+            const def = activeData[i];
             const defCode = String(def.tipificacionLabel || "0000").split(' ')[0].trim();
             const currentSupply = String(def.defiNumSuministro || "0").trim();
             const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def) : 0;
-            
+            // 🔥 CAPTURAMOS EL UUID DE LA DEFICIENCIA (Tu gran idea)
+            const defUUID = String(def.defiCol3 || "").trim().toLowerCase();
             try {
                 const response = await api.get('/File/GetByDeficiencyWeb', { params: { x_deficiency: def.defiInterno } });
                 const files = (response.data || []).filter(f => f.archActivo === 1 || f.archActivo === true);
                 
                 const photoPromises = [1, 2, 3, 4].map(async (typeId) => {
-                    const fileData = files.find(x => parseInt(x.archTipo) === typeId);
-                    if (!fileData) return { typeId, url: null };
+                    // 1. Obtenemos TODAS las fotos de este tipo
+                    let possibleFiles = files.filter(x => parseInt(x.archTipo) === typeId);
                     
-                    const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
-                    const url = await getWorkingImageUrl(candidates);
-                    return { typeId, url };
+                    if (possibleFiles.length === 0) return { typeId, url: null };
+                    
+                    // 2. 🔥 COMBINACIÓN INTELIGENTE (Bala de Plata + Fuerza Bruta)
+                    // Si tenemos UUID, ORDENAMOS la lista para evaluar primero el archivo que coincide exactamente.
+                    // No eliminamos los demás, solo los mandamos al final de la cola como respaldo.
+                    if (defUUID && possibleFiles.length > 1) {
+                        possibleFiles.sort((a, b) => {
+                            const aUUID = String(a.defiUUID || a.DefiUUID || "").trim().toLowerCase();
+                            const bUUID = String(b.defiUUID || b.DefiUUID || "").trim().toLowerCase();
+                            const aMatch = aUUID === defUUID;
+                            const bMatch = bUUID === defUUID;
+                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1; // El que coincide va al índice 0
+                        });
+                    }
+                    
+                    // 3. 🚀 FUERZA BRUTA DE RUTAS
+                    // Probará la del UUID correcto primero. Si la ruta física está rota o es un registro antiguo,
+                    // seguirá iterando y aplicando la fuerza bruta al resto de los archivos.
+                    for (const fileData of possibleFiles) {
+                        const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
+                        const url = await getWorkingImageUrl(candidates);
+                        
+                        if (url) {
+                            return { typeId, url }; // ¡Encontró la foto física!
+                        }
+                    }
+                    
+                    return { typeId, url: null };
                 });
 
                 const results = await Promise.all(photoPromises);

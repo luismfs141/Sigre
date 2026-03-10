@@ -274,27 +274,32 @@ namespace Sigre.DataAccess
         }
         public void DAARCH_SaveInWeb(Archivo x_archivo)
         {
-            // Capturamos a qué deficiencia pertenece este archivo
-            // Lo hacemos fuera del using por si necesitamos pasarlo al método evaluador
             int idDeficienciaAsociada = 0;
 
             using (SigreContext ctx = new SigreContext())
             {
+                // 🔥 LA REGLA DE ORO: El UUID del archivo DEBE ser el mismo que el del padre.
+                // Buscamos al padre (Deficiencia) para copiarle su UUID (DefiCol3)
+                var deficienciaPadre = ctx.Deficiencias
+                                          .AsNoTracking()
+                                          .FirstOrDefault(d => d.DefiInterno == x_archivo.ArchCodTabla);
+
+                string uuidHeredado = deficienciaPadre?.DefiCol3 ?? "";
+
                 // 1. Lógica para INSERTAR (Nuevo)
                 if (x_archivo.ArchInterno == 0)
                 {
-                    // === GENERACIÓN DE GUID ===
-                    if (string.IsNullOrEmpty(x_archivo.DefiUUID))
+                    // Heredamos el UUID del padre en lugar de inventar uno nuevo
+                    x_archivo.DefiUUID = uuidHeredado;
+
+                    x_archivo.ArchActivo = true;
+                    if (x_archivo.ArchFecha == DateTime.MinValue || x_archivo.ArchFecha == null)
                     {
-                        x_archivo.DefiUUID = Guid.NewGuid().ToString().ToUpper();
+                        x_archivo.ArchFecha = DateTime.Now;
                     }
 
-                    // Datos por defecto obligatorios
-                    x_archivo.ArchActivo = true;
-                    if (x_archivo.ArchFecha == DateTime.MinValue) x_archivo.ArchFecha = DateTime.Now;
-
                     ctx.Archivos.Add(x_archivo);
-                    idDeficienciaAsociada = x_archivo.ArchCodTabla; // Capturamos el ID del padre
+                    idDeficienciaAsociada = x_archivo.ArchCodTabla;
                 }
                 // 2. Lógica para ACTUALIZAR (Existente)
                 else
@@ -312,30 +317,24 @@ namespace Sigre.DataAccess
                         if (x_archivo.ArchFecha > DateTime.MinValue)
                             original.ArchFecha = x_archivo.ArchFecha;
 
-                        if (string.IsNullOrEmpty(original.DefiUUID))
-                            original.DefiUUID = Guid.NewGuid().ToString().ToUpper();
+                        // Si por alguna razón histórica no tiene UUID, lo reparamos heredándolo del padre
+                        if (string.IsNullOrEmpty(original.DefiUUID) && !string.IsNullOrEmpty(uuidHeredado))
+                        {
+                            original.DefiUUID = uuidHeredado;
+                        }
 
-                        idDeficienciaAsociada = original.ArchCodTabla; // Capturamos el ID del padre
+                        idDeficienciaAsociada = original.ArchCodTabla;
                     }
                 }
 
-                // Guardamos cambios (Esto hará el INSERT o UPDATE automáticamente)
                 ctx.SaveChanges();
             }
 
-            // 🔥 PASO REACTIVO: REEVALUAR AL PADRE 🔥
-            // Lo llamamos FUERA del 'using' anterior para que abra su propio contexto limpio,
-            // o puedes meter la lógica dentro de la misma transacción si prefieres, 
-            // pero así es más modular y seguro.
+            // PASO REACTIVO: REEVALUAR AL PADRE
             if (idDeficienciaAsociada > 0)
             {
                 ReevaluarEstadoInspeccionDeficiencia(idDeficienciaAsociada);
             }
-            //if (idDeficienciaAsociada > 0)
-            //{
-            //    SincronizarEstadoInspeccionElemento(idDeficienciaAsociada);
-            //}
-
         }
         public int ARCH_ExistPhoto(string ruta)
         {

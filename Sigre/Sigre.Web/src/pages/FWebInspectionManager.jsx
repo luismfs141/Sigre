@@ -236,6 +236,7 @@ export default function WebInspectionManager() {
              setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
              return;
         }
+        setStructureIdInt(validElement.postInterno || validElement.vanoInterno || validElement.id || 0);
 
         const realType = validElement._tipo === 'POSTE' ? 'POST' : 'VANO';
         if (realType !== structureType) {
@@ -309,13 +310,14 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
             // D. Registro de Blobs para ZIP sin recargar
             if (dataToSave.file) { sessionBlobs.current[fileName] = dataToSave.file; }
-
+            const safeElementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
             const payload = {
                 archTabla: "Deficiencias", archInterno: 0, archTipo: String(dataToSave.tipo),
                 archNombre: dbPath, archCodTabla: Number(defId),
                 archLatitud: utm.northing, archLongitud: utm.easting,
                 archFecha: new Date(dataToSave.date || new Date()).toISOString(),
                 archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
+                archIdElemento: Number(safeElementId),
                 tipiInterno: Number(defTipiInterno), archActivo: true,
                 file: dataToSave.file
             };
