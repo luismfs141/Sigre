@@ -41,6 +41,7 @@ public partial class Vano
     public bool? VanoEsBt { get; set; }
 
     public string? VanoTramo { get; set; }
+    public int? TramInterno { get; set; }
 
     public virtual Alimentadore? AlimInternoNavigation { get; set; } = null!;
 }

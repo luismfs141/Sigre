@@ -349,7 +349,8 @@ namespace Sigre.DataAccess
             }
         }
         // Añadimos alimentadorId y sedId como parámetros opcionales (nulleables)
-        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
+        // 🔥 CAMBIO AQUÍ: Reemplazamos 'string busqueda = ""' por 'string codigo = "", string etiqueta = ""'
+        public PagedResult<Poste> DAPoste_GetPaginado(int skip, int take, string codigo = "", string etiqueta = "", int? alimentadorId = null, int? sedId = null)
         {
             using (SigreContext ctx = new SigreContext())
             {
@@ -367,16 +368,32 @@ namespace Sigre.DataAccess
 
                 if (sedId.HasValue && sedId.Value > 0)
                 {
-                    // Ajusta "PostSubestacion" al nombre real de tu columna en EF
                     query = query.Where(p => p.PostSubestacion == sedId.Value);
                 }
 
-                // 3. FILTRO DE TEXTO LENTO (Ahora corre sobre un universo diminuto)
-                if (!string.IsNullOrEmpty(busqueda))
+                // 3. 🔥 FILTROS DE TEXTO INTELIGENTES (Código y Etiqueta separados)
+                bool hasCodigo = !string.IsNullOrWhiteSpace(codigo);
+                bool hasEtiqueta = !string.IsNullOrWhiteSpace(etiqueta);
+
+                if (hasCodigo && hasEtiqueta)
                 {
-                    busqueda = busqueda.Trim();
-                    query = query.Where(p => p.PostCodigoNodo.Contains(busqueda) ||
-                                             (p.PostEtiqueta != null && p.PostEtiqueta.Contains(busqueda)));
+                    // Si desde el frontend envían AMBOS, buscamos que coincida uno U otro (OR)
+                    codigo = codigo.Trim();
+                    etiqueta = etiqueta.Trim();
+                    query = query.Where(p => p.PostCodigoNodo.Contains(codigo) ||
+                                             (p.PostEtiqueta != null && p.PostEtiqueta.Contains(etiqueta)));
+                }
+                else if (hasCodigo)
+                {
+                    // Si solo envían el Código GIS
+                    codigo = codigo.Trim();
+                    query = query.Where(p => p.PostCodigoNodo.Contains(codigo));
+                }
+                else if (hasEtiqueta)
+                {
+                    // Si solo envían la Etiqueta
+                    etiqueta = etiqueta.Trim();
+                    query = query.Where(p => p.PostEtiqueta != null && p.PostEtiqueta.Contains(etiqueta));
                 }
 
                 int totalRecords = query.Count();
@@ -385,7 +402,8 @@ namespace Sigre.DataAccess
                     .OrderByDescending(p => p.PostInterno)
                     .Skip(skip)
                     .Take(take)
-                    .Select(p => new Poste() {
+                    .Select(p => new Poste()
+                    {
                         PostInterno = p.PostInterno,
                         PostEtiqueta = p.PostEtiqueta,
                         PostCodigoNodo = p.PostCodigoNodo,
@@ -399,7 +417,8 @@ namespace Sigre.DataAccess
                         PostRetenidaTipo = p.PostRetenidaTipo,
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt
+                        PostEsBt = p.PostEsBt,
+                        TramInterno = p.TramInterno,
                     })
                     .ToList();
 

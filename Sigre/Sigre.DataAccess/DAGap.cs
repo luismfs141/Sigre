@@ -435,7 +435,7 @@ namespace Sigre.DataAccess
         }
         // Asegúrate de tener la clase PagedResult<T> definida en tu proyecto (la que creamos antes).
 
-        public PagedResult<Vano> DAGAP_GetPaginado(int skip, int take, string busqueda = "", int? alimentadorId = null, int? sedId = null)
+        public PagedResult<Vano> DAGAP_GetPaginado(int skip, int take, string codigo = "", string etiqueta = "", int? alimentadorId = null, int? sedId = null)
         {
             using (SigreContext ctx = new SigreContext())
             {
@@ -464,14 +464,31 @@ namespace Sigre.DataAccess
                 }
 
                 // 3. FILTRO OPCIONAL DE BÚSQUEDA
-                if (!string.IsNullOrEmpty(busqueda))
-                {
-                    busqueda = busqueda.Trim();
-                    query = query.Where(v => v.VanoCodigo.Contains(busqueda) ||
-                                             v.VanoNodoInicial.Contains(busqueda) ||
-                                             v.VanoNodoFinal.Contains(busqueda));
-                }
+                bool hasCodigo = !string.IsNullOrWhiteSpace(codigo);
+                bool hasEtiqueta = !string.IsNullOrWhiteSpace(etiqueta);
 
+                if (hasCodigo && hasEtiqueta)
+                {
+                    codigo = codigo.Trim();
+                    etiqueta = etiqueta.Trim();
+                    // Busca por Código (y nodos) O por Etiqueta
+                    query = query.Where(v => v.VanoCodigo.Contains(codigo) ||
+                                             v.VanoNodoInicial.Contains(codigo) ||
+                                             v.VanoNodoFinal.Contains(codigo) ||
+                                             (v.VanoEtiqueta != null && v.VanoEtiqueta.Contains(etiqueta)));
+                }
+                else if (hasCodigo)
+                {
+                    codigo = codigo.Trim();
+                    query = query.Where(v => v.VanoCodigo.Contains(codigo) ||
+                                             v.VanoNodoInicial.Contains(codigo) ||
+                                             v.VanoNodoFinal.Contains(codigo));
+                }
+                else if (hasEtiqueta)
+                {
+                    etiqueta = etiqueta.Trim();
+                    query = query.Where(v => v.VanoEtiqueta != null && v.VanoEtiqueta.Contains(etiqueta));
+                }
                 // 4. CONTEO (CRÍTICO: Ya cuenta solo los de Baja Tensión filtrados por Alim/SED)
                 int totalRecords = query.Count();
 
@@ -497,7 +514,8 @@ namespace Sigre.DataAccess
                         AlimInterno = v.AlimInterno,
                         VanoSubestacion = v.VanoSubestacion,
                         VanoEsBt = v.VanoEsBt,
-                        
+                        VanoTramo=v.VanoTramo,
+                        TramInterno=v.TramInterno
                     })
                     .ToList();
 

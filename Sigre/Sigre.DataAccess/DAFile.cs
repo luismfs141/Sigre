@@ -307,6 +307,7 @@ namespace Sigre.DataAccess
                         original.ArchActivo = x_archivo.ArchActivo;
                         original.ArchLatitud = x_archivo.ArchLatitud;
                         original.ArchLongitud = x_archivo.ArchLongitud;
+                        original.TipiInterno = x_archivo.TipiInterno;
 
                         if (x_archivo.ArchFecha > DateTime.MinValue)
                             original.ArchFecha = x_archivo.ArchFecha;

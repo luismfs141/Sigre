@@ -10,10 +10,9 @@ import { classNames } from 'primereact/utils';
 import { Message } from 'primereact/message';
 import { Calendar } from 'primereact/calendar';
 import { AutoComplete } from 'primereact/autocomplete';
-
+import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { useTypification } from '../../hooks/useTypification';
 import { useElements } from '../../hooks/useElement'; 
-import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
@@ -42,12 +41,91 @@ export default function DeficiencyForm({
     // NUEVO: Estado para errores de validación en tiempo real
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSaving, setIsSaving] = useState(false);
+    const [isSearchingGis, setIsSearchingGis] = useState(false);
 
     const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
-    const { suggestions, searchNode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
+    const { searchExactCode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
 
     
+const handleGisSearch = async (codigoBuscado) => {
+    if (!codigoBuscado || codigoBuscado.trim() === '') return;
+
+    setIsSearchingGis(true);
+    try {
+        const exactMatch = await searchExactCode(codigoBuscado, '', alimentadorId, sedId);
+
+        if (exactMatch) {
+            const isPoste = exactMatch._tipo === 'POSTE';
+            // Intentamos leer las coordenadas de manera segura
+            const latEncontrada = isPoste ? (exactMatch.postLatitud || exactMatch.lat) : (exactMatch.vanoLatitudIni || exactMatch.lat);
+            const lngEncontrada = isPoste ? (exactMatch.postLongitud || exactMatch.lng) : (exactMatch.vanoLongitudIni || exactMatch.lng);
+
+            setFormData(prev => {
+                // 🔥 REGLA 1: Si es edición, CONSERVAMOS las coordenadas originales.
+                const finalLat = deficiencyToEdit ? prev.defiLatitud : (Number(latEncontrada) || prev.defiLatitud);
+                const finalLng = deficiencyToEdit ? prev.defiLongitud : (Number(lngEncontrada) || prev.defiLongitud);
+
+                // 🔥 REGLA 2: Si es edición, CONSERVAMOS el Tipo (VANO/POSTE) para NO borrar la Tipificación.
+                const finalTipo = deficiencyToEdit ? prev.defiTipoElemento : (isPoste ? 'POST' : 'VANO');
+
+                return {
+                    ...prev,
+                    // Usamos exactamente el texto que el usuario buscó para que jamás desaparezca
+                    defiCodigoElemento: codigoBuscado.toUpperCase(),
+                    defiTipoElemento: finalTipo,
+                    defiLatitud: finalLat,
+                    defiLongitud: finalLng,
+                };
+            });
+        }
+    } catch (error) {
+        console.error("Error buscando coordenadas del GIS:", error);
+    } finally {
+        setIsSearchingGis(false);
+    }
+};
+// =========================================================================
+    // 1. REGLAS DE NEGOCIO EN TIEMPO REAL (Evaluando el Elemento Destino)
+    // =========================================================================
+    
+    const currentCode = formData.defiCodigoElemento?.trim().toUpperCase() || "";
+    const currentTipiCode = getCodeById(formData.tipiInterno);
+
+    // A. ¿El elemento destino YA TIENE un registro "SIN DEFICIENCIA" (0)?
+    const targetHasCleanRecord = useMemo(() => {
+        if (!currentCode) return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) === 0 &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, existingDeficiencies, deficiencyToEdit]);
+
+    // B. ¿El elemento destino YA TIENE "DEFICIENCIAS REALES" (>0)?
+    const targetHasRealDeficiencies = useMemo(() => {
+        if (!currentCode) return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            Number(d.tipiInterno) > 0 &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, existingDeficiencies, deficiencyToEdit]);
+
+    // C. ¿El elemento destino YA TIENE la misma Tipificación exacta? (Evitar Duplicados en destino)
+    const targetHasDuplicateTipi = useMemo(() => {
+        if (!currentCode || !currentTipiCode || currentTipiCode === "0" || currentTipiCode === "7004") return false;
+        return existingDeficiencies.some(d =>
+            d.defiActivo &&
+            d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
+            getCodeById(d.tipiInterno) === currentTipiCode &&
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [currentCode, currentTipiCode, existingDeficiencies, deficiencyToEdit, getCodeById]);
+
+   
 
 // =========================================================================
     // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
@@ -185,6 +263,8 @@ const currentConfig = useMemo(() => {
                 const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
                 const _fechaRaw = getValue('FecRegistro');
                 const _fecha = _fechaRaw ? new Date(_fechaRaw) : new Date();
+                const col2Raw = getValue('Col2');
+                const safeCol2 = col2Raw ? String(col2Raw).trim().toUpperCase() : 'SEAL';
 
                 setFormData({
                     defiInterno: Number(getValue('Interno')),
@@ -208,7 +288,7 @@ const currentConfig = useMemo(() => {
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
                     defiUsuarioInic: getValue('UsuarioInic'),
-                    defiCol2: getValue('Col2') || '' 
+                    defiCol2: safeCol2
                 });
             } else {
                 // --- MODO NUEVO ---
@@ -223,7 +303,8 @@ const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi$
                 let initialDate = new Date();
                 const dateRef = getRefValue('FecRegistro');
                 if (dateRef) initialDate = new Date(dateRef);
-                const initialCol2= getRefValue('Col2') || '';
+                const col2RefRaw = getRefValue('Col2');
+                const initialCol2 = col2RefRaw ? String(col2RefRaw).trim().toUpperCase() : 'SEAL';
 
                 setFormData({
                     defiCodigoElemento: initialCode,
@@ -404,6 +485,19 @@ const handleSubmit = async () => {
             setSubmitted(false);
             return;
         }
+        // 🔥 VALIDACIONES ESTRICTAS AL GUARDAR 🔥
+        if (isSinDeficiencia && targetHasRealDeficiencies) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) ya tiene fallas reales reportadas.\n\nElimine las fallas existentes primero.`);
+            setSubmitted(false); return;
+        }
+        if (!isSinDeficiencia && targetHasCleanRecord) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) está marcado como 'SIN DEFICIENCIA'.\n\nElimine el registro S/D primero.`);
+            setSubmitted(false); return;
+        }
+        if (targetHasDuplicateTipi) {
+            alert(`ACCIÓN BLOQUEADA:\nEl elemento destino (${formData.defiCodigoElemento}) ya tiene registrada una falla del tipo ${currentTipiCode}.`);
+            setSubmitted(false); return;
+        }
 
         const now = new Date();
         const registroDate = formData.defiFecRegistro instanceof Date ? formData.defiFecRegistro : now;
@@ -548,7 +642,12 @@ if (fieldKey === 'defiEstadoCriticidad') {
                 icon={isSaving ? "pi pi-spin pi-spinner" : "pi pi-check"} // ÍCONO DE CARGA
                 onClick={handleSubmit} 
                 severity="success" 
-                disabled={isSaving || (hasCleanRecord && !isEditingSD)} // BLOQUEADO MIENTRAS GUARDA
+                disabled={
+                            isSaving || 
+                            (targetHasCleanRecord && !isSinDeficiencia) ||  // Caso 1: Intentar Falla en elemento S/D
+                            (targetHasRealDeficiencies && isSinDeficiencia) || // Caso 2: Intentar S/D en elemento con Fallas
+                            targetHasDuplicateTipi // Caso 3: Tipificación duplicada
+                        }
             />
         </div>}>
             <div className="flex flex-col gap-4 mt-2">
@@ -564,77 +663,94 @@ if (fieldKey === 'defiEstadoCriticidad') {
         className="bg-gray-100 opacity-90 cursor-not-allowed" 
     />
 </div>
-                        <div className="field">
+<div className="field">
     <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
     
-    {/* CONDICIONAL: Si es NUEVO (!deficiencyToEdit) mostramos el Buscador */}
-    {!deficiencyToEdit ? (
-<AutoComplete 
-    value={formData.defiCodigoElemento} 
-    suggestions={suggestions} 
-    completeMethod={(e) => searchNode(e.query, alimentadorId, sedId)}
-    field="codigo"
-    itemTemplate={itemTemplate} 
+    <span className="p-input-icon-right w-full">
+        {/* Mostramos un spinner de PrimeReact si está buscando */}
+        {isSearchingGis && <i className="pi pi-spin pi-spinner" />}
+        
+<InputText 
+    value={formData.defiCodigoElemento || ''} 
+    className={`w-full p-inputtext-sm font-bold uppercase ${deficiencyToEdit ? 'bg-yellow-50 border-yellow-300' : ''}`}
+    placeholder="Ingrese el código y presione Enter..."
     
-    // 1. ESTO ES LO QUE FALTABA: Permitir escribir
     onChange={(e) => {
-        const valor = e.value && e.value.codigo ? e.value.codigo : e.value;
-        const texto = String(valor || '').toUpperCase(); // Forzamos a mayúsculas
+        const texto = e.target.value.toUpperCase(); // Forzamos a mayúsculas
         
         setFormData(prev => {
             let nuevoTipo = prev.defiTipoElemento;
             
-            // Si el código contiene VBT o VANO, es un VANO
-            if (texto.includes('VBT') || texto.includes('VANO')) {
-                nuevoTipo = 'VANO';
-            } 
-            // Si el código contiene PTO o POST, es un POSTE
-            else if (texto.includes('PTO') || texto.includes('POST')) {
-                nuevoTipo = 'POST';
+            // 🔥 REGLA 3: Bloqueo estricto. Si estamos editando, prohibimos que 
+            // el sistema cambie el tipo. Así blindamos la Tipificación.
+            if (!deficiencyToEdit) {
+                if (texto.includes('VBT') || texto.includes('VANO')) nuevoTipo = 'VANO';
+                else if (texto.includes('PTO') || texto.includes('POST')) nuevoTipo = 'POST';
             }
 
             return { 
                 ...prev, 
                 defiCodigoElemento: texto, 
-                defiTipoElemento: nuevoTipo // Se actualiza solo
+                defiTipoElemento: nuevoTipo 
             };
         });
     }}
-
-    // 2. AL SELECCIONAR: Autocompletar Tipo y Coordenadas (Tu lógica actual)
-    onSelect={(e) => {
-        const item = e.value;
-        const tipoParaDropdown = item._tipo === 'POSTE' ? 'POST' : 'VANO';
-        setFormData(prev => ({
-            ...prev,
-            defiCodigoElemento: item.codigo,
-            defiTipoElemento: tipoParaDropdown,
-            defiLatitud: item.lat,        
-            defiLongitud: item.lng
-        }));
-    }}
     
-    placeholder="Buscar Poste o Vano..."
-    className="w-full"
-    inputClassName="w-full p-inputtext-sm font-bold uppercase"
+    onBlur={(e) => handleGisSearch(e.target.value)}
+    
+    onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); 
+            handleGisSearch(e.target.value);
+        }
+    }}
 />
-    ) : (
-        // CONDICIONAL: Si es EDICIÓN, mostramos el Input bloqueado (tu código original)
-        <InputText 
-            value={formData.defiCodigoElemento} 
-            disabled={!!deficiencyToEdit}
-            className="w-full p-inputtext-sm bg-gray-100 font-bold text-gray-700"
-        />
+    </span>
+    
+    {/* Pequeña ayuda visual para el usuario */}
+    {!deficiencyToEdit && (
+        <small className="text-gray-400 text-[10px]">
+            Presione Enter o salga del campo para buscar lat/lng automáticamente.
+        </small>
     )}
 </div>
                     </div>
 
-                    {hasCleanRecord && (
+                    {/* {hasCleanRecord && (
                         <Message
                             severity="warn"
                             text="Este elemento está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente."
                             className="w-full mb-3 shadow-sm"
                             style={{ borderLeft: '5px solid #f59e0b' }}
+                        />
+                    )} */}
+                    {/* ALERTA 1: El elemento destino es S/D y se intenta guardar una Falla */}
+                    {targetHasCleanRecord && !isSinDeficiencia && (
+                        <Message
+                            severity="warn"
+                            text="El elemento destino está registrado como 'SIN DEFICIENCIA'. Para agregar fallas, primero debe eliminar el registro S/D existente."
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #f59e0b' }}
+                        />
+                    )}
+
+                    {/* ALERTA 2: El elemento destino tiene Fallas y se intenta guardar como S/D */}
+                    {targetHasRealDeficiencies && isSinDeficiencia && (
+                        <Message
+                            severity="error"
+                            text="ACCIÓN BLOQUEADA: El elemento destino ya tiene fallas reales registradas. No puede marcarse como 'SIN DEFICIENCIA'."
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #ef4444' }}
+                        />
+                    )}
+
+                    {/* ALERTA 3 (CASO 1): Evitar duplicar la misma tipificación en el nuevo elemento */}
+                    {targetHasDuplicateTipi && (
+                        <Message
+                            severity="error"
+                            text={`ACCIÓN BLOQUEADA: El elemento destino ya tiene registrada una deficiencia tipo ${currentTipiCode}. Solo se permite una de este tipo.`}
+                            className="w-full mb-3 shadow-sm"
+                            style={{ borderLeft: '5px solid #ef4444' }}
                         />
                     )}
 

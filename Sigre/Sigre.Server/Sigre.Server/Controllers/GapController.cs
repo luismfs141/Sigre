@@ -131,7 +131,7 @@ namespace Sigre.Server.Controllers
         }
         [HttpGet("GetPaginado")]
         // 🔥 NUEVO: Se agregan los [FromQuery] y los nuevos parámetros opcionales
-        public IActionResult GetPaginado([FromQuery] int skip, [FromQuery] int take, [FromQuery] string busqueda = "", [FromQuery] int? alimentadorId = null, [FromQuery] int? sedId = null)
+        public IActionResult GetPaginado(int skip, int take, string codigo = "", string etiqueta = "", int? alimentadorId = null, int? sedId = null)
         {
             try
             {
@@ -139,7 +139,7 @@ namespace Sigre.Server.Controllers
                 DAGap da = new DAGap();
 
                 // 🔥 NUEVO: Le pasamos todos los parámetros, incluyendo los opcionales
-                var result = da.DAGAP_GetPaginado(skip, take, busqueda, alimentadorId, sedId);
+                var result = da.DAGAP_GetPaginado(skip, take, codigo, etiqueta, alimentadorId, sedId);
 
                 return Ok(result);
             }
