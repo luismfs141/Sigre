@@ -68,7 +68,6 @@ public partial class SigreContext : DbContext
     public virtual DbSet<Tipificacione> Tipificaciones { get; set; }
     public virtual DbSet<Tramo> Tramos { get; set; }
     public virtual DbSet<Usuario> Usuarios { get; set; }
-
     public virtual DbSet<UsuariosAlimentadore> UsuariosAlimentadores { get; set; }
 
     public virtual DbSet<Vano> Vanos { get; set; }
@@ -817,6 +816,7 @@ public partial class SigreContext : DbContext
                 .HasDefaultValueSql("('M')")
                 .IsFixedLength()
                 .HasColumnName("SED_Tipo");
+            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
 
             entity.HasOne(d => d.SedArmadoMaterialNavigation).WithMany(p => p.Seds)
                 .HasForeignKey(d => d.SedArmadoMaterial)
@@ -837,6 +837,10 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.SedRetenidaTipoNavigation).WithMany(p => p.Seds)
                 .HasForeignKey(d => d.SedRetenidaTipo)
                 .HasConstraintName("FK_Seds_RetenidaTipo");
+
+            entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.TramInterno)
+                .HasConstraintName("FK_Seds_Tramos");
         });
 
         modelBuilder.Entity<SedMaterial>(entity =>
