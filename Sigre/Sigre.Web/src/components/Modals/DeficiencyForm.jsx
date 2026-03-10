@@ -263,6 +263,8 @@ const currentConfig = useMemo(() => {
                 const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
                 const _fechaRaw = getValue('FecRegistro');
                 const _fecha = _fechaRaw ? new Date(_fechaRaw) : new Date();
+                const col2Raw = getValue('Col2');
+                const safeCol2 = col2Raw ? String(col2Raw).trim().toUpperCase() : 'SEAL';
 
                 setFormData({
                     defiInterno: Number(getValue('Interno')),
@@ -286,7 +288,7 @@ const currentConfig = useMemo(() => {
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
                     defiUsuarioInic: getValue('UsuarioInic'),
-                    defiCol2: getValue('Col2') || '' 
+                    defiCol2: safeCol2
                 });
             } else {
                 // --- MODO NUEVO ---
@@ -301,7 +303,8 @@ const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi$
                 let initialDate = new Date();
                 const dateRef = getRefValue('FecRegistro');
                 if (dateRef) initialDate = new Date(dateRef);
-                const initialCol2= getRefValue('Col2') || '';
+                const col2RefRaw = getRefValue('Col2');
+                const initialCol2 = col2RefRaw ? String(col2RefRaw).trim().toUpperCase() : 'SEAL';
 
                 setFormData({
                     defiCodigoElemento: initialCode,

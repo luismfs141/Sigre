@@ -42,7 +42,7 @@ public partial class Poste
     public string? PostTramo { get; set; }
 
     public bool PostVereda { get; set; }
-
+    public int? TramInterno { get; set; }
 
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 

@@ -8,6 +8,7 @@ using Sigre.Entities.Entities.SyncData;
 using Sigre.Entities.Structs;
 using System.Data;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Sigre.DataAccess
 {
@@ -924,114 +925,129 @@ namespace Sigre.DataAccess
 
                 if (existente != null)
                 {
-                    using (var transaction = ctx.Database.BeginTransaction())
+                    // 1. Detectamos qué cambió exactamente
+                    string codigoGisOriginal = existente.DefiCodigoElemento?.Trim() ?? "";
+                    string codigoGisNuevo = !string.IsNullOrWhiteSpace(input.DefiCodigoElemento) ? input.DefiCodigoElemento.Trim() : codigoGisOriginal;
+
+                    bool cambioGis = codigoGisOriginal != codigoGisNuevo && !string.IsNullOrEmpty(codigoGisOriginal);
+                    bool cambioTipi = existente.TipiInterno != input.TipiInterno;
+
+                    // 🔥 LA REGLA DE ORO: Solo hacemos historial si cambia GIS o Tipificación
+                    bool requiereHistorial = cambioGis || cambioTipi;
+
+                    if (requiereHistorial)
                     {
-                        try
+                        // =======================================================
+                        // RUTA A: CAMBIO ESTRUCTURAL (SOFT DELETE + NUEVO REGISTRO)
+                        // =======================================================
+                        using (var transaction = ctx.Database.BeginTransaction())
                         {
-                            // 1. "Apagamos" el registro histórico
-                            existente.DefiActivo = false;
-                            existente.DefiFecModificacion = DateTime.Now;
-                            existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
-
-                            string codigoGisOriginal = existente.DefiCodigoElemento?.Trim() ?? "";
-                            string codigoGisNuevo = !string.IsNullOrWhiteSpace(input.DefiCodigoElemento) ? input.DefiCodigoElemento.Trim() : codigoGisOriginal;
-                            bool cambioGis = codigoGisOriginal != codigoGisNuevo && !string.IsNullOrEmpty(codigoGisOriginal);
-
-                            // 2. Reciclamos el 'input' para que sea el nuevo registro
-                            // (Ya trae TipiInterno, Observacion, Criticidad, etc. del Frontend)
-                            input.DefiInterno = 0; // Fuerza a la BD a insertarlo como nuevo
-                            input.DefiActivo = true;
-                            input.DefiEstado = "N";
-                            input.DefiFecModificacion = DateTime.Now;
-
-                            
-                            // 3. Heredamos los datos estructurales o aplicamos los nuevos si hubo cambio GIS
-                            input.DefiCodigoElemento = codigoGisNuevo;
-                            input.DefiTipoElemento = !string.IsNullOrWhiteSpace(input.DefiTipoElemento) ? input.DefiTipoElemento : existente.DefiTipoElemento;
-
-                            if (cambioGis)
+                            try
                             {
-                                // Si el GIS cambió, buscamos el nuevo DefiIdElemento
-                                int nuevoIdPadre = 0;
-                                string tipoElementoEval = input.DefiTipoElemento?.ToUpper().Trim() ?? "";
+                                // 1. "Apagamos" el registro histórico
+                                existente.DefiActivo = false;
+                                existente.DefiFecModificacion = DateTime.Now;
+                                existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
 
-                                if (tipoElementoEval.StartsWith("POST"))
-                                {
-                                    var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGisNuevo);
-                                    if (poste != null) nuevoIdPadre = poste.PostInterno;
-                                }
-                                else if (tipoElementoEval.StartsWith("VANO"))
-                                {
-                                    var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGisNuevo);
-                                    if (vano != null) nuevoIdPadre = vano.VanoInterno;
-                                }
+                                // 2. Reciclamos el 'input' para que sea el nuevo registro
+                                input.DefiInterno = 0; // Fuerza a la BD a insertarlo como nuevo
+                                input.DefiActivo = true;
+                                input.DefiEstado = "N";
+                                input.DefiFecModificacion = DateTime.Now;
 
-                                // 🔥 VALIDACIÓN ESTRICTA: El nuevo elemento DEBE existir 🔥
-                                if (nuevoIdPadre == 0)
-                                {
-                                    throw new ArgumentException($"- Acción bloqueada: El nuevo código GIS '{codigoGisNuevo}' no fue encontrado en el catálogo de {tipoElementoEval}s.");
-                                }
+                                // 3. Heredamos los datos estructurales o aplicamos los nuevos si hubo cambio GIS
+                                input.DefiCodigoElemento = codigoGisNuevo;
+                                input.DefiTipoElemento = !string.IsNullOrWhiteSpace(input.DefiTipoElemento) ? input.DefiTipoElemento : existente.DefiTipoElemento;
 
-                                input.DefiIdElemento = nuevoIdPadre;
-                            }
-                            else
-                            {
-                                input.DefiIdElemento = existente.DefiIdElemento;
-                            }
-                            input.DefiCol3 = Guid.NewGuid().ToString();
-                            input.DefiInspeccionado = existente.DefiInspeccionado;
-                            input.DefiFechaCreacion = existente.DefiFechaCreacion;
-                            input.DefiUsuarioInic = existente.DefiUsuarioInic;
+                                // Rescatamos DefiCol2 para que no se pierda al clonar
+                                input.DefiCol2 = !string.IsNullOrWhiteSpace(input.DefiCol2) ? input.DefiCol2.Trim().ToUpper() : (existente.DefiCol2 ?? "SEAL");
 
-                            // Si las coordenadas no se movieron en el mapa, mantenemos las originales
-                            input.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
-                            input.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
-                            input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFecRegistro;
-
-                            // 4. Insertamos el input reciclado
-                            ctx.Deficiencias.Add(input);
-                            ctx.SaveChanges();
-                            // 🔥 2. EL TRUCO: TRASPASO AUTOMÁTICO DE ARCHIVOS 🔥
-                            // Buscamos todas las fotos vinculadas al ID de deficiencia viejo
-                            var archivosViejos = ctx.Archivos.Where(a => a.ArchCodTabla == existente.DefiInterno).ToList();
-
-                            foreach (var arch in archivosViejos)
-                            {
-                                // 1. Actualizamos la llave foránea principal (Apunta a la nueva Deficiencia)
-                                arch.ArchCodTabla = input.DefiInterno;
-
-                                // 2. Si hubo un cambio de elemento en el mapa, actualizamos las llaves del padre
                                 if (cambioGis)
                                 {
-                                    arch.ArchIdElemento = input.DefiIdElemento; // Nuevo ID del Vano/Poste
-                                    arch.ArchTipoElemento = input.DefiTipoElemento; // 'VANO' o 'POST'
+                                    int nuevoIdPadre = 0;
+                                    string tipoElementoEval = input.DefiTipoElemento?.ToUpper().Trim() ?? "";
 
+                                    if (tipoElementoEval.StartsWith("POST"))
+                                    {
+                                        var poste = ctx.Postes.FirstOrDefault(p => p.PostCodigoNodo == codigoGisNuevo);
+                                        if (poste != null) nuevoIdPadre = poste.PostInterno;
+                                    }
+                                    else if (tipoElementoEval.StartsWith("VANO"))
+                                    {
+                                        var vano = ctx.Vanos.FirstOrDefault(v => v.VanoCodigo == codigoGisNuevo);
+                                        if (vano != null) nuevoIdPadre = vano.VanoInterno;
+                                    }
 
+                                    if (nuevoIdPadre == 0)
+                                    {
+                                        throw new ArgumentException($"- Acción bloqueada: El nuevo código GIS '{codigoGisNuevo}' no fue encontrado.");
+                                    }
+
+                                    input.DefiIdElemento = nuevoIdPadre;
                                 }
+                                else
+                                {
+                                    input.DefiIdElemento = existente.DefiIdElemento;
+                                }
+
+                                input.DefiCol3 = Guid.NewGuid().ToString();
+                                input.DefiInspeccionado = existente.DefiInspeccionado;
+                                input.DefiFechaCreacion = existente.DefiFechaCreacion;
+                                input.DefiUsuarioInic = existente.DefiUsuarioInic;
+                                input.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
+                                input.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
+                                input.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFecRegistro;
+
+                                ctx.Deficiencias.Add(input);
+                                ctx.SaveChanges();
+
+                                // 🔥 TRASPASO AUTOMÁTICO DE ARCHIVOS 🔥
+                                var archivosViejos = ctx.Archivos.Where(a => a.ArchCodTabla == existente.DefiInterno).ToList();
+                                foreach (var arch in archivosViejos)
+                                {
+                                    arch.ArchCodTabla = input.DefiInterno;
+                                    if (cambioGis)
+                                    {
+                                        arch.ArchIdElemento = input.DefiIdElemento;
+                                        arch.ArchTipoElemento = input.DefiTipoElemento;
+                                    }
+                                }
+                                ctx.SaveChanges();
+                                transaction.Commit();
+
+                                return input.DefiInterno;
                             }
-                            ctx.SaveChanges(); // Guardamos los cambios de los archivos // Guardamos los cambios de los archivos
-
-                            // 3. Confirmamos toda la transacción
-
-                            transaction.Commit();
-
-                            return input.DefiInterno; // Retorna el nuevo ID
-                        }
-                        catch (Exception ex)
-                        {
-                            // 1. Deshacemos los cambios para proteger la base de datos
-                            transaction.Rollback();
-
-                            // 2. Escarbamos hasta llegar al error original de SQL Server
-                            Exception realError = ex;
-                            while (realError.InnerException != null)
+                            catch (Exception ex)
                             {
-                                realError = realError.InnerException;
+                                transaction.Rollback();
+                                Exception realError = ex;
+                                while (realError.InnerException != null) realError = realError.InnerException;
+                                throw new Exception($"Error SQL Detallado: {realError.Message}");
                             }
-
-                            // 3. Lanzamos el error hacia tu Frontend (React)
-                            throw new Exception($"Error SQL Detallado: {realError.Message}");
                         }
+                    }
+                    else
+                    {
+                        // =======================================================
+                        // RUTA B: ACTUALIZACIÓN SIMPLE DIRECTA (IN-PLACE UPDATE)
+                        // =======================================================
+
+                        // Actualizamos solo los atributos menores en la misma fila (No cambia ID)
+                        existente.DefiCol2 = !string.IsNullOrWhiteSpace(input.DefiCol2) ? input.DefiCol2.Trim().ToUpper() : existente.DefiCol2;
+                        existente.DefiObservacion = input.DefiObservacion;
+                        existente.DefiComentario = input.DefiComentario;
+                        existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
+                        existente.DefiNumSuministro = input.DefiNumSuministro;
+
+                        existente.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
+                        existente.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
+
+                        existente.DefiFecModificacion = DateTime.Now;
+                        existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
+
+                        ctx.SaveChanges();
+
+                        return existente.DefiInterno; // Retornamos el mismo ID intacto
                     }
                 }
                 else
@@ -1812,6 +1828,39 @@ namespace Sigre.DataAccess
                 dto.CriticidadLeve = deficienciasActivas.Count(d => d.DefiEstadoCriticidad == 1);
 
                 return dto;
+            }
+        }
+
+        public IActionResult GetTramosPorSed(int sedId)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                // Hacemos un JOIN directo en BD para traer solo 4 columnas (súper rápido)
+                var postesInfo = (from p in ctx.Postes.AsNoTracking()
+                                  join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
+                                  where p.PostSubestacion == sedId && p.PostEsBt == true
+                                  select new
+                                  {
+                                      IdElemento = p.PostInterno,
+                                      Tipo = "POST",
+                                      Circuito = t.TramCodigo, // Ej: "CIR. 3"
+                                      Orden = t.TramOrden      // Ej: 1, 2, 3
+                                  }).ToList();
+
+                var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
+                                 join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
+                                 where v.VanoSubestacion == sedId && v.VanoEsBt == true
+                                 select new
+                                 {
+                                     IdElemento = v.VanoInterno,
+                                     Tipo = "VANO",
+                                     Circuito = t.TramCodigo,
+                                     Orden = t.TramOrden
+                                 }).ToList();
+
+                // Unimos ambos y los enviamos
+                var resultado = postesInfo.Concat(vanosInfo).ToList();
+                return Ok(resultado);
             }
         }
     }

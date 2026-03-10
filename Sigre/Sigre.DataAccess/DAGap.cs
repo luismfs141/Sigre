@@ -514,7 +514,8 @@ namespace Sigre.DataAccess
                         AlimInterno = v.AlimInterno,
                         VanoSubestacion = v.VanoSubestacion,
                         VanoEsBt = v.VanoEsBt,
-                        
+                        VanoTramo=v.VanoTramo,
+                        TramInterno=v.TramInterno
                     })
                     .ToList();
 

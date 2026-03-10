@@ -412,7 +412,7 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.InspInterno).HasColumnName("INSP_Interno");
             entity.Property(e => e.TablInterno).HasColumnName("TABL_Interno");
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
-
+            
             entity.HasOne(d => d.InspInternoNavigation).WithMany(p => p.Deficiencia)
                 .HasForeignKey(d => d.InspInterno)
                 .HasConstraintName("fk_DEFI_INSP");
@@ -709,7 +709,7 @@ public partial class SigreContext : DbContext
     .HasColumnName("POST_Tramo");
 
             entity.Property(e => e.PostVereda).HasColumnName("POST_Vereda");
-
+            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
 
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostArmadoMaterial)
@@ -968,6 +968,7 @@ public partial class SigreContext : DbContext
                 .HasColumnName("VANO_NodoInicial");
             entity.Property(e => e.VanoSubestacion).HasColumnName("VANO_Subestacion");
             entity.Property(e => e.VanoTerceros).HasColumnName("VANO_Terceros");
+            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
 
             entity.Property(e => e.VanoTramo)
     .HasMaxLength(50)

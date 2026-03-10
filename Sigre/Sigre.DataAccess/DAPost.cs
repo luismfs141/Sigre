@@ -417,7 +417,8 @@ namespace Sigre.DataAccess
                         PostRetenidaTipo = p.PostRetenidaTipo,
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt
+                        PostEsBt = p.PostEsBt,
+                        TramInterno = p.TramInterno,
                     })
                     .ToList();
 

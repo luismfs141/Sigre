@@ -27,6 +27,11 @@ import EvidenceView from './SEvidenceView';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
 import EstadoBadge from '../utils/estadoBadge';
 import DuplicateDeficiencyModal from '../components/Modals/DuplicateDeficiencyModal';
+import PdfGeneratorModal from '../components/Modals/PdfGeneratorModal';
+
+//const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//servidor estatico enlocal
+const API_BASE_URL = "http://localhost:8080/";
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
@@ -65,7 +70,12 @@ export default function Subestaciones() {
     const [filteredData, setFilteredData] = useState(null);
     const [globalFilterValue, setGlobalFilterValue] = useState('');
     const [evidenceCount, setEvidenceCount] = useState(0);
-    
+    // Estados para la impresión masiva
+    const [isPreparingPrint, setIsPreparingPrint] = useState(false);
+    const [printProgress, setPrintProgress] = useState({ current: 0, total: 0 });
+    const [printChunks, setPrintChunks] = useState([]); // Guardará arrays de 50 en 50
+    const [activeChunkIndex, setActiveChunkIndex] = useState(null); // Cuál lote se está imprimiendo
+    const [massivePrintVisible, setMassivePrintVisible] = useState(false);
 
     // --- FILTROS INICIALES ---
     const initialFilters = {
@@ -503,6 +513,8 @@ export default function Subestaciones() {
         setDuplicateId(selectedDeficiency.defiInterno);
         setDuplicateVisible(true);
     };
+
+
         // -------------------------------------------------------------------
     // 7. RENDERIZADO
     // -------------------------------------------------------------------
@@ -550,6 +562,21 @@ export default function Subestaciones() {
                         <i className="pi pi-clone text-lg font-bold"></i>
                         <div className="flex flex-col items-start leading-none"><span className="font-extrabold text-[10px]">CLONAR</span><span className="text-[9px] font-medium">DEFICIENCIA</span></div>
                     </Button>
+{deficiencies.length > 0 && (
+    <Button 
+        type="button" 
+        onClick={() => setMassivePrintVisible(true)} 
+        className="p-button-sm px-3 h-10 shadow-md shrink-0 border-none flex items-center gap-2 hover:opacity-90 transition-opacity" 
+        style={{ backgroundColor: '#64748b', color: '#ffffff' }} 
+        tooltip="Imprimir todas las visibles"
+    >
+        <i className="pi pi-file-pdf text-lg font-bold"></i>
+        <div className="flex flex-col items-start leading-none">
+            <span className="font-extrabold text-[10px]">REPORTE</span>
+            <span className="text-[9px] font-medium opacity-90">MASIVO PDF</span>
+        </div>
+    </Button>
+)}
                 </div>
             </div>
 
@@ -664,6 +691,19 @@ export default function Subestaciones() {
                 getDeficiencyById={getDeficiencyById}
                 onSave={handleSaveSuccess}
             />
+<PdfGeneratorModal 
+    visible={massivePrintVisible} 
+    onHide={() => setMassivePrintVisible(false)} 
+    dataToPrint={(filteredData && filteredData.length > 0) ? filteredData : mappedDeficiencies}
+    allData={mappedDeficiencies} 
+    empresaInfo={{ 
+        sed: selectedSed?.sedCodigo, 
+        alimentador: feederObject?.label,
+        // 🔥 AÑADIMOS ESTO PARA PODER BUSCAR LOS POSTES LUEGO:
+        sedId: selectedSed?.sedInterno || selectedSed?.SedInterno || selectedSed?.id
+    }}
+/>
+
         </div>
     );
 }
