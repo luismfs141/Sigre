@@ -112,11 +112,13 @@ export default function Sync() {
 
     if (user?.proyecto === 0) {
       if (!selectedFeeder) return Alert.alert("Selecciona un alimentador");
-      if (selectedSubstations.length === 0)
+      if (selectedSubstations.length === 0) {
         return Alert.alert("Selecciona al menos una subestación");
+      }
     } else {
-      if (!selectedFeeders.length)
+      if (!selectedFeeders.length) {
         return Alert.alert("Selecciona al menos un alimentador");
+      }
     }
 
     dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "Descargando base de datos..." });
@@ -125,19 +127,14 @@ export default function Sync() {
     let ok = false;
 
     try {
-      let nombreBase = `sigre_offline_${Date.now()}.db`;
+      const nombreBase = `sigre_offline_${Date.now()}.db`;
       console.log("⬇️ Descargando base:", nombreBase);
 
       if (user?.proyecto === 0) {
         const sedsIds = selectedSubstations.map((s) => parseInt(s.id, 10));
-        //console.log("📥 SEDs a descargar:", sedsIds);
 
-        const fileUri = await downloadDatabase(user.id, sedsIds, 0, nombreBase);
-        if (!fileUri) throw new Error("Descarga fallida");
-
-        await closeDatabase();
-        await new Promise((r) => setTimeout(r, 150));
-        await setDbName(nombreBase);
+        const fileRes = await downloadDatabase(user.id, sedsIds, 0, nombreBase);
+        if (!fileRes?.ok) throw new Error("Descarga fallida");
 
         setSelectedFeeders([]);
         setSelectedSubstations([]);
@@ -147,12 +144,8 @@ export default function Sync() {
         const feederIds = selectedFeeders.map((f) => parseInt(f.id, 10));
         console.log("📥 Alimentadores a descargar:", feederIds);
 
-        const fileUri = await downloadDatabase(user.id, feederIds, 1, nombreBase);
-        if (!fileUri) throw new Error("Descarga fallida");
-
-        await closeDatabase();
-        await new Promise((r) => setTimeout(r, 150));
-        await setDbName(nombreBase);
+        const fileRes = await downloadDatabase(user.id, feederIds, 1, nombreBase);
+        if (!fileRes?.ok) throw new Error("Descarga fallida");
 
         setSelectedFeeders([]);
         setDbExists(true);
@@ -212,7 +205,7 @@ export default function Sync() {
               await FileSystem.deleteAsync(dbPath, { idempotent: true });
 
               await AsyncStorage.removeItem("selectedFeeders");
-              await AsyncStorage.removeItem("offline_db_name");
+              await AsyncStorage.removeItem("db_name");
 
               setSelectedFeeders([]);
               setSelectedFeeder(null);
@@ -234,40 +227,40 @@ export default function Sync() {
   };
 
   //───────────────────────────────────────────────
-// 🔄 SINCRONIZAR OFFLINE → SERVIDOR
-//───────────────────────────────────────────────
-const handleSync = async () => {
-  if (!dbExists) {
-    return Alert.alert("Aviso", "No existe una base local para sincronizar.");
-  }
+  // 🔄 SINCRONIZAR OFFLINE → SERVIDOR
+  //───────────────────────────────────────────────
+  const handleSync = async () => {
+    if (!dbExists) {
+      return Alert.alert("Aviso", "No existe una base local para sincronizar.");
+    }
 
-  if (syncing) return;
+    if (syncing) return;
 
-  dispatch({
-    type: "APP/SET_LOADING_MESSAGE",
-    payload: "Sincronizando información..."
-  });
-  dispatch({ type: "APP/SET_LOADING", payload: true });
+    dispatch({
+      type: "APP/SET_LOADING_MESSAGE",
+      payload: "Sincronizando información..."
+    });
+    dispatch({ type: "APP/SET_LOADING", payload: true });
 
-  try {
-    const result = await syncAllPending();
+    try {
+      const result = await syncAllPending();
 
-    const total = Number(result?.totalPending ?? 0);
-    const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
-    const remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
+      const total = Number(result?.totalPending ?? 0);
+      const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
+      const remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
 
-    Alert.alert(
-      result?.ok ? "Sincronización completa" : "Sincronización incompleta",
-      `Se sincronizaron ${synced} de ${total} registros.\nFaltan ${remaining} por sincronizar.`
-    );
-  } catch (e) {
-    console.log("❌ Error sincronizando:", e);
-    Alert.alert("Error", "Ocurrió un error durante la sincronización. Intenta nuevamente.");
-  } finally {
-    dispatch({ type: "APP/SET_LOADING", payload: false });
-    dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
-  }
-};
+      Alert.alert(
+        result?.ok ? "Sincronización completa" : "Sincronización incompleta",
+        `Se sincronizaron ${synced} de ${total} registros.\nFaltan ${remaining} por sincronizar.`
+      );
+    } catch (e) {
+      console.log("❌ Error sincronizando:", e);
+      Alert.alert("Error", "Ocurrió un error durante la sincronización. Intenta nuevamente.");
+    } finally {
+      dispatch({ type: "APP/SET_LOADING", payload: false });
+      dispatch({ type: "APP/SET_LOADING_MESSAGE", payload: "" });
+    }
+  };
 
   //───────────────────────────────────────────────
   // ALIMENTADORES
