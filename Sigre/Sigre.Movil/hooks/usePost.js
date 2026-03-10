@@ -19,7 +19,7 @@ export const usePost = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const { isOnline } = useConnectivity();
-  const { checkDatabase } = useDatos(); // ✅ Validación de DB
+  const { checkDatabase, isAutoSyncOnline } = useDatos(); // ✅ Validación de DB
   const client = api();
 
   // ------------------- OBTENER POSTE -------------------
@@ -180,6 +180,8 @@ export const usePost = () => {
 
   // 🔁 Auto-sync de UN poste (automático)
   const autoSyncPost = async (postInternoLocal) => {
+    if (!isAutoSyncOnline) return;
+
     const dbOk = await checkDatabase();
     if (!dbOk) {
       console.warn("⚠ Base de datos no disponible, auto-sync cancelado");

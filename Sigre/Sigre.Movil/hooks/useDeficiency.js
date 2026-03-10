@@ -37,6 +37,7 @@ export const useDeficiency = () => {
     isSupervisor,
     isInspector, // (puede quedar aunque no lo uses)
     currentUserId,
+    isAutoSyncOnline,
   } = useDatos();
 
   const { isOnline } = useConnectivity();
@@ -88,7 +89,9 @@ export const useDeficiency = () => {
   };
 
   const autoSyncArchivosByIds = async (archIds) => {
+    
     if (!Array.isArray(archIds) || !archIds.length) return;
+      if (!isAutoSyncOnline) return;
 
     if (syncingFilesRef.current) return;
     syncingFilesRef.current = true;
@@ -441,7 +444,9 @@ export const useDeficiency = () => {
 
   // ------------------- AUTO SYNC (robusto + compatible) -------------------
   const autoSyncDeficiency = async (defOrId) => {
+     if (!isAutoSyncOnline) return;
     if (syncingRef.current) return;
+    
     syncingRef.current = true;
 
     try {

@@ -1,6 +1,7 @@
 // hooks/useGap.js
 import { useState } from "react";
 import { api } from "../config";
+import { useDatos } from "../context/DatosContext";
 import { useConnectivity } from "./useConnectivity";
 
 import {
@@ -17,6 +18,7 @@ export const useGap = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const { isOnline } = useConnectivity();
+  const { checkDatabase, isAutoSyncOnline } = useDatos();
   const client = api();
 
   // ------------------- GAPS POR ALIMENTADOR -------------------
@@ -104,6 +106,11 @@ export const useGap = () => {
 
   // ------------------- AUTO-SYNC DE UN VANO -------------------
   const autoSyncVano = async (vanoInternoLocal) => {
+    if (!isAutoSyncOnline) return;
+
+    const dbOk = await checkDatabase();
+    if (!dbOk) return;
+
     try {
       const online = await isOnline();
       if (!online) return;
