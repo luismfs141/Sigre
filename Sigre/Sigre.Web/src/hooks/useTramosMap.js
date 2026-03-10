@@ -1,30 +1,27 @@
 import { useCallback } from 'react';
-import api from '../../api/apiConfig'; // Ajusta la ruta si es necesario
+import api from './../api/apiConfig'; 
 
 export const useTramosMap = () => {
-
     const fetchTramosDictionary = useCallback(async (sedId) => {
         if (!sedId) return {};
 
         try {
-            // Llamamos a tu nuevo endpoint limpio y rápido
-            // (Ajusta la ruta '/Feeder/GetTramosPorSed' según el nombre real de tu controlador)
             const response = await api.get('/Feeder/GetTramosPorSed', { params: { sedId } });
             const listaTramos = response.data || [];
 
-            // Convertimos la lista plana en un Diccionario para búsquedas instantáneas (O(1))
             const map = {};
             
             listaTramos.forEach(item => {
-                // Estandarizamos el tipo ('POST' o 'POSTE') para evitar errores
-                const tipoNormalized = item.tipo.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
-                
-                // Creamos una llave única: "POSTE_25" o "VANO_10"
+                // Validación por si acaso llega algo corrupto
+                if(!item.tipo || !item.idElemento) return; 
+
+                const tipoNormalized = String(item.tipo).toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
                 const key = `${tipoNormalized}_${item.idElemento}`;
                 
                 map[key] = {
-                    orden: item.orden || 0,
-                    circuito: item.circuito || ''
+                    // Mapeamos los nombres exactos que enviará tu nuevo DTO en C#
+                    orden: item.tramOrden || 0,
+                    circuito: item.tramCodigo || ''
                 };
             });
 
@@ -32,7 +29,7 @@ export const useTramosMap = () => {
 
         } catch (error) {
             console.error("Error sincronizando tramos para el PDF:", error);
-            return {}; // Devolvemos un objeto vacío para no romper el PDF si hay error
+            return {}; 
         }
     }, []);
 

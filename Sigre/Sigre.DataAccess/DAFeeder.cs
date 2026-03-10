@@ -397,33 +397,33 @@ namespace Sigre.DataAccess
                 return seds; // Devolvemos la lista limpia directamente
             }
         }
-        public List<Tramo> DAFE_GetTramosPorSed(int sedId)
+        public List<TramoElementoDTO> DAFE_GetTramosPorSed(int sedId)
         {
             using (SigreContext ctx = new SigreContext())
             {
-                var tramos = ctx.Tramos
-                    .Where(t =>
-                        // Condición 1: El tramo tiene algún Poste en esta SED
-                        t.Postes.Any(p => p.PostSubestacion == sedId && p.PostEsBt == true)
-                        ||
-                        // Condición 2: O el tramo tiene algún Vano en esta SED
-                        t.Vanos.Any(v => v.VanoSubestacion == sedId && v.VanoEsBt == true)
-                    )
-                    .Select(t => new Tramo
-                    {
-                        // Mapeamos SOLO las propiedades escalares de tu tabla Tramos.
-                        // Al NO mapear las colecciones (Postes, Vanos), evitamos 
-                        // el Error 500 de referencias circulares.
-                        TramInterno = t.TramInterno,
-                        TramCodigo = t.TramCodigo,
-                        TramOrden = t.TramOrden,
-                        TramActivo = t.TramActivo
-                    })
-                    .Distinct() // Aseguramos que no vengan tramos repetidos
-                    .OrderBy(t => t.TramOrden) // Los ordenamos correctamente
-                    .ToList();
+                var postesInfo = (from p in ctx.Postes.AsNoTracking()
+                                  join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
+                                  where p.PostSubestacion == sedId && p.PostEsBt == true
+                                  select new TramoElementoDTO
+                                  {
+                                      IdElemento = p.PostInterno,
+                                      Tipo = "POSTE",
+                                      TramCodigo = t.TramCodigo,
+                                      TramOrden = t.TramOrden
+                                  }).ToList();
 
-                return tramos;
+                var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
+                                 join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
+                                 where v.VanoSubestacion == sedId && v.VanoEsBt == true
+                                 select new TramoElementoDTO
+                                 {
+                                     IdElemento = v.VanoInterno,
+                                     Tipo = "VANO",
+                                     TramCodigo = t.TramCodigo,
+                                     TramOrden = t.TramOrden
+                                 }).ToList();
+
+                return postesInfo.Concat(vanosInfo).ToList();
             }
         }
     }

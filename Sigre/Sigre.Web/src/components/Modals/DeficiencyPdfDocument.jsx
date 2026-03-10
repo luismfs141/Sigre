@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
 });
 
 const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
-    
+
     const getCircuito = (def, globalFeeder) => {
         if (def?.circuitoCalculado) return def.circuitoCalculado.toUpperCase();
         if (def?.tramCodigoCalculado) return def.tramCodigoCalculado.toUpperCase();
@@ -58,7 +58,7 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
             let subtractMinutes = 4;
             if (isSinDef) {
                 const id = Number(def?.defiInterno) || 0;
-                subtractMinutes = (id % 2 === 0) ? 2 : 3; 
+                subtractMinutes = (id % 2 === 0) ? 2 : 3;
             }
             date.setMinutes(date.getMinutes() - subtractMinutes);
         }
@@ -93,6 +93,13 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
     if (!dataList || dataList.length === 0) {
         return <Document><Page size="A4" style={styles.page}><Text>No se encontraron datos.</Text></Page></Document>;
     }
+    const getAlimentador = (def, globalFeeder) => {
+        const val = def?.alimentador || def?.Alimentador || def?.defiAlimentador || def?.nombreAlimentador || globalFeeder;
+        if (!val) return "-";
+
+        // Cortamos el texto en el guion ('-') y nos quedamos solo con la primera parte (índice 0)
+        return String(val).split('-')[0].trim().toUpperCase();
+    };
 
     return (
         <Document>
@@ -114,12 +121,12 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
 
                 if (originalName !== "_____________________") {
                     const cleanName = originalName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, ' ');
-                    if (cleanName.includes("DIEGO INFANTES") ) {
+                    if (cleanName.includes("DIEGO INFANTES")) {
                         inspectorName = "RONALD RENZO RIOS VERGARA";
-                    } 
+                    }
                     else if (cleanName.includes("ADMINISTRADOR GENERAL")) {
                         inspectorName = "RONALD RENZO RIOS VERGARA";
-                    } 
+                    }
                     else {
                         inspectorName = originalName.toUpperCase();
                     }
@@ -128,30 +135,35 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                 return (
                     <Page key={`page-${idx}`} size="A4" style={styles.page}>
                         <Text style={styles.title}>REGISTRO DE INSPECCIÓN DE DEFICIENCIAS - SED {empresaInfo?.sed || 'S/E'}</Text>
-                        
+
                         <View style={styles.table}>
+                            {/* 🔥 FILA 1: SED | ALIMENTADOR | FECHA REG */}
                             <View style={styles.row}>
                                 <Text style={[styles.headerCell, { width: '15%' }]}>SED:</Text>
                                 <Text style={[styles.valueCell, { width: '15%' }]}>{empresaInfo?.sed || "-"}</Text>
-                                <Text style={[styles.headerCell, { width: '15%' }]}>Circuito:</Text>
-                                <Text style={[styles.valueCell, { width: '25%', fontWeight: 'bold' }]}>
-                                    {getCircuito(item.deficiencia, empresaInfo?.alimentador)}
-                                </Text>
+
+                                <Text style={[styles.headerCell, { width: '15%' }]}>Alimentador:</Text>
+                                <Text style={[styles.valueCell, { width: '15%' }]}>{getAlimentador(item.deficiencia, empresaInfo?.alimentador)}</Text>
+
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Fecha Reg:</Text>
                                 <Text style={[styles.valueCell, { width: '15%', borderRight: 0 }]}>{formatDate(item.deficiencia?.defiFecRegistro)}</Text>
                             </View>
-                            
+
+                            {/* 🔥 FILA 2: SECUENCIA (TramOrden) | CIRCUITO (TramCodigo) | HORA INICIO */}
                             <View style={styles.row}>
-                                <Text style={[styles.headerCell, { width: '15%' }]}>Secuencia:</Text>
-                                <Text style={[styles.valueCell, { width: '15%' }]}>{item.deficiencia?.defiInterno || "0"}</Text>
-                                <Text style={[styles.headerCell, { width: '15%' }]}>Tramo:</Text>
+                                <Text style={[styles.headerCell, { width: '15%' }]}>Circuito:</Text>
                                 <Text style={[styles.valueCell, { width: '25%', color: '#2563eb', fontWeight: 'bold' }]}>
-                                    {item.deficiencia?.tramoCalculado || '-'}
+                                    {item.deficiencia?.tramCodigoCalculado || '-'}
                                 </Text>
+                                <Text style={[styles.headerCell, { width: '15%' }]}>Secuencia:</Text>
+                                <Text style={[styles.valueCell, { width: '15%' }]}>
+                                    {item.deficiencia?.tramOrdenCalculado || "0"}
+                                </Text>
+
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Hora Inicio:</Text>
                                 <Text style={[styles.valueCell, { width: '15%', borderRight: 0 }]}>{formatTime(item.deficiencia?.defiFecRegistro, true, item.deficiencia)}</Text>
                             </View>
-                            
+
                             <View style={styles.rowNoBorder}>
                                 <Text style={[styles.headerCell, { width: '15%' }]}>Tipo Elem:</Text>
                                 <Text style={[styles.valueCell, { width: '15%' }]}>{item.deficiencia?.defiTipoElemento === 'POST' ? 'POSTE' : 'VANO'}</Text>

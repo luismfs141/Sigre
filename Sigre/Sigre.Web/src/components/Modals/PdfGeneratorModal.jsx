@@ -9,7 +9,7 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip'; // 🔥 REGRESA EL ZIP
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
-
+import { useTramosMap } from '../../hooks/useTramosMap';
 const API_BASE_URL = "http://localhost:8080/"; 
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
@@ -21,7 +21,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     const [zipBlob, setZipBlob] = useState(null); // 🔥 ESTADO PARA EL ZIP
     
     const isCancelled = useRef(false);
-
+    
     useEffect(() => {
         if (visible) {
             setStep(0);
@@ -125,7 +125,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         const myIndex = sameElement7004s.findIndex(d => d.defiInterno === def.defiInterno) + 1;
         return myIndex > 0 ? myIndex : 1;
     };
-
+const { fetchTramosDictionary } = useTramosMap();
     const startProcessing = async () => {
         if (!dataToPrint || dataToPrint.length === 0) return;
         setStep(1);
@@ -135,30 +135,11 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         let resolvedData = [];
         const tempUrls = []; 
 
-        // 1. DICCIONARIO DE TRAMOS EN MEMORIA (AMPLIADO)
+        // 🔥 3. NUEVA SINCRONIZACIÓN ULTRA RÁPIDA CON EL HOOK
         setProgress(p => ({ ...p, detail: `Sincronizando Tramos y Circuitos...` }));
-        const tramosMap = {};
-        try {
-            if (empresaInfo?.sedId) {
-                const response = await api.get('/Post/GetPaginado', { 
-                    params: { sedId: empresaInfo.sedId, skip: 0, take: 5000 } 
-                });
-                const listaPostes = response.data.data || [];
-                
-                listaPostes.forEach(p => {
-                    const id = p.postInterno || p.PostInterno;
-                    // Guardamos todo lo que nos sirva para ordenar y mostrar
-                    tramosMap[id] = {
-                        interno: p.tramInterno || p.TRAM_Interno || p.TramInterno || 0,
-                        orden: p.tramOrden || p.TRAM_Orden || p.TramOrden || p.tramInterno || p.TRAM_Interno || 0,
-                        codigo: p.tramCodigo || p.TRAM_Codigo || p.TramCodigo || '', 
-                        circuito: p.postCircuito || p.POST_Circuito || '' 
-                    };
-                });
-            }
-        } catch (e) {
-            console.error("Error sincronizando tramos", e);
-        }
+        
+        // Llamamos al hook y esperamos el diccionario listo
+        const tramosMap = await fetchTramosDictionary(empresaInfo?.sedId);
 
         // 2. PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
         for (let i = 0; i < dataToPrint.length; i++) {
@@ -202,20 +183,23 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                     currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: missing.join(', ') });
                 }
 
-                // 🔥 ASIGNACIÓN DE VARIABLES DE ORDENAMIENTO
-                const tramoInfo = def.defiTipoElemento === 'POST' ? (tramosMap[def.defiIdElemento] || {}) : {};
+                // 🔥 4. NUEVA ASIGNACIÓN DE VARIABLES DE ORDENAMIENTO
+                const tipoDefNormalizado = def.defiTipoElemento.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
+                const keyBusqueda = `${tipoDefNormalizado}_${def.defiIdElemento}`;
+                
+                const tramoInfo = tramosMap[keyBusqueda] || {};
+                
                 const defConTramo = { 
                     ...def, 
-                    tramoCalculado: tramoInfo.interno || '-',
                     tramOrdenCalculado: tramoInfo.orden || 0,
-                    tramCodigoCalculado: tramoInfo.codigo || '',
-                    circuitoCalculado: tramoInfo.circuito || tramoInfo.codigo || '' // CIR.3
+                    tramCodigoCalculado: tramoInfo.circuito || '', 
+                    circuitoCalculado: tramoInfo.circuito || ''
                 };
 
                 resolvedData.push({ deficiencia: defConTramo, fotos });
 
             } catch (e) { 
-                resolvedData.push({ deficiencia: { ...def, tramoCalculado: '-', tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
+                resolvedData.push({ deficiencia: { ...def, tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
                 currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'TODAS (Error BD)' });
             }
 
@@ -225,22 +209,29 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
 
         if (isCancelled.current) return;
 
-        // 🔥 MOTOR DE ORDENAMIENTO (Primero por Código Tramo/Circuito, luego numérico por Orden)
-        setProgress(p => ({ ...p, detail: `Ordenando registros por Circuito y Tramo...` }));
+        // 🔥 5. MOTOR DE ORDENAMIENTO ACTUALIZADO
+// 🔥 MOTOR DE ORDENAMIENTO: Primero CIRCUITO, luego SECUENCIA
+        setProgress(p => ({ ...p, detail: `Ordenando registros por Circuito y Secuencia...` }));
+        
         resolvedData.sort((a, b) => {
-            const codA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
-            const codB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            // 1. ORDENAMOS POR CIRCUITO (tramCodigoCalculado)
+            const circuitoA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            const circuitoB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
             
-            // Si pertenecen a diferentes códigos (ej. CIR.3 vs CIR.4), ordenar alfabéticamente
-            if (codA !== codB) return codA.localeCompare(codB);
+            if (circuitoA !== circuitoB) {
+                // El { numeric: true } asegura que "Cir.2" vaya ANTES que "Cir.10"
+                return circuitoA.localeCompare(circuitoB, undefined, { numeric: true, sensitivity: 'base' });
+            }
 
-            // Si están dentro del mismo código (ej. ambos son CIR.3), ordenar por el número de tramo
-            const ordA = Number(a.deficiencia.tramOrdenCalculado || 0);
-            const ordB = Number(b.deficiencia.tramOrdenCalculado || 0);
-            return ordA - ordB;
+            // 2. SI ES EL MISMO CIRCUITO, ORDENAMOS POR SECUENCIA (tramOrdenCalculado)
+            const seqA = Number(a.deficiencia.tramOrdenCalculado || 0);
+            const seqB = Number(b.deficiencia.tramOrdenCalculado || 0);
+            
+            return seqA - seqB;
         });
 
-        // 3. GENERACIÓN DEL PDF COMPLETO Y EMPAQUETADO ZIP
+
+        // 🔥🔥🔥 ESTO ES LO QUE FALTABA: GENERACIÓN DEL PDF Y EL ZIP 🔥🔥🔥
         if (resolvedData.length > 0) {
             setProgress(p => ({ ...p, detail: `Ensamblando y comprimiendo PDF...` }));
             try {
@@ -266,7 +257,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
 
         setMissingPhotosLog(currentMissingLog);
         setStep(2);
-    };
+    }; // 🔥 FIN DE LA FUNCIÓN STARTPROCESSING
 
     const cancelProcess = () => {
         isCancelled.current = true;
