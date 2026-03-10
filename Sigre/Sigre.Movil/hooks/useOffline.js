@@ -168,6 +168,41 @@ export const useOffline = () => {
     }
   };
 
+
+
+
+  const getPendingSyncSummary = async () => {
+    let defBefore = 0;
+    let archBefore = 0;
+    let postBefore = 0;
+    let gapBefore = 0;
+
+    try {
+      defBefore = await countPendingDeficienciesLocal();
+      archBefore = await countPendingArchivosLocal();
+      postBefore = await countPendingPostsLocal();
+      gapBefore = await countPendingGapsLocal();
+    } catch (e) {
+      console.log("❌ Error contando pendientes:", e);
+    }
+
+    const totalPending = defBefore + archBefore + postBefore + gapBefore;
+
+    return {
+      ok: true,
+      totalPending,
+      syncedCount: 0,
+      remainingPending: totalPending,
+      synced: 0,
+      detail: {
+        def: { before: defBefore, after: defBefore },
+        arch: { before: archBefore, after: archBefore },
+        post: { before: postBefore, after: postBefore },
+        gap: { before: gapBefore, after: gapBefore },
+      },
+    };
+  };
+
   /* ============================
    🔄 SINCRONIZACIÓN OFFLINE
 ============================ */
@@ -233,7 +268,7 @@ export const useOffline = () => {
         postAfter = await countPendingPostsLocal();
         gapAfter = await countPendingGapsLocal();
 
-        console.log(`✅ Sync completado. Pendientes antes: ${totalPending} (Def: ${defBefore}, Arch: ${archBefore}, Post: ${postBefore}, Gap: ${gapBefore}). Pendientes después: ${defAfter + archAfter + postAfter + gapAfter} (Def: ${defAfter}, Arch: ${archAfter}, Post: ${postAfter}, Gap: ${gapAfter}).`);
+        //console.log(`✅ Sync completado. Pendientes antes: ${totalPending} (Def: ${defBefore}, Arch: ${archBefore}, Post: ${postBefore}, Gap: ${gapBefore}). Pendientes después: ${defAfter + archAfter + postAfter + gapAfter} (Def: ${defAfter}, Arch: ${archAfter}, Post: ${postAfter}, Gap: ${gapAfter}).`);
       } catch (e) {
         console.log("❌ Error contando pendientes (después):", e);
       }
@@ -300,5 +335,6 @@ export const useOffline = () => {
     syncing,
     downloadDatabase,
     syncAllPending,
+    getPendingSyncSummary,
   };
 };

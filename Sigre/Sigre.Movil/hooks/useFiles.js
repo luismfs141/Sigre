@@ -100,7 +100,8 @@ export function useFiles() {
 
 
   const autoSyncArchivo = useCallback(async (archInternoLocal) => {
-    const log = (...a) => console.log("[AUTO-SYNC][FILE]", ...a);
+    //const log = (...a) => console.log("[AUTO-SYNC][FILE]", ...a);
+    const log = () => { };
 
     if (!isAutoSyncOnline) {
       log("modo OFFLINE manual activo => autosync omitido");
@@ -310,8 +311,8 @@ export function useFiles() {
 
 
   const syncAllArchivos = useCallback(async () => {
-    const log = (...a) => console.log("[SYNC][FILES]", ...a);
-
+    //const log = (...a) => console.log("[SYNC][FILES]", ...a);
+const log = () => {};
     const online = await isOnline();
     log("online =", online);
     if (!online) return { ok: false };
