@@ -15,9 +15,9 @@ import { latLonToUTM } from '../utils/geoUtils'; // Importamos la función de co
 //cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
 //const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
 //ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-//const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
 //servidor estatico enlocal
-const API_BASE_URL = "http://localhost:8080/";
+//const API_BASE_URL = "http://localhost:8080/";
 
 // --- ALMACENAMIENTO LOCAL ---
 const LocalFileStore = {

@@ -197,8 +197,8 @@ const DeficiencyPdfDocument = ({ dataList, empresaInfo }) => {
                             {[
                                 { key: 'panoramica', label: 'VISTA PANORÁMICA' },
                                 { key: 'frontal', label: 'VISTA FRONTAL' },
-                                { key: 'detalle', label: 'DETALLE DE DEFICIENCIA' },
-                                { key: 'evidencia', label: 'EVIDENCIA / MEDICIÓN' }
+                                { key: 'detalle', label: 'IZQUIERDA' },
+                                { key: 'evidencia', label: 'DERECHA' }
                             ].map(photoType => (
                                 <View key={photoType.key} style={styles.photoBox}>
                                     {item.fotos && item.fotos[photoType.key] && typeof item.fotos[photoType.key] === 'string' ? (

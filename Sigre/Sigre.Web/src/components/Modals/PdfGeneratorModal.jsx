@@ -10,8 +10,8 @@ import JSZip from 'jszip';
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
 import { useTramosMap } from '../../hooks/useTramosMap';
-
-const API_BASE_URL = "http://localhost:8080/"; 
+const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL = "http://localhost:8080/"; 
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
     const [step, setStep] = useState(0); 
@@ -131,81 +131,101 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     };
 
     const startProcessing = async () => {
-const activeData = filterOnlyActive(dataToPrint);
+        const activeData = filterOnlyActive(dataToPrint);
 
         if (activeData.length === 0) {
             onHide();
             return;
         }
+
         setStep(1);
-        
         let totalProcessed = 0;
         const currentMissingLog = [];
         let resolvedData = [];
         const tempUrls = []; 
 
-        setProgress(p => ({ ...p, detail: `Sincronizando Tramos y Circuitos...` }));
-        
-        // Llamamos al hook y esperamos el diccionario listo
+        // 🎯 CÓDIGOS GIS A RASTREAR
+        const targetGisCodes = ['PTO000055171', 'VBT000033740', 'VBT000033741', 'VBT000096303'];
+
+        setProgress({ current: 0, total: activeData.length, detail: 'Sincronizando tramos...' });
         const tramosMap = await fetchTramosDictionary(empresaInfo?.sedId);
 
-        // PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
         for (let i = 0; i < activeData.length; i++) {
             if (isCancelled.current) break;
             
-            const def = activeData[i];
+            const def = activeData[i]; 
             const defCode = String(def.tipificacionLabel || "0000").split(' ')[0].trim();
             const currentSupply = String(def.defiNumSuministro || "0").trim();
-            const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def) : 0;
-            // 🔥 CAPTURAMOS EL UUID DE LA DEFICIENCIA (Tu gran idea)
+            const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def, activeData) : 0;
             const defUUID = String(def.defiCol3 || "").trim().toLowerCase();
+
+            // 🕵️‍♂️ TRACKER LOGIC
+            const isTarget = targetGisCodes.includes(def.defiCodigoElemento);
+
+            if (isTarget) {
+                console.log(`\n======================================================`);
+                console.log(`🔍 AUDITORÍA GIS: ${def.defiCodigoElemento} | DefID: ${def.defiInterno}`);
+                console.log(`▶ Tipi: ${defCode} | Suministro: ${currentSupply}`);
+                console.log(`▶ Correlativo 7004 Calculado: ${my7004Corr}`);
+                console.log(`▶ UUID Padre (DefiCol3): ${defUUID}`);
+            }
+
             try {
                 const response = await api.get('/File/GetByDeficiencyWeb', { params: { x_deficiency: def.defiInterno } });
                 const files = (response.data || []).filter(f => f.archActivo === 1 || f.archActivo === true);
                 
+                if (isTarget) {
+                    console.log(`▶ Archivos Activos encontrados en BD para este ID: ${files.length}`, files);
+                }
+
                 const photoPromises = [1, 2, 3, 4].map(async (typeId) => {
-                    // 1. Obtenemos TODAS las fotos de este tipo
                     let possibleFiles = files.filter(x => parseInt(x.archTipo) === typeId);
                     
+                    if (isTarget) {
+                        console.log(`  📸 Buscando Tipo Foto: ${typeId}. Posibles candidatos iniciales: ${possibleFiles.length}`);
+                    }
+
                     if (possibleFiles.length === 0) return { typeId, url: null };
                     
-                    // 2. 🔥 COMBINACIÓN INTELIGENTE (Bala de Plata + Fuerza Bruta)
-                    // Si tenemos UUID, ORDENAMOS la lista para evaluar primero el archivo que coincide exactamente.
-                    // No eliminamos los demás, solo los mandamos al final de la cola como respaldo.
+                    // Prioridad por UUID (Bala de plata)
                     if (defUUID && possibleFiles.length > 1) {
                         possibleFiles.sort((a, b) => {
-                            const aUUID = String(a.defiUUID || a.DefiUUID || "").trim().toLowerCase();
-                            const bUUID = String(b.defiUUID || b.DefiUUID || "").trim().toLowerCase();
-                            const aMatch = aUUID === defUUID;
-                            const bMatch = bUUID === defUUID;
-                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1; // El que coincide va al índice 0
+                            const aMatch = String(a.defiUUID || a.DefiUUID || "").trim().toLowerCase() === defUUID;
+                            const bMatch = String(b.defiUUID || b.DefiUUID || "").trim().toLowerCase() === defUUID;
+                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1; 
                         });
-                    }
-                    
-                    // 3. 🚀 FUERZA BRUTA DE RUTAS
-                    // Probará la del UUID correcto primero. Si la ruta física está rota o es un registro antiguo,
-                    // seguirá iterando y aplicando la fuerza bruta al resto de los archivos.
-                    for (const fileData of possibleFiles) {
-                        const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
-                        const url = await getWorkingImageUrl(candidates);
                         
-                        if (url) {
-                            return { typeId, url }; // ¡Encontró la foto física!
+                        if (isTarget) {
+                            console.log(`  ⚖️ Aplicando orden por UUID. Primer archivo a probar: ID ${possibleFiles[0].archInterno} (UUID: ${possibleFiles[0].defiUUID || possibleFiles[0].DefiUUID})`);
                         }
                     }
                     
+                    for (const fileData of possibleFiles) {
+                        const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
+                        
+                        if (isTarget) {
+                            console.log(`  🛠 Generando rutas para archivo BD [${fileData.archNombre}]. Candidatos:`, candidates);
+                        }
+
+                        const url = await getWorkingImageUrl(candidates);
+                        
+                        if (url) {
+                            if (isTarget) console.log(`  ✅ ÉXITO: URL encontrada para tipo ${typeId} ->`, url);
+                            return { typeId, url };
+                        } else {
+                            if (isTarget) console.log(`  ❌ FALLO: Ningún candidato sirvió para el archivo ${fileData.archNombre}`);
+                        }
+                    }
                     return { typeId, url: null };
                 });
 
                 const results = await Promise.all(photoPromises);
-                
                 const fotos = {};
                 const missing = []; 
 
                 results.forEach(res => {
                     const key = res.typeId === 1 ? 'panoramica' : res.typeId === 2 ? 'frontal' : res.typeId === 3 ? 'detalle' : 'evidencia';
                     fotos[key] = res.url;
-                    
                     if (res.url) {
                         if (res.url.startsWith('blob:')) tempUrls.push(res.url);
                     } else {
@@ -214,12 +234,12 @@ const activeData = filterOnlyActive(dataToPrint);
                 });
 
                 if (missing.length > 0) {
+                    if (isTarget) console.log(`⚠️ ALERTA: Faltaron estas fotos: ${missing.join(', ')}`);
                     currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: missing.join(', ') });
                 }
 
                 const tipoDefNormalizado = def.defiTipoElemento.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
                 const keyBusqueda = `${tipoDefNormalizado}_${def.defiIdElemento}`;
-                
                 const tramoInfo = tramosMap[keyBusqueda] || {};
                 
                 const defConTramo = { 
@@ -232,52 +252,39 @@ const activeData = filterOnlyActive(dataToPrint);
                 resolvedData.push({ deficiencia: defConTramo, fotos });
 
             } catch (e) { 
+                if (isTarget) console.error(`🚨 ERROR CATCH: `, e);
                 resolvedData.push({ deficiencia: { ...def, tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
-                currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'TODAS (Error BD)' });
+                currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'ERROR BD' });
             }
 
             totalProcessed++;
-            setProgress({ current: totalProcessed, total: dataToPrint.length, detail: `Procesando fotos: ${totalProcessed}/${dataToPrint.length}` });
+            setProgress({ current: totalProcessed, total: activeData.length, detail: `Procesando: ${totalProcessed}/${activeData.length}` });
         }
 
         if (isCancelled.current) return;
 
-        // 🔥 MOTOR DE ORDENAMIENTO (Circuito -> Secuencia)
-        setProgress(p => ({ ...p, detail: `Ordenando registros por Circuito y Secuencia...` }));
-        
+        // Ordenamiento final
         resolvedData.sort((a, b) => {
-            const circuitoA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
-            const circuitoB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
-            
-            if (circuitoA !== circuitoB) {
-                return circuitoA.localeCompare(circuitoB, undefined, { numeric: true, sensitivity: 'base' });
-            }
-
-            const seqA = Number(a.deficiencia.tramOrdenCalculado || 0);
-            const seqB = Number(b.deficiencia.tramOrdenCalculado || 0);
-            
-            return seqA - seqB;
+            const cA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            const cB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            if (cA !== cB) return cA.localeCompare(cB, undefined, { numeric: true });
+            return (a.deficiencia.tramOrdenCalculado || 0) - (b.deficiencia.tramOrdenCalculado || 0);
         });
 
-
-        // 🔥 GENERACIÓN DEL PDF Y EL ZIP
         if (resolvedData.length > 0) {
-            setProgress(p => ({ ...p, detail: `Ensamblando y comprimiendo PDF...` }));
+            setProgress(p => ({ ...p, detail: `Generando PDF comprimido...` }));
             try {
                 const zip = new JSZip(); 
                 const docElement = <DeficiencyPdfDocument dataList={resolvedData} empresaInfo={empresaInfo} />;
                 const pdfInstance = pdf();
                 pdfInstance.updateContainer(docElement);
                 const blob = await pdfInstance.toBlob();
-                
-                zip.file(`Reporte_SEAL_SED_${empresaInfo?.sed || 'SED'}_Completo.pdf`, blob);
-                
+                zip.file(`Reporte_SED_${empresaInfo?.sed || 'SED'}.pdf`, blob);
                 const finalZip = await zip.generateAsync({ type: "blob" });
                 setZipBlob(finalZip);
-                
                 tempUrls.forEach(u => URL.revokeObjectURL(u));
             } catch (err) {
-                console.error(`Error generando el PDF unificado:`, err);
+                console.error(err);
             }
         }
 
