@@ -1,4 +1,5 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Sigre.DataAccess.Context;
@@ -1831,37 +1832,37 @@ namespace Sigre.DataAccess
             }
         }
 
-        public IActionResult GetTramosPorSed(int sedId)
-        {
-            using (SigreContext ctx = new SigreContext())
-            {
-                // Hacemos un JOIN directo en BD para traer solo 4 columnas (súper rápido)
-                var postesInfo = (from p in ctx.Postes.AsNoTracking()
-                                  join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
-                                  where p.PostSubestacion == sedId && p.PostEsBt == true
-                                  select new
-                                  {
-                                      IdElemento = p.PostInterno,
-                                      Tipo = "POST",
-                                      Circuito = t.TramCodigo, // Ej: "CIR. 3"
-                                      Orden = t.TramOrden      // Ej: 1, 2, 3
-                                  }).ToList();
+        //public IActionResult GetTramosPorSed(int sedId)
+        //{
+        //    using (SigreContext ctx = new SigreContext())
+        //    {
+        //        // Hacemos un JOIN directo en BD para traer solo 4 columnas (súper rápido)
+        //        var postesInfo = (from p in ctx.Postes.AsNoTracking()
+        //                          join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
+        //                          where p.PostSubestacion == sedId && p.PostEsBt == true
+        //                          select new
+        //                          {
+        //                              IdElemento = p.PostInterno,
+        //                              Tipo = "POST",
+        //                              Circuito = t.TramCodigo, // Ej: "CIR. 3"
+        //                              Orden = t.TramOrden      // Ej: 1, 2, 3
+        //                          }).ToList();
 
-                var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
-                                 join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
-                                 where v.VanoSubestacion == sedId && v.VanoEsBt == true
-                                 select new
-                                 {
-                                     IdElemento = v.VanoInterno,
-                                     Tipo = "VANO",
-                                     Circuito = t.TramCodigo,
-                                     Orden = t.TramOrden
-                                 }).ToList();
+        //        var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
+        //                         join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
+        //                         where v.VanoSubestacion == sedId && v.VanoEsBt == true
+        //                         select new
+        //                         {
+        //                             IdElemento = v.VanoInterno,
+        //                             Tipo = "VANO",
+        //                             Circuito = t.TramCodigo,
+        //                             Orden = t.TramOrden
+        //                         }).ToList();
 
-                // Unimos ambos y los enviamos
-                var resultado = postesInfo.Concat(vanosInfo).ToList();
-                return Ok(resultado);
-            }
-        }
+        //        // Unimos ambos y los enviamos
+        //        var resultado = postesInfo.Concat(vanosInfo).ToList();
+        //        return Ok(resultado);
+        //    }
+        //}
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Diagnostics;
 
 namespace Sigre.Entities.Entities;
 
@@ -40,8 +41,11 @@ public partial class Vano
 
     public bool? VanoEsBt { get; set; }
 
-    public string? VanoTramo { get; set; }
     public int? TramInterno { get; set; }
 
-    public virtual Alimentadore? AlimInternoNavigation { get; set; } = null!;
+    public string? VanoTramo { get; set; }
+
+    public virtual Alimentadore AlimInternoNavigation { get; set; } = null!;
+
+    public virtual Tramo? TramInternoNavigation { get; set; }
 }

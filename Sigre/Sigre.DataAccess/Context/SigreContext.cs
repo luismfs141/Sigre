@@ -66,7 +66,7 @@ public partial class SigreContext : DbContext
     public virtual DbSet<Tabla> Tablas { get; set; }
 
     public virtual DbSet<Tipificacione> Tipificaciones { get; set; }
-
+    public virtual DbSet<Tramo> Tramos { get; set; }
     public virtual DbSet<Usuario> Usuarios { get; set; }
 
     public virtual DbSet<UsuariosAlimentadore> UsuariosAlimentadores { get; set; }
@@ -680,6 +680,9 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PostInterno).HasColumnName("POST_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.PostAltura)
+                .HasColumnType("numeric(10, 2)")
+                .HasColumnName("POST_Altura");
             entity.Property(e => e.PostArmadoMaterial).HasColumnName("POST_ArmadoMaterial");
             entity.Property(e => e.PostArmadoTipo).HasColumnName("POST_ArmadoTipo");
             entity.Property(e => e.PostCodigoNodo)
@@ -700,15 +703,10 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.PostRetenidaTipo).HasColumnName("POST_RetenidaTipo");
             entity.Property(e => e.PostSubestacion).HasColumnName("POST_Subestacion");
             entity.Property(e => e.PostTerceros).HasColumnName("POST_Terceros");
-
-            entity.Property(e => e.PostAltura).HasColumnName("POST_Altura");
-
-            entity.Property(e => e.PostTramo)
-    .HasMaxLength(20)
-    .IsUnicode(false)
-    .HasColumnName("POST_Tramo");
-
             entity.Property(e => e.PostVereda).HasColumnName("POST_Vereda");
+            entity.Property(e => e.PostTramo)
+                .HasMaxLength(20)
+                .HasColumnName("POST_Tramo");
             entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
 
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
@@ -731,8 +729,9 @@ public partial class SigreContext : DbContext
                 .HasForeignKey(d => d.PostRetenidaTipo)
                 .HasConstraintName("FK_Postes_RetenidaTipo");
 
-
-
+            entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.TramInterno)
+                .HasConstraintName("FK_Postes_Tramos");
         });
 
         modelBuilder.Entity<PosteMaterial>(entity =>
@@ -884,6 +883,21 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("fk_TIPI_CODI");
         });
 
+        modelBuilder.Entity<Tramo>(entity =>
+        {
+            entity.HasKey(e => e.TramInterno).HasName("PK__Tramos__0A1B1E0768F26A86");
+
+            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
+            entity.Property(e => e.TramActivo)
+                .HasDefaultValue(true)
+                .HasColumnName("TRAM_Activo");
+            entity.Property(e => e.TramCodigo)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasColumnName("TRAM_Codigo");
+            entity.Property(e => e.TramOrden).HasColumnName("TRAM_Orden");
+        });
+
         modelBuilder.Entity<Usuario>(entity =>
         {
             entity.HasKey(e => e.UsuaInterno).HasName("PK__Usuarios__D34094097AE6F930");
@@ -935,10 +949,11 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Vano>(entity =>
         {
-            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F4097793A8");
+            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F4FB8301A9");
 
             entity.Property(e => e.VanoInterno).HasColumnName("VANO_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
             entity.Property(e => e.VanoCodigo)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -968,17 +983,18 @@ public partial class SigreContext : DbContext
                 .HasColumnName("VANO_NodoInicial");
             entity.Property(e => e.VanoSubestacion).HasColumnName("VANO_Subestacion");
             entity.Property(e => e.VanoTerceros).HasColumnName("VANO_Terceros");
-            entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
-
             entity.Property(e => e.VanoTramo)
-    .HasMaxLength(50)
-    .IsUnicode(false)
-    .HasColumnName("VANO_Tramo");
+                .HasMaxLength(20)
+                .HasColumnName("VANO_Tramo");
 
             entity.HasOne(d => d.AlimInternoNavigation).WithMany(p => p.Vanos)
                 .HasForeignKey(d => d.AlimInterno)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_VANO_ALIM");
+
+            entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Vanos)
+                .HasForeignKey(d => d.TramInterno)
+                .HasConstraintName("FK_Vanos_Tramos");
         });
 
         modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);
