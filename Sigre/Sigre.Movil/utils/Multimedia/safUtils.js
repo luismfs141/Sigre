@@ -128,12 +128,22 @@ const ensureSafSubdir = async (parentUri, dirNameRaw) => {
     throw new Error(`SAF parentUri inválido para crear carpeta: ${dirName}`);
   }
 
-  const children = await readSafDirectoryAsync(parentUri);
-  const existing = children.find((u) => safDisplayName(u) === dirName);
+  const childrenBefore = await readSafDirectoryAsync(parentUri);
+  const existing = childrenBefore.find((u) => safDisplayName(u) === dirName);
 
   if (existing) return existing;
 
-  return await SAF.makeDirectoryAsync(parentUri, dirName);
+  await SAF.makeDirectoryAsync(parentUri, dirName);
+
+  // MUY IMPORTANTE:
+  // no usar la URI cruda devuelta por makeDirectoryAsync;
+  // volver a listar el padre y recuperar la URI real utilizable.
+  const childrenAfter = await readSafDirectoryAsync(parentUri);
+  const createdResolved = childrenAfter.find((u) => safDisplayName(u) === dirName);
+
+  if (createdResolved) return createdResolved;
+
+  throw new Error(`No se pudo resolver la carpeta SAF creada: ${dirName}`);
 };
 
 export const ensureSafPath = async (rootUri, segments) => {
@@ -207,7 +217,13 @@ export const safTrashDirForRelativeFile = async (rootUri, relativePath) => {
   return ensureSafPath(rootUri, segs);
 };
 
-export const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFileUri }) => {
+export const writeFileIntoSafDir = async ({
+  dirUri,
+  fileName,
+  mimeType,
+  sourceFileUri,
+  skipLookup = false,
+}) => {
   if (!dirUri) {
     throw new Error("SAF dirUri inválido");
   }
@@ -218,12 +234,17 @@ export const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFi
     encoding: FileSystem.EncodingType.Base64,
   });
 
-  const children = await readSafDirectoryAsync(dirUri);
-  const existing = children.find((u) => safNameMatches(u, fileName));
+  let safFileUri = null;
 
-  const safFileUri =
-    existing ??
-    (await SAF.createFileAsync(dirUri, stripExt(fileName), finalMime));
+  if (!skipLookup) {
+    const children = await readSafDirectoryAsync(dirUri);
+    const existing = children.find((u) => safNameMatches(u, fileName));
+    safFileUri = existing ?? null;
+  }
+
+  if (!safFileUri) {
+    safFileUri = await SAF.createFileAsync(dirUri, stripExt(fileName), finalMime);
+  }
 
   await FileSystem.writeAsStringAsync(safFileUri, base64, {
     encoding: FileSystem.EncodingType.Base64,
