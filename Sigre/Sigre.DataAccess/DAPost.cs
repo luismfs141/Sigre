@@ -256,7 +256,7 @@ namespace Sigre.DataAccess
                         existente.PostAltura = x_poste.PostAltura;
                         existente.PostRetenidaTipo = x_poste.PostRetenidaTipo;
                         existente.PostTerceros = x_poste.PostTerceros;
-
+                        existente.PostVereda = x_poste.PostVereda;
                         // NOTA: No actualizamos 'PostInspeccionado' para no borrar el trabajo de campo si ya se hizo.
 
                         // 3. Guardar Cambios
@@ -417,7 +417,9 @@ namespace Sigre.DataAccess
                         PostRetenidaTipo = p.PostRetenidaTipo,
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
-                        PostEsBt = p.PostEsBt
+                        PostEsBt = p.PostEsBt,
+                        TramInterno = p.TramInterno,
+                        PostVereda = p.PostVereda
                     })
                     .ToList();
 

@@ -20,9 +20,9 @@ export const usePosteVanoSearch = (fetchPostesChunk, fetchVanosChunk) => {
         debounceTimer.current = setTimeout(async () => {
             try {
                 // 🔥 2. SE LOS PASAMOS DIRECTO AL BACKEND
-                const [responsePostes, responseVanos] = await Promise.all([
-                    fetchPostesChunk(0, 15, query, alimentadorId, sedId),
-                    fetchVanosChunk(0, 15, query, alimentadorId, sedId)
+const [responsePostes, responseVanos] = await Promise.all([
+                    fetchPostesChunk(0, 15, query, query, alimentadorId, sedId),
+                    fetchVanosChunk(0, 15, query, query, alimentadorId, sedId)
                 ]);
                 
                 const resultados = [];

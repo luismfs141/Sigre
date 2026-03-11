@@ -5,6 +5,31 @@ import { basenameFromAnyPath, normalizeRelativePath, safeSeg, stripExt } from ".
 
 export const SAF = FileSystem.StorageAccessFramework;
 
+
+
+export const readSafDirectoryAsync = async (dirUri) => {
+  if (!dirUri) return [];
+
+  try {
+    return (await SAF.readDirectoryAsync(dirUri)) ?? [];
+  } catch (e) {
+    console.log("[SAF] readDirectoryAsync no legible:", dirUri, e?.message ?? e);
+    return [];
+  }
+};
+
+const isSafDirAccessible = async (dirUri) => {
+  if (!dirUri) return null;
+
+  try {
+    await SAF.readDirectoryAsync(dirUri);
+    return dirUri;
+  } catch (e) {
+    console.log("[SAF] URI inválido o sin permiso:", dirUri, e?.message ?? e);
+    return null;
+  }
+};
+
 export const safDisplayName = (uri) => {
   try {
     const dec = decodeURIComponent(uri);
@@ -34,56 +59,114 @@ export const safNameMatches = (uri, fileName) => {
 
 export const getOrRequestPublicDir = async (rootFolderName, storageKey) => {
   if (Platform.OS !== "android") return null;
-  const saved = await AsyncStorage.getItem(storageKey);
-  if (saved) return saved;
 
   try {
+    const saved = await AsyncStorage.getItem(storageKey);
+
+    // 1) Si hay uno guardado, validarlo antes de usarlo
+    const validSaved = await isSafDirAccessible(saved);
+    if (validSaved) {
+      return validSaved;
+    }
+
+    // 2) Si estaba guardado pero ya murió, limpiarlo
+    if (saved) {
+      try {
+        await AsyncStorage.removeItem(storageKey);
+      } catch { }
+    }
+
+    // 3) Pedir permiso otra vez
     const initialUri = SAF.getUriForDirectoryInRoot(rootFolderName);
     const perm = await SAF.requestDirectoryPermissionsAsync(initialUri);
-    if (!perm.granted) return null;
-    await AsyncStorage.setItem(storageKey, perm.directoryUri);
-    return perm.directoryUri;
+
+    if (!perm?.granted || !perm?.directoryUri) {
+      return null;
+    }
+
+    // 4) Validar el nuevo antes de guardarlo
+    const validNew = await isSafDirAccessible(perm.directoryUri);
+    if (!validNew) {
+      return null;
+    }
+
+    await AsyncStorage.setItem(storageKey, validNew);
+    return validNew;
   } catch (e) {
-    console.log("SAF Request cancelled or failed", e);
+    console.log("[SAF] Request cancelled or failed", e);
     return null;
   }
 };
 
 export const getSavedPublicDir = async (storageKey) => {
   if (Platform.OS !== "android") return null;
+
   try {
     const saved = await AsyncStorage.getItem(storageKey);
-    return saved || null;
-  } catch {
+    if (!saved) return null;
+
+    const validSaved = await isSafDirAccessible(saved);
+    if (validSaved) {
+      return validSaved;
+    }
+
+    try {
+      await AsyncStorage.removeItem(storageKey);
+    } catch { }
+
+    return null;
+  } catch (e) {
+    console.log("[SAF] Saved dir inválido:", e?.message ?? e);
     return null;
   }
 };
 
 const ensureSafSubdir = async (parentUri, dirNameRaw) => {
   const dirName = safeSeg(dirNameRaw);
-  try {
-    const children = await SAF.readDirectoryAsync(parentUri);
-    const existing = children.find((u) => safDisplayName(u) === dirName);
-    if (existing) return existing;
-    return await SAF.makeDirectoryAsync(parentUri, dirName);
-  } catch (e) {
-    console.warn(`Error check SAF ${dirName}:`, e.message);
-    return await SAF.makeDirectoryAsync(parentUri, dirName);
+
+  if (!parentUri) {
+    throw new Error(`SAF parentUri inválido para crear carpeta: ${dirName}`);
   }
+
+  const childrenBefore = await readSafDirectoryAsync(parentUri);
+  const existing = childrenBefore.find((u) => safDisplayName(u) === dirName);
+
+  if (existing) return existing;
+
+  await SAF.makeDirectoryAsync(parentUri, dirName);
+
+  // MUY IMPORTANTE:
+  // no usar la URI cruda devuelta por makeDirectoryAsync;
+  // volver a listar el padre y recuperar la URI real utilizable.
+  const childrenAfter = await readSafDirectoryAsync(parentUri);
+  const createdResolved = childrenAfter.find((u) => safDisplayName(u) === dirName);
+
+  if (createdResolved) return createdResolved;
+
+  throw new Error(`No se pudo resolver la carpeta SAF creada: ${dirName}`);
 };
 
 export const ensureSafPath = async (rootUri, segments) => {
+  if (!rootUri) {
+    throw new Error("SAF rootUri inválido");
+  }
+
   let current = rootUri;
+
   for (const seg of segments) {
     current = await ensureSafSubdir(current, seg);
   }
+
   return current;
 };
 
 const findSafSubdir = async (parentUri, dirNameRaw) => {
   const dirName = safeSeg(dirNameRaw);
+
+  if (!parentUri) return null;
+
   try {
-    const children = await SAF.readDirectoryAsync(parentUri);
+    const children = await readSafDirectoryAsync(parentUri);
     const existing = children.find((u) => safDisplayName(u) === dirName);
     return existing ?? null;
   } catch {
@@ -134,19 +217,34 @@ export const safTrashDirForRelativeFile = async (rootUri, relativePath) => {
   return ensureSafPath(rootUri, segs);
 };
 
-export const writeFileIntoSafDir = async ({ dirUri, fileName, mimeType, sourceFileUri }) => {
+export const writeFileIntoSafDir = async ({
+  dirUri,
+  fileName,
+  mimeType,
+  sourceFileUri,
+  skipLookup = false,
+}) => {
+  if (!dirUri) {
+    throw new Error("SAF dirUri inválido");
+  }
+
   const finalMime = guessMime(fileName, mimeType);
 
   const base64 = await FileSystem.readAsStringAsync(sourceFileUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
-  const children = await SAF.readDirectoryAsync(dirUri);
-  const existing = children.find((u) => safNameMatches(u, fileName));
+  let safFileUri = null;
 
-  const safFileUri =
-    existing ??
-    (await SAF.createFileAsync(dirUri, stripExt(fileName), finalMime));
+  if (!skipLookup) {
+    const children = await readSafDirectoryAsync(dirUri);
+    const existing = children.find((u) => safNameMatches(u, fileName));
+    safFileUri = existing ?? null;
+  }
+
+  if (!safFileUri) {
+    safFileUri = await SAF.createFileAsync(dirUri, stripExt(fileName), finalMime);
+  }
 
   await FileSystem.writeAsStringAsync(safFileUri, base64, {
     encoding: FileSystem.EncodingType.Base64,
@@ -177,20 +275,20 @@ export const cleanupEmptyAncestorsSaf = async (rootUri, relativeFilePath, stopAt
     const rel = normalizeRelativePath(relativeFilePath);
     const segs = rel.split("?")[0].split("/").filter(Boolean);
 
-    // quitamos el archivo (último segmento)
+    // quitamos el archivo
     segs.pop();
     if (!segs.length) return;
 
     const stopIdx = segs.indexOf(stopAtSeg);
-    const minLen = stopIdx >= 0 ? stopIdx + 1 : 1; // nunca borres stopAtSeg
+    const minLen = stopIdx >= 0 ? stopIdx + 1 : 1;
 
     for (let i = segs.length; i > minLen; i--) {
       const currentSegs = segs.slice(0, i);
-      const dirUri = await findSafPath(rootUri, currentSegs); // ✅ usa el helper interno
+      const dirUri = await findSafPath(rootUri, currentSegs);
       if (!dirUri) break;
 
-      const children = (await SAF.readDirectoryAsync(dirUri)) ?? [];
-      if (children.length > 0) break; // ya no está vacía
+      const children = await readSafDirectoryAsync(dirUri);
+      if (children.length > 0) break;
 
       await SAF.deleteAsync(dirUri);
     }

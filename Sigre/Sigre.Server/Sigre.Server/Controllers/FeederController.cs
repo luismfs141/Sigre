@@ -44,7 +44,40 @@ namespace Sigre.Server.Controllers
                 Mensaje = "Mapa Actualizado"
             };
         }
+        [HttpGet("GetSedsByFeederWeb")]
+        public IActionResult GetSedsByFeederWeb(int x_feeder)
+        {
+            try
+            {
+                DAFeeder dAFeeder = new DAFeeder();
 
+                // Obtenemos la lista limpia desde la capa de datos
+                var seds = dAFeeder.DAFE_GetSedsByFeederWeb(x_feeder);
+
+                // ¡Aquí SÍ va el Ok()! Envía la lista a React formateada como JSON
+                return Ok(seds);
+            }
+            catch (Exception ex)
+            {
+                // Si algo falla, le decimos a React exactamente qué fue
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
+        }
+        [HttpGet("GetTramosPorSed")]
+        public IActionResult GetTramosPorSed(int sedId)
+        {
+            try
+            {
+                DAFeeder daFeeder = new DAFeeder();
+                var resultado = daFeeder.DAFE_GetTramosPorSed(sedId);
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
+        }
         [HttpPost("export")]
         public async Task<IActionResult> ExportDatabase([FromBody] DatabaseExportRequest request)
         {
@@ -105,6 +138,7 @@ namespace Sigre.Server.Controllers
             return dAFeeder.DAFE_GetSedsByFeeder(x_feeder);
         }
     }
+
     public class DatabaseExportRequest
     {
         public int UserId { get; set; }

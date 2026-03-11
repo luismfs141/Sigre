@@ -17,6 +17,9 @@ const DatosContext = createContext();
 // 🔴 CLAVE PARA GUARDAR EL ALIMENTADOR EN STORAGE
 const SELECTED_FEEDER_KEY = "SIGRE_SELECTED_FEEDER";
 
+// 🔴 CLAVE PARA GUARDAR EL MODO DE AUTO-SYNC
+const AUTO_SYNC_MODE_KEY = "SIGRE_AUTO_SYNC_MODE";
+
 
 export const DatosProvider = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -30,7 +33,7 @@ export const DatosProvider = ({ children }) => {
 
 
   const [alimEtiquetaLocal, setAlimEtiquetaLocal] = useState(null);
-
+  const [isAutoSyncOnline, setIsAutoSyncOnlineState] = useState(true);
 
   // ------------------ PERFIL GLOBAL (desde login del servidor) ------------------
   const profileId = user?.perfilId ?? null;
@@ -213,7 +216,22 @@ export const DatosProvider = ({ children }) => {
     loadLastDatabaseName();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(AUTO_SYNC_MODE_KEY);
+        if (raw == null) {
+          setIsAutoSyncOnlineState(true); // default = ONLINE
+          return;
+        }
 
+        setIsAutoSyncOnlineState(raw === "1");
+      } catch (e) {
+        console.log("[DatosContext] error leyendo modo auto-sync:", e);
+        setIsAutoSyncOnlineState(true);
+      }
+    })();
+  }, []);
 
 
 
@@ -284,6 +302,19 @@ export const DatosProvider = ({ children }) => {
     })();
   };
 
+
+  const setIsAutoSyncOnline = async (value) => {
+    const next = !!value;
+
+    setIsAutoSyncOnlineState(next);
+
+    try {
+      await AsyncStorage.setItem(AUTO_SYNC_MODE_KEY, next ? "1" : "0");
+    } catch (e) {
+      console.log("[DatosContext] error guardando modo auto-sync:", e);
+    }
+  };
+
   return (
     <DatosContext.Provider
       value={{
@@ -293,7 +324,7 @@ export const DatosProvider = ({ children }) => {
         dbName,
         dbEpoch,
         setDbName,
-        
+
         openLocalDB,
         checkDatabase,
         setNewDatabase,
@@ -341,6 +372,9 @@ export const DatosProvider = ({ children }) => {
 
         selectedProject,
         alimEtiquetaLocal,
+
+        isAutoSyncOnline,
+        setIsAutoSyncOnline,
 
         setSelectedProject
       }}

@@ -51,11 +51,10 @@ import {
   basenameFromAnyPath,
   buildMediaName,
   cleanUri,
-  getDirFromRelative,
   getStampPartsFromMs,
   normalizeRelativePath,
   safeSeg,
-  toTrashRelativePath,
+  toTrashRelativePath
 } from "../../utils/Multimedia/pathUtils";
 
 
@@ -74,8 +73,10 @@ import {
 
 import {
   SAF,
+  cleanupEmptyAncestorsSaf,
   ensureSafPath,
   getOrRequestPublicDir,
+  readSafDirectoryAsync,
   safDirForRelativeFileReadOnly,
   safNameMatches,
   safTrashDirForRelativeFile,
@@ -377,7 +378,7 @@ export default function Multimedia() {
         if (!dirUri) return [];
         if (dirCache.has(dirUri)) return dirCache.get(dirUri);
         try {
-          const children = (await SAF.readDirectoryAsync(dirUri)) ?? [];
+          const children = await readSafDirectoryAsync(dirUri);
           dirCache.set(dirUri, children);
           return children;
         } catch {
@@ -767,40 +768,6 @@ export default function Multimedia() {
     });
   };
 
-  // ==========================
-  // 🧹 CLEANUP: SAF empty folders (Android)
-  // ==========================
-  const cleanupEmptyAncestorsSaf = async (rootUri, relativeFilePath) => {
-    try {
-      if (Platform.OS !== "android") return;
-      if (!rootUri || !relativeFilePath) return;
-
-      const rel = normalizeRelativePath(relativeFilePath);
-      const dirRel = getDirFromRelative(rel); // ejemplo: SIGRE.MOVIL/.../7004/3/
-      if (!dirRel) return;
-
-      const segs = dirRel.split("/").filter(Boolean);
-      // Evitar borrar por encima de SIGRE.MOVIL (lo dejamos como “base”)
-      if (segs.length <= 1) return;
-
-      // Desde la carpeta más profunda hacia arriba
-      for (let i = segs.length; i > 1; i--) {
-        const currentDirRel = segs.slice(0, i).join("/") + "/";
-
-        // Truco: resolver el URI del directorio usando el resolver de “file”
-        const dirUri = await safDirForRelativeFileReadOnly(rootUri, currentDirRel + "__dir__");
-        if (!dirUri) break;
-
-        const children = (await SAF.readDirectoryAsync(dirUri)) ?? [];
-        if (children.length > 0) break; // ya tiene algo, paramos
-
-        // Está vacío -> borrar carpeta
-        await SAF.deleteAsync(dirUri);
-      }
-    } catch {
-      // si falla, no rompe el flujo
-    }
-  };
 
   // ==========================
   // 🧹 CLEANUP: Private cache (Android)
@@ -883,13 +850,23 @@ export default function Multimedia() {
 
       const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/`;
 
-      const hasNewPhotos = photos.some((p) => p && !p.id);
-      const hasNewAudios = audios.some((a) => a && !a.id);
-      const hasDeletedPhotos = deletedIds.some((d) => d.type !== 0);
-      const hasDeletedAudios = deletedIds.some((d) => d.type === 0);
 
-      const needPictures = hasNewPhotos || hasDeletedPhotos;
-      const needMusic = hasNewAudios || hasDeletedAudios;
+
+
+
+      const hasNewPhotos = photos.some((p) => p && !p.id && !p.isPlaceholder);
+      const hasNewAudios = audios.some((a) => a && !a.id);
+
+      const hasDeletedPhotos = deletedIds.some((d) => Number(d?.type) !== 0);
+      const hasDeletedAudios = deletedIds.some((d) => Number(d?.type) === 0);
+
+      // ROOT = necesito acceder al árbol público (para leer, mover a eliminados, etc.)
+      const needPicturesRoot = hasNewPhotos || hasDeletedPhotos;
+      const needMusicRoot = hasNewAudios || hasDeletedAudios;
+
+      // TARGET = necesito la carpeta final solo si voy a guardar nuevos archivos
+      const needPicturesTarget = hasNewPhotos;
+      const needMusicTarget = hasNewAudios;
 
       let relativeFolderPath = null;
 
@@ -900,12 +877,10 @@ export default function Multimedia() {
 
         let correlativo = extract7004IndexFromPath(anyPath);
 
-        // ✅ si ya existió antes (aunque hoy no tenga fotos), lo sacamos de BD
         if (correlativo == null) {
           correlativo = await get7004CorrelativoFromDbSafe(deficiencyData);
         }
 
-        // ✅ si nunca existió, recién asignamos uno nuevo
         if (correlativo == null) {
           correlativo = await getNext7004Correlativo(elementBaseRel);
         }
@@ -920,11 +895,9 @@ export default function Multimedia() {
 
       const carpetaBase = FileSystem.documentDirectory + relativeFolderPath;
 
-      // iOS NO tiene SAF público: guardamos final en privado
       if (Platform.OS !== "android" && (hasNewPhotos || hasNewAudios)) {
         await ensureDirExists(carpetaBase);
       }
-
 
       let picturesTargetDir = null;
       let musicTargetDir = null;
@@ -935,40 +908,45 @@ export default function Multimedia() {
 
       try {
         if (Platform.OS === "android") {
-          picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+          if (needPicturesRoot) {
+            picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+          }
 
-          if (picturesRoot) {
+          if (needMusicRoot) {
+            musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
+          }
+
+          if (needPicturesTarget && picturesRoot) {
             picturesTargetDir = await ensureSafPath(picturesRoot, pathSegments);
           }
 
-          if (needMusic) {
-            musicRoot = await getOrRequestPublicDir("Music", KEY_MUSIC_DIR);
-            if (musicRoot) {
-              musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
-            }
+          if (needMusicTarget && musicRoot) {
+            musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
           }
         }
       } catch (e) {
-        console.warn("SAF Error:", e.message);
+        console.warn("SAF Error:", e?.message ?? e);
       }
 
       if (Platform.OS === "android") {
-        if (needPictures && !picturesTargetDir) {
+        if (needPicturesTarget && !picturesTargetDir) {
           setLoading({ active: false, msg: "" });
           return Alert.alert(
             "Permiso requerido",
-            "Para trabajar solo con carpeta pública, debes seleccionar una carpeta en Pictures (SAF). Acepta el permiso e intenta nuevamente."
+            "Para guardar fotos en carpeta pública, debes seleccionar una carpeta válida en Pictures (SAF)."
           );
         }
 
-        if (needMusic && !musicTargetDir) {
+        if (needMusicTarget && !musicTargetDir) {
           setLoading({ active: false, msg: "" });
           return Alert.alert(
             "Permiso requerido",
-            "Para trabajar solo con carpeta pública, debes seleccionar una carpeta en Music (SAF). Acepta el permiso e intenta nuevamente."
+            "Para guardar audios en carpeta pública, debes seleccionar una carpeta válida en Music (SAF)."
           );
         }
       }
+
+
 
       // 3) ELIMINADOS
       if (deletedIds.length > 0) {
@@ -982,15 +960,13 @@ export default function Multimedia() {
 
           // ✅ Android: borrar cache privado (NO mover a trash privado)
           if (Platform.OS === "android") {
-            // placeholder cache
-            if (isPlaceholder && item?.sourceUri) {
-              try { await FileSystem.deleteAsync(cleanUri(item.sourceUri), { idempotent: true }); } catch { }
-            }
-
-            // restos de versiones antiguas (si existiera el archivo privado)
+            // restos de versiones antiguas en privado (que no sean el placeholder que quizá
+            // usaremos como evidencia para ELIMINADOS)
             try {
               const info = await FileSystem.getInfoAsync(oldUri);
-              if (info.exists) await FileSystem.deleteAsync(oldUri, { idempotent: true });
+              if (info.exists && cleanUri(oldUri) !== cleanUri(item?.sourceUri)) {
+                await FileSystem.deleteAsync(oldUri, { idempotent: true });
+              }
             } catch { }
           }
 
@@ -1002,8 +978,10 @@ export default function Multimedia() {
               const srcDir = await safDirForRelativeFileReadOnly(picturesRoot, oldRelativePath);
               const dstDir = await safTrashDirForRelativeFile(picturesRoot, oldRelativePath);
 
+              let movedSomething = false;
+
               if (srcDir) {
-                const files = (await SAF.readDirectoryAsync(srcDir)) ?? [];
+                const files = await readSafDirectoryAsync(srcDir);
                 const oldSafFile = files.find((u) => safNameMatches(u, fileName));
 
                 if (oldSafFile) {
@@ -1013,11 +991,32 @@ export default function Multimedia() {
                     mimeType: "image/jpeg",
                     sourceFileUri: oldSafFile,
                   });
+
                   await SAF.deleteAsync(oldSafFile);
+                  movedSomething = true;
                 }
               }
 
-              // ✅ borrar carpetas vacías hacia arriba (solo Pictures)
+              // fallback: si no existe el archivo real en SAF, pero era placeholder,
+              // mandamos el placeholder privado a ELIMINADOS como evidencia
+              if (!movedSomething && item?.isPlaceholder && item?.sourceUri) {
+                const placeholderUri = cleanUri(item.sourceUri);
+                const info = await FileSystem.getInfoAsync(placeholderUri);
+
+                if (info.exists) {
+                  await writeFileIntoSafDir({
+                    dirUri: dstDir,
+                    fileName,
+                    mimeType: "image/jpeg",
+                    sourceFileUri: placeholderUri,
+                  });
+
+                  try {
+                    await FileSystem.deleteAsync(placeholderUri, { idempotent: true });
+                  } catch { }
+                }
+              }
+
               await cleanupEmptyAncestorsSaf(picturesRoot, oldRelativePath);
             } catch (e) {
               console.warn("SAF move-photo-to-trash error:", e?.message ?? e);
@@ -1033,7 +1032,7 @@ export default function Multimedia() {
               const dstDir = await safTrashDirForRelativeFile(musicRoot, oldRelativePath);
 
               if (srcDir) {
-                const files = (await SAF.readDirectoryAsync(srcDir)) ?? [];
+                const files = await readSafDirectoryAsync(srcDir);
                 const oldSafFile = files.find((u) => safNameMatches(u, fileName));
 
                 if (oldSafFile) {
@@ -1059,11 +1058,30 @@ export default function Multimedia() {
         }
       }
 
+
+
+
+      // 3.5) Re-resolver carpetas target después de mover eliminados,
+      // porque cleanupEmptyAncestorsSaf pudo borrar la carpeta original
+      // y dejar inválida la URI calculada antes.
+      if (Platform.OS === "android") {
+        if (hasNewPhotos && picturesRoot) {
+          picturesTargetDir = await ensureSafPath(picturesRoot, pathSegments);
+        }
+
+        if (hasNewAudios && musicRoot) {
+          musicTargetDir = await ensureSafPath(musicRoot, pathSegments);
+        }
+      }
+
+
+
+
       // 4) FOTOS NUEVAS (DRAFT -> COMMIT)
       let existingPublicPics = [];
-      if (Platform.OS === "android" && picturesTargetDir) {
+      if (Platform.OS === "android" && hasNewPhotos && picturesTargetDir) {
         try {
-          existingPublicPics = (await SAF.readDirectoryAsync(picturesTargetDir)) ?? [];
+          existingPublicPics = await readSafDirectoryAsync(picturesTargetDir);
         } catch { }
       }
 
@@ -1145,16 +1163,9 @@ export default function Multimedia() {
       }
 
 
-      // 5) AUDIOS NUEVOS (DRAFT -> COMMIT)
-      let existingPublicAud = [];
-      if (Platform.OS === "android" && musicTargetDir) {
-        try {
-          existingPublicAud = (await SAF.readDirectoryAsync(musicTargetDir)) ?? [];
-        } catch { }
-      }
 
-      const publicHasAud = (fileName) =>
-        (existingPublicAud ?? []).some((u) => safNameMatches(u, fileName));
+
+
 
       for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
@@ -1186,14 +1197,13 @@ export default function Multimedia() {
             throw new Error("No hay carpeta pública (Music) seleccionada.");
           }
 
-          if (!publicHasAud(fname)) {
-            await writeFileIntoSafDir({
-              dirUri: musicTargetDir,
-              fileName: fname,
-              mimeType: "audio/mp4",
-              sourceFileUri: srcUri,
-            });
-          }
+          await writeFileIntoSafDir({
+            dirUri: musicTargetDir,
+            fileName: fname,
+            mimeType: "audio/mp4",
+            sourceFileUri: srcUri,
+            skipLookup: true,
+          });
         } else {
           const destUri = carpetaBase + fname;
           const info = await FileSystem.getInfoAsync(destUri);
@@ -1297,10 +1307,21 @@ export default function Multimedia() {
 
 
 
+
     } catch (err) {
       setLoading({ active: false, msg: "" });
       Alert.alert("Error", err.message);
     }
+
+
+
+
+
+
+
+
+
+
   };
 
   const discardChanges = async () => {
@@ -1340,8 +1361,13 @@ export default function Multimedia() {
   };
 
 
-  const onCancel = () => {
-    if (!isDirty) return router.replace("/inspection");
+  const onCancel = async () => {
+    if (!isDirty) {
+      try {
+        await cleanupPrivateMultimediaAndroidSafe();
+      } catch { }
+      return router.replace("/inspection");
+    }
 
     Alert.alert(
       "Descartar cambios",
@@ -1353,6 +1379,7 @@ export default function Multimedia() {
           style: "destructive",
           onPress: async () => {
             await discardChanges();
+            await cleanupPrivateMultimediaAndroidSafe();
             router.replace("/inspection");
           }
         }

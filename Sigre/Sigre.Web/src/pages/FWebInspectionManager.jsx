@@ -236,6 +236,7 @@ export default function WebInspectionManager() {
              setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
              return;
         }
+        setStructureIdInt(validElement.postInterno || validElement.vanoInterno || validElement.id || 0);
 
         const realType = validElement._tipo === 'POSTE' ? 'POST' : 'VANO';
         if (realType !== structureType) {
@@ -309,13 +310,14 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
             // D. Registro de Blobs para ZIP sin recargar
             if (dataToSave.file) { sessionBlobs.current[fileName] = dataToSave.file; }
-
+            const safeElementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
             const payload = {
                 archTabla: "Deficiencias", archInterno: 0, archTipo: String(dataToSave.tipo),
                 archNombre: dbPath, archCodTabla: Number(defId),
                 archLatitud: utm.northing, archLongitud: utm.easting,
                 archFecha: new Date(dataToSave.date || new Date()).toISOString(),
                 archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
+                archIdElemento: Number(safeElementId),
                 tipiInterno: Number(defTipiInterno), archActivo: true,
                 file: dataToSave.file
             };
@@ -948,7 +950,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                         <div className="flex items-center">
                             <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({...bulkOptions, gisCode: e.checked})} />
                             <label htmlFor="cb_gisCode" className="ml-2 text-sm font-bold text-blue-800 cursor-pointer">
-                                Actualizar Ruta y Archivo con el Código GIS actual
+                                Código GIS actual
                             </label>
                         </div>
                         {bulkOptions.gisCode && (

@@ -38,6 +38,7 @@ public partial class Sed
     public int? SedRetenidaTipo { get; set; }
 
     public int? SedRetenidaMaterial { get; set; }
+    public int? TramInterno { get; set; }
 
     public virtual ICollection<Sed> InverseSedMaterialNavigation { get; } = new List<Sed>();
 
@@ -50,4 +51,5 @@ public partial class Sed
     public virtual RetenidaMaterial? SedRetenidaMaterialNavigation { get; set; }
 
     public virtual RetenidaTipo? SedRetenidaTipoNavigation { get; set; }
+    public virtual Tramo? TramInternoNavigation { get; set; }
 }

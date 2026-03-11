@@ -2,9 +2,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { Fragment, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Switch, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { DropDown } from "../../components/DropDown.js";
 import { DropDownSed } from "../../components/DropDownSed";
@@ -15,6 +15,8 @@ import { useMap } from "../../hooks/useMap.js";
 import { usePost } from "../../hooks/usePost.js";
 import { useSed } from "../../hooks/useSed.js";
 import styles, { mapStyles, pinStyles } from "../../styles/mapStyles";
+
+import { useNavigation } from "@react-navigation/native";
 
 import { runQuery } from "../../database/offlineDB/db";
 import { useGap } from "../../hooks/useGap.js";
@@ -240,6 +242,7 @@ const SedWithLabel = memo(function SedWithLabel({
 
 const MapScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const mapRef = useRef(null);
   const lastRegionSentRef = useRef(null);
   const lastRegionTickRef = useRef(0);
@@ -261,6 +264,8 @@ const MapScreen = () => {
     region,
     setRegion,
     setSelectedItem,
+    isAutoSyncOnline,
+    setIsAutoSyncOnline,
   } = useDatos();
 
   const {
@@ -1361,6 +1366,41 @@ const MapScreen = () => {
       Alert.alert("Error", "No se pudo abrir inspección.");
     }
   };
+
+
+
+
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: "#111" }}>
+            Mapa
+          </Text>
+
+          <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 12 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: isAutoSyncOnline ? "#16A34A" : "#DC2626",
+                marginRight: 6,
+              }}
+            >
+              {isAutoSyncOnline ? "ONLINE" : "OFFLINE"}
+            </Text>
+
+            <Switch
+              value={isAutoSyncOnline}
+              onValueChange={setIsAutoSyncOnline}
+            />
+          </View>
+        </View>
+      ),
+    });
+  }, [navigation, isAutoSyncOnline]);
+
 
 
 
