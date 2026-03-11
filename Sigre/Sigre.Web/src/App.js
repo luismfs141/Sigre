@@ -19,6 +19,7 @@ import Subestaciones from './pages/Subestaciones';
 import ImportacionMasivaFotos from './pages/ImportacionMasivaFotos';
 import Elementos from './pages/Elementos';
 import ImportacionMasivaInversa from './pages/ImportacionMasivaInversa';
+import ReporteMaestro from './pages/ReporteMaestro';
 function App() {
   return (
     // 4. ENVUELVE TODO EL CONTENIDO CON EL PROVIDER
@@ -43,6 +44,7 @@ function App() {
           <Route path="/estadisticas" element={<DashboardEstadisticas />} />
           <Route path="/configuracion" element={<div>Página de Configuración</div>} />
           <Route path="/importacion-masiva-inversa" element={<ImportacionMasivaInversa />} />
+          <Route path="/reporteMaestro" element={<ReporteMaestro />} />
         </Route>
 
         {/* REDIRECCIÓN */}

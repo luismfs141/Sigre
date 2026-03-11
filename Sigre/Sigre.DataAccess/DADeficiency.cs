@@ -1043,7 +1043,14 @@ namespace Sigre.DataAccess
 
                         existente.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
                         existente.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
+                        // 🔥 Actualizamos la Fecha de Registro con la enviada desde el frontend
+                        existente.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFecRegistro;
 
+                        // 🔥 Hacemos que la Fecha de Creación sea igual a la Fecha de Registro editada
+                        existente.DefiFechaCreacion = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFechaCreacion;
+
+                        // 🔥 Mantenemos DefiFecModificacion con la fecha y hora REAL de este momento
+                        // (Para saber a nivel de base de datos CUÁNDO alguien hizo esta edición)
                         existente.DefiFecModificacion = DateTime.Now;
                         existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
 
