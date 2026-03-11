@@ -17,21 +17,21 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
   // ACTUALIZAR LO QUE VENGA DE SQLITE
   // =========================
   const toFormShape = (src) => ({
-    PostInterno: src?.PostInterno ?? "",
-    EstadoOffLine: src?.EstadoOffLine ?? "",
-    PostEtiqueta: src?.PostEtiqueta ?? "",
-    PostLatitud: src?.PostLatitud ?? "",
-    PostLongitud: src?.PostLongitud ?? "",
-    PostCodigoNodo: src?.PostCodigoNodo ?? "",
+  PostInterno: src?.PostInterno ?? "",
+  EstadoOffLine: src?.EstadoOffLine ?? null,
+  PostEtiqueta: src?.PostEtiqueta ?? "",
+  PostLatitud: src?.PostLatitud ?? "",
+  PostLongitud: src?.PostLongitud ?? "",
+  PostCodigoNodo: src?.PostCodigoNodo ?? "",
 
-    PostVereda: src?.PostVereda == null ? "" : String(Number(src.PostVereda)), // "0" / "1"
-    PostTerceros: src?.PostTerceros == null ? "" : String(Number(src.PostTerceros)), // "0" / "1"
-    PostMaterial: src?.PostMaterial ?? "",
-    PostRetenidaTipo: src?.PostRetenidaTipo ?? "",
-    PostRetenidaMaterial: src?.PostRetenidaMaterial ?? "",
-    PostArmadoMaterial: src?.PostArmadoMaterial ?? "",
-    PostAltura: src?.PostAltura == null ? "" : String(src.PostAltura),
-  });
+  PostVereda: src?.PostVereda == null ? "" : String(Number(src.PostVereda)),
+  PostTerceros: src?.PostTerceros == null ? "" : String(Number(src.PostTerceros)),
+  PostMaterial: src?.PostMaterial ?? "",
+  PostRetenidaTipo: src?.PostRetenidaTipo ?? "",
+  PostRetenidaMaterial: src?.PostRetenidaMaterial ?? "",
+  PostArmadoMaterial: src?.PostArmadoMaterial ?? "",
+  PostAltura: src?.PostAltura == null ? "" : String(src.PostAltura),
+});
 
 
 
@@ -41,22 +41,7 @@ const PosteForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) =>
   // =========================
   // STATE FORM
   // =========================
-  const [form, setForm] = useState({
-    PostInterno: data?.PostInterno ?? "",
-    EstadoOffLine: data?.EstadoOffLine ?? "",
-    PostEtiqueta: data?.PostEtiqueta ?? "",
-    PostLatitud: data?.PostLatitud ?? "",
-    PostLongitud: data?.PostLongitud ?? "",
-    PostCodigoNodo: data?.PostCodigoNodo ?? "",
-    PostVereda: data?.PostVereda ?? "",
-    PostTerceros: data?.PostTerceros ?? "",
-    PostMaterial: data?.PostMaterial ?? "",
-    PostRetenidaTipo: data?.PostRetenidaTipo ?? "",
-    PostRetenidaMaterial: data?.PostRetenidaMaterial ?? "",
-    PostArmadoMaterial: data?.PostArmadoMaterial ?? "",
-    PostAltura: data?.PostAltura ?? ""
-
-  });
+  const [form, setForm] = useState(toFormShape(data ?? {}));
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 

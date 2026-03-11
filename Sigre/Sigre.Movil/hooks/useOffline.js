@@ -168,9 +168,6 @@ export const useOffline = () => {
     }
   };
 
-
-
-
   const getPendingSyncSummary = async () => {
     let defBefore = 0;
     let archBefore = 0;
@@ -187,6 +184,37 @@ export const useOffline = () => {
     }
 
     const totalPending = defBefore + archBefore + postBefore + gapBefore;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    console.log("📊 Pendientes antes:", {
+  defBefore,
+  archBefore,
+  postBefore,
+  gapBefore,
+  totalPending,
+});
+
+
+
+
+
+
+
+
+
+
 
     return {
       ok: true,
@@ -251,10 +279,57 @@ export const useOffline = () => {
 
     try {
       // 4) intentar sync
-      await syncAllDeficiencies();
-      await syncAllArchivos();
-      await syncAllPosts();
-      await syncAllGaps();
+      // await syncAllPosts();
+      // await syncAllGaps();
+      // await syncAllDeficiencies();
+      // await syncAllArchivos();
+
+
+
+
+
+
+
+
+
+
+// 4) intentar sync
+console.log("🚀 Iniciando syncAllPosts");
+await syncAllPosts();
+console.log("✅ Terminó syncAllPosts");
+
+console.log("🚀 Iniciando syncAllGaps");
+await syncAllGaps();
+console.log("✅ Terminó syncAllGaps");
+
+console.log("🚀 Iniciando syncAllDeficiencies");
+await syncAllDeficiencies();
+console.log("✅ Terminó syncAllDeficiencies");
+
+console.log("🚀 Iniciando syncAllArchivos");
+await syncAllArchivos();
+console.log("✅ Terminó syncAllArchivos");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       // 5) contar pendientes DESPUÉS (real)
       let defAfter = 0;
@@ -272,6 +347,33 @@ export const useOffline = () => {
       } catch (e) {
         console.log("❌ Error contando pendientes (después):", e);
       }
+
+
+
+
+
+
+
+
+
+
+
+console.log("📊 Pendientes después:", {
+  defAfter,
+  archAfter,
+  postAfter,
+  gapAfter,
+  remainingPendingCalculado: defAfter + archAfter + postAfter + gapAfter,
+});
+
+
+
+
+
+
+
+
+
 
       const remainingPending = defAfter + archAfter + postAfter + gapAfter;
       const syncedCount = Math.max(totalPending - remainingPending, 0);
@@ -291,7 +393,28 @@ export const useOffline = () => {
         },
       };
     } catch (err) {
-      console.log("❌ Sync general falló:", err?.message ?? err);
+      // console.log("❌ Sync general falló:", err?.message ?? err);
+
+
+
+
+
+console.log("❌ Sync general falló:", err);
+console.log("❌ Sync general falló message:", err?.message);
+console.log("❌ Sync general falló stack:", err?.stack);
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
       let defAfter = defBefore;
@@ -307,6 +430,46 @@ export const useOffline = () => {
       } catch (e) {
         console.log("❌ Error contando pendientes después de sync fallido:", e);
       }
+
+
+
+
+
+
+
+
+
+
+
+
+console.log("📊 Pendientes después de sync fallido:", {
+  defAfter,
+  archAfter,
+  postAfter,
+  gapAfter,
+  remainingPendingCalculado: defAfter + archAfter + postAfter + gapAfter,
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       const remainingPending = defAfter + archAfter + postAfter + gapAfter;
       const syncedCount = Math.max(totalPending - remainingPending, 0);

@@ -266,10 +266,12 @@ export const usePost = () => {
 
   const normalizePostForSync = (post) => ({
     ...post,
-    EstadoOffLine: Number(post.EstadoOffLine ?? 1),
+    EstadoOffLine:
+      post.EstadoOffLine === "" || post.EstadoOffLine == null || Number(post.EstadoOffLine) === 0
+        ? 1
+        : Number(post.EstadoOffLine),
     AlimInterno: Number(post.AlimInterno),
 
-    // ✅ este es el correcto para campos 0/1
     PostVereda: Number(post.PostVereda) === 1,
     PostTerceros: Number(post.PostTerceros) === 1,
 
@@ -281,7 +283,6 @@ export const usePost = () => {
     PostRetenidaTipo: post.PostRetenidaTipo ? Number(post.PostRetenidaTipo) : null,
     PostRetenidaMaterial: post.PostRetenidaMaterial ? Number(post.PostRetenidaMaterial) : null,
     PostArmadoMaterial: post.PostArmadoMaterial ? Number(post.PostArmadoMaterial) : null,
-
   });
 
   const countPendingPostsLocal = async () => {
