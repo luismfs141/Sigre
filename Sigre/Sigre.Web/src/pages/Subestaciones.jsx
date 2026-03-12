@@ -28,11 +28,7 @@ import DeficiencyForm from '../components/Modals/DeficiencyForm';
 import EstadoBadge from '../utils/estadoBadge';
 import DuplicateDeficiencyModal from '../components/Modals/DuplicateDeficiencyModal';
 import PdfGeneratorModal from '../components/Modals/PdfGeneratorModal';
-
-const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//servidor estatico enlocal
-//const API_BASE_URL = "http://localhost:8080/";
-// --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
+import { API_BASE_URL } from '../utils/ngrok';
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
       background-color: #bfdbfe !important; /* Azul más fuerte */

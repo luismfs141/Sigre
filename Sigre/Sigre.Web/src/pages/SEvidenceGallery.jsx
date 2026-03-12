@@ -10,14 +10,7 @@ import { useFiles } from '../hooks/useFiles';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { useTypification } from '../hooks/useTypification';
 import { latLonToUTM } from '../utils/geoUtils'; // Importamos la función de conversión a UTM
-
-// 🔥 CONEXIÓN AL SERVIDOR CLOUDFLARE
-//cloudflare con túnel directo a tu servidor local (recomendado para desarrollo):
-//const API_BASE_URL = "https://capacity-preceding-skills-outline.trycloudflare.com";
-//ngrok con túnel directo a tu servidor local (recomendado para desarrollo):
-const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//servidor estatico enlocal
-//const API_BASE_URL = "http://localhost:8080/";
+import { API_BASE_URL } from '../utils/ngrok';
 
 // --- ALMACENAMIENTO LOCAL ---
 const LocalFileStore = {

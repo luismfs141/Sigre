@@ -30,9 +30,21 @@ import { usePosteVanoSearch } from '../hooks/usePosteVanoSearch';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { latLonToUTM } from '../utils/geoUtils';
 import { Checkbox } from 'primereact/checkbox';
-// 🔥 CONEXIÓN AL SERVIDOR NGROK
-const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//const API_BASE_URL = "http://localhost:8080/";
+import { API_BASE_URL } from '../utils/ngrok';
+const highContrastStyle = `
+  .p-datatable .p-datatable-tbody > tr.p-highlight {
+      background-color: #bfdbfe !important; /* Azul más fuerte */
+      color: #1e3a8a !important; /* Texto azul oscuro */
+      font-weight: bold;
+      border-left: 6px solid #2563eb; /* Borde lateral */
+  }
+  .p-datatable .p-datatable-tbody > tr.p-highlight .p-tag {
+      border: 1px solid #1e3a8a; 
+  }
+  .p-datatable-wrapper {
+      cursor: default;
+  }
+`;
 // --- DICCIONARIOS Y AYUDANTES ---
 const photoTypes = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' };
 
@@ -119,7 +131,6 @@ export default function WebInspectionManager() {
         tipi: false, // Tipificación
         geo: false   // GPS (Protegido)
     });
-
     // --- 2. ESTADOS DE DATOS E HISTORIAL ---
     const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
     const { getCodeById, fetchTypificationsByTypeElement, masterTypifications } = useTypification();
@@ -259,7 +270,7 @@ export default function WebInspectionManager() {
         setHistoricalData(activeData);
 
         if (activeData.length > 0) {
-            setSelectedDeficiency(activeData[0]);
+            setSelectedDeficiency(null);
             loadFiles(activeData[0].defiInterno);
             toast.current.show({ severity: 'success', summary: 'Historial', detail: `${activeData.length} registros activos` });
         } else {
@@ -726,7 +737,9 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
     };
 
     return (
+        
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
+            <style>{highContrastStyle}</style>
             <Toast ref={toast} />
             <ConfirmPopup />
             <ConfirmDialog />
@@ -752,27 +765,41 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                     </div>
 
                     <div className="flex flex-col flex-1 min-w-[250px]">
-                        <label className="text-[10px] font-bold text-indigo-700 uppercase mb-1">Código GIS (Autocompletar o Enter)</label>
-                        <div className="p-inputgroup relative">
-                            <AutoComplete
-                                value={structureCode} suggestions={suggestions}
-                                completeMethod={(e) => {
-                                    const extractedSedId = selectedSed ? (selectedSed.sedInterno || selectedSed.id || selectedSed.value) : null;
-                                    searchNode(e.query, selectedFeederId, extractedSedId);
-                                }}
-                                field="codigo" itemTemplate={itemTemplate} onSelect={handleGisSelection}
-                                onChange={(e) => {
-                                    const texto = typeof e.value === 'string' ? e.value.toUpperCase() : (e.value?.codigo || '');
-                                    setStructureCode(texto);
-                                    if (texto.includes('VBT') || texto.includes('VANO')) setStructureType('VANO');
-                                    else if (texto.includes('PTO') || texto.includes('POST')) setStructureType('POST');
-                                }}
-                                placeholder="Escriba para buscar..." className="w-full" inputClassName="w-full p-inputtext-sm font-bold text-blue-900 uppercase" dropdown={false} delay={500} disabled={!selectedFeederId || !selectedSed} 
-                            />
-                            <Button icon={searchLoading ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} onClick={handleSearchDeficiencies} loading={searchLoading} disabled={!selectedFeederId || !selectedSed || !structureCode} severity="info" tooltip="Verificar Elemento y Buscar Historial" />
-                        </div>
-                        {(!selectedFeederId || !selectedSed) && <small className="text-orange-500 font-bold mt-1 text-[10px]">Seleccione Alimentador y SED primero.</small>}
-                    </div>
+    <label className="text-[10px] font-bold text-indigo-700 uppercase mb-1">
+        Código GIS
+    </label>
+    
+    <div className="p-inputgroup relative">
+        <InputText
+            value={structureCode}
+            onChange={(e) => {
+                const texto = e.target.value.toUpperCase();
+                setStructureCode(texto);
+                
+                // Mantenemos tu lógica para setear el tipo de estructura
+                if (texto.includes('VBT') || texto.includes('VANO')) {
+                    setStructureType('VANO');
+                } else if (texto.includes('PTO') || texto.includes('POST')) {
+                    setStructureType('POST');
+                }
+
+                // Opcional pero recomendado: si el usuario vuelve a escribir, limpiamos el error
+                // setIsGisNotFound(false); 
+            }}
+            placeholder="Escriba el código..."
+            className="w-full p-inputtext-sm font-bold text-blue-900 uppercase"
+            disabled={!selectedFeederId || !selectedSed}
+        />
+        <Button 
+            icon={searchLoading ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} 
+            onClick={handleSearchDeficiencies} 
+            loading={searchLoading} 
+            disabled={!selectedFeederId || !selectedSed || !structureCode} 
+            severity="info" 
+            tooltip="Verificar Elemento y Buscar Historial" 
+        />
+    </div>
+</div>
                 </div>
 
                 {/* Atributos Globales Extra */}
