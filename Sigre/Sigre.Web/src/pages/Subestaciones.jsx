@@ -29,9 +29,9 @@ import EstadoBadge from '../utils/estadoBadge';
 import DuplicateDeficiencyModal from '../components/Modals/DuplicateDeficiencyModal';
 import PdfGeneratorModal from '../components/Modals/PdfGeneratorModal';
 
-const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
 //servidor estatico enlocal
-//const API_BASE_URL = "http://localhost:8080/";
+const API_BASE_URL = "http://localhost:8080/";
 // --- ESTILOS CSS PARA LA FILA SELECCIONADA (High Contrast) ---
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {

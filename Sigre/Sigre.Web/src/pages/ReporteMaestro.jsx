@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useMemo } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -6,12 +6,14 @@ import { InputText } from 'primereact/inputtext';
 import { Dialog } from 'primereact/dialog';
 import { AutoComplete } from 'primereact/autocomplete';
 import { Dropdown } from 'primereact/dropdown';
-
+import { Tag } from 'primereact/tag';
+import { Skeleton } from 'primereact/skeleton';
 // Tus hooks
 import { useDeficienciesBySed } from '../hooks/useDeficiency'; 
 import { useElements } from '../hooks/useElement'; 
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
-
+import { useTypification } from '../hooks/useTypification';
+import { useUsuario } from '../hooks/useUsuario';
 // Tus Modales/Formularios
 import StaticFormCard from '../components/Modals/StaticFormCard';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
@@ -20,45 +22,80 @@ export default function ReporteMaestro() {
     // --- ESTADOS DE BÚSQUEDA JERÁRQUICA ---
     const [selectedFeeder, setSelectedFeeder] = useState(null);
     const [selectedSed, setSelectedSed] = useState(null);
-    const [filteredSeds, setFilteredSeds] = useState([]);
 
     // --- HOOKS DE DATOS ---
     const { feeders } = useFeeder();
-    const { seds } = useSedsByFeeder(selectedFeeder); // Se actualiza solo al elegir Alimentador
+    const { seds } = useSedsByFeeder(selectedFeeder); 
     
     const { deficiencies, loading: loadingDef, fetchBySed } = useDeficienciesBySed();
     const { saveElement, loading: loadingElement } = useElements();
-
+    const { getCodeById, loading: loadingTypos } = useTypification();
     // --- ESTADOS DE MODALES ---
     const [elementModalOpen, setElementModalOpen] = useState(false);
     const [deficiencyModalOpen, setDeficiencyModalOpen] = useState(false);
     const [selectedRow, setSelectedRow] = useState(null);
+    const { getInspectorName, loading: loadingUsers } = useUsuario(true);
+    
+    // =========================================================================
+    // 🔥 EL SECRETO: MAPEO DE DATOS AL IGUAL QUE EN SUBESTACIONES
+    // =========================================================================
+    const mappedDeficiencies = useMemo(() => {
+        return deficiencies.map(item => {
+            const critMap = { 1: 'LEVE', 2: 'MEDIO', 3: 'CRÍTICO' };
+            return {
+                ...item,
+                // Inyectamos las etiquetas que los templates están buscando
+                tipificacionLabel: getCodeById(item.tipiInterno) || '',
+                inspectorLabel: getInspectorName(item.defiUsuarioInic) || '',
+                criticidadLabel: critMap[item.defiEstadoCriticidad] || 'N/A'
+            };
+        });
+    }, [deficiencies, getCodeById, getInspectorName]);
 
-    // --- LÓGICA DE AUTOCOMPLETADO LOCAL ---
-    const searchSedsLocal = (event) => {
-        const query = event.query.toLowerCase();
-        // Filtramos la lista de SEDs que ya trajo el hook basado en el texto del usuario
-        const _filteredSeds = seds.filter(sed => 
-            sed.label.toLowerCase().includes(query)
-        );
-        setFilteredSeds(_filteredSeds);
-    };
-
-    // --- DISPARADOR DE BÚSQUEDA (Generar Reporte) ---
+    // --- DISPARADOR DE BÚSQUEDA ---
     const handleSearch = (e) => {
         e?.preventDefault();
-        
-        // Dependiendo de cómo mapea useSedsByFeeder, el ID suele venir en 'value' o 'sedInterno'
-        const sedIdToFetch = selectedSed?.value || selectedSed?.sedInterno; 
-        
+        const sedIdToFetch = selectedSed?.value || selectedSed?.sedInterno || selectedSed; 
         if (sedIdToFetch) {
             fetchBySed(Number(sedIdToFetch));
         }
     };
 
-    // --- MANEJADORES DE APERTURA DE MODALES ---
+
+    // =========================================================================
+    // 🔥 CORRECCIÓN CRÍTICA: TRADUCCIÓN DE DTO (Deficiencia -> Elemento)
+    // =========================================================================
     const openElementEdit = (rowData) => {
-        setSelectedRow(rowData);
+        console.log("Datos crudos de la fila:", rowData);
+        const isPoste = rowData.defiTipoElemento === 'POST' || rowData.defiTipoElemento === 'POSTE';
+        const currentSedId = selectedSed?.sedInterno || selectedSed?.SedInterno || selectedSed?.value || selectedSed;
+        const etiquetaFila = rowData.etiqueta || rowData.DefiEtiqueta || rowData.defiEtiqueta || '';
+        // Creamos un objeto que StaticFormCard pueda entender perfectamente
+        const mappedElement = {
+            ...rowData,
+            id: rowData.defiIdElemento || rowData.idInterno,
+            codigo: rowData.defiCodigoElemento,
+            etiqueta: etiquetaFila,
+            alimInterno: rowData.alimInterno || selectedFeeder,
+
+            // Variables específicas si es Poste
+            postInterno: isPoste ? rowData.defiIdElemento : null,
+            postCodigoNodo: isPoste ? rowData.defiCodigoElemento : null,
+            postEtiqueta: isPoste ? rowData.etiqueta : null,
+            postLatitud: rowData.defiLatitud,
+            postLongitud: rowData.defiLongitud,
+            postSubestacion: currentSedId,
+
+            // Variables específicas si es Vano
+            vanoInterno: !isPoste ? rowData.defiIdElemento : null,
+            vanoCodigo: !isPoste ? rowData.defiCodigoElemento : null,
+            vanoEtiqueta: !isPoste ? rowData.etiqueta : null,
+vanoNodoInicial: rowData.DefiNodoInicial || rowData.defiNodoInicial || rowData.nodoInicial || '',
+            vanoNodoFinal: rowData.DefiNodoFinal || rowData.defiNodoFinal || rowData.nodoFinal || '',
+            vanoSubestacion: currentSedId,
+        };
+
+        setSelectedRow(mappedElement);
         setElementModalOpen(true);
     };
 
@@ -72,17 +109,16 @@ export default function ReporteMaestro() {
         const res = await saveElement(payloadToSend);
         if (res.success) {
             setElementModalOpen(false);
-            handleSearch(); // Recargamos usando el estado actual
+            handleSearch(); 
         }
     };
 
     const handleSaveDeficiency = async (payloadToSend) => {
-        // Asumiendo que DeficiencyForm maneja el guardado por dentro o llama a tu API
-        // const res = await saveDeficiency(payloadToSend);
-        
+        // Lógica de guardado API aquí...
         setDeficiencyModalOpen(false);
-        handleSearch(); // Recargamos la grilla
+        handleSearch(); 
     };
+
 
     const actionTemplate = (rowData) => {
         return (
@@ -109,6 +145,9 @@ export default function ReporteMaestro() {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
+  const criticidadTemplate = (rowData) => { const conf = { 'LEVE': 'success', 'MEDIO': 'warning', 'CRÍTICO': 'danger', 'N/A': 'null' }; return <Tag value={rowData.criticidadLabel} severity={conf[rowData.criticidadLabel] || 'null'} style={{ fontSize: '10px' }} />; };
+        const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
+            const inspectorTemplate = (rowData) => { if (loadingUsers) return <Skeleton width="80px" />; return <span className="text-gray-700 text-xs font-medium uppercase truncate">{rowData.inspectorLabel}</span>; };
 
     return (
         <div className="p-4 bg-white rounded-lg shadow-md w-full">
@@ -125,11 +164,11 @@ export default function ReporteMaestro() {
                             value={selectedFeeder} 
                             onChange={(e) => { 
                                 setSelectedFeeder(e.value); 
-                                setSelectedSed(null); // Reseteamos SED al cambiar alimentador
+                                setSelectedSed(null); 
                             }} 
                             options={feeders} 
                             optionLabel="label" 
-                            optionValue="value" // Asegúrate de que extraiga el ID correctamente
+                            optionValue="value" 
                             placeholder="Seleccione..." 
                             filter 
                             className="w-full h-10 flex items-center p-inputtext-sm shadow-sm"
@@ -139,18 +178,16 @@ export default function ReporteMaestro() {
                     {/* 2. CÓDIGO SED */}
                     <div className="flex flex-col gap-1 w-full md:w-1/3">
                         <label className="text-xs font-bold text-gray-600">CÓDIGO SED</label>
-                        <AutoComplete 
+                        <Dropdown 
                             value={selectedSed} 
-                            suggestions={filteredSeds} 
-                            completeMethod={searchSedsLocal} 
-                            field="label" 
-                            onChange={(e) => setSelectedSed(e.value)}
-                            placeholder={selectedFeeder ? "Escribe código..." : "Seleccione Alimentador primero..."}
-                            dropdown
-                            forceSelection
-                            className="w-full p-inputtext-sm shadow-sm"
-                            inputClassName="h-10"
+                            options={seds} 
+                            onChange={(e) => setSelectedSed(e.value)} 
+                            optionLabel="label" 
+                            filter 
+                            placeholder={selectedFeeder ? "Escribe o selecciona código..." : "Seleccione Alimentador primero..."}
+                            className="w-full h-10 flex items-center p-inputtext-sm shadow-sm"
                             disabled={!selectedFeeder}
+                            emptyMessage="No hay SEDs para este alimentador"
                         />
                     </div>
 
@@ -169,16 +206,11 @@ export default function ReporteMaestro() {
             </div>
 
             {/* TABLA DE DATOS */}
-            <div className="card border rounded-lg overflow-hidden">
+<div className="card border rounded-lg overflow-hidden">
+                {/* 🔥 CAMBIAMOS value={deficiencies} por value={mappedDeficiencies} */}
                 <DataTable 
-                    value={deficiencies} 
-                    loading={loadingDef} 
-                    scrollable 
-                    scrollHeight="600px" 
-                    size="small"
-                    stripedRows 
-                    emptyMessage="Seleccione un Alimentador y una SED para ver los registros."
-                    className="text-sm"
+                    value={mappedDeficiencies} 
+                    loading={loadingDef} scrollable scrollHeight="600px" size="small" stripedRows emptyMessage="Seleccione un Alimentador y una SED para ver los registros." className="text-sm"
                 >
                     <Column body={actionTemplate} header="Acciones" frozen alignFrozen="left" className="bg-gray-50 border-r-2" />
                     
@@ -187,13 +219,12 @@ export default function ReporteMaestro() {
                     <Column field="defiTipoElemento" header="Tipo" />
                     <Column field="nodoInicial" header="Nodo Inicial" />
                     <Column field="nodoFinal" header="Nodo Final" />
-                    <Column field="alimentador" header="Alimentador" />
-                    <Column field="sedCodigo" header="SED" />
+
                     <Column field="defiLatitud" header="Latitud" />
                     <Column field="defiLongitud" header="Longitud" />
 
-                    <Column field="defiEstadoCriticidad" header="Criticidad" body={(r) => r.defiEstadoCriticidad === 3 ? 'CRÍTICO' : r.defiEstadoCriticidad === 2 ? 'MEDIO' : 'LEVE'} />
-                    <Column field="tipiInterno" header="Tipificación (ID)" />
+                    <Column field="defiEstadoCriticidad" header="Criticidad" body={criticidadTemplate} />
+                    <Column header="Tipificación" body={typificationTemplate} />
                     <Column field="defiCol2" header="Responsable" />
                     <Column field="defiNumSuministro" header="Suministro" />
                     <Column field="defiDistHorizontal" header="Dist. Horiz." />
@@ -201,7 +232,9 @@ export default function ReporteMaestro() {
                     <Column field="defiFecRegistro" header="Fecha Registro" body={(r) => formatDate(r.defiFecRegistro)} />
                     <Column field="defiObservacion" header="Observación" style={{ maxWidth: '150px' }} className="truncate" />
                     <Column field="defiComentario" header="Comentario" style={{ maxWidth: '150px' }} className="truncate" />
-                    <Column field="defiUsuarioInic" header="Inspector" />
+                    {/* 🔥 TEMPLATES APLICADOS AQUÍ */}
+                    <Column header="Inspector" body={inspectorTemplate} />
+                    
                 </DataTable>
             </div>
 
@@ -216,7 +249,7 @@ export default function ReporteMaestro() {
             >
                 {selectedRow && (
                     <StaticFormCard 
-                        elementToEdit={{ ...selectedRow, id: selectedRow.defiIdElemento || selectedRow.idInterno, codigo: selectedRow.defiCodigoElemento }}
+                        elementToEdit={selectedRow} // Ahora le pasamos el objeto mapeado perfecto
                         typeMode={selectedRow.defiTipoElemento === 'POST' ? 'POSTE' : 'VANO'}
                         onClear={() => {}} 
                         onSave={handleSaveElement}
@@ -231,7 +264,7 @@ export default function ReporteMaestro() {
                     onHide={() => setDeficiencyModalOpen(false)}
                     deficiencyToEdit={selectedRow}
                     alimentadorId={selectedRow.alimInterno || selectedFeeder} 
-                    sedId={selectedRow.sedCodigo || (selectedSed?.value || selectedSed?.sedInterno)}
+                    sedId={selectedRow.sedCodigo || selectedRow.vanoSubestacion || selectedRow.postSubestacion || selectedSed}
                     existingDeficiencies={deficiencies} 
                     onSave={handleSaveDeficiency}
                 />
