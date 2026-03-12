@@ -31,8 +31,8 @@ import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { latLonToUTM } from '../utils/geoUtils';
 import { Checkbox } from 'primereact/checkbox';
 // 🔥 CONEXIÓN AL SERVIDOR NGROK
-//const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
-const API_BASE_URL = "http://localhost:8080/";
+const API_BASE_URL = "https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL = "http://localhost:8080/";
 // --- DICCIONARIOS Y AYUDANTES ---
 const photoTypes = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' };
 

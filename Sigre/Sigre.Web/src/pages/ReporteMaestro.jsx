@@ -63,37 +63,76 @@ export default function ReporteMaestro() {
 
 
     // =========================================================================
-    // 🔥 CORRECCIÓN CRÍTICA: TRADUCCIÓN DE DTO (Deficiencia -> Elemento)
+    // 🔥 CONSTRUCTOR ESTRICTO: Aislamos datos de Poste y Vano
     // =========================================================================
     const openElementEdit = (rowData) => {
-        console.log("Datos crudos de la fila:", rowData);
         const isPoste = rowData.defiTipoElemento === 'POST' || rowData.defiTipoElemento === 'POSTE';
-        const currentSedId = selectedSed?.sedInterno || selectedSed?.SedInterno || selectedSed?.value || selectedSed;
-        const etiquetaFila = rowData.etiqueta || rowData.DefiEtiqueta || rowData.defiEtiqueta || '';
-        // Creamos un objeto que StaticFormCard pueda entender perfectamente
-        const mappedElement = {
-            ...rowData,
-            id: rowData.defiIdElemento || rowData.idInterno,
-            codigo: rowData.defiCodigoElemento,
-            etiqueta: etiquetaFila,
-            alimInterno: rowData.alimInterno || selectedFeeder,
+        
+        // 1. EXTRAER ID DE LA SUBESTACIÓN (Venga de donde venga)
+        let sedIdLimpio = selectedSed?.sedInterno || selectedSed?.value || selectedSed?.id;
+        
+        if (!sedIdLimpio) {
+            // Si falla el filtro de arriba, lo buscamos dentro del objeto anidado que manda el backend
+            if (isPoste && rowData.postSubestacion?.sedInterno) {
+                sedIdLimpio = rowData.postSubestacion.sedInterno;
+            } else if (!isPoste && rowData.vanoSubestacion?.sedInterno) {
+                sedIdLimpio = rowData.vanoSubestacion.sedInterno;
+            }
+        }
 
-            // Variables específicas si es Poste
-            postInterno: isPoste ? rowData.defiIdElemento : null,
-            postCodigoNodo: isPoste ? rowData.defiCodigoElemento : null,
-            postEtiqueta: isPoste ? rowData.etiqueta : null,
-            postLatitud: rowData.defiLatitud,
-            postLongitud: rowData.defiLongitud,
-            postSubestacion: currentSedId,
+        // 2. EXTRAER TEXTOS BUSCANDO EN TODAS LAS VARIANTES POSIBLES DE TU BACKEND
+        const etiquetaReal = rowData.etiqueta || rowData.DefiEtiqueta || rowData.defiEtiqueta || rowData.postEtiqueta || rowData.vanoEtiqueta || "";
+        const nodoIniReal = rowData.DefiNodoInicial || rowData.defiNodoInicial || rowData.nodoInicial || rowData.vanoNodoInicial || "";
+        const nodoFinReal = rowData.DefiNodoFinal || rowData.defiNodoFinal || rowData.nodoFinal || rowData.vanoNodoFinal || "";
 
-            // Variables específicas si es Vano
-            vanoInterno: !isPoste ? rowData.defiIdElemento : null,
-            vanoCodigo: !isPoste ? rowData.defiCodigoElemento : null,
-            vanoEtiqueta: !isPoste ? rowData.etiqueta : null,
-vanoNodoInicial: rowData.DefiNodoInicial || rowData.defiNodoInicial || rowData.nodoInicial || '',
-            vanoNodoFinal: rowData.DefiNodoFinal || rowData.defiNodoFinal || rowData.nodoFinal || '',
-            vanoSubestacion: currentSedId,
-        };
+        let mappedElement = {};
+
+        // 3. CONSTRUIMOS EL OBJETO EXACTO SEGÚN EL TIPO
+        if (isPoste) {
+            mappedElement = {
+                // Props genéricas que usa tu StaticFormCard en el useEffect
+                id: rowData.defiIdElemento || rowData.postInterno,
+                tipoElemento: 'POSTE',
+                codigo: rowData.defiCodigoElemento || rowData.postCodigoNodo,
+                etiqueta: etiquetaReal,
+                alimentadorId: selectedFeeder || rowData.alimInterno,
+                sedId: Number(sedIdLimpio),
+                latitud: Number(rowData.defiLatitud || rowData.postLatitud || 0),
+                longitud: Number(rowData.defiLongitud || rowData.postLongitud || 0),
+
+                // Props específicas legacy
+                postInterno: rowData.defiIdElemento || rowData.postInterno,
+                postCodigoNodo: rowData.defiCodigoElemento || rowData.postCodigoNodo,
+                postEtiqueta: etiquetaReal,
+                postSubestacion: Number(sedIdLimpio),
+                alimInterno: selectedFeeder || rowData.alimInterno,
+                postLatitud: Number(rowData.defiLatitud || rowData.postLatitud || 0),
+                postLongitud: Number(rowData.defiLongitud || rowData.postLongitud || 0),
+            };
+        } else {
+            mappedElement = {
+                // Props genéricas que usa tu StaticFormCard en el useEffect
+                id: rowData.defiIdElemento || rowData.vanoInterno,
+                tipoElemento: 'VANO',
+                codigo: rowData.defiCodigoElemento || rowData.vanoCodigo,
+                etiqueta: etiquetaReal,
+                alimentadorId: selectedFeeder || rowData.alimInterno,
+                sedId: Number(sedIdLimpio),
+                nodoInicial: nodoIniReal,
+                nodoFinal: nodoFinReal,
+
+                // Props específicas legacy
+                vanoInterno: rowData.defiIdElemento || rowData.vanoInterno,
+                vanoCodigo: rowData.defiCodigoElemento || rowData.vanoCodigo,
+                vanoEtiqueta: etiquetaReal,
+                vanoSubestacion: Number(sedIdLimpio),
+                alimInterno: selectedFeeder || rowData.alimInterno,
+                vanoNodoInicial: nodoIniReal,
+                vanoNodoFinal: nodoFinReal,
+            };
+        }
+
+        console.log("✅ Objeto limpio enviado al formulario:", mappedElement);
 
         setSelectedRow(mappedElement);
         setElementModalOpen(true);
