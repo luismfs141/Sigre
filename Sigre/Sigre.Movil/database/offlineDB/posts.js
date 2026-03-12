@@ -278,7 +278,19 @@ export const saveOrUpdatePost = async (post) => {
 
 
     if (cols.has("EstadoOffLine")) {
-      const estado = post.EstadoOffLine == null ? 1 : post.EstadoOffLine;
+      const estadoRaw = post.EstadoOffLine;
+      const estadoNum =
+        estadoRaw === "" || estadoRaw == null
+          ? null
+          : Number(estadoRaw);
+
+      const estado =
+        estadoNum == null || estadoNum === 0
+          ? 1
+          : [2, 3, 4].includes(estadoNum)
+            ? estadoNum
+            : 1;
+
       sets.push(`EstadoOffLine = ?`);
       vals.push(estado);
     }
@@ -344,7 +356,7 @@ export const insertPostAndPin = async (post) => {
   const payload = {
     EstadoOffLine: 2,
     PostTerceros: _toInt01(post?.PostTerceros, 0),
-     PostVereda: _toInt01(post?.PostVereda, 1),
+    PostVereda: _toInt01(post?.PostVereda, 1),
     PostInspeccionado: _toInt01(post?.PostInspeccionado, 0),
     PostEsMt: post?.PostEsMt == null ? 0 : _toInt01(post.PostEsMt, 0),
     PostEsBt: post?.PostEsBt == null ? 1 : _toInt01(post.PostEsBt, 1),
@@ -364,7 +376,7 @@ export const insertPostAndPin = async (post) => {
 
     PostAltura: post?.PostAltura ?? null,
     PostTramo: post?.PostTramo ?? null,
-    
+
   };
 
   // mínimos

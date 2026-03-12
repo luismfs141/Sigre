@@ -76,7 +76,11 @@ export const saveOrUpdateVano = async (vano) => {
       const id = Number(vano.VanoInterno);
 
       // UPDATE: si EstadoOffLine es null => 1 (modificado)
-      const estado = vano.EstadoOffLine == null ? 1 : Number(vano.EstadoOffLine);
+      const estadoRaw = vano.EstadoOffLine;
+const estado =
+  estadoRaw === "" || estadoRaw == null
+    ? 1
+    : Number(estadoRaw);
 
       const sets = [];
       const vals = [];

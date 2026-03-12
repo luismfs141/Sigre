@@ -170,7 +170,10 @@ export const markArchivoDeletedLocal = async (
       `UPDATE Archivos
      SET ArchActivo = 0,
          ArchNombre = ?, 
-         EstadoOffLine = 3
+         EstadoOffLine = CASE
+            WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
+            ELSE 3
+          END
      WHERE ArchInterno = ?`,
       [newRelativePath, archInterno]
     );
@@ -256,7 +259,10 @@ export const deleteFileById = async (archInterno) => {
       `
       UPDATE Archivos
       SET ArchActivo = 0,
-        EstadoOffLine = 3
+        EstadoOffLine = CASE
+            WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
+            ELSE 3
+          END
       WHERE ArchInterno = ?;
       `,
       [archInterno]
@@ -463,8 +469,7 @@ export const markArchivosByDefiRefsInactiveLocal = async ({
       UPDATE Archivos
       SET ArchActivo = 0,
           EstadoOffLine = CASE
-            -- ✅ si era INSERT local (2) y aún NO tiene serverId => NO sync (queda null)
-            WHEN EstadoOffLine = 2 AND (DefiServerId IS NULL OR DefiServerId = 0) THEN NULL
+            WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
             ELSE 3
           END
       WHERE ArchTabla = 'Deficiencias'

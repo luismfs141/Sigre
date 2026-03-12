@@ -168,9 +168,6 @@ export const useOffline = () => {
     }
   };
 
-
-
-
   const getPendingSyncSummary = async () => {
     let defBefore = 0;
     let archBefore = 0;
@@ -251,10 +248,11 @@ export const useOffline = () => {
 
     try {
       // 4) intentar sync
-      await syncAllDeficiencies();
-      await syncAllArchivos();
       await syncAllPosts();
       await syncAllGaps();
+      await syncAllDeficiencies();
+      await syncAllArchivos();
+
 
       // 5) contar pendientes DESPUÉS (real)
       let defAfter = 0;
@@ -291,9 +289,9 @@ export const useOffline = () => {
         },
       };
     } catch (err) {
-      console.log("❌ Sync general falló:", err?.message ?? err);
+       console.log("❌ Sync general falló:", err?.message ?? err);
 
-      // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
+       // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
       let defAfter = defBefore;
       let archAfter = archBefore;
       let postAfter = postBefore;

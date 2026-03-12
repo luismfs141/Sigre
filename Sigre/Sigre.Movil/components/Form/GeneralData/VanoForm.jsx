@@ -28,7 +28,7 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
   // =========================
   const toFormShape = (src) => ({
     VanoInterno: src?.VanoInterno ?? "",
-    EstadoOffLine: src?.EstadoOffLine ?? "",
+    EstadoOffLine: src?.EstadoOffLine ?? null,
 
     VanoCodigo: pickCodigo(src),
 
@@ -153,7 +153,11 @@ const VanoForm = forwardRef(({ data, visible, onClose, onDirtyChange }, ref) => 
 
         const payload = {
           ...form,
-          VanoEtiqueta: etiquetaFinal, // ✅ nunca null
+          EstadoOffLine:
+            form.EstadoOffLine === "" || form.EstadoOffLine == null
+              ? null
+              : Number(form.EstadoOffLine),
+          VanoEtiqueta: etiquetaFinal,
           VanoTerceros: form.VanoTerceros === "" ? null : Number(form.VanoTerceros),
         };
 
