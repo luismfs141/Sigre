@@ -1,23 +1,34 @@
-import React, { useState, useEffect,useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
-import { InputText } from 'primereact/inputtext';
 import { Dialog } from 'primereact/dialog';
-import { AutoComplete } from 'primereact/autocomplete';
 import { Dropdown } from 'primereact/dropdown';
 import { Tag } from 'primereact/tag';
 import { Skeleton } from 'primereact/skeleton';
+
 // Tus hooks
 import { useDeficienciesBySed } from '../hooks/useDeficiency'; 
 import { useElements } from '../hooks/useElement'; 
 import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useTypification } from '../hooks/useTypification';
 import { useUsuario } from '../hooks/useUsuario';
+
 // Tus Modales/Formularios
 import StaticFormCard from '../components/Modals/StaticFormCard';
 import DeficiencyForm from '../components/Modals/DeficiencyForm';
+const customStyles = `
+  /* Botón Rosa (Elementos) */
+  .btn-rosa { background-color: #fce7f3 !important; color: #be185d !important; border-color: #f9a8d4 !important; transition: transform 0.2s; }
+  .btn-rosa:hover:not(:disabled) { background-color: #fbcfe8 !important; transform: scale(1.1); }
+  
+  /* Botón Amarillo (Deficiencias) */
+  .btn-amarillo { background-color: #fef3c7 !important; color: #b45309 !important; border-color: #fde047 !important; transition: transform 0.2s; }
+  .btn-amarillo:hover:not(:disabled) { background-color: #fde68a !important; transform: scale(1.1); }
 
+  /* Ajuste para que el texto del Dropdown no se aplaste */
+  .filtro-dropdown .p-dropdown-label { display: flex; align-items: center; }
+`;
 export default function ReporteMaestro() {
     // --- ESTADOS DE BÚSQUEDA JERÁRQUICA ---
     const [selectedFeeder, setSelectedFeeder] = useState(null);
@@ -28,23 +39,27 @@ export default function ReporteMaestro() {
     const { seds } = useSedsByFeeder(selectedFeeder); 
     
     const { deficiencies, loading: loadingDef, fetchBySed } = useDeficienciesBySed();
-    const { saveElement, loading: loadingElement } = useElements();
+    
+    // 🔥 AQUÍ TRAEMOS LAS FUNCIONES DE BÚSQUEDA DE ELEMENTOS
+    const { saveElement, loading: loadingElement, fetchPostesChunk, fetchVanosChunk } = useElements();
+    
     const { getCodeById, loading: loadingTypos } = useTypification();
-    // --- ESTADOS DE MODALES ---
+    const { getInspectorName, loading: loadingUsers } = useUsuario(true);
+
+    // --- ESTADOS DE MODALES Y UI ---
     const [elementModalOpen, setElementModalOpen] = useState(false);
     const [deficiencyModalOpen, setDeficiencyModalOpen] = useState(false);
     const [selectedRow, setSelectedRow] = useState(null);
-    const { getInspectorName, loading: loadingUsers } = useUsuario(true);
+    const [fetchingRowId, setFetchingRowId] = useState(null); 
     
     // =========================================================================
-    // 🔥 EL SECRETO: MAPEO DE DATOS AL IGUAL QUE EN SUBESTACIONES
+    // 🔥 MAPEO DE DATOS (Para la Grilla)
     // =========================================================================
     const mappedDeficiencies = useMemo(() => {
         return deficiencies.map(item => {
             const critMap = { 1: 'LEVE', 2: 'MEDIO', 3: 'CRÍTICO' };
             return {
                 ...item,
-                // Inyectamos las etiquetas que los templates están buscando
                 tipificacionLabel: getCodeById(item.tipiInterno) || '',
                 inspectorLabel: getInspectorName(item.defiUsuarioInic) || '',
                 criticidadLabel: critMap[item.defiEstadoCriticidad] || 'N/A'
@@ -63,79 +78,61 @@ export default function ReporteMaestro() {
 
 
     // =========================================================================
-    // 🔥 CONSTRUCTOR ESTRICTO: Aislamos datos de Poste y Vano
+    // 🔥 CONSTRUCTOR: Buscar el Elemento REAL en BD antes de editar
     // =========================================================================
-    const openElementEdit = (rowData) => {
+    const openElementEdit = async (rowData) => {
         const isPoste = rowData.defiTipoElemento === 'POST' || rowData.defiTipoElemento === 'POSTE';
-        
-        // 1. EXTRAER ID DE LA SUBESTACIÓN (Venga de donde venga)
-        let sedIdLimpio = selectedSed?.sedInterno || selectedSed?.value || selectedSed?.id;
-        
-        if (!sedIdLimpio) {
-            // Si falla el filtro de arriba, lo buscamos dentro del objeto anidado que manda el backend
-            if (isPoste && rowData.postSubestacion?.sedInterno) {
-                sedIdLimpio = rowData.postSubestacion.sedInterno;
-            } else if (!isPoste && rowData.vanoSubestacion?.sedInterno) {
-                sedIdLimpio = rowData.vanoSubestacion.sedInterno;
+        const codigoGis = rowData.defiCodigoElemento;
+        const currentSedId = selectedSed?.sedInterno || selectedSed?.value || selectedSed?.id;
+
+        setFetchingRowId(rowData.defiInterno);
+
+        try {
+            let realElement = null;
+
+            if (isPoste) {
+                const res = await fetchPostesChunk(0, 1, codigoGis);
+                if (res?.data?.length > 0) realElement = res.data[0];
+            } else {
+                const res = await fetchVanosChunk(0, 1, codigoGis);
+                if (res?.data?.length > 0) realElement = res.data[0];
             }
+
+            let mappedElement = {};
+
+            if (realElement) {
+                mappedElement = {
+                    ...realElement, 
+                    id: isPoste ? realElement.postInterno : realElement.vanoInterno,
+                    tipoElemento: isPoste ? 'POSTE' : 'VANO',
+                    codigo: codigoGis,
+                    
+                    alimInterno: realElement.alimInterno || selectedFeeder,
+                    postSubestacion: isPoste ? (realElement.postSubestacion || currentSedId) : null,
+                    vanoSubestacion: !isPoste ? (realElement.vanoSubestacion || currentSedId) : null,
+                };
+            } else {
+                mappedElement = {
+                    ...rowData,
+                    id: rowData.defiIdElemento || rowData.idInterno,
+                    tipoElemento: isPoste ? 'POSTE' : 'VANO',
+                    codigo: codigoGis,
+                    alimInterno: rowData.alimInterno || selectedFeeder,
+                    postInterno: isPoste ? rowData.defiIdElemento : null,
+                    postSubestacion: currentSedId,
+                    vanoInterno: !isPoste ? rowData.defiIdElemento : null,
+                    vanoSubestacion: currentSedId,
+                };
+            }
+
+            setSelectedRow(mappedElement);
+            setElementModalOpen(true);
+
+        } catch (error) {
+            console.error("Error al traer elemento de la BD:", error);
+        } finally {
+            setFetchingRowId(null);
         }
-
-        // 2. EXTRAER TEXTOS BUSCANDO EN TODAS LAS VARIANTES POSIBLES DE TU BACKEND
-        const etiquetaReal = rowData.etiqueta || rowData.DefiEtiqueta || rowData.defiEtiqueta || rowData.postEtiqueta || rowData.vanoEtiqueta || "";
-        const nodoIniReal = rowData.DefiNodoInicial || rowData.defiNodoInicial || rowData.nodoInicial || rowData.vanoNodoInicial || "";
-        const nodoFinReal = rowData.DefiNodoFinal || rowData.defiNodoFinal || rowData.nodoFinal || rowData.vanoNodoFinal || "";
-
-        let mappedElement = {};
-
-        // 3. CONSTRUIMOS EL OBJETO EXACTO SEGÚN EL TIPO
-        if (isPoste) {
-            mappedElement = {
-                // Props genéricas que usa tu StaticFormCard en el useEffect
-                id: rowData.defiIdElemento || rowData.postInterno,
-                tipoElemento: 'POSTE',
-                codigo: rowData.defiCodigoElemento || rowData.postCodigoNodo,
-                etiqueta: etiquetaReal,
-                alimentadorId: selectedFeeder || rowData.alimInterno,
-                sedId: Number(sedIdLimpio),
-                latitud: Number(rowData.defiLatitud || rowData.postLatitud || 0),
-                longitud: Number(rowData.defiLongitud || rowData.postLongitud || 0),
-
-                // Props específicas legacy
-                postInterno: rowData.defiIdElemento || rowData.postInterno,
-                postCodigoNodo: rowData.defiCodigoElemento || rowData.postCodigoNodo,
-                postEtiqueta: etiquetaReal,
-                postSubestacion: Number(sedIdLimpio),
-                alimInterno: selectedFeeder || rowData.alimInterno,
-                postLatitud: Number(rowData.defiLatitud || rowData.postLatitud || 0),
-                postLongitud: Number(rowData.defiLongitud || rowData.postLongitud || 0),
-            };
-        } else {
-            mappedElement = {
-                // Props genéricas que usa tu StaticFormCard en el useEffect
-                id: rowData.defiIdElemento || rowData.vanoInterno,
-                tipoElemento: 'VANO',
-                codigo: rowData.defiCodigoElemento || rowData.vanoCodigo,
-                etiqueta: etiquetaReal,
-                alimentadorId: selectedFeeder || rowData.alimInterno,
-                sedId: Number(sedIdLimpio),
-                nodoInicial: nodoIniReal,
-                nodoFinal: nodoFinReal,
-
-                // Props específicas legacy
-                vanoInterno: rowData.defiIdElemento || rowData.vanoInterno,
-                vanoCodigo: rowData.defiCodigoElemento || rowData.vanoCodigo,
-                vanoEtiqueta: etiquetaReal,
-                vanoSubestacion: Number(sedIdLimpio),
-                alimInterno: selectedFeeder || rowData.alimInterno,
-                vanoNodoInicial: nodoIniReal,
-                vanoNodoFinal: nodoFinReal,
-            };
-        }
-
-        console.log("✅ Objeto limpio enviado al formulario:", mappedElement);
-
-        setSelectedRow(mappedElement);
-        setElementModalOpen(true);
     };
 
     const openDeficiencyEdit = (rowData) => {
@@ -153,26 +150,36 @@ export default function ReporteMaestro() {
     };
 
     const handleSaveDeficiency = async (payloadToSend) => {
-        // Lógica de guardado API aquí...
         setDeficiencyModalOpen(false);
         handleSearch(); 
     };
 
-
+    // --- TEMPLATES DE ACCIONES Y FORMATOS ---
+    // --- TEMPLATES DE ACCIONES Y FORMATOS ---
+    // --- TEMPLATES DE ACCIONES Y FORMATOS ---
     const actionTemplate = (rowData) => {
+        const isFetchingThis = fetchingRowId === rowData.defiInterno;
+        
         return (
-            <div className="flex gap-2">
+            <div className="flex gap-2 justify-center">
+                {/* BOTÓN ROSA: ELEMENTO (Rayo) */}
                 <Button 
-                    icon="pi pi-bolt" 
-                    className="p-button-rounded p-button-outlined p-button-info p-button-sm" 
-                    tooltip="Editar Elemento (GIS, Nodos)"
+                    icon={isFetchingThis ? "pi pi-spin pi-spinner" : "pi pi-bolt"} 
+                    // Usamos ! para forzar el color de fondo, texto y borde de Tailwind
+                    className="p-button-rounded p-button-sm !bg-pink-100 !text-pink-700 !border-pink-300 hover:!bg-pink-200 hover:scale-110 transition-all shadow-sm" 
+                    tooltip="Editar Elemento"
                     onClick={() => openElementEdit(rowData)} 
+                    disabled={fetchingRowId !== null} 
                 />
+                
+                {/* BOTÓN AMARILLO: DEFICIENCIA (Clipboard) */}
                 <Button 
                     icon="pi pi-clipboard" 
-                    className="p-button-rounded p-button-outlined p-button-warning p-button-sm" 
-                    tooltip="Editar Deficiencia (Fallas, Obs)"
+                    // Usamos ! para forzar los colores amarillos
+                    className="p-button-rounded p-button-sm !bg-yellow-100 !text-yellow-700 !border-yellow-400 hover:!bg-yellow-200 hover:scale-110 transition-all shadow-sm" 
+                    tooltip="Editar Deficiencia"
                     onClick={() => openDeficiencyEdit(rowData)} 
+                    disabled={fetchingRowId !== null}
                 />
             </div>
         );
@@ -184,9 +191,32 @@ export default function ReporteMaestro() {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
-  const criticidadTemplate = (rowData) => { const conf = { 'LEVE': 'success', 'MEDIO': 'warning', 'CRÍTICO': 'danger', 'N/A': 'null' }; return <Tag value={rowData.criticidadLabel} severity={conf[rowData.criticidadLabel] || 'null'} style={{ fontSize: '10px' }} />; };
-        const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
-            const inspectorTemplate = (rowData) => { if (loadingUsers) return <Skeleton width="80px" />; return <span className="text-gray-700 text-xs font-medium uppercase truncate">{rowData.inspectorLabel}</span>; };
+    
+    const getCriticidadConfig = (val) => {
+        const num = parseInt(val);
+        switch (num) {
+            case 3: return { label: 'CRÍTICO', severity: 'danger' };
+            case 2: return { label: 'MEDIO', severity: 'warning' };
+            case 1: return { label: 'LEVE', severity: 'info' };
+            case 0: return { label: 'SIN DEFICIENCIA', severity: 'success' };
+            default: return { label: 'N/A', severity: 'secondary' };
+        }
+    };
+
+    const criticidadTemplate = (rowData) => { 
+        if (rowData.defiEstadoCriticidad === null || rowData.defiEstadoCriticidad === undefined) return "-";
+        const conf = getCriticidadConfig(rowData.defiEstadoCriticidad);
+        return <Tag value={conf.label} severity={conf.severity} style={{ fontSize: '10px' }} />; 
+    };
+
+    const typificationTemplate = (rowData) => { if (loadingTypos) return <Skeleton width="40px" />; return <Tag value={rowData.tipificacionLabel || "S/D"} severity={rowData.tipificacionLabel ? "info" : "warning"} style={{ fontSize: '11px', fontWeight: 'bold' }} />; };
+    const inspectorTemplate = (rowData) => { if (loadingUsers) return <Skeleton width="80px" />; return <span className="text-gray-700 text-xs font-medium uppercase truncate">{rowData.inspectorLabel}</span>; };
+
+    // =========================================================================
+    // 🔥 ESTILOS PARA CELDAS (Rosado y Amarillo)
+    // =========================================================================
+    const styleElemento = { backgroundColor: '#fce7f3' }; // bg-pink-100
+    const styleDeficiencia = { backgroundColor: '#fef3c7' }; // bg-yellow-100
 
     return (
         <div className="p-4 bg-white rounded-lg shadow-md w-full">
@@ -205,11 +235,8 @@ export default function ReporteMaestro() {
                                 setSelectedFeeder(e.value); 
                                 setSelectedSed(null); 
                             }} 
-                            options={feeders} 
-                            optionLabel="label" 
-                            optionValue="value" 
-                            placeholder="Seleccione..." 
-                            filter 
+                            options={feeders} optionLabel="label" optionValue="value" 
+                            placeholder="Seleccione..." filter 
                             className="w-full h-10 flex items-center p-inputtext-sm shadow-sm"
                         />
                     </div>
@@ -218,15 +245,12 @@ export default function ReporteMaestro() {
                     <div className="flex flex-col gap-1 w-full md:w-1/3">
                         <label className="text-xs font-bold text-gray-600">CÓDIGO SED</label>
                         <Dropdown 
-                            value={selectedSed} 
-                            options={seds} 
+                            value={selectedSed} options={seds} 
                             onChange={(e) => setSelectedSed(e.value)} 
-                            optionLabel="label" 
-                            filter 
+                            optionLabel="label" filter 
                             placeholder={selectedFeeder ? "Escribe o selecciona código..." : "Seleccione Alimentador primero..."}
                             className="w-full h-10 flex items-center p-inputtext-sm shadow-sm"
-                            disabled={!selectedFeeder}
-                            emptyMessage="No hay SEDs para este alimentador"
+                            disabled={!selectedFeeder} emptyMessage="No hay SEDs para este alimentador"
                         />
                     </div>
 
@@ -235,45 +259,52 @@ export default function ReporteMaestro() {
                         <Button 
                             label={loadingDef ? "Cargando..." : "Generar Reporte"} 
                             icon={loadingDef ? "pi pi-spin pi-spinner" : "pi pi-table"} 
-                            onClick={handleSearch}
-                            disabled={loadingDef || !selectedSed}
-                            className="w-full md:w-auto h-10 px-5 font-bold"
-                            severity="primary"
+                            onClick={handleSearch} disabled={loadingDef || !selectedSed}
+                            className="w-full md:w-auto h-10 px-5 font-bold" severity="primary"
                         />
                     </div>
                 </div>
             </div>
 
             {/* TABLA DE DATOS */}
-<div className="card border rounded-lg overflow-hidden">
-                {/* 🔥 CAMBIAMOS value={deficiencies} por value={mappedDeficiencies} */}
+            <div className="card border rounded-lg overflow-hidden">
                 <DataTable 
                     value={mappedDeficiencies} 
-                    loading={loadingDef} scrollable scrollHeight="600px" size="small" stripedRows emptyMessage="Seleccione un Alimentador y una SED para ver los registros." className="text-sm"
+                    loading={loadingDef} 
+                    scrollable 
+                    scrollHeight="600px" 
+                    size="small" 
+                    stripedRows={false} // Desactivamos stripedRows para que se noten los colores de las columnas
+                    emptyMessage="Seleccione un Alimentador y una SED para ver los registros." 
+                    className="text-sm p-datatable-gridlines" // Añadimos gridlines para mejor separación
+                    
+                    // 🔥 AGREGAMOS PAGINACIÓN DE 30 EN 30
+                    paginator 
+                    rows={30} 
+                    rowsPerPageOptions={[15, 30, 50, 100]}
                 >
                     <Column body={actionTemplate} header="Acciones" frozen alignFrozen="left" className="bg-gray-50 border-r-2" />
                     
-                    <Column field="defiCodigoElemento" header="Código" sortable className="font-bold text-blue-700" />
-                    <Column field="etiqueta" header="Etiqueta" />
-                    <Column field="defiTipoElemento" header="Tipo" />
-                    <Column field="nodoInicial" header="Nodo Inicial" />
-                    <Column field="nodoFinal" header="Nodo Final" />
+                    {/* --- ZONA ROSADA (DATOS DEL ELEMENTO) --- */}
+                    <Column field="defiCodigoElemento" header="Código" sortable style={{ ...styleElemento, fontWeight: 'bold', color: '#1d4ed8' }} />
+                    <Column field="etiqueta" header="Etiqueta" style={styleElemento} />
+                    <Column field="defiTipoElemento" header="Tipo" style={styleElemento} />
+                    <Column field="vanoNodoInicial" header="Nodo Inicial" style={styleElemento} />
+                    <Column field="vanoNodoFinal" header="Nodo Final" style={styleElemento} />
+                    <Column field="defiLatitud" header="Latitud" style={styleElemento} />
+                    <Column field="defiLongitud" header="Longitud" style={styleElemento} />
 
-                    <Column field="defiLatitud" header="Latitud" />
-                    <Column field="defiLongitud" header="Longitud" />
-
-                    <Column field="defiEstadoCriticidad" header="Criticidad" body={criticidadTemplate} />
-                    <Column header="Tipificación" body={typificationTemplate} />
-                    <Column field="defiCol2" header="Responsable" />
-                    <Column field="defiNumSuministro" header="Suministro" />
-                    <Column field="defiDistHorizontal" header="Dist. Horiz." />
-                    <Column field="defiDistVertical" header="Dist. Vert." />
-                    <Column field="defiFecRegistro" header="Fecha Registro" body={(r) => formatDate(r.defiFecRegistro)} />
-                    <Column field="defiObservacion" header="Observación" style={{ maxWidth: '150px' }} className="truncate" />
-                    <Column field="defiComentario" header="Comentario" style={{ maxWidth: '150px' }} className="truncate" />
-                    {/* 🔥 TEMPLATES APLICADOS AQUÍ */}
-                    <Column header="Inspector" body={inspectorTemplate} />
-                    
+                    {/* --- ZONA AMARILLA (DATOS DE LA DEFICIENCIA) --- */}
+                    <Column field="defiEstadoCriticidad" header="Criticidad" body={criticidadTemplate} style={styleDeficiencia} />
+                    <Column header="Tipificación" body={typificationTemplate} style={styleDeficiencia} />
+                    <Column field="defiCol2" header="Responsable" style={styleDeficiencia} />
+                    <Column field="defiNumSuministro" header="Suministro" style={styleDeficiencia} />
+                    <Column field="defiDistHorizontal" header="Dist. Horiz." style={styleDeficiencia} />
+                    <Column field="defiDistVertical" header="Dist. Vert." style={styleDeficiencia} />
+                    <Column field="defiFecRegistro" header="Fecha Registro" body={(r) => formatDate(r.defiFecRegistro)} style={styleDeficiencia} />
+                    <Column field="defiObservacion" header="Observación" style={{ ...styleDeficiencia, maxWidth: '150px' }} className="truncate" />
+                    <Column field="defiComentario" header="Comentario" style={{ ...styleDeficiencia, maxWidth: '150px' }} className="truncate" />
+                    <Column header="Inspector" body={inspectorTemplate} style={styleDeficiencia} />
                 </DataTable>
             </div>
 
@@ -283,12 +314,11 @@ export default function ReporteMaestro() {
                 onHide={() => setElementModalOpen(false)}
                 header="Editar Elemento Maestro"
                 style={{ width: '800px' }}
-                modal
-                className="p-fluid"
+                modal className="p-fluid"
             >
                 {selectedRow && (
                     <StaticFormCard 
-                        elementToEdit={selectedRow} // Ahora le pasamos el objeto mapeado perfecto
+                        elementToEdit={selectedRow} 
                         typeMode={selectedRow.defiTipoElemento === 'POST' ? 'POSTE' : 'VANO'}
                         onClear={() => {}} 
                         onSave={handleSaveElement}

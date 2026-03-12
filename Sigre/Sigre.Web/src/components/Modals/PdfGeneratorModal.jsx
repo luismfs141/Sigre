@@ -10,8 +10,7 @@ import JSZip from 'jszip';
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
 import { useTramosMap } from '../../hooks/useTramosMap';
-const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
-//const API_BASE_URL = "http://localhost:8080/"; 
+import { API_BASE_URL } from '../../utils/ngrok';
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
     const [step, setStep] = useState(0); 
