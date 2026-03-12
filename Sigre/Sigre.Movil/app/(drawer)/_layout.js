@@ -86,6 +86,23 @@ export default function DrawerLayout() {
         }}
       />
 
+
+      <Drawer.Screen
+        name="loadDB"
+        options={{
+          title: "Cargar DB",
+          drawerIcon: ({ color, size }) => (
+            <Ionicons name="folder-open" size={size} color={color} />
+          ),
+          drawerItemStyle: {
+            display: isAdmin ? "flex" : "none",
+            display: "none"
+          },
+
+        }}
+      />
+
+
       {/* ✅ Usuarios: visible solo para ADMIN */}
       <Drawer.Screen
         name="user"
@@ -126,6 +143,11 @@ export default function DrawerLayout() {
         }}
       />
 
+
+
+
+
+
       {/* ocultos */}
       <Drawer.Screen
         name="inspection"
@@ -134,14 +156,13 @@ export default function DrawerLayout() {
           headerTitle: "Inspección",
         }}
       />
+
+
       <Drawer.Screen
         name="multimedia"
         options={{ drawerItemStyle: { display: "none" } }}
       />
-      <Drawer.Screen
-        name="registerDef"
-        options={{ drawerItemStyle: { display: "none" } }}
-      />
+
     </Drawer>
   );
 }
