@@ -361,7 +361,7 @@ export const deleteDeficiencyById = async (
         SET ArchActivo = 0,
             ArchNombre = ?,
             EstadoOffLine = CASE
-              WHEN EstadoOffLine = 2 THEN NULL
+              WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
               ELSE 3
             END
         WHERE ArchInterno = ?
@@ -379,7 +379,7 @@ export const deleteDeficiencyById = async (
           DefiUsuarioMod = COALESCE(?, DefiUsuarioMod),
           DefiFecModificacion = ?,
           EstadoOffLine = CASE
-            WHEN EstadoOffLine = 2 AND (DefiServerId IS NULL OR DefiServerId = 0) THEN NULL
+            WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
             ELSE 3
           END
       WHERE DefiInterno = ?
