@@ -1007,6 +1007,7 @@ namespace Sigre.DataAccess
                                 foreach (var arch in archivosViejos)
                                 {
                                     arch.ArchCodTabla = input.DefiInterno;
+                                    arch.DefiUUID = input.DefiCol3;
                                     if (cambioGis)
                                     {
                                         arch.ArchIdElemento = input.DefiIdElemento;
@@ -1042,7 +1043,14 @@ namespace Sigre.DataAccess
 
                         existente.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
                         existente.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
+                        // 🔥 Actualizamos la Fecha de Registro con la enviada desde el frontend
+                        existente.DefiFecRegistro = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFecRegistro;
 
+                        // 🔥 Hacemos que la Fecha de Creación sea igual a la Fecha de Registro editada
+                        existente.DefiFechaCreacion = input.DefiFecRegistro != DateTime.MinValue ? input.DefiFecRegistro : existente.DefiFechaCreacion;
+
+                        // 🔥 Mantenemos DefiFecModificacion con la fecha y hora REAL de este momento
+                        // (Para saber a nivel de base de datos CUÁNDO alguien hizo esta edición)
                         existente.DefiFecModificacion = DateTime.Now;
                         existente.DefiUsuarioMod = !string.IsNullOrEmpty(input.DefiUsuarioMod) ? input.DefiUsuarioMod : "20";
 
@@ -1832,37 +1840,7 @@ namespace Sigre.DataAccess
             }
         }
 
-        //public IActionResult GetTramosPorSed(int sedId)
-        //{
-        //    using (SigreContext ctx = new SigreContext())
-        //    {
-        //        // Hacemos un JOIN directo en BD para traer solo 4 columnas (súper rápido)
-        //        var postesInfo = (from p in ctx.Postes.AsNoTracking()
-        //                          join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
-        //                          where p.PostSubestacion == sedId && p.PostEsBt == true
-        //                          select new
-        //                          {
-        //                              IdElemento = p.PostInterno,
-        //                              Tipo = "POST",
-        //                              Circuito = t.TramCodigo, // Ej: "CIR. 3"
-        //                              Orden = t.TramOrden      // Ej: 1, 2, 3
-        //                          }).ToList();
 
-        //        var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
-        //                         join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
-        //                         where v.VanoSubestacion == sedId && v.VanoEsBt == true
-        //                         select new
-        //                         {
-        //                             IdElemento = v.VanoInterno,
-        //                             Tipo = "VANO",
-        //                             Circuito = t.TramCodigo,
-        //                             Orden = t.TramOrden
-        //                         }).ToList();
-
-        //        // Unimos ambos y los enviamos
-        //        var resultado = postesInfo.Concat(vanosInfo).ToList();
-        //        return Ok(resultado);
-        //    }
-        //}
+        
     }
 }

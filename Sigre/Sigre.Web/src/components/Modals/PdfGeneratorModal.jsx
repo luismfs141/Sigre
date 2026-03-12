@@ -6,11 +6,12 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import JSZip from 'jszip'; // 🔥 REGRESA EL ZIP
+import JSZip from 'jszip'; 
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
-
-const API_BASE_URL = "http://localhost:8080/"; 
+import { useTramosMap } from '../../hooks/useTramosMap';
+const API_BASE_URL="https://subobscure-hilda-audacious.ngrok-free.dev"; 
+//const API_BASE_URL = "http://localhost:8080/"; 
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
     const [step, setStep] = useState(0); 
@@ -18,14 +19,23 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     
     const [missingPhotosLog, setMissingPhotosLog] = useState([]);
     const [showMissingModal, setShowMissingModal] = useState(false);
-    const [zipBlob, setZipBlob] = useState(null); // 🔥 ESTADO PARA EL ZIP
+    const [zipBlob, setZipBlob] = useState(null); 
     
     const isCancelled = useRef(false);
-
+    const { fetchTramosDictionary } = useTramosMap();
+    const filterOnlyActive = (list) => {
+        return (list || []).filter(def => 
+            def.defiActivo === 1 || 
+            def.defiActivo === true || 
+            String(def.defiActivo) === '1' || 
+            String(def.defiActivo) === 'true'
+        );
+    };
     useEffect(() => {
         if (visible) {
+            const activeData = filterOnlyActive(dataToPrint);
             setStep(0);
-            setProgress({ current: 0, total: dataToPrint?.length || 0, detail: 'Iniciando...' });
+            setProgress({ current: 0, total: activeData.length || 0, detail: 'Iniciando...' });
             setMissingPhotosLog([]);
             setShowMissingModal(false);
             setZipBlob(null);
@@ -33,67 +43,57 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         }
     }, [visible, dataToPrint]);
 
+    // 🔥 GENERADOR DE RUTAS AVANZADO (Ingeniería Inversa para 7004)
     const generateCandidates = (rawPath, defCode, currentSupply, my7004Correlativo) => {
         if (!rawPath) return [];
-        let base = rawPath.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
-        const candidates = [];
+
+        let base = String(rawPath).replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        const rootPathWithoutFile = parts.join('/') + '/';
-        let shortFileName = null;
-        
-        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+        let rootPathWithoutFile = parts.join('/') + '/';
 
-        const addPathVariations = (folderPath) => { 
-            candidates.push(folderPath + originalFileName); 
-            if (shortFileName) candidates.push(folderPath + shortFileName); 
+        const candidates = new Set(); 
+        const add = (path, fileName) => {
+            candidates.add(path + fileName);
         };
 
-        const processDeficiencyFolder = (currentPath) => {
-            const complexRegex = new RegExp(`\/(${defCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
-            const matchComplex = currentPath.match(complexRegex);
-            addPathVariations(currentPath);
+        const is7004 = defCode === "7004" || defCode === "60";
+
+        if (is7004) {
+            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1;
+            let cleanBaseDir = rootPathWithoutFile.replace(/\/7004(\.[^/]+|\/\d+)?\//i, '/7004/');
+            const exactFolder = cleanBaseDir.replace(/\/7004\//i, `/7004/${folderNum}/`);
+            let exactFileName = originalFileName.replace(/7004(_\d+)?/i, `7004_${folderNum}`);
+
+            // Rutas exactas según guardado móvil
+            add(exactFolder, exactFileName);
+            add(exactFolder, originalFileName); 
+
+            // Rutas de respaldo
+            add(cleanBaseDir, originalFileName); 
+            for (let i = 1; i <= 6; i++) {
+                add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName);
+                add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName.replace(/7004(_\d+)?/i, `7004_${i}`));
+            }
+        } else {
+            add(rootPathWithoutFile, originalFileName);
+            
+            const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+            if (typeMatch) add(rootPathWithoutFile, `${typeMatch[1]}.${typeMatch[2]}`);
+
             if (currentSupply && currentSupply !== '0') {
-                 if (matchComplex) { 
-                     const fullStr = matchComplex[0]; 
-                     addPathVariations(currentPath.replace(fullStr, `/${defCode}.1.${currentSupply}/`)); 
-                     addPathVariations(currentPath.replace(fullStr, `/${defCode}/${currentSupply}/`)); 
-                 } else { 
-                     const simpleDefRegex = new RegExp(`\/${defCode}\/`); 
-                     if (currentPath.match(simpleDefRegex)) { 
-                         addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}.1.${currentSupply}/`)); 
-                         addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}/${currentSupply}/`)); 
-                     } 
-                 }
+                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}.1.${currentSupply}/`), originalFileName);
+                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}/${currentSupply}/`), originalFileName);
             }
-            if (matchComplex) { 
-                const fullStr = matchComplex[0]; 
-                addPathVariations(currentPath.replace(fullStr, `/${defCode}/`)); 
-                for(let i=1; i<=5; i++) addPathVariations(currentPath.replace(fullStr, `/${defCode}/${i}/`)); 
-            } else { 
-                const simpleDefRegex = new RegExp(`\/${defCode}\/`); 
-                if (currentPath.match(simpleDefRegex)) { 
-                    for(let i=1; i<=5; i++) { 
-                        if (!currentPath.includes(`/${defCode}/${i}/`)) { 
-                            const split = currentPath.split(`/${defCode}/`); 
-                            if (split.length > 1) addPathVariations(`${split[0]}/${defCode}/${i}/${split[1]}`); 
-                        } 
-                    } 
-                } 
-            }
-        };
-
-        processDeficiencyFolder(rootPathWithoutFile);
-        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
-        if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
-
-        if ((defCode === "7004" || defCode === "60") && my7004Correlativo > 0) {
-            const specific7004Path = rootPathWithoutFile.replace(/\/7004\//i, `/7004/${my7004Correlativo}/`);
-            candidates.unshift(specific7004Path + originalFileName);
         }
 
-        return candidates.map(c => `${API_BASE_URL}/${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
+        const candidatesArray = Array.from(candidates);
+        candidatesArray.forEach(cand => {
+            const upperCand = cand.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+            if (upperCand !== cand) candidates.add(upperCand);
+        });
+
+        return Array.from(candidates).map(c => `${API_BASE_URL}${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
     };
 
     const getWorkingImageUrl = async (candidates) => {
@@ -118,79 +118,114 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         return null;
     };
 
+    // 🔥 CÁLCULO DE CORRELATIVO REFORZADO
     const calculate7004Correlativo = (def) => {
         const targetGis = def.defiCodigoElemento;
-        const sameElement7004s = (allData || []).filter(d => d.defiCodigoElemento === targetGis && (String(d.tipiCodigo || d.tipificacionLabel || "").includes("7004") || String(d.tipiInterno) === "60"));
+        const sameElement7004s = (dataToPrint || []).filter(d => 
+            d.defiCodigoElemento === targetGis && 
+            (String(d.tipiCodigo || d.tipificacionLabel || "").includes("7004") || String(d.tipiInterno) === "60")
+        );
         sameElement7004s.sort((a, b) => a.defiInterno - b.defiInterno);
         const myIndex = sameElement7004s.findIndex(d => d.defiInterno === def.defiInterno) + 1;
         return myIndex > 0 ? myIndex : 1;
     };
 
     const startProcessing = async () => {
-        if (!dataToPrint || dataToPrint.length === 0) return;
+        const activeData = filterOnlyActive(dataToPrint);
+
+        if (activeData.length === 0) {
+            onHide();
+            return;
+        }
+
         setStep(1);
-        
         let totalProcessed = 0;
         const currentMissingLog = [];
         let resolvedData = [];
         const tempUrls = []; 
 
-        // 1. DICCIONARIO DE TRAMOS EN MEMORIA (AMPLIADO)
-        setProgress(p => ({ ...p, detail: `Sincronizando Tramos y Circuitos...` }));
-        const tramosMap = {};
-        try {
-            if (empresaInfo?.sedId) {
-                const response = await api.get('/Post/GetPaginado', { 
-                    params: { sedId: empresaInfo.sedId, skip: 0, take: 5000 } 
-                });
-                const listaPostes = response.data.data || [];
-                
-                listaPostes.forEach(p => {
-                    const id = p.postInterno || p.PostInterno;
-                    // Guardamos todo lo que nos sirva para ordenar y mostrar
-                    tramosMap[id] = {
-                        interno: p.tramInterno || p.TRAM_Interno || p.TramInterno || 0,
-                        orden: p.tramOrden || p.TRAM_Orden || p.TramOrden || p.tramInterno || p.TRAM_Interno || 0,
-                        codigo: p.tramCodigo || p.TRAM_Codigo || p.TramCodigo || '', 
-                        circuito: p.postCircuito || p.POST_Circuito || '' 
-                    };
-                });
-            }
-        } catch (e) {
-            console.error("Error sincronizando tramos", e);
-        }
+        // 🎯 CÓDIGOS GIS A RASTREAR
+        const targetGisCodes = ['PTO000055171', 'VBT000033740', 'VBT000033741', 'VBT000096303'];
 
-        // 2. PROCESAMIENTO ÚNICO DE TODAS LAS DEFICIENCIAS
-        for (let i = 0; i < dataToPrint.length; i++) {
+        setProgress({ current: 0, total: activeData.length, detail: 'Sincronizando tramos...' });
+        const tramosMap = await fetchTramosDictionary(empresaInfo?.sedId);
+
+        for (let i = 0; i < activeData.length; i++) {
             if (isCancelled.current) break;
             
-            const def = dataToPrint[i];
+            const def = activeData[i]; 
             const defCode = String(def.tipificacionLabel || "0000").split(' ')[0].trim();
             const currentSupply = String(def.defiNumSuministro || "0").trim();
-            const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def) : 0;
-            
+            const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def, activeData) : 0;
+            const defUUID = String(def.defiCol3 || "").trim().toLowerCase();
+
+            // 🕵️‍♂️ TRACKER LOGIC
+            const isTarget = targetGisCodes.includes(def.defiCodigoElemento);
+
+            if (isTarget) {
+                console.log(`\n======================================================`);
+                console.log(`🔍 AUDITORÍA GIS: ${def.defiCodigoElemento} | DefID: ${def.defiInterno}`);
+                console.log(`▶ Tipi: ${defCode} | Suministro: ${currentSupply}`);
+                console.log(`▶ Correlativo 7004 Calculado: ${my7004Corr}`);
+                console.log(`▶ UUID Padre (DefiCol3): ${defUUID}`);
+            }
+
             try {
                 const response = await api.get('/File/GetByDeficiencyWeb', { params: { x_deficiency: def.defiInterno } });
                 const files = (response.data || []).filter(f => f.archActivo === 1 || f.archActivo === true);
                 
+                if (isTarget) {
+                    console.log(`▶ Archivos Activos encontrados en BD para este ID: ${files.length}`, files);
+                }
+
                 const photoPromises = [1, 2, 3, 4].map(async (typeId) => {
-                    const fileData = files.find(x => parseInt(x.archTipo) === typeId);
-                    if (!fileData) return { typeId, url: null };
+                    let possibleFiles = files.filter(x => parseInt(x.archTipo) === typeId);
                     
-                    const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
-                    const url = await getWorkingImageUrl(candidates);
-                    return { typeId, url };
+                    if (isTarget) {
+                        console.log(`  📸 Buscando Tipo Foto: ${typeId}. Posibles candidatos iniciales: ${possibleFiles.length}`);
+                    }
+
+                    if (possibleFiles.length === 0) return { typeId, url: null };
+                    
+                    // Prioridad por UUID (Bala de plata)
+                    if (defUUID && possibleFiles.length > 1) {
+                        possibleFiles.sort((a, b) => {
+                            const aMatch = String(a.defiUUID || a.DefiUUID || "").trim().toLowerCase() === defUUID;
+                            const bMatch = String(b.defiUUID || b.DefiUUID || "").trim().toLowerCase() === defUUID;
+                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1; 
+                        });
+                        
+                        if (isTarget) {
+                            console.log(`  ⚖️ Aplicando orden por UUID. Primer archivo a probar: ID ${possibleFiles[0].archInterno} (UUID: ${possibleFiles[0].defiUUID || possibleFiles[0].DefiUUID})`);
+                        }
+                    }
+                    
+                    for (const fileData of possibleFiles) {
+                        const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
+                        
+                        if (isTarget) {
+                            console.log(`  🛠 Generando rutas para archivo BD [${fileData.archNombre}]. Candidatos:`, candidates);
+                        }
+
+                        const url = await getWorkingImageUrl(candidates);
+                        
+                        if (url) {
+                            if (isTarget) console.log(`  ✅ ÉXITO: URL encontrada para tipo ${typeId} ->`, url);
+                            return { typeId, url };
+                        } else {
+                            if (isTarget) console.log(`  ❌ FALLO: Ningún candidato sirvió para el archivo ${fileData.archNombre}`);
+                        }
+                    }
+                    return { typeId, url: null };
                 });
 
                 const results = await Promise.all(photoPromises);
-                
                 const fotos = {};
                 const missing = []; 
 
                 results.forEach(res => {
                     const key = res.typeId === 1 ? 'panoramica' : res.typeId === 2 ? 'frontal' : res.typeId === 3 ? 'detalle' : 'evidencia';
                     fotos[key] = res.url;
-                    
                     if (res.url) {
                         if (res.url.startsWith('blob:')) tempUrls.push(res.url);
                     } else {
@@ -199,68 +234,57 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                 });
 
                 if (missing.length > 0) {
+                    if (isTarget) console.log(`⚠️ ALERTA: Faltaron estas fotos: ${missing.join(', ')}`);
                     currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: missing.join(', ') });
                 }
 
-                // 🔥 ASIGNACIÓN DE VARIABLES DE ORDENAMIENTO
-                const tramoInfo = def.defiTipoElemento === 'POST' ? (tramosMap[def.defiIdElemento] || {}) : {};
+                const tipoDefNormalizado = def.defiTipoElemento.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
+                const keyBusqueda = `${tipoDefNormalizado}_${def.defiIdElemento}`;
+                const tramoInfo = tramosMap[keyBusqueda] || {};
+                
                 const defConTramo = { 
                     ...def, 
-                    tramoCalculado: tramoInfo.interno || '-',
                     tramOrdenCalculado: tramoInfo.orden || 0,
-                    tramCodigoCalculado: tramoInfo.codigo || '',
-                    circuitoCalculado: tramoInfo.circuito || tramoInfo.codigo || '' // CIR.3
+                    tramCodigoCalculado: tramoInfo.circuito || '', 
+                    circuitoCalculado: tramoInfo.circuito || ''
                 };
 
                 resolvedData.push({ deficiencia: defConTramo, fotos });
 
             } catch (e) { 
-                resolvedData.push({ deficiencia: { ...def, tramoCalculado: '-', tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
-                currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'TODAS (Error BD)' });
+                if (isTarget) console.error(`🚨 ERROR CATCH: `, e);
+                resolvedData.push({ deficiencia: { ...def, tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
+                currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'ERROR BD' });
             }
 
             totalProcessed++;
-            setProgress({ current: totalProcessed, total: dataToPrint.length, detail: `Procesando fotos: ${totalProcessed}/${dataToPrint.length}` });
+            setProgress({ current: totalProcessed, total: activeData.length, detail: `Procesando: ${totalProcessed}/${activeData.length}` });
         }
 
         if (isCancelled.current) return;
 
-        // 🔥 MOTOR DE ORDENAMIENTO (Primero por Código Tramo/Circuito, luego numérico por Orden)
-        setProgress(p => ({ ...p, detail: `Ordenando registros por Circuito y Tramo...` }));
+        // Ordenamiento final
         resolvedData.sort((a, b) => {
-            const codA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
-            const codB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
-            
-            // Si pertenecen a diferentes códigos (ej. CIR.3 vs CIR.4), ordenar alfabéticamente
-            if (codA !== codB) return codA.localeCompare(codB);
-
-            // Si están dentro del mismo código (ej. ambos son CIR.3), ordenar por el número de tramo
-            const ordA = Number(a.deficiencia.tramOrdenCalculado || 0);
-            const ordB = Number(b.deficiencia.tramOrdenCalculado || 0);
-            return ordA - ordB;
+            const cA = String(a.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            const cB = String(b.deficiencia.tramCodigoCalculado || '').toUpperCase();
+            if (cA !== cB) return cA.localeCompare(cB, undefined, { numeric: true });
+            return (a.deficiencia.tramOrdenCalculado || 0) - (b.deficiencia.tramOrdenCalculado || 0);
         });
 
-        // 3. GENERACIÓN DEL PDF COMPLETO Y EMPAQUETADO ZIP
         if (resolvedData.length > 0) {
-            setProgress(p => ({ ...p, detail: `Ensamblando y comprimiendo PDF...` }));
+            setProgress(p => ({ ...p, detail: `Generando PDF comprimido...` }));
             try {
-                const zip = new JSZip(); // Instanciamos ZIP
+                const zip = new JSZip(); 
                 const docElement = <DeficiencyPdfDocument dataList={resolvedData} empresaInfo={empresaInfo} />;
                 const pdfInstance = pdf();
                 pdfInstance.updateContainer(docElement);
                 const blob = await pdfInstance.toBlob();
-                
-                // Metemos el PDF al ZIP
-                zip.file(`Reporte_SEAL_SED_${empresaInfo?.sed || 'SED'}_Completo.pdf`, blob);
-                
-                // Generamos el .zip final
+                zip.file(`Reporte_SED_${empresaInfo?.sed || 'SED'}.pdf`, blob);
                 const finalZip = await zip.generateAsync({ type: "blob" });
                 setZipBlob(finalZip);
-                
-                // Limpieza masiva de RAM al final
                 tempUrls.forEach(u => URL.revokeObjectURL(u));
             } catch (err) {
-                console.error(`Error generando el PDF unificado:`, err);
+                console.error(err);
             }
         }
 
@@ -301,7 +325,6 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                             <span className="font-bold text-lg">¡Proceso Finalizado!</span>
                             <p className="text-sm text-gray-600">El reporte ordenado ha sido comprimido. Descárgalo a continuación.</p>
                             
-                            {/* 🔥 BOTÓN DEL QA DE FOTOS FALTANTES */}
                             {missingPhotosLog.length > 0 && (
                                 <div className="w-full mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
                                     <p className="text-xs text-orange-800 font-bold mb-2">
@@ -317,7 +340,6 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                                 </div>
                             )}
 
-                            {/* 🔥 BOTÓN PARA DESCARGAR EL ZIP */}
                             <Button 
                                 label="Descargar Archivo ZIP" 
                                 icon="pi pi-download" 

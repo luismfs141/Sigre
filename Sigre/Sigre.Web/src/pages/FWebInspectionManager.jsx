@@ -236,6 +236,7 @@ export default function WebInspectionManager() {
              setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
              return;
         }
+        setStructureIdInt(validElement.postInterno || validElement.vanoInterno || validElement.id || 0);
 
         const realType = validElement._tipo === 'POSTE' ? 'POST' : 'VANO';
         if (realType !== structureType) {
@@ -309,13 +310,14 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
             // D. Registro de Blobs para ZIP sin recargar
             if (dataToSave.file) { sessionBlobs.current[fileName] = dataToSave.file; }
-
+            const safeElementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
             const payload = {
                 archTabla: "Deficiencias", archInterno: 0, archTipo: String(dataToSave.tipo),
                 archNombre: dbPath, archCodTabla: Number(defId),
                 archLatitud: utm.northing, archLongitud: utm.easting,
                 archFecha: new Date(dataToSave.date || new Date()).toISOString(),
                 archTipoElemento: dbTipoElem, archIdElemento: Number(structureIdInt),
+                archIdElemento: Number(safeElementId),
                 tipiInterno: Number(defTipiInterno), archActivo: true,
                 file: dataToSave.file
             };
@@ -391,7 +393,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
             let currentPathParts = row.currentPath.split('/');
 
             // Reconstrucción de la ruta si aplican cambios de Ruta o Tipificación
-            if ((applyPath || applyTipi || applyGisCode) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
+            if ((applyPath || applyTipi || applyGisCode || applyDate) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
                 const effectiveFeeder = applyPath ? newFeeder : currentPathParts[1];
                 const effectiveSed = applyPath ? newSed : currentPathParts[2];
                 const effectiveType = applyPath ? newType : String(currentPathParts[3]).toUpperCase();
@@ -971,7 +973,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
                     <div className="flex items-center">
                         <Checkbox inputId="cb_date" checked={bulkOptions.date} onChange={e => setBulkOptions({...bulkOptions, date: e.checked})} />
-                        <label htmlFor="cb_date" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Fecha de Captura</label>
+                        <label htmlFor="cb_date" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Fecha y Hora de Captura</label>
                     </div>
 
                     <div className="flex items-start bg-red-50 p-3 rounded-md border border-red-200 mt-2">

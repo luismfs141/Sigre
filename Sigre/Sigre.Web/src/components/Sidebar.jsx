@@ -29,8 +29,9 @@ const navItems = [
   { title: 'Importar Datos', href: '/importar-datos', icon: FileSearch },
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
   { title: 'NUEVA Importación Masiva(EN PRUEBA)', href: '/importacion-masiva-inversa', icon: FileSearch },
-];
+  { title: 'Gestión de Inspecciones', href: '/reporteMaestro', icon: FileSearch },
 
+]
 export function Sidebar({ className, onClose, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();

@@ -17,7 +17,7 @@ export default function StaticFormCard({ elementToEdit, typeMode, onClear, onSav
         alimentadorId: null, sedId: null, 
         latitud: null, longitud: null, materialPoste: 2, altura: null, idRetenida: null,
         nodoInicial: '', nodoFinal: '',
-        latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null,terceros: false
+        latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null,terceros: false,vereda:true
     };
 
     const [formData, setFormData] = useState(initialState);
@@ -71,6 +71,7 @@ useEffect(() => {
                     idRetenida: elementToEdit.postRetenidaTipo || elementToEdit.idRetenida,
                     nodoInicial: '', nodoFinal: '', latitudIni: null, longitudIni: null, latitudFin: null, longitudFin: null,
                     terceros: elementToEdit.postTerceros || false,
+                    vereda: elementToEdit.postVereda === false ? false : true,
                 });
             } else {
                 setFormData({
@@ -249,6 +250,7 @@ const handleSaveWrapper = () => {
                 postAltura: formData.altura,
                 postRetenidaTipo: formData.idRetenida || 5,
                 postTerceros: formData.terceros,
+                postVereda: formData.vereda,
             };
         } else {
             payloadToSend = {
@@ -313,28 +315,70 @@ const itemTemplate = (item) => {
         );
     };
 
-    const handleSelectNode = (e, campoBase) => {
-        const item = e.value;
-        const isInicio = campoBase === 'nodoInicial';
+// =================================================================
+    // 🔥 FUNCIÓN 1: SE DISPARA SOLO AL HACER CLIC EN LA SUGERENCIA
+    // =================================================================
+    const handleSelectNode = (e, isInicio) => {
+        const item = e.value; // Aquí PrimeReact SÍ nos da el objeto JSON completo
         
-        // Determinamos el valor a guardar en el input de texto
-        // Si es SED, guardamos su código/nombre. Si es Poste, su etiqueta o código.
-        const valorTexto = item._tipo === 'SED' 
-            ? (item.label || "").split(' - ')[0] // O item.sedCodigo
-            : (item.postEtiqueta || item.postCodigoNodo);
+        const campoNodo = isInicio ? 'nodoInicial' : 'nodoFinal';
+        const campoLat = isInicio ? 'latitudIni' : 'latitudFin';
+        const campoLon = isInicio ? 'longitudIni' : 'longitudFin';
 
-        // Obtenemos coordenadas (Asegúrate que tu objeto SED tenga lat/lon)
-        // En la búsqueda (paso 1) ya mapeamos las coords de la SED a postLatitud/postLongitud para facilitar esto,
-        // pero si tu objeto original es distinto, ajusta aquí.
-        const lat = item.postLatitud || item.sedLatitud || item.latitud;
-        const lon = item.postLongitud || item.sedLongitud || item.longitud;
+        let valorTexto = "";
 
+        // --- LÓGICA DE NEGOCIO PARA EL NOMBRE A GUARDAR ---
+        if (item._tipo === 'SED') {
+            // Regla 1: Si es SED, extraemos el código (ej. "8189") y le añadimos "SED "
+            // Tu item.label viene como "8189 - 8189 50", así que lo separamos por ' - ' y tomamos la primera parte.
+            const codigoSed = (item.label || "").split(' - ')[0].trim();
+            valorTexto = `SED ${codigoSed}`;
+        } 
+        else {
+            // Regla 2 y 3: Si es Poste, buscamos la etiqueta primero
+            const etiqueta = String(item.postEtiqueta || "").trim();
+            const codigoGis = String(item.postCodigoNodo || item.codigo || "").trim();
+
+            // Verificamos si la etiqueta es válida (no vacía, no es ".", no es "S/N", y no es igual al código)
+            const tieneEtiquetaValida = etiqueta !== "" && etiqueta !== "." && etiqueta.toUpperCase() !== "S/N" && etiqueta !== codigoGis;
+
+            if (tieneEtiquetaValida) {
+                // Si tiene etiqueta real, guardamos la etiqueta
+                valorTexto = etiqueta;
+            } else {
+                // Si no tiene etiqueta válida, guardamos el código GIS
+                valorTexto = codigoGis;
+            }
+        }
+
+        // --- EXTRACCIÓN DE COORDENADAS ---
+        const lat = item.postLatitud || item.sedLatitud || item.latitud || item.lat;
+        const lon = item.postLongitud || item.sedLongitud || item.longitud || item.lng;
+
+        // Actualizamos estado con datos exactos
         setFormData(prev => ({
             ...prev,
-            [campoBase]: valorTexto,
-            [isInicio ? 'latitudIni' : 'latitudFin']: lat,
-            [isInicio ? 'longitudIni' : 'longitudFin']: lon
+            [campoNodo]: valorTexto,
+            [campoLat]: lat,
+            [campoLon]: lon
         }));
+    };
+
+    // =================================================================
+    // 🔥 FUNCIÓN 2: SE DISPARA AL ESCRIBIR CON EL TECLADO
+    // =================================================================
+    const handleTextChange = (e, isInicio) => {
+        const item = e.value;
+        const campoNodo = isInicio ? 'nodoInicial' : 'nodoFinal';
+
+        // Solo actualizamos si es texto. Si es objeto (clic), lo ignoramos 
+        // para que 'handleSelectNode' haga su trabajo y no se sobreescriba.
+        if (typeof item === 'string') {
+            setFormData(prev => ({
+                ...prev,
+                [campoNodo]: item
+            }));
+        }
     };
     const isEdit = !!formData.id;
     const inputBorderClass = "border border-gray-300 rounded shadow-sm hover:border-blue-400 focus:border-blue-500 transition-colors";
@@ -457,7 +501,32 @@ onKeyDown={(e) => e.key === 'Enter' && handleVerifyElement()}
             />
         </div>
     </div>
+
+
+    
 )}
+{isEdit && (
+<div className="col-span-2 flex items-center justify-between p-2 rounded border border-blue-200 shadow-sm transition-colors bg-blue-50 mt-1 mb-2">
+                                <div className="flex flex-row items-center gap-2 pl-2">
+                                    <i className="pi pi-map-marker text-blue-500"></i>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase">¿ESTÁ EN VEREDA?</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[11px] font-extrabold ${formData.vereda ? 'text-green-600' : 'text-gray-500'}`}>
+                                        {formData.vereda ? "SÍ" : "NO"}
+                                    </span>
+                                    <Button 
+                                        icon={formData.vereda ? "pi pi-check" : "pi pi-times"} 
+                                        className={`p-button-rounded p-button-sm w-8 h-8 ${formData.vereda ? 'p-button-success' : 'p-button-secondary'}`}
+                                        onClick={() => setFormData({...formData, vereda: !formData.vereda})}
+                                        tooltip={formData.vereda ? "Cambiar a NO" : "Cambiar a SÍ"}
+                                    />
+                                </div>
+</div>
+    
+    
+)}
+
 
                     {/* --- CAMPOS ESPECÍFICOS: POSTE --- */}
                     {typeMode === 'POSTE' && (
@@ -511,11 +580,8 @@ onKeyDown={(e) => e.key === 'Enter' && handleVerifyElement()}
         completeMethod={(e) => searchNode(e.query, formData.alimentadorId, formData.sedId)}
         itemTemplate={itemTemplate} 
         field="postCodigoNodo" 
-        onSelect={(e) => handleSelectNode(e, 'nodoInicial')} 
-        onChange={(e) => {
-            const val = e.value?.postEtiqueta || e.value?.postCodigoNodo || e.value?.label || e.value;
-            setFormData({...formData, nodoInicial: val});
-        }}
+onSelect={(e) => handleSelectNode(e, true)} // <--- CAPTURA EL CLIC (Extrae Lat/Lon)
+    onChange={(e) => handleTextChange(e, true)}
         className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
         inputClassName="w-full h-9 font-bold border-none" 
         
@@ -545,12 +611,8 @@ onKeyDown={(e) => e.key === 'Enter' && handleVerifyElement()}
         suggestions={suggestions} 
         completeMethod={(e) => searchNode(e.query, formData.alimentadorId, formData.sedId)}        itemTemplate={itemTemplate} 
         field="postCodigoNodo" 
-        onSelect={(e) => handleSelectNode(e, 'nodoFinal')} 
-        onChange={(e) => {
-            // Se agregó ?. por seguridad al escribir libremente
-            const val = e.value?.postEtiqueta || e.value?.postCodigoNodo || e.value?.label || e.value;
-            setFormData({...formData, nodoFinal: val});
-        }}
+onSelect={(e) => handleSelectNode(e, false)} // <--- CAPTURA EL CLIC
+    onChange={(e) => handleTextChange(e, false)}
         className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
         inputClassName="w-full h-9 font-bold border-none" 
         

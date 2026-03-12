@@ -22,3 +22,10 @@ public partial class Tramo
 
     public virtual ICollection<Vano> Vanos { get; set; } = new List<Vano>();
 }
+public class TramoElementoDTO
+{
+    public int IdElemento { get; set; }
+    public string Tipo { get; set; }
+    public string TramCodigo { get; set; }
+    public int TramOrden { get; set; }
+}

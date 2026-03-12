@@ -1,4 +1,5 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -372,6 +373,57 @@ namespace Sigre.DataAccess
                 if (ex.InnerException != null)
                     Console.WriteLine($"🔍 Inner: {ex.InnerException.Message}");
                 throw;
+            }
+        }
+        // Nota: Cambiamos 'List<Sed>' por 'IActionResult' para poder devolver el molde JSON limpio
+        public List<Sed> DAFE_GetSedsByFeederWeb(int x_feeder_id)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var seds = ctx.Seds
+                    .Where(s => s.AlimInterno == x_feeder_id)
+                    .Select(s => new Sed
+                    {
+                        // Mapeamos solo los campos básicos que React necesita.
+                        // AL NO mapear las listas virtuales (como los Postes), 
+                        // rompemos la referencia circular que causaba el Error 500.
+                        SedInterno = s.SedInterno,
+                        SedCodigo = s.SedCodigo,
+                        SedEtiqueta = s.SedEtiqueta,
+                        AlimInterno = s.AlimInterno
+                    })
+                    .ToList();
+
+                return seds; // Devolvemos la lista limpia directamente
+            }
+        }
+        public List<TramoElementoDTO> DAFE_GetTramosPorSed(int sedId)
+        {
+            using (SigreContext ctx = new SigreContext())
+            {
+                var postesInfo = (from p in ctx.Postes.AsNoTracking()
+                                  join t in ctx.Tramos.AsNoTracking() on p.TramInterno equals t.TramInterno
+                                  where p.PostSubestacion == sedId && p.PostEsBt == true
+                                  select new TramoElementoDTO
+                                  {
+                                      IdElemento = p.PostInterno,
+                                      Tipo = "POSTE",
+                                      TramCodigo = t.TramCodigo,
+                                      TramOrden = t.TramOrden
+                                  }).ToList();
+
+                var vanosInfo = (from v in ctx.Vanos.AsNoTracking()
+                                 join t in ctx.Tramos.AsNoTracking() on v.TramInterno equals t.TramInterno
+                                 where v.VanoSubestacion == sedId && v.VanoEsBt == true
+                                 select new TramoElementoDTO
+                                 {
+                                     IdElemento = v.VanoInterno,
+                                     Tipo = "VANO",
+                                     TramCodigo = t.TramCodigo,
+                                     TramOrden = t.TramOrden
+                                 }).ToList();
+
+                return postesInfo.Concat(vanosInfo).ToList();
             }
         }
     }
