@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo,useRef } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -6,7 +6,7 @@ import { Dialog } from 'primereact/dialog';
 import { Dropdown } from 'primereact/dropdown';
 import { Tag } from 'primereact/tag';
 import { Skeleton } from 'primereact/skeleton';
-
+import { Toast } from 'primereact/toast';
 // Tus hooks
 import { useDeficienciesBySed } from '../hooks/useDeficiency'; 
 import { useElements } from '../hooks/useElement'; 
@@ -49,10 +49,11 @@ export default function ReporteMaestro() {
     // --- HOOKS ---
     const { feeders } = useFeeder();
     const { seds } = useSedsByFeeder(selectedFeeder); 
-    const { deficiencies, fetchBySed } = useDeficienciesBySed();
+    const { deficiencies, loading: loadingDef, fetchBySed, saveDeficiency } = useDeficienciesBySed();
     const { saveElement, loading: loadingElement, fetchPostesChunk, fetchVanosChunk } = useElements();
     const { getCodeById, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
+    const toast = useRef(null)
     
     // --- MAPEO DE DATOS ---
     const mappedDeficiencies = useMemo(() => {
@@ -167,8 +168,15 @@ export default function ReporteMaestro() {
     };
 
     const handleSaveDeficiency = async (payloadToSend) => {
-        setDeficiencyModalOpen(false);
-        handleSearch(); 
+        // 🔥 AHORA SÍ LLAMAMOS A LA API
+        const res = await saveDeficiency(payloadToSend);
+        if (res.success) {
+            toast.current.show({ severity: 'success', summary: 'Guardado', detail: 'Deficiencia actualizada correctamente' });
+            setDeficiencyModalOpen(false);
+            handleSearch(); 
+        } else {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: res.message || 'No se pudo guardar la deficiencia' });
+        }
     };
 
     // --- TEMPLATES ---
@@ -207,7 +215,7 @@ export default function ReporteMaestro() {
             case 3: return { label: 'CRÍTICO', severity: 'danger' };
             case 2: return { label: 'MEDIO', severity: 'warning' };
             case 1: return { label: 'LEVE', severity: 'info' };
-            case 0: return { label: 'SIN DEFICIENCIA', severity: 'success' };
+            case 0: return { label: 'NO APLICA', severity: 'success' };
             default: return { label: 'N/A', severity: 'secondary' };
         }
     };
@@ -228,7 +236,7 @@ export default function ReporteMaestro() {
         <div className="p-4 bg-white rounded-lg shadow-md w-full flex flex-col h-screen">
             {/* 🔥 INYECTAMOS LOS ESTILOS AQUÍ */}
             <style>{customStyles}</style>
-
+            <Toast ref={toast} />
             <h2 className="text-xl font-bold mb-4 text-gray-800 flex-none">Maestro de Elementos y Deficiencias</h2>
 
             {/* BARRA DE FILTROS */}
@@ -280,10 +288,10 @@ export default function ReporteMaestro() {
                     <Column field="defiTipoElemento" header="Tipo" style={styleElemento} />
                     <Column field="nodoInicialTabla" header="Nodo Inicial" style={styleElemento} />
                     <Column field="nodoFinalTabla" header="Nodo Final" style={styleElemento} />
-                    <Column field="defiLatitud" header="Latitud" style={styleElemento} />
-                    <Column field="defiLongitud" header="Longitud" style={styleElemento} />
 
                     {/* ZONA AMARILLA */}
+                    <Column field="defiLatitud" header="Latitud" style={styleDeficiencia} />
+                    <Column field="defiLongitud" header="Longitud" style={styleDeficiencia} />
                     <Column field="defiEstadoCriticidad" header="Criticidad" body={criticidadTemplate} style={styleDeficiencia} />
                     <Column header="Tipificación" body={typificationTemplate} style={styleDeficiencia} />
                     <Column field="defiCol2" header="Responsable" style={styleDeficiencia} />
