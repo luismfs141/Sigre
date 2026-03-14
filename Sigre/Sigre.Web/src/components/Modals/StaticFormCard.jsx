@@ -504,66 +504,75 @@ onKeyDown={(e) => e.key === 'Enter' && handleVerifyElement()}
 
 
     
-)}
-{isEdit && (
-<div className="col-span-2 flex items-center justify-between p-2 rounded border border-blue-200 shadow-sm transition-colors bg-blue-50 mt-1 mb-2">
-                                <div className="flex flex-row items-center gap-2 pl-2">
-                                    <i className="pi pi-map-marker text-blue-500"></i>
-                                    <span className="text-[10px] font-bold text-gray-600 uppercase">¿ESTÁ EN VEREDA?</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-[11px] font-extrabold ${formData.vereda ? 'text-green-600' : 'text-gray-500'}`}>
-                                        {formData.vereda ? "SÍ" : "NO"}
-                                    </span>
-                                    <Button 
-                                        icon={formData.vereda ? "pi pi-check" : "pi pi-times"} 
-                                        className={`p-button-rounded p-button-sm w-8 h-8 ${formData.vereda ? 'p-button-success' : 'p-button-secondary'}`}
-                                        onClick={() => setFormData({...formData, vereda: !formData.vereda})}
-                                        tooltip={formData.vereda ? "Cambiar a NO" : "Cambiar a SÍ"}
-                                    />
-                                </div>
-</div>
+
     
     
 )}
 
 
                     {/* --- CAMPOS ESPECÍFICOS: POSTE --- */}
-                    {typeMode === 'POSTE' && (
-                        <>
-                            <div className="col-span-2 border-t border-gray-100 my-1"></div>
-                                                <div className="col-span-1">
-                        <label className="font-bold text-gray-600 block mb-1.5 ml-1">ETIQUETA</label>
-                        <InputText value={formData.etiqueta} onChange={(e)=>setFormData({...formData, etiqueta:e.target.value})} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`}/>
-                    </div>
-                            <div className="col-span-1">
-                                <label className="font-bold text-gray-600 block mb-1.5 ml-1">LATITUD</label>
-                                <InputNumber value={formData.latitud} onValueChange={(e)=>setFormData({...formData, latitud:e.value})} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="py-2"/>
-                            </div>
-                            <div className="col-span-1">
-                                <label className="font-bold text-gray-600 block mb-1.5 ml-1">LONGITUD</label>
-                                <InputNumber value={formData.longitud} onValueChange={(e)=>setFormData({...formData, longitud:e.value})} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="py-2"/>
-                            </div>
+{typeMode === 'POSTE' && (
+    <>
+        <div className="col-span-2 border-t border-gray-100 my-1"></div>
+        
+        <div className="col-span-1">
+            <label className="font-bold text-gray-600 block mb-1.5 ml-1">ETIQUETA</label>
+            <InputText value={formData.etiqueta} onChange={(e)=>setFormData({...formData, etiqueta:e.target.value})} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`}/>
+        </div>
+        
+        <div className="col-span-1">
+            <label className="font-bold text-gray-600 block mb-1.5 ml-1">LATITUD</label>
+            <InputNumber value={formData.latitud} onValueChange={(e)=>setFormData({...formData, latitud:e.value})} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="py-2"/>
+        </div>
+        
+        <div className="col-span-1">
+            <label className="font-bold text-gray-600 block mb-1.5 ml-1">LONGITUD</label>
+            <InputNumber value={formData.longitud} onValueChange={(e)=>setFormData({...formData, longitud:e.value})} mode="decimal" minFractionDigits={8} maxFractionDigits={15} useGrouping={false} className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} inputClassName="py-2"/>
+        </div>
 
-                            <div className="col-span-2 mt-2">
-                                <label className="font-bold text-gray-600 block mb-1.5 ml-1">MATERIAL DEL POSTE</label>
-                                <Dropdown value={formData.materialPoste} options={MATERIAL_OPTIONS} onChange={(e)=>setFormData({...formData, materialPoste:e.value})} className={`w-full h-9 flex items-center ${inputBorderClass}`} editable placeholder="Seleccione..."/>
-                            </div>
-                            
-                            <div className="col-span-2">
-                                <label className="font-bold text-gray-600 block mb-1.5 ml-1">ALTURA (m)</label>
-                                <InputNumber 
-                                    value={formData.altura} 
-                                    onValueChange={(e)=>setFormData({...formData, altura:e.value})} 
-                                    className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
-                                    inputClassName="py-2 font-bold text-blue-800"
-                                    min={0} max={30} showButtons buttonLayout="horizontal" step={1}
-                                    decrementButtonClassName="p-button-secondary opacity-50" incrementButtonClassName="p-button-secondary opacity-50" 
-                                    incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus"
-                                />
-                            </div>
-                        </>
-                    )}
+        <div className="col-span-2 mt-2">
+            <label className="font-bold text-gray-600 block mb-1.5 ml-1">MATERIAL DEL POSTE</label>
+            <Dropdown value={formData.materialPoste} options={MATERIAL_OPTIONS} onChange={(e)=>setFormData({...formData, materialPoste:e.value})} className={`w-full h-9 flex items-center ${inputBorderClass}`} editable placeholder="Seleccione..."/>
+        </div>
+        
+        <div className="col-span-2">
+            <label className="font-bold text-gray-600 block mb-1.5 ml-1">ALTURA (m)</label>
+            <InputNumber 
+                value={formData.altura} 
+                onValueChange={(e)=>setFormData({...formData, altura:e.value})} 
+                className={`w-full p-inputtext-sm h-9 ${inputBorderClass}`} 
+                inputClassName="py-2 font-bold text-blue-800"
+                min={0} max={30} showButtons buttonLayout="horizontal" step={1}
+                decrementButtonClassName="p-button-secondary opacity-50" incrementButtonClassName="p-button-secondary opacity-50" 
+                incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus"
+            />
+        </div>
+
+        {/* --- SOLO VISIBLE SI ES POSTE Y ESTÁ EN EDICIÓN --- */}
+        {isEdit && (
+            <div className="col-span-2 flex items-center justify-between p-2 rounded border border-blue-200 shadow-sm transition-colors bg-blue-50 mt-1 mb-2">
+                <div className="flex flex-row items-center gap-2 pl-2">
+                    <i className="pi pi-map-marker text-blue-500"></i>
+                    <span className="text-[10px] font-bold text-gray-600 uppercase">¿ESTÁ EN VEREDA?</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-extrabold ${formData.vereda ? 'text-green-600' : 'text-gray-500'}`}>
+                        {formData.vereda ? "SÍ" : "NO"}
+                    </span>
+                    <Button 
+                        icon={formData.vereda ? "pi pi-check" : "pi pi-times"} 
+                        className={`p-button-rounded p-button-sm w-8 h-8 ${formData.vereda ? 'p-button-success' : 'p-button-secondary'}`}
+                        onClick={(e) => {
+                            e.preventDefault(); // Evita que el botón haga submit si está dentro de un <form>
+                            setFormData({...formData, vereda: !formData.vereda});
+                        }}
+                        tooltip={formData.vereda ? "Cambiar a NO" : "Cambiar a SÍ"}
+                    />
+                </div>
+            </div>
+        )}
+    </>
+)}
 
                     {/* --- CAMPOS ESPECÍFICOS: VANO --- */}
                     {typeMode === 'VANO' && (
