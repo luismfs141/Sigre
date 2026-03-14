@@ -31,7 +31,6 @@ GO
 
 
 
-
 INSERT INTO dbo.CodigosOpciones
 (
     CODI_Interno,

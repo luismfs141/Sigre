@@ -21,4 +21,7 @@ public partial class Codigo
     public virtual ICollection<PerfilesCodigo> PerfilesCodigos { get; } = new List<PerfilesCodigo>();
 
     public virtual ICollection<Tipificacione> Tipificaciones { get; } = new List<Tipificacione>();
+
+    public virtual ICollection<CodigosOpciones> CodigosOpciones { get; } = new List<CodigosOpciones>();
+
 }

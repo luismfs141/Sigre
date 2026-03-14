@@ -28,7 +28,9 @@ namespace Sigre.DataAccess.Context
         public DbSet<SedMaterial> SedMaterials { get; set; }
         public DbSet<PinStruct> Pines { get; set; }
         public DbSet<Alimentadore> Alimentadores { get; set; }
-        
+        public DbSet<Codigo> Codigos { get; set; }
+        public DbSet<CodigosOpciones> CodigosOpciones { get; set; }
+
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -58,6 +60,19 @@ namespace Sigre.DataAccess.Context
             modelBuilder.Entity<Poste>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Vano>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Sed>().Property<int?>("EstadoOffLine");
+
+            modelBuilder.Entity<Codigo>(entity =>
+            {
+                entity.HasKey(e => e.CodiInterno);
+                entity.Property(e => e.CodiInterno).ValueGeneratedNever();
+            });
+
+            modelBuilder.Entity<CodigosOpciones>(entity =>
+            {
+                entity.HasKey(e => e.CodopInterno);
+                entity.Property(e => e.CodopInterno).ValueGeneratedNever();
+            });
+
         }
     }
 }

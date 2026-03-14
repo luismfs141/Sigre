@@ -25,6 +25,8 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Codigo> Codigos { get; set; }
 
+    public virtual DbSet<CodigosOpciones> CodigosOpciones { get; set; }
+
     public virtual DbSet<Componente> Componentes { get; set; }
 
     public virtual DbSet<Deficiencia> Deficiencias { get; set; }
@@ -202,6 +204,30 @@ public partial class SigreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_CODI_COMP");
         });
+
+
+        modelBuilder.Entity<CodigosOpciones>(entity =>
+        {
+            entity.HasKey(e => e.CodopInterno).HasName("PK_CodigosOpciones");
+
+            entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
+            entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
+            entity.Property(e => e.CodopOpcion)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Opcion");
+            entity.Property(e => e.CodopCol1)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Col1");
+            entity.Property(e => e.CodopCol2)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Col2");
+
+            entity.HasOne(d => d.CodiInternoNavigation).WithMany(p => p.CodigosOpciones)
+                .HasForeignKey(d => d.CodiInterno)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CodigosOpciones_Codigos");
+        });
+
 
         modelBuilder.Entity<Componente>(entity =>
         {
