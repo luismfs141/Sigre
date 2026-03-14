@@ -166,6 +166,7 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiCol3",
       "DefiAccesibilidad",
       "DefiTipoCruce",
+      "CodopInterno",
       "EstadoOffLine"
     ];
 
@@ -463,6 +464,41 @@ export const getComentarioEstandarByTypificationIdLocal = async (typificationId)
   } catch (error) {
     console.error("❌ Error obteniendo ComentarioEstandar (Tipificaciones):", error);
     return "";
+  }
+};
+
+export const getCodigosOpcionesByTypificationIdLocal = async (typificationId) => {
+  try {
+    const id = Number(typificationId);
+    if (!Number.isFinite(id) || id <= 0) return [];
+
+    const rows = await runQuery(
+      `
+      SELECT
+        co.CodopInterno AS value,
+        co.CodopOpcion  AS label
+      FROM Tipificaciones t
+      INNER JOIN Codigos c
+        ON c.CodiCodigo = t.Code
+      INNER JOIN CodigosOpciones co
+        ON co.CodiInterno = c.CodiInterno
+      WHERE t.TypificationId = ?
+      ORDER BY co.CodopInterno ASC
+      `,
+      [id]
+    );
+
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+
+    return rows
+      .map((r) => ({
+        value: r?.value != null ? Number(r.value) : null,
+        label: String(r?.label ?? "").trim(),
+      }))
+      .filter((x) => x.value != null && x.label !== "");
+  } catch (error) {
+    console.error("❌ Error obteniendo CodigosOpciones por tipificación:", error);
+    return [];
   }
 };
 

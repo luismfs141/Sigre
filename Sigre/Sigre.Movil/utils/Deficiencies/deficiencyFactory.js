@@ -78,6 +78,7 @@ export const createEmptyDeficiency = ({
 
     // UUID (se setea al guardar si está null)
     DefiCol3: null,
+    CodopInterno: null,
 
     // Campos dinámicos (usuario)
     ...dynamicFields,
