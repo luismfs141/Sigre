@@ -78,6 +78,9 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
+
+
+
         [HttpPost("export")]
         public async Task<IActionResult> ExportDatabase([FromBody] DatabaseExportRequest request)
         {

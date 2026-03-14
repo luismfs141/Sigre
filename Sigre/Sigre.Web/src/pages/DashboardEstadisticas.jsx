@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AutoComplete } from 'primereact/autocomplete';
+import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -8,13 +8,14 @@ import { Divider } from 'primereact/divider';
 import { Dialog } from 'primereact/dialog';
 import { ProgressSpinner } from 'primereact/progressspinner';
 
-// 🔥 IMPORTAMOS TU NUEVO HOOK
+// 🔥 IMPORTAMOS LOS HOOKS DE BÚSQUEDA JERÁRQUICA
+import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useEstadisticas } from '../hooks/useEstadisticas';
 
 export default function DashboardEstadisticas() {
-    // --- ESTADOS DE BÚSQUEDA ---
+    // --- ESTADOS DE BÚSQUEDA JERÁRQUICA ---
+    const [selectedFeeder, setSelectedFeeder] = useState(null);
     const [selectedSed, setSelectedSed] = useState(null);
-    const [suggestions, setSuggestions] = useState([]);
 
     // --- ESTADOS PARA EL MODAL DE DESGLOSE ---
     const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -25,7 +26,10 @@ export default function DashboardEstadisticas() {
     const [chartData, setChartData] = useState({});
     const [chartOptions, setChartOptions] = useState({});
 
-    // 🔥 USAMOS EL HOOK
+    // --- HOOKS DE DATOS ---
+    const { feeders } = useFeeder();
+    const { seds } = useSedsByFeeder(selectedFeeder);
+
     const { 
         metrics, 
         loadingMetrics, 
@@ -39,55 +43,37 @@ export default function DashboardEstadisticas() {
     // ACCIONES
     // =========================================================================
     
-    // 1. BUSCAR SED
-    const searchSed = async (event) => {
-        const query = event.query.toLowerCase();
+    // 1. CARGAR ESTADÍSTICAS PRINCIPALES
+    const handleLoadData = async (e) => {
+        e?.preventDefault();
         
-        // Simulación rápida (Reemplazar con tu endpoint real de buscar SED)
-        // const res = await api.get(`/SED/Buscar?query=${query}`);
-        // setSuggestions(res.data);
-        
-        const mockSeds = [
-            { sedInterno: 1465, sedCodigo: '1887', nombre: 'SED Alto Cocachacra' }, 
-            { sedInterno: 2, sedCodigo: '8581', nombre: 'SED Central' }
-        ];
-        setSuggestions(mockSeds.filter(s => 
-            s.sedCodigo.includes(query) || s.nombre.toLowerCase().includes(query)
-        ));
-    };
+        if (!selectedSed) return;
 
-    // 2. CARGAR ESTADÍSTICAS PRINCIPALES
-    const handleLoadData = async (sed) => {
-        if (!sed) return;
-
-        // Extracción robusta del ID y Código
-        const sedIdExtracted = sed.value || sed.sedInterno || sed.SedInterno || sed.id || sed.Id;
-        const sedCodigoExtracted = sed.label || sed.sedCodigo || sed.SedCodigo || (typeof sed === 'string' ? sed : '');
+        // Extracción robusta del ID y Código según venga el Dropdown
+        const sedIdExtracted = selectedSed.value || selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id || selectedSed;
+        const sedCodigoExtracted = selectedSed.label || selectedSed.sedCodigo || '';
 
         if (!sedIdExtracted) {
-            alert("Por favor, seleccione una SED válida de la lista.");
+            alert("Por favor, seleccione una SED válida.");
             return;
         }
 
-        // Llamamos al hook
         try {
-            await fetchEstadisticas(sedIdExtracted, sedCodigoExtracted);
-        } catch (e) {
-            alert("Error de conexión al obtener estadísticas.");
+            await fetchEstadisticas(Number(sedIdExtracted), sedCodigoExtracted);
+        } catch (error) {
+            console.error("Error cargando estadísticas:", error);
         }
     };
 
-    // 3. ABRIR MODAL DE DESGLOSE (DRILL-DOWN)
+    // 2. ABRIR MODAL DE DESGLOSE (DRILL-DOWN)
     const openDetailModal = async (kpiType, title) => {
         if (!selectedSed) return;
         
-        // Extracción robusta del ID
-        const sedIdExtracted = selectedSed.value || selectedSed.sedInterno || selectedSed.id || selectedSed.Id;
+        const sedIdExtracted = selectedSed.value || selectedSed.sedInterno || selectedSed.id || selectedSed;
 
         setDetailTitle(`Desglose: ${title}`);
         setDetailModalVisible(true);
 
-        // Configuramos las columnas del DataTable dinámicamente según el KPI
         if (kpiType === 'DUPLICADAS') {
             setDetailColumns([
                 { field: 'codigoDef', header: 'Tipo Defecto' },
@@ -104,15 +90,12 @@ export default function DashboardEstadisticas() {
             ]);
         }
 
-        // Llamamos al hook para traer los datos (Se mostrará el ProgressSpinner automáticamente)
         await fetchDetalleKpi(kpiType, sedIdExtracted);
     };
 
     // =========================================================================
     // EFECTOS
     // =========================================================================
-    
-    // Actualizar configuración del gráfico de Chart.js cuando recibimos nueva data
     useEffect(() => {
         if (metrics && metrics.summaryData) {
             const documentStyle = getComputedStyle(document.documentElement);
@@ -137,18 +120,15 @@ export default function DashboardEstadisticas() {
     // =========================================================================
     // COMPONENTES AUXILIARES UI
     // =========================================================================
-    
     const footerGroup = (
         <div className="flex justify-between w-full font-bold text-gray-800">
-            <span>Total General SED {selectedSed?.sedCodigo || selectedSed?.label}:</span>
+            <span>Total General SED {selectedSed?.label || selectedSed?.sedCodigo || ''}:</span>
             <span>{metrics?.totalGeneral || 0}</span>
         </div>
     );
 
     const KpiCard = ({ id, title, value, icon, colorClass }) => {
-        // Solo es cliqueable si tiene un ID configurado y su valor es mayor a 0
         const isClickable = !!id && value > 0;
-        
         return (
             <div 
                 onClick={() => isClickable && openDetailModal(id, title)}
@@ -159,8 +139,6 @@ export default function DashboardEstadisticas() {
                 <div>
                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{title}</h4>
                     <span className="text-2xl font-black text-gray-800">{value}</span>
-                    
-                    {/* Indicador visual de que se puede hacer clic */}
                     {isClickable && (
                         <div className="text-[10px] text-blue-500 mt-1 font-bold flex items-center gap-1">
                             <i className="pi pi-search-plus"></i> Ver detalle
@@ -180,39 +158,50 @@ export default function DashboardEstadisticas() {
     return (
         <div className="p-4 flex flex-col gap-4 bg-gray-50 min-h-screen">
             
-            {/* 1. BARRA SUPERIOR DE BÚSQUEDA */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
+            {/* 1. CABECERA Y FILTROS (Misma lógica de ReporteMaestro) */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div className="mb-4 border-b border-gray-100 pb-4">
                     <h2 className="text-xl font-bold text-blue-900 m-0 flex items-center gap-2">
                         <i className="pi pi-chart-bar"></i> Auditoría y Calidad de Datos
                     </h2>
-                    <p className="text-sm text-gray-500 m-0">Seleccione una subestación para evaluar la integridad de sus registros.</p>
+                    <p className="text-sm text-gray-500 m-0 mt-1">Seleccione una subestación para evaluar la integridad de sus registros.</p>
                 </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <div className="p-inputgroup flex-1">
-                        <span className="p-inputgroup-addon bg-blue-50"><i className="pi pi-search text-blue-600"></i></span>
-                        <AutoComplete 
-                            value={selectedSed} 
-                            suggestions={suggestions} 
-                            completeMethod={searchSed} 
-                            field="sedCodigo" // Asegúrate de que esto coincida con cómo quieres mostrar el texto
-                            placeholder="Buscar SED (Ej: 1887)" 
-                            onChange={(e) => setSelectedSed(e.value)} 
-                            onSelect={(e) => handleLoadData(e.value)}
-                            dropdown
-                            forceSelection // 🔥 Obliga a seleccionar de la lista
-                            className="w-full md:w-64"
-                            inputClassName="w-full font-bold"
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex flex-col gap-1 w-full md:w-1/3">
+                        <label className="text-xs font-bold text-gray-600">ALIMENTADOR</label>
+                        <Dropdown 
+                            value={selectedFeeder} 
+                            onChange={(e) => { 
+                                setSelectedFeeder(e.value); 
+                                setSelectedSed(null); 
+                            }} 
+                            options={feeders} optionLabel="label" optionValue="value" 
+                            placeholder="Seleccione..." filter 
+                            className="w-full h-10 flex items-center p-inputtext-sm shadow-sm"
                         />
                     </div>
-                    <Button 
-                        icon={`pi ${loadingMetrics ? 'pi-spin pi-spinner' : 'pi-refresh'}`} 
-                        onClick={() => handleLoadData(selectedSed)} 
-                        disabled={!selectedSed || loadingMetrics} 
-                        tooltip="Recargar Métricas" 
-                        className="p-button-outlined" 
-                    />
+
+                    <div className="flex flex-col gap-1 w-full md:w-1/3">
+                        <label className="text-xs font-bold text-gray-600">CÓDIGO SED</label>
+                        <Dropdown 
+                            value={selectedSed} options={seds} 
+                            onChange={(e) => setSelectedSed(e.value)} 
+                            optionLabel="label" filter 
+                            placeholder={selectedFeeder ? "Escribe o selecciona código..." : "Seleccione Alimentador primero..."}
+                            className="w-full h-10 flex items-center p-inputtext-sm shadow-sm" 
+                            disabled={!selectedFeeder} emptyMessage="No hay SEDs"
+                        />
+                    </div>
+
+                    <div className="w-full md:w-auto">
+                        <Button 
+                            label={loadingMetrics ? "Calculando..." : "Cargar Métricas"} 
+                            icon={loadingMetrics ? "pi pi-spin pi-spinner" : "pi pi-chart-line"} 
+                            onClick={handleLoadData} disabled={loadingMetrics || !selectedSed}
+                            className="w-full md:w-auto h-10 px-5 font-bold shadow-sm" severity="primary"
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -257,11 +246,8 @@ export default function DashboardEstadisticas() {
                     {/* --- KPIs DE AUDITORÍA (TARJETAS) --- */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         <KpiCard title="No Inspeccionados" value={metrics.noInspeccionados} icon="pi pi-eye-slash" colorClass="border-gray-500 text-gray-500" />
-                        
-                        {/* 🔥 Tarjetas con ID para abrir el Modal */}
                         <KpiCard id="DUPLICADAS" title="Def. Duplicadas" value={metrics.duplicadas} icon="pi pi-clone" colorClass="border-red-500 text-red-500" />
                         <KpiCard id="DISTANCIAS_CERO" title="7004/7006 Distancia 0.0" value={metrics.distanciasCero} icon="pi pi-arrows-h" colorClass="border-pink-500 text-pink-500" />
-                        
                         <KpiCard title="Sin Deff pero Con Deff" value={metrics.sinDefConDef} icon="pi pi-exclamation-triangle" colorClass="border-red-600 text-red-600" />
                         <KpiCard title="Falta Nodo Inicial/Final" value={metrics.nodoFaltante} icon="pi pi-share-alt" colorClass="border-orange-500 text-orange-500" />
                         <KpiCard title="Suministro Erróneo" value={metrics.suministroErroneo} icon="pi pi-id-card" colorClass="border-orange-400 text-orange-400" />
@@ -278,16 +264,14 @@ export default function DashboardEstadisticas() {
                 </div>
             )}
 
-            {/* ========================================================================= */}
             {/* 3. MODAL DE DESGLOSE (DRILL-DOWN) */}
-            {/* ========================================================================= */}
             <Dialog 
                 header={detailTitle} 
                 visible={detailModalVisible} 
                 style={{ width: '80vw' }} 
                 onHide={() => setDetailModalVisible(false)}
                 maximizable
-                contentClassName="p-0" // Quita padding extra para la tabla
+                contentClassName="p-0"
             >
                 {loadingDetail ? (
                     <div className="flex justify-center items-center p-10 flex-col gap-3">
@@ -296,23 +280,13 @@ export default function DashboardEstadisticas() {
                     </div>
                 ) : (
                     <DataTable 
-                        value={detailData} 
-                        paginator 
-                        rows={10} 
-                        size="small" 
-                        stripedRows 
-                        className="p-datatable-sm text-sm" 
-                        emptyMessage="No hay registros detallados."
+                        value={detailData} paginator rows={10} size="small" stripedRows 
+                        className="p-datatable-sm text-sm" emptyMessage="No hay registros detallados."
                     >
                         {detailColumns.map((col, i) => (
                             <Column 
-                                key={i} 
-                                field={col.field} 
-                                header={col.header} 
-                                sortable 
-                                filter 
-                                filterPlaceholder="Buscar" 
-                                style={{ minWidth: '120px' }} 
+                                key={i} field={col.field} header={col.header} 
+                                sortable filter filterPlaceholder="Buscar" style={{ minWidth: '120px' }} 
                             />
                         ))}
                     </DataTable>

@@ -124,6 +124,11 @@ public partial class Deficiencia
 
     public string? DefiAccesibilidad { get; set; }
     public string? DefiTipoCruce { get; set; }
+
+    public int? CodopInterno { get; set; }
+
+
+
     [NotMapped]
     public bool EsTercero { get; set; }
 
