@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo,useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog } from 'primereact/dialog';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
@@ -12,7 +12,7 @@ import { Calendar } from 'primereact/calendar';
 import { AutoComplete } from 'primereact/autocomplete';
 import { usePosteVanoSearch } from '../../hooks/usePosteVanoSearch';
 import { useTypification } from '../../hooks/useTypification';
-import { useElements } from '../../hooks/useElement'; 
+import { useElements } from '../../hooks/useElement';
 import { DEFICIENCY_FIELD_MAP, ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig';
 
 const TIPO_ELEMENTO_OPTIONS = [
@@ -43,52 +43,58 @@ export default function DeficiencyForm({
     const [isSaving, setIsSaving] = useState(false);
     const [isSearchingGis, setIsSearchingGis] = useState(false);
 
-    const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
+    const [tipificationOptionOptions, setTipificationOptionOptions] = useState([]);
+    const [loadingTipificationOptions, setLoadingTipificationOptions] = useState(false);
+
+    // const { getCodeById, masterTypifications, loading: loadingTipos } = useTypification();
+    const { getCodeById, masterTypifications, fetchTypificationOptionsByTipiInterno, loading: loadingTipos } = useTypification();
+
+
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
     const { searchExactCode } = usePosteVanoSearch(fetchPostesChunk, fetchVanosChunk);
 
-    
-const handleGisSearch = async (codigoBuscado) => {
-    if (!codigoBuscado || codigoBuscado.trim() === '') return;
 
-    setIsSearchingGis(true);
-    try {
-        const exactMatch = await searchExactCode(codigoBuscado, '', alimentadorId, sedId);
+    const handleGisSearch = async (codigoBuscado) => {
+        if (!codigoBuscado || codigoBuscado.trim() === '') return;
 
-        if (exactMatch) {
-            const isPoste = exactMatch._tipo === 'POSTE';
-            // Intentamos leer las coordenadas de manera segura
-            const latEncontrada = isPoste ? (exactMatch.postLatitud || exactMatch.lat) : (exactMatch.vanoLatitudIni || exactMatch.lat);
-            const lngEncontrada = isPoste ? (exactMatch.postLongitud || exactMatch.lng) : (exactMatch.vanoLongitudIni || exactMatch.lng);
+        setIsSearchingGis(true);
+        try {
+            const exactMatch = await searchExactCode(codigoBuscado, '', alimentadorId, sedId);
 
-            setFormData(prev => {
-                // 🔥 REGLA 1: Si es edición, CONSERVAMOS las coordenadas originales.
-                const finalLat = deficiencyToEdit ? prev.defiLatitud : (Number(latEncontrada) || prev.defiLatitud);
-                const finalLng = deficiencyToEdit ? prev.defiLongitud : (Number(lngEncontrada) || prev.defiLongitud);
+            if (exactMatch) {
+                const isPoste = exactMatch._tipo === 'POSTE';
+                // Intentamos leer las coordenadas de manera segura
+                const latEncontrada = isPoste ? (exactMatch.postLatitud || exactMatch.lat) : (exactMatch.vanoLatitudIni || exactMatch.lat);
+                const lngEncontrada = isPoste ? (exactMatch.postLongitud || exactMatch.lng) : (exactMatch.vanoLongitudIni || exactMatch.lng);
 
-                // 🔥 REGLA 2: Si es edición, CONSERVAMOS el Tipo (VANO/POSTE) para NO borrar la Tipificación.
-                const finalTipo = deficiencyToEdit ? prev.defiTipoElemento : (isPoste ? 'POST' : 'VANO');
+                setFormData(prev => {
+                    // 🔥 REGLA 1: Si es edición, CONSERVAMOS las coordenadas originales.
+                    const finalLat = deficiencyToEdit ? prev.defiLatitud : (Number(latEncontrada) || prev.defiLatitud);
+                    const finalLng = deficiencyToEdit ? prev.defiLongitud : (Number(lngEncontrada) || prev.defiLongitud);
 
-                return {
-                    ...prev,
-                    // Usamos exactamente el texto que el usuario buscó para que jamás desaparezca
-                    defiCodigoElemento: codigoBuscado.toUpperCase(),
-                    defiTipoElemento: finalTipo,
-                    defiLatitud: finalLat,
-                    defiLongitud: finalLng,
-                };
-            });
+                    // 🔥 REGLA 2: Si es edición, CONSERVAMOS el Tipo (VANO/POSTE) para NO borrar la Tipificación.
+                    const finalTipo = deficiencyToEdit ? prev.defiTipoElemento : (isPoste ? 'POST' : 'VANO');
+
+                    return {
+                        ...prev,
+                        // Usamos exactamente el texto que el usuario buscó para que jamás desaparezca
+                        defiCodigoElemento: codigoBuscado.toUpperCase(),
+                        defiTipoElemento: finalTipo,
+                        defiLatitud: finalLat,
+                        defiLongitud: finalLng,
+                    };
+                });
+            }
+        } catch (error) {
+            console.error("Error buscando coordenadas del GIS:", error);
+        } finally {
+            setIsSearchingGis(false);
         }
-    } catch (error) {
-        console.error("Error buscando coordenadas del GIS:", error);
-    } finally {
-        setIsSearchingGis(false);
-    }
-};
-// =========================================================================
+    };
+    // =========================================================================
     // 1. REGLAS DE NEGOCIO EN TIEMPO REAL (Evaluando el Elemento Destino)
     // =========================================================================
-    
+
     const currentCode = formData.defiCodigoElemento?.trim().toUpperCase() || "";
     const currentTipiCode = getCodeById(formData.tipiInterno);
 
@@ -125,12 +131,12 @@ const handleGisSearch = async (codigoBuscado) => {
         );
     }, [currentCode, currentTipiCode, existingDeficiencies, deficiencyToEdit, getCodeById]);
 
-   
 
-// =========================================================================
+
+    // =========================================================================
     // 1. REGLAS DE NEGOCIO: VALIDACIÓN DE HISTORIAL (S/D vs FALLAS)
     // =========================================================================
-    
+
     // A. ¿Ya existe un registro "SIN DEFICIENCIA" (ID 0)?
     // Si esto es true, NO se pueden agregar deficiencias reales.
     const hasCleanRecord = useMemo(() => {
@@ -141,8 +147,8 @@ const handleGisSearch = async (codigoBuscado) => {
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
             Number(d.tipiInterno) === 0 &&
-        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
-        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+            // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
         );
     }, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
@@ -156,29 +162,42 @@ const handleGisSearch = async (codigoBuscado) => {
             d.defiActivo &&
             d.defiCodigoElemento?.trim().toUpperCase() === currentCode &&
             Number(d.tipiInterno) > 0 &&
-        // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
-        (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
-    );
-}, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
+            // 🔥 CLAVE: Ignorar el registro que estamos editando actualmente
+            (!deficiencyToEdit || d.defiInterno !== deficiencyToEdit.defiInterno)
+        );
+    }, [formData.defiCodigoElemento, existingDeficiencies, deficiencyToEdit]);
 
     // Helper para saber si estamos editando el registro S/D actual
     const isEditingSD = deficiencyToEdit && Number(formData.tipiInterno) === 0;
     // =========================================================================
     // 2. CONFIGURACIÓN DINÁMICA (Campos según Código)
     // =========================================================================
-const currentConfig = useMemo(() => {
+    const currentConfig = useMemo(() => {
         // Corrección: Validamos null/undefined explícitamente, permitiendo el 0
         if (formData.tipiInterno === null || formData.tipiInterno === undefined) return null;
-        
+
         // Si es 0, retornamos directo la config de SIN DEFICIENCIA
         if (Number(formData.tipiInterno) === 0) return DEFICIENCY_FIELD_MAP["0"];
 
         const code = getCodeById(formData.tipiInterno);
         return DEFICIENCY_FIELD_MAP[code] || null;
     }, [formData.tipiInterno, getCodeById]);
-    
+
     // Helper para saber si estamos en modo "Sin Deficiencia"
     const isSinDeficiencia = Number(formData.tipiInterno) === 0;
+
+
+
+
+
+
+    // const observacionField = currentConfig?.fields.find(f => f.key === 'defiObservacion');
+    // const comentarioField = currentConfig?.fields.find(f => f.key === 'defiComentario');
+    // // TEMPORAL: luego aquí conectamos con backend según la tipificación seleccionada
+    // const tipificationOptionOptions = [];
+    const observacionField = currentConfig?.fields.find(f => f.key === 'defiObservacion');
+    const comentarioField = currentConfig?.fields.find(f => f.key === 'defiComentario');
+
 
     // =========================================================================
     // 3. OPCIONES DEL DROPDOWN (Filtradas por Tipo + Regla de Duplicados + Mapeo ID)
@@ -247,7 +266,7 @@ const currentConfig = useMemo(() => {
         if (deficiencyToEdit) return ALL_CRITICIDAD_OPTIONS;
         return ALL_CRITICIDAD_OPTIONS.filter(opt => opt.value !== 2);
     }, [deficiencyToEdit]);
-    
+
 
     // =========================================================================
     // 4. INICIALIZACIÓN (CARGA DE DATOS)
@@ -260,7 +279,17 @@ const currentConfig = useMemo(() => {
 
             if (deficiencyToEdit) {
                 // --- MODO EDICIÓN ---
-                const getValue = (keyBase) => deficiencyToEdit[`defi${keyBase}`] ?? deficiencyToEdit[`Defi${keyBase}`] ?? deficiencyToEdit[keyBase] ?? null;
+                const getValue = (keyBase) => {
+                    const camelKey = keyBase.charAt(0).toLowerCase() + keyBase.slice(1);
+
+                    return deficiencyToEdit[`defi${keyBase}`]
+                        ?? deficiencyToEdit[`Defi${keyBase}`]
+                        ?? deficiencyToEdit[keyBase]
+                        ?? deficiencyToEdit[camelKey]
+                        ?? null;
+                };
+
+
                 const _fechaRaw = getValue('FecRegistro');
                 const _fecha = _fechaRaw ? new Date(_fechaRaw) : new Date();
                 const col2Raw = getValue('Col2');
@@ -288,15 +317,16 @@ const currentConfig = useMemo(() => {
                     defiTipoCruce: getValue('TipoCruce'),
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
                     defiUsuarioInic: getValue('UsuarioInic'),
+                    codopInterno: getValue('CodopInterno') != null ? Number(getValue('CodopInterno')) : null,
                     defiCol2: safeCol2
                 });
             } else {
                 // --- MODO NUEVO ---
-const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`] ?? referenceSelection[keyBase]) : null;
-                
+                const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi${keyBase}`] ?? referenceSelection[`Defi${keyBase}`] ?? referenceSelection[keyBase]) : null;
+
                 // 🔥 AQUÍ ESTÁ EL CAMBIO: 
                 // Jalamos el Código GIS del elemento seleccionado. Si no hay selección, ponemos '0'
-                const initialCode = getRefValue('CodigoElemento') || referenceSelection?.codigo ;
+                const initialCode = getRefValue('CodigoElemento') || referenceSelection?.codigo;
                 const initialType = getRefValue('TipoElemento') || 'POST';
                 const latRaw = getRefValue('Latitud') || 0;
                 const lngRaw = getRefValue('Longitud') || 0;
@@ -317,6 +347,7 @@ const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi$
                     defiObservacion: '',
                     defiComentario: '',
                     defiEstadoCriticidad: 0,
+                    codopInterno: null,
                     defiCol2: initialCol2
                 });
 
@@ -332,14 +363,65 @@ const getRefValue = (keyBase) => referenceSelection ? (referenceSelection[`defi$
         }
     }, [visible, deficiencyToEdit, sedId, referenceSelection]);
 
+    useEffect(() => {
+        let activo = true;
+
+        const cargarOpcionesTipificacion = async () => {
+            if (!visible) return;
+
+            const tipiInterno = Number(formData.tipiInterno);
+
+            if (!tipiInterno || tipiInterno <= 0) {
+    if (activo) {
+        setTipificationOptionOptions([]);
+    }
+    return;
+}
+
+            setLoadingTipificationOptions(true);
+
+            try {
+                const opciones = await fetchTypificationOptionsByTipiInterno(tipiInterno);
+
+                if (!activo) return;
+
+                setTipificationOptionOptions(opciones);
+
+                setFormData(prev => {
+                    if (prev.codopInterno == null) return prev;
+
+                    const existe = opciones.some(op => Number(op.value) === Number(prev.codopInterno));
+                    return existe ? prev : { ...prev, codopInterno: null };
+                });
+            } catch (error) {
+                if (activo) {
+                    console.error("Error cargando opciones de tipificación:", error);
+                    setTipificationOptionOptions([]);
+                }
+            } finally {
+                if (activo) {
+                    setLoadingTipificationOptions(false);
+                }
+            }
+        };
+
+        cargarOpcionesTipificacion();
+
+        return () => {
+            activo = false;
+        };
+    }, [visible, formData.tipiInterno, fetchTypificationOptionsByTipiInterno]);
+
+
+
     // --- BÚSQUEDA HÍBRIDA (POSTES Y VANOS) ---
     // Crea la referencia fuera de la función pero dentro de tu componente
-const debounceTimer = useRef(null);
+    const debounceTimer = useRef(null);
 
 
     const itemTemplate = (item) => {
         const esPoste = item._tipo === 'POSTE';
-        
+
         return (
             <div className="flex flex-col border-b border-gray-100 p-2 hover:bg-blue-50 cursor-pointer">
                 <div className="flex items-center justify-between">
@@ -348,7 +430,7 @@ const debounceTimer = useRef(null);
                         <div className={`w-7 h-7 flex items-center justify-center rounded-full ${esPoste ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
                             <i className={`pi ${esPoste ? 'pi-bolt' : 'pi-arrows-h'} text-sm`}></i>
                         </div>
-                        
+
                         {/* DATOS: PRIORIDAD AL CÓDIGO */}
                         <div className="flex flex-col">
                             {/* CÓDIGO EN GRANDE */}
@@ -393,22 +475,58 @@ const debounceTimer = useRef(null);
         return null;
     };
 
+
+
+
+
+    // const updateField = (key, value) => {
+    //     setFormData(prev => {
+    //         const newData = { ...prev, [key]: value };
+    //         if (key === 'defiTipoElemento') newData.tipiInterno = null;
+    //         if (key === 'tipiInterno' && Number(value) === 0) {
+    //             newData.defiEstadoCriticidad = 0;
+    //             newData.defiNumSuministro = '';
+    //             newData.defiObservacion = '';
+    //         }
+    //         return newData;
+    //     });
+
+    //     // Validamos en tiempo real y guardamos el error si existe
+    //     const error = validateField(key, value);
+    //     setFieldErrors(prev => ({ ...prev, [key]: error }));
+    // };
     const updateField = (key, value) => {
         setFormData(prev => {
             const newData = { ...prev, [key]: value };
-            if (key === 'defiTipoElemento') newData.tipiInterno = null;
-            if (key === 'tipiInterno' && Number(value) === 0) {
-            newData.defiEstadoCriticidad = 0;
-            newData.defiNumSuministro = '';
-            newData.defiObservacion = '';
-        }
+
+            if (key === 'defiTipoElemento') {
+                newData.tipiInterno = null;
+                newData.codopInterno = null;
+            }
+
+            if (key === 'tipiInterno') {
+                newData.codopInterno = null;
+
+                if (Number(value) === 0) {
+                    newData.defiEstadoCriticidad = 0;
+                    newData.defiNumSuministro = '';
+                    newData.defiObservacion = '';
+                }
+            }
+
             return newData;
         });
 
-        // Validamos en tiempo real y guardamos el error si existe
         const error = validateField(key, value);
         setFieldErrors(prev => ({ ...prev, [key]: error }));
     };
+
+
+
+
+
+
+
 
     // Validación Total antes de guardar
     const validateDynamicForm = () => {
@@ -442,10 +560,10 @@ const debounceTimer = useRef(null);
     // =========================================================================
     // 6. GUARDADO
     // =========================================================================
-const handleSubmit = async () => {
+    const handleSubmit = async () => {
         setSubmitted(true);
 
-// 1. Validaciones Básicas
+        // 1. Validaciones Básicas
         if (!formData.defiCodigoElemento?.trim()) { alert("Falta Código GIS."); return; }
         if (formData.tipiInterno === null || formData.tipiInterno === undefined) {
             alert("Falta Tipificación.");
@@ -462,15 +580,15 @@ const handleSubmit = async () => {
 
         // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
         // ¿El usuario está intentando guardar un registro "Sin Deficiencia" (ID 0)?
-       // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
+        // 2. REGLAS DE NEGOCIO (Exclusión Mutua)
         const isSavingSD = Number(formData.tipiInterno) === 0;
 
-// 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
+        // 🔥 NUEVA REGLA: Bloquear DUPLICADOS de S/D
         if (isSavingSD && hasCleanRecord) { // <-- Quitamos el && !isEditingSD
-    alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
-    setSubmitted(false); 
-    return;
-}
+            alert("ACCIÓN BLOQUEADA:\nYa existe un registro 'SIN DEFICIENCIA' para este elemento.\n\nNo puede tener dos registros S/D al mismo tiempo.");
+            setSubmitted(false);
+            return;
+        }
 
         // CASO A: Intenta crear 'SIN DEFICIENCIA', pero ya existen fallas reales
         if (isSavingSD && hasRealDeficiencies) {
@@ -480,7 +598,7 @@ const handleSubmit = async () => {
         }
 
         // CASO B: Intenta crear una FALLA REAL, pero ya existe un registro 'SIN DEFICIENCIA'
-        if (!isSavingSD && hasCleanRecord ) {
+        if (!isSavingSD && hasCleanRecord) {
             alert("ACCIÓN BLOQUEADA:\nEl elemento está marcado como 'SIN DEFICIENCIA'.\n\n>> Elimine el registro S/D primero para agregar fallas.");
             setSubmitted(false);
             return;
@@ -516,6 +634,9 @@ const handleSubmit = async () => {
             defiCodigoElemento: formData.defiCodigoElemento.trim(),
             defiTipoElemento: formData.defiTipoElemento,
             tipiInterno: Number(formData.tipiInterno),
+
+            codopInterno: formData.codopInterno != null ? Number(formData.codopInterno) : null,
+
             defiLatitud: Number(formData.defiLatitud) || 0,
             defiLongitud: Number(formData.defiLongitud) || 0,
             defiFecRegistro: toLocalISOString(registroDate),
@@ -531,20 +652,20 @@ const handleSubmit = async () => {
             defiCol2: formData.defiCol2 ? String(formData.defiCol2).trim() : ''
         };
 
-        setIsSaving(true); 
-    
-    try {
-        // Ejecuta el guardado. Usamos Promise.resolve por si tu onSave devuelve una promesa.
-        await Promise.resolve(onSave(cleanPayload)); 
-    } catch (error) {
-        console.error("Error al guardar:", error);
-    } finally {
-        // Cooldown de seguridad: Reactivamos el botón después de 1.5s 
-        // en caso de que el modal no se cierre automáticamente tras un error.
-        setTimeout(() => {
-            setIsSaving(false);
-        }, 1500);
-    }
+        setIsSaving(true);
+
+        try {
+            // Ejecuta el guardado. Usamos Promise.resolve por si tu onSave devuelve una promesa.
+            await Promise.resolve(onSave(cleanPayload));
+        } catch (error) {
+            console.error("Error al guardar:", error);
+        } finally {
+            // Cooldown de seguridad: Reactivamos el botón después de 1.5s 
+            // en caso de que el modal no se cierre automáticamente tras un error.
+            setTimeout(() => {
+                setIsSaving(false);
+            }, 1500);
+        }
     };
 
     // =========================================================================
@@ -575,7 +696,7 @@ const handleSubmit = async () => {
             }
         }
 
-if (fieldKey === 'defiEstadoCriticidad') {
+        if (fieldKey === 'defiEstadoCriticidad') {
             // 1. Verificamos si estamos en el caso "Sin Deficiencia"
             const isSinDef = formData.tipiInterno === 0;
 
@@ -587,17 +708,17 @@ if (fieldKey === 'defiEstadoCriticidad') {
                     <label className="text-sm font-bold text-gray-700 block mb-1">
                         Criticidad
                     </label>
-                    <Dropdown 
-                        {...commonProps} 
+                    <Dropdown
+                        {...commonProps}
                         value={currentValue}
-                        options={criticidadOptions} 
-                        optionLabel="label" 
-                        optionValue="value" 
+                        options={criticidadOptions}
+                        optionLabel="label"
+                        optionValue="value"
                         disabled={isSinDef} // 3. Bloqueamos el input si es SINDEF
                         onChange={(e) => {
                             // Prevenimos actualizaciones innecesarias si está bloqueado
                             if (!isSinDef) updateField(fieldKey, e.value);
-                        }} 
+                        }}
                     />
                 </div>
             );
@@ -630,90 +751,90 @@ if (fieldKey === 'defiEstadoCriticidad') {
 
     return (
         <Dialog visible={visible} style={{ width: '950px', maxWidth: '95vw' }} header={`Deficiencia ${deficiencyToEdit ? 'Editar' : 'Nueva'}`} modal className="p-fluid" onHide={onHide} footer={<div className="flex justify-end gap-2 pt-3 border-t">
-            <Button 
-                label="Cancelar" 
-                icon="pi pi-times" 
-                onClick={onHide} 
-                severity="danger" 
+            <Button
+                label="Cancelar"
+                icon="pi pi-times"
+                onClick={onHide}
+                severity="danger"
                 disabled={isSaving} // BLOQUEADO MIENTRAS GUARDA
             />
-            <Button 
+            <Button
                 label={isSaving ? "Guardando..." : "Guardar"} // TEXTO DINÁMICO
                 icon={isSaving ? "pi pi-spin pi-spinner" : "pi pi-check"} // ÍCONO DE CARGA
-                onClick={handleSubmit} 
-                severity="success" 
+                onClick={handleSubmit}
+                severity="success"
                 disabled={
-                            isSaving || 
-                            (targetHasCleanRecord && !isSinDeficiencia) ||  // Caso 1: Intentar Falla en elemento S/D
-                            (targetHasRealDeficiencies && isSinDeficiencia) || // Caso 2: Intentar S/D en elemento con Fallas
-                            targetHasDuplicateTipi // Caso 3: Tipificación duplicada
-                        }
+                    isSaving ||
+                    (targetHasCleanRecord && !isSinDeficiencia) ||  // Caso 1: Intentar Falla en elemento S/D
+                    (targetHasRealDeficiencies && isSinDeficiencia) || // Caso 2: Intentar S/D en elemento con Fallas
+                    targetHasDuplicateTipi // Caso 3: Tipificación duplicada
+                }
             />
         </div>}>
             <div className="flex flex-col gap-4 mt-2">
                 <div className="p-4 border rounded bg-blue-50 border-blue-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-<div className="field">
-    <label className="font-bold text-xs uppercase text-gray-500">Tipo Elemento(AUTOGENERADO)</label>
-    <Dropdown 
-        value={formData.defiTipoElemento} 
-        options={TIPO_ELEMENTO_OPTIONS} 
-        // Ya no necesitamos el onChange manual, el sistema lo controla
-        disabled={true} // 🔥 BLOQUEO TOTAL
-        className="bg-gray-100 opacity-90 cursor-not-allowed" 
-    />
-</div>
-<div className="field">
-    <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
-    
-    <span className="p-input-icon-right w-full">
-        {/* Mostramos un spinner de PrimeReact si está buscando */}
-        {isSearchingGis && <i className="pi pi-spin pi-spinner" />}
-        
-<InputText 
-    value={formData.defiCodigoElemento || ''} 
-    className={`w-full p-inputtext-sm font-bold uppercase ${deficiencyToEdit ? 'bg-yellow-50 border-yellow-300' : ''}`}
-    placeholder="Ingrese el código y presione Enter..."
-    
-    onChange={(e) => {
-        const texto = e.target.value.toUpperCase(); // Forzamos a mayúsculas
-        
-        setFormData(prev => {
-            let nuevoTipo = prev.defiTipoElemento;
-            
-            // 🔥 REGLA 3: Bloqueo estricto. Si estamos editando, prohibimos que 
-            // el sistema cambie el tipo. Así blindamos la Tipificación.
-            if (!deficiencyToEdit) {
-                if (texto.includes('VBT') || texto.includes('VANO')) nuevoTipo = 'VANO';
-                else if (texto.includes('PTO') || texto.includes('POST')) nuevoTipo = 'POST';
-            }
+                        <div className="field">
+                            <label className="font-bold text-xs uppercase text-gray-500">Tipo Elemento(AUTOGENERADO)</label>
+                            <Dropdown
+                                value={formData.defiTipoElemento}
+                                options={TIPO_ELEMENTO_OPTIONS}
+                                // Ya no necesitamos el onChange manual, el sistema lo controla
+                                disabled={true} // 🔥 BLOQUEO TOTAL
+                                className="bg-gray-100 opacity-90 cursor-not-allowed"
+                            />
+                        </div>
+                        <div className="field">
+                            <label className="font-bold text-xs uppercase text-gray-500">Código GIS</label>
 
-            return { 
-                ...prev, 
-                defiCodigoElemento: texto, 
-                defiTipoElemento: nuevoTipo 
-            };
-        });
-    }}
-    
-    onBlur={(e) => handleGisSearch(e.target.value)}
-    
-    onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault(); 
-            handleGisSearch(e.target.value);
-        }
-    }}
-/>
-    </span>
-    
-    {/* Pequeña ayuda visual para el usuario */}
-    {!deficiencyToEdit && (
-        <small className="text-gray-400 text-[10px]">
-            Presione Enter o salga del campo para buscar lat/lng automáticamente.
-        </small>
-    )}
-</div>
+                            <span className="p-input-icon-right w-full">
+                                {/* Mostramos un spinner de PrimeReact si está buscando */}
+                                {isSearchingGis && <i className="pi pi-spin pi-spinner" />}
+
+                                <InputText
+                                    value={formData.defiCodigoElemento || ''}
+                                    className={`w-full p-inputtext-sm font-bold uppercase ${deficiencyToEdit ? 'bg-yellow-50 border-yellow-300' : ''}`}
+                                    placeholder="Ingrese el código y presione Enter..."
+
+                                    onChange={(e) => {
+                                        const texto = e.target.value.toUpperCase(); // Forzamos a mayúsculas
+
+                                        setFormData(prev => {
+                                            let nuevoTipo = prev.defiTipoElemento;
+
+                                            // 🔥 REGLA 3: Bloqueo estricto. Si estamos editando, prohibimos que 
+                                            // el sistema cambie el tipo. Así blindamos la Tipificación.
+                                            if (!deficiencyToEdit) {
+                                                if (texto.includes('VBT') || texto.includes('VANO')) nuevoTipo = 'VANO';
+                                                else if (texto.includes('PTO') || texto.includes('POST')) nuevoTipo = 'POST';
+                                            }
+
+                                            return {
+                                                ...prev,
+                                                defiCodigoElemento: texto,
+                                                defiTipoElemento: nuevoTipo
+                                            };
+                                        });
+                                    }}
+
+                                    onBlur={(e) => handleGisSearch(e.target.value)}
+
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleGisSearch(e.target.value);
+                                        }
+                                    }}
+                                />
+                            </span>
+
+                            {/* Pequeña ayuda visual para el usuario */}
+                            {!deficiencyToEdit && (
+                                <small className="text-gray-400 text-[10px]">
+                                    Presione Enter o salga del campo para buscar lat/lng automáticamente.
+                                </small>
+                            )}
+                        </div>
                     </div>
 
                     {/* {hasCleanRecord && (
@@ -774,25 +895,149 @@ if (fieldKey === 'defiEstadoCriticidad') {
                         <>{/* COLUMNA IZQUIERDA: DATOS TÉCNICOS 
                                 (Se oculta si es Sin Deficiencia) */}
                             {!isSinDeficiencia && (
-                        
-                            <div className="flex-1 flex flex-col h-full">
-                                <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
-                                <div className="flex flex-col gap-1 w-full">
-                                    {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
+
+                                <div className="flex-1 flex flex-col h-full">
+                                    <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Datos Técnicos</span></Divider>
+                                    <div className="flex flex-col gap-1 w-full">
+                                        {currentConfig.fields.filter(f => f.key !== 'defiObservacion' && f.key !== 'defiComentario').map(renderDynamicField)}
+                                    </div>
                                 </div>
-                            </div>
                             )}
                             <Divider layout="vertical" className="hidden md:flex" />
-                            <div className="flex-1 flex flex-col h-full">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            {/* <div className="flex-1 flex flex-col h-full">
                                 <Divider align="left" className="mt-0"><span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">Detalle Inspección</span></Divider>
                                 <div className="flex flex-col gap-1 w-full h-full">
                                     {currentConfig.fields.filter(f => f.key === 'defiObservacion' || f.key === 'defiComentario').map(renderDynamicField)}
                                 </div>
+                            </div> */}
+
+                            <div className="flex-1 flex flex-col h-full">
+                                <Divider align="left" className="mt-0">
+                                    <span className="text-xs font-bold bg-gray-100 p-1 rounded text-gray-600">
+                                        Detalle Inspección
+                                    </span>
+                                </Divider>
+
+                                <div className="flex flex-col gap-1 w-full h-full">
+                                    {observacionField && renderDynamicField(observacionField)}
+
+                                    <div className="field mb-3 w-full">
+                                        <label className="font-bold text-sm block mb-1 text-gray-700">
+                                            Opción de tipificación
+                                        </label>
+
+
+
+
+
+
+
+
+
+
+                                        {/* <Dropdown
+                                            value={formData.codopInterno}
+                                            options={tipificationOptionOptions}
+                                            onChange={(e) => updateField('codopInterno', e.value)}
+                                            optionLabel="label"
+                                            optionValue="value"
+                                            placeholder={!formData.tipiInterno ? "Seleccione una tipificación primero..." : "Seleccione una opción..."}
+                                            disabled={!formData.tipiInterno || tipificationOptionOptions.length === 0}
+                                            className="w-full"
+                                            showClear
+                                        />
+
+                                        {formData.tipiInterno && tipificationOptionOptions.length === 0 && (
+                                            <small className="text-gray-400 block mt-1">
+                                                No hay opciones
+                                            </small>
+                                        )} */}
+
+
+                                        <Dropdown
+                                            value={formData.codopInterno}
+                                            options={tipificationOptionOptions}
+                                            onChange={(e) => updateField('codopInterno', e.value)}
+                                            optionLabel="label"
+                                            optionValue="value"
+                                            placeholder={
+                                                !formData.tipiInterno
+                                                    ? "Seleccione una tipificación primero..."
+                                                    : loadingTipificationOptions
+                                                        ? "Cargando opciones..."
+                                                        : tipificationOptionOptions.length === 0
+                                                            ? "No hay opciones"
+                                                            : "Seleccione una opción..."
+                                            }
+                                            disabled={
+                                                !formData.tipiInterno ||
+                                                Number(formData.tipiInterno) === 0 ||
+                                                loadingTipificationOptions ||
+                                                tipificationOptionOptions.length === 0
+                                            }
+                                            className="w-full"
+                                            showClear
+                                        />
+
+                                        {formData.tipiInterno && Number(formData.tipiInterno) > 0 && loadingTipificationOptions && (
+                                            <small className="text-gray-400 block mt-1">
+                                                Cargando opciones...
+                                            </small>
+                                        )}
+
+                                        {formData.tipiInterno && Number(formData.tipiInterno) > 0 && !loadingTipificationOptions && tipificationOptionOptions.length === 0 && (
+                                            <small className="text-gray-400 block mt-1">
+                                                No hay opciones
+                                            </small>
+                                        )}
+
+
+
+
+
+
+
+
+                                    </div>
+
+                                    {comentarioField && renderDynamicField(comentarioField)}
+                                </div>
                             </div>
-                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                         </>
-                        
-                        
+
+
                     ) : (
                         <div className="w-full flex items-center justify-center bg-gray-50 rounded border border-dashed text-gray-400">
                             <div className="text-center">
@@ -806,30 +1051,30 @@ if (fieldKey === 'defiEstadoCriticidad') {
 
                 </div>
                 {/* SECCIÓN DE RESPONSABILIDAD (Estilo Compacto) */}
-<div className="bg-gray-100 p-3 rounded mt-2 border border-gray-200">
-    <div className="field mb-0 text-center">
-        <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase tracking-wider">
-            Responsabilidad
-        </label>
-        <Dropdown 
-            value={formData.defiCol2} 
-            options={[
-                { label: 'SEAL', value: 'SEAL' },
-                { label: 'TERCEROS', value: 'TERCEROS' }
-            ]} 
-            onChange={(e) => updateField('defiCol2', e.value)} 
-            placeholder="Seleccione Responsable"
-            className="w-full p-inputtext-sm text-center border border-gray-400 shadow-sm"
-            style={{ height: '34px' }}
-        />
-    </div>
-</div>
+                <div className="bg-gray-100 p-3 rounded mt-2 border border-gray-200">
+                    <div className="field mb-0 text-center">
+                        <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase tracking-wider">
+                            Responsabilidad
+                        </label>
+                        <Dropdown
+                            value={formData.defiCol2}
+                            options={[
+                                { label: 'SEAL', value: 'SEAL' },
+                                { label: 'TERCEROS', value: 'TERCEROS' }
+                            ]}
+                            onChange={(e) => updateField('defiCol2', e.value)}
+                            placeholder="Seleccione Responsable"
+                            className="w-full p-inputtext-sm text-center border border-gray-400 shadow-sm"
+                            style={{ height: '34px' }}
+                        />
+                    </div>
+                </div>
 
                 <div className="bg-gray-100 p-3 rounded mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-200">
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LATITUD</label><InputNumber value={formData.defiLatitud} onValueChange={(e) => updateField('defiLatitud', e.value)} mode="decimal" minFractionDigits={8} maxFractionDigits={12} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">LONGITUD</label><InputNumber value={formData.defiLongitud} onValueChange={(e) => updateField('defiLongitud', e.value)} mode="decimal" minFractionDigits={8} maxFractionDigits={12} className="w-full p-inputtext-sm text-center" inputClassName="text-center" /></div>
                     <div className="field mb-0 text-center"><label className="text-[10px] font-bold text-gray-500 block mb-1">FECHA REGISTRO</label><Calendar value={formData.defiFecRegistro} onChange={(e) => updateField('defiFecRegistro', e.value)} showTime hourFormat="24" className="w-full p-inputtext-sm" inputClassName="text-center" /></div>
-                    
+
                 </div>
             </div>
         </Dialog>

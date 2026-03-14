@@ -1047,6 +1047,11 @@ namespace Sigre.DataAccess
                         existente.DefiComentario = input.DefiComentario;
                         existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
                         existente.DefiNumSuministro = input.DefiNumSuministro;
+                        existente.CodopInterno = input.CodopInterno;
+
+
+
+
 
                         existente.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
                         existente.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
@@ -1111,7 +1116,7 @@ namespace Sigre.DataAccess
                 }
             }
         }
-        
+
 
         public object DADEFI_ObtenerReportePorSED(int sedInterno)
         {

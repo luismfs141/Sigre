@@ -1,12 +1,6 @@
 begin transaction
 
 
-SET ANSI_NULLS ON
-GO
-
-SET QUOTED_IDENTIFIER ON
-GO
-
 CREATE TABLE [dbo].[CodigosOpciones]
 (
     [CODOP_Interno] INT IDENTITY(1,1) NOT NULL,
@@ -22,11 +16,11 @@ CREATE TABLE [dbo].[CodigosOpciones]
         FOREIGN KEY ([CODI_Interno])
         REFERENCES [dbo].[Codigos] ([CODI_Interno])
 );
-GO
+
 
 CREATE INDEX [IX_CodigosOpciones_CODI_Interno]
 ON [dbo].[CodigosOpciones] ([CODI_Interno])
-GO
+
 
 
 
@@ -77,14 +71,11 @@ VALUES
 
 
 
-
-
 ALTER TABLE [dbo].[Deficiencias]
 ADD [CODOP_Interno] [int] NULL
-GO
 
 
-
+--commit
 rollback
 
 

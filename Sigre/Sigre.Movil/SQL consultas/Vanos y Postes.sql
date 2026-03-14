@@ -69,7 +69,8 @@ DECLARE @SUB_ETI VARCHAR(20) = '%2755%'-- <-- tu SED_Codigo
             Elemento = 'Poste',
             P.POST_Interno AS [ID Elemento interno],
             P.POST_Etiqueta AS [Etiqueta elemento],
-            p.POST_CodigoNodo as cod
+            p.POST_CodigoNodo as cod,
+            P.POST_Terceros AS Terceros
         
     FROM Postes AS P
     LEFT JOIN Seds AS S
@@ -89,7 +90,8 @@ DECLARE @SUB_ETI VARCHAR(20) = '%2755%'-- <-- tu SED_Codigo
             Elemento = 'Vano',
             V.VANO_Interno AS [ID Interno],
             V.VANO_Codigo [Etiqueta],
-            v.VANO_Codigo as cod
+            v.VANO_Codigo as cod,
+            v.VANO_Terceros as Terceros
     FROM Vanos AS V
     LEFT JOIN Seds AS S
         ON V.VANO_Subestacion = S.SED_Interno

@@ -92,8 +92,8 @@ android {
         applicationId 'com.luisfoco141.SigreMovil'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 130508
-        versionName "13.5.8"
+        versionCode 140000
+        versionName "14.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
