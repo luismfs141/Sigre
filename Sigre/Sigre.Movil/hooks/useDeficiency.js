@@ -12,6 +12,7 @@ import { useDatos } from "../context/DatosContext";
 import {
   deleteDeficiencyById,
   fetchDeficienciesForFlatList,
+  getCodigosOpcionesByTypificationIdLocal,
   getComentarioEstandarByTypificationIdLocal,
   getDeficienciesByElement,
   getDeficienciesByElementAndTypi,
@@ -89,9 +90,9 @@ export const useDeficiency = () => {
   };
 
   const autoSyncArchivosByIds = async (archIds) => {
-    
+
     if (!Array.isArray(archIds) || !archIds.length) return;
-      if (!isAutoSyncOnline) return;
+    if (!isAutoSyncOnline) return;
 
     if (syncingFilesRef.current) return;
     syncingFilesRef.current = true;
@@ -346,13 +347,33 @@ export const useDeficiency = () => {
     }
   };
 
+  const fetchCodigosOpcionesTipiLocal = async (typificationId) => {
+    const dbOk = await checkDatabase();
+    if (!dbOk) return [];
+
+    try {
+      return await getCodigosOpcionesByTypificationIdLocal(typificationId);
+    } catch (err) {
+      console.error("❌ Error fetchCodigosOpcionesTipiLocal:", err);
+      return [];
+    }
+  };
 
   // ------------------- NORMALIZAR ANTES DE GUARDAR -------------------
   const isBlank = (v) => v === null || v === undefined || String(v).trim() === "";
 
+
+
   const normalizeDeficiencyBeforeSave = (deficiency, userId, nowIso) => {
     const base = deficiency ?? {};
     const isNew = !base?.DefiInterno;
+
+    const codopInternoParsed =
+      base?.CodopInterno === null ||
+        base?.CodopInterno === undefined ||
+        String(base?.CodopInterno).trim() === ""
+        ? null
+        : Number(base.CodopInterno);
 
     // ✅ defaults
     const normalized = {
@@ -362,6 +383,7 @@ export const useDeficiency = () => {
       DefiCol2: base?.DefiCol2 ?? "",
       DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
       DefiTipoCruce: base?.DefiTipoCruce ?? "",
+      CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
 
       // ✅ SIEMPRE se actualiza al guardar
       DefiUsuarioMod: userId != null ? String(userId) : null,
@@ -409,6 +431,14 @@ export const useDeficiency = () => {
 
     const fecMod = normalizeDate(base?.DefiFecModificacion) || nowIso;
 
+    const codopInternoParsed =
+      base?.CodopInterno === null ||
+        base?.CodopInterno === undefined ||
+        String(base?.CodopInterno).trim() === ""
+        ? null
+        : Number(base.CodopInterno);
+
+
     return {
       ...base,
 
@@ -439,14 +469,15 @@ export const useDeficiency = () => {
       // 🔹 IDENTIFICADOR ÚNICO
       DefiCol3: base?.DefiCol3 ?? null,
       DefiCol2: base?.DefiCol2 ?? null,
+      CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
     };
   };
 
   // ------------------- AUTO SYNC (robusto + compatible) -------------------
   const autoSyncDeficiency = async (defOrId) => {
-     if (!isAutoSyncOnline) return;
+    if (!isAutoSyncOnline) return;
     if (syncingRef.current) return;
-    
+
     syncingRef.current = true;
 
     try {
@@ -787,5 +818,6 @@ export const useDeficiency = () => {
     fetchDeficienciesByElement,
     deficienciesForFlatList,
     fetchComentarioEstandarTipiLocal,
+    fetchCodigosOpcionesTipiLocal,
   };
 };

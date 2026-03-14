@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Sigre.Entities.Entities.Structs;
 
 namespace Sigre.DataAccess
 {
@@ -105,5 +106,30 @@ namespace Sigre.DataAccess
 
             return query.ToList();
         }
+
+
+        public List<TypificationOptionStruct> DATIPI_GetOptionsByTipiInterno(int x_tipiInterno)
+        {
+            using var ctx = new SigreContext();
+
+            if (x_tipiInterno <= 0)
+                return new List<TypificationOptionStruct>();
+
+            var query =
+                from ti in ctx.Tipificaciones
+                join co in ctx.CodigosOpciones on ti.CodiInterno equals co.CodiInterno
+                where ti.TipiInterno == x_tipiInterno
+                orderby co.CodopInterno
+                select new TypificationOptionStruct
+                {
+                    CodopInterno = co.CodopInterno,
+                    CodopOpcion = co.CodopOpcion,
+                    CodopCol1 = co.CodopCol1,
+                    CodopCol2 = co.CodopCol2
+                };
+
+            return query.ToList();
+        }
+
     }
 }

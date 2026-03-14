@@ -138,7 +138,8 @@ namespace Sigre.DataAccess
                      DefiKeyWords = d.DefiKeyWords,
                      DefiAccesibilidad = d.DefiAccesibilidad,
                      DefiTipoCruce = d.DefiTipoCruce,
-         
+                     CodopInterno = d.CodopInterno,
+
                      EstadoOffLine = 0,
                  }).ToList();
 
@@ -283,6 +284,7 @@ namespace Sigre.DataAccess
                  DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                  DefiAccesibilidad = d.DefiAccesibilidad,
                  DefiTipoCruce = d.DefiTipoCruce,
+                 CodopInterno = d.CodopInterno,
                  EstadoOffLine = 0,
              });
 
@@ -355,6 +357,7 @@ namespace Sigre.DataAccess
                     DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                     DefiAccesibilidad = d.DefiAccesibilidad,
                     DefiTipoCruce = d.DefiTipoCruce,
+                    CodopInterno = d.CodopInterno,
                     EstadoOffLine = 0,
                 }
             ).ToList();
@@ -511,8 +514,10 @@ namespace Sigre.DataAccess
 
                     existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                     existente.DefiTipoCruce = dto.DefiTipoCruce;
+                    existente.CodopInterno = dto.CodopInterno;
                     existente.DefiActivo = dto.DefiActivo;
-
+                    
+                    existente.DefiCol1 = dto.DefiCol1;
                     existente.DefiCol2 = dto.DefiCol2;
 
                     ctx.SaveChanges();
@@ -588,6 +593,7 @@ namespace Sigre.DataAccess
                         DefiCol3 = dto.DefiCol3,
                         DefiCol2 = dto.DefiCol2,
                         DefiCol1 = dto.DefiCol1,
+                        CodopInterno = dto.CodopInterno,
                     };
 
                     ctx.Deficiencias.Add(nueva);
@@ -752,7 +758,8 @@ namespace Sigre.DataAccess
                 DefiNroOrden = def_offline.DefiNroOrden,
                 DefiCol3 = def_offline.DefiCol3,
                 DefiCol2 = def_offline.DefiCol2,
-                DefiCol1 = def_offline.DefiCol1 
+                DefiCol1 = def_offline.DefiCol1,
+                CodopInterno = def_offline.CodopInterno,
             };
         }
         public int DADEFI_ExistDeficiency(Deficiencia def)
@@ -1040,6 +1047,11 @@ namespace Sigre.DataAccess
                         existente.DefiComentario = input.DefiComentario;
                         existente.DefiEstadoCriticidad = input.DefiEstadoCriticidad;
                         existente.DefiNumSuministro = input.DefiNumSuministro;
+                        existente.CodopInterno = input.CodopInterno;
+
+
+
+
 
                         existente.DefiLatitud = input.DefiLatitud != 0 ? input.DefiLatitud : existente.DefiLatitud;
                         existente.DefiLongitud = input.DefiLongitud != 0 ? input.DefiLongitud : existente.DefiLongitud;
@@ -1104,7 +1116,7 @@ namespace Sigre.DataAccess
                 }
             }
         }
-        
+
 
         public object DADEFI_ObtenerReportePorSED(int sedInterno)
         {
@@ -1479,6 +1491,9 @@ namespace Sigre.DataAccess
 
             return dt;
         }
+
+
+
         // EN DADeficiency.cs
         public async Task<object> DADEFI_GetInfoTecnicaAsync(string codigo)
         {

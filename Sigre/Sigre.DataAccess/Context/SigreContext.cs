@@ -25,6 +25,8 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Codigo> Codigos { get; set; }
 
+    public virtual DbSet<CodigosOpciones> CodigosOpciones { get; set; }
+
     public virtual DbSet<Componente> Componentes { get; set; }
 
     public virtual DbSet<Deficiencia> Deficiencias { get; set; }
@@ -203,6 +205,30 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("fk_CODI_COMP");
         });
 
+
+        modelBuilder.Entity<CodigosOpciones>(entity =>
+        {
+            entity.HasKey(e => e.CodopInterno).HasName("PK_CodigosOpciones");
+
+            entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
+            entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
+            entity.Property(e => e.CodopOpcion)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Opcion");
+            entity.Property(e => e.CodopCol1)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Col1");
+            entity.Property(e => e.CodopCol2)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Col2");
+
+            entity.HasOne(d => d.CodiInternoNavigation).WithMany(p => p.CodigosOpciones)
+                .HasForeignKey(d => d.CodiInterno)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CodigosOpciones_Codigos");
+        });
+
+
         modelBuilder.Entity<Componente>(entity =>
         {
             entity.HasKey(e => e.CompInterno).HasName("PK__Componen__5CC4ECD0D14E0A39");
@@ -270,14 +296,18 @@ public partial class SigreContext : DbContext
                 .HasColumnName("DEFI_Comentario");
 
             entity.Property(e => e.DefiAccesibilidad)
-    .HasMaxLength(20)
-    .IsUnicode(false)
-    .HasColumnName("DEFI_Accesibilidad");
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("DEFI_Accesibilidad");
 
             entity.Property(e => e.DefiTipoCruce)
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_TipoCruce");
+
+
+
+
 
 
             entity.Property(e => e.DefiCoordX).HasColumnName("DEFI_CoordX");
@@ -411,7 +441,9 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.InspInterno).HasColumnName("INSP_Interno");
             entity.Property(e => e.TablInterno).HasColumnName("TABL_Interno");
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
-            
+
+            entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
+
             entity.HasOne(d => d.InspInternoNavigation).WithMany(p => p.Deficiencia)
                 .HasForeignKey(d => d.InspInterno)
                 .HasConstraintName("fk_DEFI_INSP");
