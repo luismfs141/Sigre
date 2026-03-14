@@ -1084,48 +1084,63 @@ export default function DeficiencyModal({
   }, [deficiency]);
 
   useEffect(() => {
-    if (!visible || !localDef) return;
+  if (!visible || !localDef) return;
 
-    let cancelled = false;
+  let cancelled = false;
 
-    const loadCodigosOpciones = async () => {
-      const typiId =
-        localDef?.TipiInterno ??
-        localDef?.typificationId ??
-        deficiency?.typificationId ??
-        null;
+  const loadCodigosOpciones = async () => {
+    const typiId =
+      localDef?.TipiInterno ??
+      localDef?.typificationId ??
+      deficiency?.typificationId ??
+      null;
 
-      if (!typiId) {
-        if (!cancelled) {
-          setCodigosOpcionesItems([]);
-          setLocalDef(prev => prev ? { ...prev, [CODOP_INTERNO_FIELD]: null } : prev);
-        }
-        return;
+    if (!typiId) {
+      if (!cancelled) {
+        setCodigosOpcionesItems(prev =>
+          Array.isArray(prev) && prev.length === 0 ? prev : []
+        );
+
+        setLocalDef(prev => {
+          if (!prev) return prev;
+          if (prev[CODOP_INTERNO_FIELD] == null) return prev;
+          return { ...prev, [CODOP_INTERNO_FIELD]: null };
+        });
       }
+      return;
+    }
 
-      const items = await fetchCodigosOpcionesTipiLocal(typiId);
-      if (cancelled) return;
+    const items = await fetchCodigosOpcionesTipiLocal(typiId);
+    if (cancelled) return;
 
-      const safeItems = Array.isArray(items) ? items : [];
-      setCodigosOpcionesItems(safeItems);
+    const safeItems = Array.isArray(items) ? items : [];
 
-      if (safeItems.length === 0) {
-        setLocalDef(prev => prev ? { ...prev, [CODOP_INTERNO_FIELD]: null } : prev);
-      }
-    };
+    setCodigosOpcionesItems(prev => {
+      const prevJson = JSON.stringify(prev ?? []);
+      const nextJson = JSON.stringify(safeItems);
+      return prevJson === nextJson ? prev : safeItems;
+    });
 
-    loadCodigosOpciones();
+    if (safeItems.length === 0) {
+      setLocalDef(prev => {
+        if (!prev) return prev;
+        if (prev[CODOP_INTERNO_FIELD] == null) return prev;
+        return { ...prev, [CODOP_INTERNO_FIELD]: null };
+      });
+    }
+  };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    visible,
-    localDef?.TipiInterno,
-    localDef?.typificationId,
-    deficiency?.typificationId,
-    fetchCodigosOpcionesTipiLocal
-  ]);
+  loadCodigosOpciones();
+
+  return () => {
+    cancelled = true;
+  };
+}, [
+  visible,
+  localDef?.TipiInterno,
+  localDef?.typificationId,
+  deficiency?.typificationId
+]);
 
   const setFieldValue = (key, val) => {
     setLocalDef(prev => {
@@ -1372,13 +1387,13 @@ export default function DeficiencyModal({
                           onPress={
                             hasOptions
                               ? () =>
-                                  setSelectConfig({
-                                    field: field.key,
-                                    title: field.label,
-                                    items: codigosOpcionesItems,
-                                    labelKey: "label",
-                                    valueKey: "value"
-                                  })
+                                setSelectConfig({
+                                  field: field.key,
+                                  title: field.label,
+                                  items: codigosOpcionesItems,
+                                  labelKey: "label",
+                                  valueKey: "value"
+                                })
                               : null
                           }
                         />
@@ -1398,13 +1413,13 @@ export default function DeficiencyModal({
                           onPress={
                             field.selectable
                               ? () =>
-                                  setSelectConfig({
-                                    field: field.key,
-                                    title: field.label,
-                                    items,
-                                    labelKey: "label",
-                                    valueKey: "value"
-                                  })
+                                setSelectConfig({
+                                  field: field.key,
+                                  title: field.label,
+                                  items,
+                                  labelKey: "label",
+                                  valueKey: "value"
+                                })
                               : null
                           }
                         />
