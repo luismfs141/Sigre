@@ -20,6 +20,9 @@ const SELECTED_FEEDER_KEY = "SIGRE_SELECTED_FEEDER";
 // 🔴 CLAVE PARA GUARDAR EL MODO DE AUTO-SYNC
 const AUTO_SYNC_MODE_KEY = "SIGRE_AUTO_SYNC_MODE";
 
+// 🔴 CLAVE PARA GUARDAR LA VISIBILIDAD DE ELEMENTOS
+const SHOW_HIDDEN_THIRD_PARTY_KEY = "SIGRE_SHOW_HIDDEN_THIRD_PARTY";
+
 
 export const DatosProvider = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -34,6 +37,7 @@ export const DatosProvider = ({ children }) => {
 
   const [alimEtiquetaLocal, setAlimEtiquetaLocal] = useState(null);
   const [isAutoSyncOnline, setIsAutoSyncOnlineState] = useState(true);
+  const [showHiddenThirdParty, setShowHiddenThirdPartyState] = useState(false);
 
   // ------------------ PERFIL GLOBAL (desde login del servidor) ------------------
   const profileId = user?.perfilId ?? null;
@@ -233,6 +237,22 @@ export const DatosProvider = ({ children }) => {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SHOW_HIDDEN_THIRD_PARTY_KEY);
+        if (raw == null) {
+          setShowHiddenThirdPartyState(false); // default = NO mostrar ocultos
+          return;
+        }
+
+        setShowHiddenThirdPartyState(raw === "1");
+      } catch (e) {
+        console.log("[DatosContext] error leyendo modo ocultos:", e);
+        setShowHiddenThirdPartyState(false);
+      }
+    })();
+  }, []);
 
 
 
@@ -315,6 +335,21 @@ export const DatosProvider = ({ children }) => {
     }
   };
 
+  const setShowHiddenThirdParty = async (value) => {
+    const next = !!value;
+
+    setShowHiddenThirdPartyState(next);
+
+    try {
+      await AsyncStorage.setItem(SHOW_HIDDEN_THIRD_PARTY_KEY, next ? "1" : "0");
+    } catch (e) {
+      console.log("[DatosContext] error guardando modo ocultos:", e);
+    }
+  };
+
+
+
+
   return (
     <DatosContext.Provider
       value={{
@@ -375,6 +410,9 @@ export const DatosProvider = ({ children }) => {
 
         isAutoSyncOnline,
         setIsAutoSyncOnline,
+
+        showHiddenThirdParty,
+        setShowHiddenThirdParty,
 
         setSelectedProject
       }}

@@ -15,20 +15,42 @@ import { getGapsByFeederLocal, getGapsBySedLocal } from "../database/offlineDB/g
 import { getPinsByFeederLocal, getPinsBySedLocal } from "../database/offlineDB/pins";
 
 export const useMap = () => {
-  const {
+    const {
     setPins,
     setGaps,
     setRegion,
     totalPins,
-    setTotalPins
+    setTotalPins,
+    showHiddenThirdParty
   } = useDatos();
 
   // --------------------------------------------------------------
   // CARGAR TODOS LOS PINS DEL ALIMENTADOR (NO SE MUESTRAN AÚN)
   // --------------------------------------------------------------
-  const getPinsByFeeder = async (feederId) => {
+  // const getPinsByFeeder = async (feederId) => {
+  //   try {
+  //     let data = await getPinsByFeederLocal(feederId);
+  //     if (!Array.isArray(data)) data = [];
+
+  //     const pinsFiltered = data
+  //       .filter(p => p.Type !== 0)
+  //       .map(p => ({
+  //         ...p,
+  //         Latitude: Number(p.Latitude),
+  //         Longitude: Number(p.Longitude)
+  //       }));
+
+  //     setTotalPins(pinsFiltered);
+  //     return pinsFiltered;
+  //   } catch (err) {
+  //     console.error("❌ Error cargando pines offline:", err);
+  //     setTotalPins([]);
+  //     return [];
+  //   }
+  // };
+    const getPinsByFeeder = async (feederId) => {
     try {
-      let data = await getPinsByFeederLocal(feederId);
+      let data = await getPinsByFeederLocal(feederId, showHiddenThirdParty);
       if (!Array.isArray(data)) data = [];
 
       const pinsFiltered = data
@@ -51,9 +73,31 @@ export const useMap = () => {
   // --------------------------------------------------------------
   // CARGAR TODOS LOS PINS DE LA SUBESTACION (NO SE MUESTRAN AÚN)
   // --------------------------------------------------------------
-  const getPinsBySed = async (sedId) => {
+  // const getPinsBySed = async (sedId) => {
+  //   try {
+  //     let data = await getPinsBySedLocal(sedId);
+  //     if (!Array.isArray(data)) data = [];
+
+  //     const pinsFiltered = data
+  //       .filter(p => p.Type !== 0)
+  //       .map(p => ({
+  //         ...p,
+  //         Latitude: Number(p.Latitude),
+  //         Longitude: Number(p.Longitude)
+  //       }));
+
+  //     setTotalPins(pinsFiltered);
+  //     return pinsFiltered;
+  //   } catch (err) {
+  //     console.error("❌ Error cargando pines offline:", err);
+  //     setTotalPins([]);
+  //     return [];
+  //   }
+  // };
+
+    const getPinsBySed = async (sedId) => {
     try {
-      let data = await getPinsBySedLocal(sedId);
+      let data = await getPinsBySedLocal(sedId, showHiddenThirdParty);
       if (!Array.isArray(data)) data = [];
 
       const pinsFiltered = data
@@ -161,8 +205,23 @@ export const useMap = () => {
   // --------------------------------------------------------------
   // GAPS (no causan lag)
   // --------------------------------------------------------------
-  const getGapsByFeeder = async (feederId) => {
-    let data = await getGapsByFeederLocal(feederId);
+  // const getGapsByFeeder = async (feederId) => {
+  //   let data = await getGapsByFeederLocal(feederId);
+  //   if (!Array.isArray(data)) data = [];
+
+  //   setGaps(data.map(g => ({
+  //     ...g,
+  //     VanoLatitudIni: Number(g.VanoLatitudIni),
+  //     VanoLongitudIni: Number(g.VanoLongitudIni),
+  //     VanoLatitudFin: Number(g.VanoLatitudFin),
+  //     VanoLongitudFin: Number(g.VanoLongitudFin)
+  //   })));
+
+  //   return data;
+  // };
+
+    const getGapsByFeeder = async (feederId) => {
+    let data = await getGapsByFeederLocal(feederId, showHiddenThirdParty);
     if (!Array.isArray(data)) data = [];
 
     setGaps(data.map(g => ({
@@ -179,8 +238,23 @@ export const useMap = () => {
   // --------------------------------------------------------------
   // GAPS POR SUBESTACION(no causan lag)
   // --------------------------------------------------------------
-  const getGapsBySed = async (sedId) => {
-    let data = await getGapsBySedLocal(sedId);
+  // const getGapsBySed = async (sedId) => {
+  //   let data = await getGapsBySedLocal(sedId);
+  //   if (!Array.isArray(data)) data = [];
+
+  //   setGaps(data.map(g => ({
+  //     ...g,
+  //     VanoLatitudIni: Number(g.VanoLatitudIni),
+  //     VanoLongitudIni: Number(g.VanoLongitudIni),
+  //     VanoLatitudFin: Number(g.VanoLatitudFin),
+  //     VanoLongitudFin: Number(g.VanoLongitudFin)
+  //   })));
+
+  //   return data;
+  // };
+
+    const getGapsBySed = async (sedId) => {
+    let data = await getGapsBySedLocal(sedId, showHiddenThirdParty);
     if (!Array.isArray(data)) data = [];
 
     setGaps(data.map(g => ({
