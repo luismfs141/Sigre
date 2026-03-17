@@ -13,10 +13,29 @@ const hasColumn = async (table, column) => {
 };
 
 // ========================= GETS =========================
+// export const getPinsByFeederLocal = async (feederId) => {
+//   try {
+//     const rows = await runQuery(
+//       "SELECT * FROM Pines WHERE IdAlimentador = ?",
+//       [feederId]
+//     );
+
+//     if (!rows || rows.length === 0) {
+//       console.warn(`⚠ No hay pines para el alimentador ${feederId}`);
+//       return [];
+//     }
+
+//     return rows;
+//   } catch (error) {
+//     console.error(`❌ Error al obtener pines locales para el alimentador ${feederId}:`, error);
+//     return [];
+//   }
+// };
+
 export const getPinsByFeederLocal = async (feederId) => {
   try {
     const rows = await runQuery(
-      "SELECT * FROM Pines WHERE IdAlimentador = ?",
+      "SELECT * FROM Pines WHERE IdAlimentador = ? AND IFNULL(Tercero, 0) = 0",
       [feederId]
     );
 
@@ -32,11 +51,45 @@ export const getPinsByFeederLocal = async (feederId) => {
   }
 };
 
+
+
+
+
+// export const getPinsBySedLocal = async (sedId) => {
+//   try {
+//     // Pines asociados a la SED
+//     const rows = await runQuery(
+//       "SELECT * FROM Pines WHERE IdSed = ?",
+//       [sedId]
+//     );
+
+//     // El pin de la SED (IdSed NULL y IdOriginal = sedId)
+//     const sedRows = await runQuery(
+//       "SELECT * FROM Pines WHERE IdOriginal = ? AND IdSed IS NULL LIMIT 1",
+//       [sedId]
+//     );
+
+//     if ((!rows || rows.length === 0) && (!sedRows || sedRows.length === 0)) {
+//       console.warn(`⚠ No hay pines ni SED para el sedId ${sedId}`);
+//       return [];
+//     }
+
+//     // Primero SED, luego los demás
+//     return [
+//       ...(sedRows ?? []),
+//       ...(rows ?? [])
+//     ];
+//   } catch (error) {
+//     console.error(`❌ Error al obtener pines locales para sedId ${sedId}:`, error);
+//     return [];
+//   }
+// };
+
 export const getPinsBySedLocal = async (sedId) => {
   try {
-    // Pines asociados a la SED
+    // Pines asociados a la SED, excluyendo terceros
     const rows = await runQuery(
-      "SELECT * FROM Pines WHERE IdSed = ?",
+      "SELECT * FROM Pines WHERE IdSed = ? AND IFNULL(Tercero, 0) = 0",
       [sedId]
     );
 
@@ -51,7 +104,6 @@ export const getPinsBySedLocal = async (sedId) => {
       return [];
     }
 
-    // Primero SED, luego los demás
     return [
       ...(sedRows ?? []),
       ...(rows ?? [])
@@ -61,6 +113,20 @@ export const getPinsBySedLocal = async (sedId) => {
     return [];
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ✅ Obtiene el estado de inspección de un pin por IdOriginal
 export const getPinInspeccionadoByIdOriginalLocal = async (idOriginal) => {

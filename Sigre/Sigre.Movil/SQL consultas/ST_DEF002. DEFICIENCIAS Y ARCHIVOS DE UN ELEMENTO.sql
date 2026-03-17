@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = 'VBT0003'
+DECLARE @CODIGO VARCHAR(20) = '0111434'
 
 
 
