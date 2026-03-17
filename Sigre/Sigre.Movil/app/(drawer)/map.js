@@ -266,6 +266,8 @@ const MapScreen = () => {
     setSelectedItem,
     isAutoSyncOnline,
     setIsAutoSyncOnline,
+    showHiddenThirdParty,
+    setShowHiddenThirdParty,
   } = useDatos();
 
   const {
@@ -531,6 +533,14 @@ const MapScreen = () => {
 
     loadMapData({ recenter: true, keepView: false });
   }, [user?.proyecto, selectedFeeder?.AlimInterno, selectedSed?.SedInterno]);
+
+  useEffect(() => {
+    if (user?.proyecto === 1 && !selectedFeeder) return;
+    if (user?.proyecto === 0 && !selectedSed) return;
+
+    loadMapData({ recenter: false, keepView: true });
+  }, [showHiddenThirdParty]);
+
 
   // GPS (solo permisos 1 vez; NO watcher)
   useEffect(() => {
@@ -1396,10 +1406,34 @@ const MapScreen = () => {
               onValueChange={setIsAutoSyncOnline}
             />
           </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 12 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: showHiddenThirdParty ? "#2563EB" : "#6B7280",
+                marginRight: 6,
+              }}
+            >
+              {showHiddenThirdParty ? "OCULTOS ON" : "OCULTOS OFF"}
+            </Text>
+
+            <Switch
+              value={showHiddenThirdParty}
+              onValueChange={setShowHiddenThirdParty}
+            />
+          </View>
         </View>
       ),
     });
-  }, [navigation, isAutoSyncOnline]);
+  }, [
+    navigation,
+    isAutoSyncOnline,
+    setIsAutoSyncOnline,
+    showHiddenThirdParty,
+    setShowHiddenThirdParty,
+  ]);
 
 
 
