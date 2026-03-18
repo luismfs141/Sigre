@@ -1,6 +1,11 @@
 {
+  "globalHeaders": {
+    "Referrer-Policy": "origin"
+  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/assets/*", "/*.css", "/*.js"]
   }
 }
+
+

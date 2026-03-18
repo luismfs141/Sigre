@@ -105,7 +105,9 @@ ORDER BY 6
 
 
 
-
+update Postes
+set POST_Terceros = 0
+where POST_Interno = 330414
 
 
 ------------------------------------------------------------------
