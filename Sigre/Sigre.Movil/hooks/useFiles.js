@@ -312,7 +312,7 @@ export function useFiles() {
 
   const syncAllArchivos = useCallback(async () => {
     //const log = (...a) => console.log("[SYNC][FILES]", ...a);
-const log = () => {};
+    const log = () => { };
     const online = await isOnline();
     log("online =", online);
     if (!online) return { ok: false };

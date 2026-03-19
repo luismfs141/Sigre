@@ -96,12 +96,11 @@ export default function DrawerLayout() {
           ),
           drawerItemStyle: {
             display: isAdmin ? "flex" : "none",
-            display: "none"
+            display: "true"
           },
 
         }}
       />
-
 
       {/* ✅ Usuarios: visible solo para ADMIN */}
       <Drawer.Screen
