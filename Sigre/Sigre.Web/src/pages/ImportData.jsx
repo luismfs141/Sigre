@@ -117,7 +117,14 @@ export default function ImportData() {
           >
             {syncing ? "Sincronizando..." : "Sincronizar datos"}
           </button>
-          <input type="file" accept=".db" onChange={handleFileChange} />
+          <input
+  type="file"
+  accept=".db"
+  onClick={(e) => {
+    e.target.value = null;
+  }}
+  onChange={handleFileChange}
+/>
         </div>
       </div>
 
