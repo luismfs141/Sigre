@@ -4,8 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = '0111434'
-
+DECLARE @CODIGO VARCHAR(20) = 'VBT000184285'
 
 
 ------------------------------------------------------------
@@ -99,29 +98,3 @@ WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
 GO
 
-
-
---==================================================================
-
-
-------------------------------------------------------------------
--- BUSCA UN VANO ------------------------------------------------
-------------------------------------------------------------------
-DECLARE @CODIGO VARCHAR(20) = 'VBT0003'
-
-SELECT  V.VANO_Interno,
-        V.VANO_Codigo,
-        A.ALIM_Etiqueta,
-        V.VANO_NodoInicial,
-        V.VANO_NodoFinal,
-        VANO_Terceros,
-        V.VANO_Inspeccionado,
-        [***] = '',
-        V.*
-FROM Vanos AS V
-LEFT JOIN Alimentadores AS A
-    ON V.ALIM_Interno = A.ALIM_Interno
-
-WHERE V.VANO_Codigo LIKE '%' + @CODIGO
-    OR V.VANO_Codigo = @CODIGO
-GO

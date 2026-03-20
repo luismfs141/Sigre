@@ -6,27 +6,27 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import JSZip from 'jszip'; 
+import JSZip from 'jszip';
 import api from '../../api/apiConfig';
 import DeficiencyPdfDocument from './DeficiencyPdfDocument';
 import { useTramosMap } from '../../hooks/useTramosMap';
 import { API_BASE_URL } from '../../utils/ngrok';
 
 const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData }) => {
-    const [step, setStep] = useState(0); 
+    const [step, setStep] = useState(0);
     const [progress, setProgress] = useState({ current: 0, total: 0, detail: '' });
-    
+
     const [missingPhotosLog, setMissingPhotosLog] = useState([]);
     const [showMissingModal, setShowMissingModal] = useState(false);
-    const [zipBlob, setZipBlob] = useState(null); 
-    
+    const [zipBlob, setZipBlob] = useState(null);
+
     const isCancelled = useRef(false);
     const { fetchTramosDictionary } = useTramosMap();
     const filterOnlyActive = (list) => {
-        return (list || []).filter(def => 
-            def.defiActivo === 1 || 
-            def.defiActivo === true || 
-            String(def.defiActivo) === '1' || 
+        return (list || []).filter(def =>
+            def.defiActivo === 1 ||
+            def.defiActivo === true ||
+            String(def.defiActivo) === '1' ||
             String(def.defiActivo) === 'true'
         );
     };
@@ -46,17 +46,41 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     const generateCandidates = (rawPath, defCode, currentSupply, my7004Correlativo) => {
         if (!rawPath) return [];
 
-        let base = String(rawPath).replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
+        let base = String(rawPath)
+            .replace(/\\/g, '/')
+            .replace(/^.*SIGRE\.MOVIL\//i, '')
+            .replace(/^.*ELIMINADOS\//i, '');
+
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        let rootPathWithoutFile = parts.join('/') + '/';
 
-        const candidates = new Set(); 
+        if (!originalFileName) return [];
+
+        const rootPathWithoutFile = parts.length > 0 ? `${parts.join('/')}/` : '';
+        const candidates = new Set();
+
         const add = (path, fileName) => {
+            if (!path || !fileName) return;
             candidates.add(path + fileName);
         };
 
-        const is7004 = defCode === "7004" || defCode === "60";
+        const buildFolderAliasVariants = (folderPath) => {
+            const variants = new Set([folderPath]);
+
+            if (/\/SINDEF\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/SINDEF\//gi, '/0000/'));
+            }
+
+            if (/\/0000\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/0000\//gi, '/SINDEF/'));
+            }
+
+            return Array.from(variants);
+        };
+
+        const normalizedDefCode = String(defCode || '').trim().toUpperCase();
+        const is7004 = normalizedDefCode === "7004" || normalizedDefCode === "60";
+        const isSinDef = normalizedDefCode === "0000" || normalizedDefCode === "0" || normalizedDefCode === "SINDEF";
 
         if (is7004) {
             const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1;
@@ -64,25 +88,40 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
             const exactFolder = cleanBaseDir.replace(/\/7004\//i, `/7004/${folderNum}/`);
             let exactFileName = originalFileName.replace(/7004(_\d+)?/i, `7004_${folderNum}`);
 
-            // Rutas exactas según guardado móvil
             add(exactFolder, exactFileName);
-            add(exactFolder, originalFileName); 
+            add(exactFolder, originalFileName);
 
-            // Rutas de respaldo
-            add(cleanBaseDir, originalFileName); 
+            add(cleanBaseDir, originalFileName);
+
             for (let i = 1; i <= 6; i++) {
                 add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName);
                 add(cleanBaseDir.replace(/\/7004\//i, `/7004/${i}/`), originalFileName.replace(/7004(_\d+)?/i, `7004_${i}`));
             }
         } else {
-            add(rootPathWithoutFile, originalFileName);
-            
-            const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-            if (typeMatch) add(rootPathWithoutFile, `${typeMatch[1]}.${typeMatch[2]}`);
+            const codeVariants = isSinDef ? ['SINDEF', '0000'] : [normalizedDefCode];
 
-            if (currentSupply && currentSupply !== '0') {
-                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}.1.${currentSupply}/`), originalFileName);
-                add(rootPathWithoutFile.replace(`/${defCode}/`, `/${defCode}/${currentSupply}/`), originalFileName);
+            const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+            const shortFileName = typeMatch ? `${typeMatch[1]}.${typeMatch[2]}` : null;
+
+            for (const basePathVariant of buildFolderAliasVariants(rootPathWithoutFile)) {
+                add(basePathVariant, originalFileName);
+                if (shortFileName) add(basePathVariant, shortFileName);
+
+                for (const codeVariant of codeVariants) {
+                    if (currentSupply && currentSupply !== '0') {
+                        const simpleRegex = new RegExp(`/${codeVariant}/`, 'i');
+
+                        if (simpleRegex.test(basePathVariant)) {
+                            add(basePathVariant.replace(simpleRegex, `/${codeVariant}.1.${currentSupply}/`), originalFileName);
+                            add(basePathVariant.replace(simpleRegex, `/${codeVariant}/${currentSupply}/`), originalFileName);
+
+                            if (shortFileName) {
+                                add(basePathVariant.replace(simpleRegex, `/${codeVariant}.1.${currentSupply}/`), shortFileName);
+                                add(basePathVariant.replace(simpleRegex, `/${codeVariant}/${currentSupply}/`), shortFileName);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -92,7 +131,12 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
             if (upperCand !== cand) candidates.add(upperCand);
         });
 
-        return Array.from(candidates).map(c => `${API_BASE_URL}${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
+        return Array.from(candidates).map(c =>
+            `${API_BASE_URL}${(c.startsWith('/') ? c.substring(1) : c)
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')}`
+        );
     };
 
     const getWorkingImageUrl = async (candidates) => {
@@ -120,8 +164,8 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
     // 🔥 CÁLCULO DE CORRELATIVO REFORZADO
     const calculate7004Correlativo = (def) => {
         const targetGis = def.defiCodigoElemento;
-        const sameElement7004s = (dataToPrint || []).filter(d => 
-            d.defiCodigoElemento === targetGis && 
+        const sameElement7004s = (dataToPrint || []).filter(d =>
+            d.defiCodigoElemento === targetGis &&
             (String(d.tipiCodigo || d.tipificacionLabel || "").includes("7004") || String(d.tipiInterno) === "60")
         );
         sameElement7004s.sort((a, b) => a.defiInterno - b.defiInterno);
@@ -141,7 +185,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         let totalProcessed = 0;
         const currentMissingLog = [];
         let resolvedData = [];
-        const tempUrls = []; 
+        const tempUrls = [];
 
         // 🎯 CÓDIGOS GIS A RASTREAR
         const targetGisCodes = ['PTO000055171', 'VBT000033740', 'VBT000033741', 'VBT000096303'];
@@ -151,8 +195,8 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
 
         for (let i = 0; i < activeData.length; i++) {
             if (isCancelled.current) break;
-            
-            const def = activeData[i]; 
+
+            const def = activeData[i];
             const defCode = String(def.tipificacionLabel || "0000").split(' ')[0].trim();
             const currentSupply = String(def.defiNumSuministro || "0").trim();
             const my7004Corr = (defCode === "7004" || def.tipiInterno === 60) ? calculate7004Correlativo(def, activeData) : 0;
@@ -172,42 +216,42 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
             try {
                 const response = await api.get('/File/GetByDeficiencyWeb', { params: { x_deficiency: def.defiInterno } });
                 const files = (response.data || []).filter(f => f.archActivo === 1 || f.archActivo === true);
-                
+
                 if (isTarget) {
                     console.log(`▶ Archivos Activos encontrados en BD para este ID: ${files.length}`, files);
                 }
 
                 const photoPromises = [1, 2, 3, 4].map(async (typeId) => {
                     let possibleFiles = files.filter(x => parseInt(x.archTipo) === typeId);
-                    
+
                     if (isTarget) {
                         console.log(`  📸 Buscando Tipo Foto: ${typeId}. Posibles candidatos iniciales: ${possibleFiles.length}`);
                     }
 
                     if (possibleFiles.length === 0) return { typeId, url: null };
-                    
+
                     // Prioridad por UUID (Bala de plata)
                     if (defUUID && possibleFiles.length > 1) {
                         possibleFiles.sort((a, b) => {
                             const aMatch = String(a.defiUUID || a.DefiUUID || "").trim().toLowerCase() === defUUID;
                             const bMatch = String(b.defiUUID || b.DefiUUID || "").trim().toLowerCase() === defUUID;
-                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1; 
+                            return (aMatch === bMatch) ? 0 : aMatch ? -1 : 1;
                         });
-                        
+
                         if (isTarget) {
                             console.log(`  ⚖️ Aplicando orden por UUID. Primer archivo a probar: ID ${possibleFiles[0].archInterno} (UUID: ${possibleFiles[0].defiUUID || possibleFiles[0].DefiUUID})`);
                         }
                     }
-                    
+
                     for (const fileData of possibleFiles) {
                         const candidates = generateCandidates(fileData.archNombre || fileData.ARCH_Nombre, defCode, currentSupply, my7004Corr);
-                        
+
                         if (isTarget) {
                             console.log(`  🛠 Generando rutas para archivo BD [${fileData.archNombre}]. Candidatos:`, candidates);
                         }
 
                         const url = await getWorkingImageUrl(candidates);
-                        
+
                         if (url) {
                             if (isTarget) console.log(`  ✅ ÉXITO: URL encontrada para tipo ${typeId} ->`, url);
                             return { typeId, url };
@@ -220,7 +264,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
 
                 const results = await Promise.all(photoPromises);
                 const fotos = {};
-                const missing = []; 
+                const missing = [];
 
                 results.forEach(res => {
                     const key = res.typeId === 1 ? 'panoramica' : res.typeId === 2 ? 'frontal' : res.typeId === 3 ? 'detalle' : 'evidencia';
@@ -228,7 +272,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                     if (res.url) {
                         if (res.url.startsWith('blob:')) tempUrls.push(res.url);
                     } else {
-                        missing.push(key.toUpperCase()); 
+                        missing.push(key.toUpperCase());
                     }
                 });
 
@@ -240,19 +284,19 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                 const tipoDefNormalizado = def.defiTipoElemento.toUpperCase().startsWith('POST') ? 'POSTE' : 'VANO';
                 const keyBusqueda = `${tipoDefNormalizado}_${def.defiIdElemento}`;
                 const tramoInfo = tramosMap[keyBusqueda] || {};
-                
-                const defConTramo = { 
-                    ...def, 
+
+                const defConTramo = {
+                    ...def,
                     tramOrdenCalculado: tramoInfo.orden || 0,
-                    tramCodigoCalculado: tramoInfo.circuito || '', 
+                    tramCodigoCalculado: tramoInfo.circuito || '',
                     circuitoCalculado: tramoInfo.circuito || ''
                 };
 
                 resolvedData.push({ deficiencia: defConTramo, fotos });
 
-            } catch (e) { 
+            } catch (e) {
                 if (isTarget) console.error(`🚨 ERROR CATCH: `, e);
-                resolvedData.push({ deficiencia: { ...def, tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} }); 
+                resolvedData.push({ deficiencia: { ...def, tramOrdenCalculado: 0, tramCodigoCalculado: '', circuitoCalculado: '' }, fotos: {} });
                 currentMissingLog.push({ gis: def.defiCodigoElemento, tipi: defCode, faltantes: 'ERROR BD' });
             }
 
@@ -273,7 +317,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
         if (resolvedData.length > 0) {
             setProgress(p => ({ ...p, detail: `Generando PDF comprimido...` }));
             try {
-                const zip = new JSZip(); 
+                const zip = new JSZip();
                 const docElement = <DeficiencyPdfDocument dataList={resolvedData} empresaInfo={empresaInfo} />;
                 const pdfInstance = pdf();
                 pdfInstance.updateContainer(docElement);
@@ -308,7 +352,7 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                             <Button label="Iniciar Generación" icon="pi pi-play" onClick={startProcessing} className="w-full mt-2" />
                         </>
                     )}
-                    
+
                     {step === 1 && (
                         <div className="w-full flex flex-col items-center gap-3">
                             <i className="pi pi-cloud-download text-4xl text-blue-500"></i>
@@ -317,34 +361,34 @@ const PdfGeneratorModal = ({ visible, onHide, dataToPrint, empresaInfo, allData 
                             <Button label="Cancelar Proceso" icon="pi pi-times" severity="danger" outlined size="small" onClick={cancelProcess} className="mt-2" />
                         </div>
                     )}
-                    
+
                     {step === 2 && (
                         <>
                             <i className="pi pi-check-circle text-5xl text-green-500"></i>
                             <span className="font-bold text-lg">¡Proceso Finalizado!</span>
                             <p className="text-sm text-gray-600">El reporte ordenado ha sido comprimido. Descárgalo a continuación.</p>
-                            
+
                             {missingPhotosLog.length > 0 && (
                                 <div className="w-full mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
                                     <p className="text-xs text-orange-800 font-bold mb-2">
                                         Se detectaron {missingPhotosLog.length} deficiencias con fotos incompletas.
                                     </p>
-                                    <Button 
-                                        label="Ver Reporte de Faltantes" 
-                                        icon="pi pi-exclamation-triangle" 
-                                        severity="warning" 
-                                        onClick={() => setShowMissingModal(true)} 
-                                        className="w-full p-button-sm" 
+                                    <Button
+                                        label="Ver Reporte de Faltantes"
+                                        icon="pi pi-exclamation-triangle"
+                                        severity="warning"
+                                        onClick={() => setShowMissingModal(true)}
+                                        className="w-full p-button-sm"
                                     />
                                 </div>
                             )}
 
-                            <Button 
-                                label="Descargar Archivo ZIP" 
-                                icon="pi pi-download" 
-                                severity="success" 
-                                onClick={() => saveAs(zipBlob, `Reporte_SEAL_${empresaInfo?.sed}.zip`)} 
-                                className="w-full h-12 mt-2" 
+                            <Button
+                                label="Descargar Archivo ZIP"
+                                icon="pi pi-download"
+                                severity="success"
+                                onClick={() => saveAs(zipBlob, `Reporte_SEAL_${empresaInfo?.sed}.zip`)}
+                                className="w-full h-12 mt-2"
                                 disabled={!zipBlob}
                             />
                         </>

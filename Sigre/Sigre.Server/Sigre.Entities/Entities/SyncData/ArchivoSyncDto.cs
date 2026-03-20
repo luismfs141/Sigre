@@ -9,7 +9,7 @@ namespace Sigre.Entities.Entities.SyncData
     public class ArchivoSyncDto
     {
         public int ArchInterno { get; set; }
-        public int? ArchServerId { get; set; }
+        //public int? ArchServerId { get; set; }
 
         public string ArchTipo { get; set; }   // 👈 STRING
         public string ArchTabla { get; set; }

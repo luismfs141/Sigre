@@ -213,10 +213,10 @@ export const useOffline = () => {
     let gapBefore = 0;
 
     try {
-      defBefore = await countPendingDeficienciesLocal();
-      archBefore = await countPendingArchivosLocal();
       postBefore = await countPendingPostsLocal();
       gapBefore = await countPendingGapsLocal();
+      defBefore = await countPendingDeficienciesLocal();
+      archBefore = await countPendingArchivosLocal();
     } catch (e) {
       console.log("❌ Error contando pendientes (antes):", e);
     }
@@ -261,10 +261,10 @@ export const useOffline = () => {
       let gapAfter = 0;
 
       try {
-        defAfter = await countPendingDeficienciesLocal();
-        archAfter = await countPendingArchivosLocal();
         postAfter = await countPendingPostsLocal();
         gapAfter = await countPendingGapsLocal();
+        defAfter = await countPendingDeficienciesLocal();
+        archAfter = await countPendingArchivosLocal();
 
         //console.log(`✅ Sync completado. Pendientes antes: ${totalPending} (Def: ${defBefore}, Arch: ${archBefore}, Post: ${postBefore}, Gap: ${gapBefore}). Pendientes después: ${defAfter + archAfter + postAfter + gapAfter} (Def: ${defAfter}, Arch: ${archAfter}, Post: ${postAfter}, Gap: ${gapAfter}).`);
       } catch (e) {
@@ -289,19 +289,19 @@ export const useOffline = () => {
         },
       };
     } catch (err) {
-       console.log("❌ Sync general falló:", err?.message ?? err);
+      console.log("❌ Sync general falló:", err?.message ?? err);
 
-       // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
+      // si falló, igual devuelve lo que pudo (usando conteo final si se puede)
       let defAfter = defBefore;
       let archAfter = archBefore;
       let postAfter = postBefore;
       let gapAfter = gapBefore;
 
       try {
-        defAfter = await countPendingDeficienciesLocal();
-        archAfter = await countPendingArchivosLocal();
         postAfter = await countPendingPostsLocal();
         gapAfter = await countPendingGapsLocal();
+        defAfter = await countPendingDeficienciesLocal();
+        archAfter = await countPendingArchivosLocal();
       } catch (e) {
         console.log("❌ Error contando pendientes después de sync fallido:", e);
       }

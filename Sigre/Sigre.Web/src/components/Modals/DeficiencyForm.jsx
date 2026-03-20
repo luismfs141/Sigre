@@ -372,11 +372,11 @@ export default function DeficiencyForm({
             const tipiInterno = Number(formData.tipiInterno);
 
             if (!tipiInterno || tipiInterno <= 0) {
-    if (activo) {
-        setTipificationOptionOptions([]);
-    }
-    return;
-}
+                if (activo) {
+                    setTipificationOptionOptions([]);
+                }
+                return;
+            }
 
             setLoadingTipificationOptions(true);
 
@@ -656,15 +656,18 @@ export default function DeficiencyForm({
 
         try {
             // Ejecuta el guardado. Usamos Promise.resolve por si tu onSave devuelve una promesa.
-            await Promise.resolve(onSave(cleanPayload));
+            const result = await Promise.resolve(onSave(cleanPayload));
+
+            // 🔥 Si el guardado fue exitoso, cerramos el modal.
+            // Si el padre devuelve false, no cerramos.
+            if (result !== false) {
+                onHide();
+            }
         } catch (error) {
             console.error("Error al guardar:", error);
         } finally {
-            // Cooldown de seguridad: Reactivamos el botón después de 1.5s 
-            // en caso de que el modal no se cierre automáticamente tras un error.
-            setTimeout(() => {
-                setIsSaving(false);
-            }, 1500);
+            // Reactivamos el botón solo si el modal no se cerró por algún error
+            setIsSaving(false);
         }
     };
 

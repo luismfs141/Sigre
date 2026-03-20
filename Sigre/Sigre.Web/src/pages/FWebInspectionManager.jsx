@@ -15,8 +15,8 @@ import { Image } from 'primereact/image';
 import { Toolbar } from 'primereact/toolbar';
 import { Message } from 'primereact/message';
 import { Dialog } from 'primereact/dialog';
-import JSZip from 'jszip'; 
-import { saveAs } from 'file-saver'; 
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 // --- HOOKS ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
@@ -24,7 +24,7 @@ import { useFeeder, useSedsByFeeder } from '../hooks/useFeeder';
 import { useTypification } from '../hooks/useTypification';
 import { useFiles } from '../hooks/useFiles';
 import { useElements } from '../hooks/useElement';
-import { usePosteVanoSearch } from '../hooks/usePosteVanoSearch'; 
+import { usePosteVanoSearch } from '../hooks/usePosteVanoSearch';
 
 // --- COMPONENTES HIJOS Y UTILIDADES ---
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
@@ -53,14 +53,14 @@ const safeSeg = (val) => val ? val.toString().trim().toUpperCase().replace(/[\\/
 function formatCompactDate(date) {
     if (!date) return "00000000-000000";
     const d = new Date(date);
-    if(isNaN(d.getTime())) return "00000000-000000";
+    if (isNaN(d.getTime())) return "00000000-000000";
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; 
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 const toLocalISOString = (date) => {
     if (!date) return null;
-    const tzOffset = date.getTimezoneOffset() * 60000; 
+    const tzOffset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() - tzOffset).toISOString().slice(0, -1);
 };
 
@@ -81,12 +81,12 @@ function resolveFeederName(feederVal, feedersArray) {
 function resolveSedLabel(sedVal, sedsArray) {
     if (!sedVal) return "SIN_SED";
     let raw = "SIN_SED";
-    
+
     if (typeof sedVal === 'object') {
         raw = sedVal.sedCodigo || sedVal.label || sedVal.codigo || "SIN_SED";
     } else {
-        const found = (sedsArray || []).find(s => 
-            String(s.sedInterno) === String(sedVal) || 
+        const found = (sedsArray || []).find(s =>
+            String(s.sedInterno) === String(sedVal) ||
             String(s.value) === String(sedVal) ||
             String(s.id) === String(sedVal)
         );
@@ -97,6 +97,16 @@ function resolveSedLabel(sedVal, sedsArray) {
     if (typeof raw === 'string' && raw.includes(" - ")) raw = raw.split(" - ")[0];
     return safeSeg(raw);
 }
+
+
+
+function detectSinDefFolderAliasFromPath(path) {
+    const normalized = String(path || '').replace(/\\/g, '/');
+    const match = normalized.match(/\/(SINDEF|0000)(?=\/|$)/i);
+    return match ? match[1].toUpperCase() : "SINDEF";
+}
+
+
 // ==============================================================================
 // 🚀 COMPONENTE PRINCIPAL UNIFICADO
 // ==============================================================================
@@ -183,8 +193,8 @@ export default function WebInspectionManager() {
                         archIdElemento: idElementoRecuperado,
                         originalName: f.archNombre,
                         currentPath: f.archNombre,
-                        selectedDeficiencyId: f.archCodTabla, 
-                        archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1), 
+                        selectedDeficiencyId: f.archCodTabla,
+                        archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1),
                         archFecha: new Date(f.archFecha),
                         archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
                         archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
@@ -205,7 +215,7 @@ export default function WebInspectionManager() {
         if (!item) return;
 
         setStructureCode(item.codigo);
-        setStructureType(item._tipo); 
+        setStructureType(item._tipo);
         setStructureIdInt(item.postInterno || item.vanoInterno || item.id || 0);
 
         if (item.lat) setGlobalLat(item.lat.toString());
@@ -243,9 +253,9 @@ export default function WebInspectionManager() {
         const validElement = await searchExactCode(rawCode, null, selectedFeederId, sedId);
 
         if (!validElement) {
-             toast.current.show({ severity: 'error', summary: 'No Encontrado', detail: `El elemento no existe en el Alimentador/SED seleccionados.` });
-             setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
-             return;
+            toast.current.show({ severity: 'error', summary: 'No Encontrado', detail: `El elemento no existe en el Alimentador/SED seleccionados.` });
+            setHistoricalData([]); setSelectedDeficiency(null); setGlobalLat(''); setGlobalLon('');
+            return;
         }
         setStructureIdInt(validElement.postInterno || validElement.vanoInterno || validElement.id || 0);
 
@@ -284,7 +294,7 @@ export default function WebInspectionManager() {
     const handlePhotoSave = async (dataToSave) => {
         try {
             // A. Contexto
-const feederLbl = resolveFeederName(selectedFeederId, feeders);
+            const feederLbl = resolveFeederName(selectedFeederId, feeders);
             const sedLbl = resolveSedLabel(selectedSed, sedsDelAlimentador);
 
             const codeElemLbl = safeSeg(structureCode);
@@ -347,7 +357,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
     // --- 6. LÓGICA DE APLICACIÓN DE CAMBIOS MASIVOS A LAS FOTOS ---
     // --- LÓGICA DE ACTUALIZACIÓN MASIVA SELECTIVA ---
-    
+
     const openBulkUpdateModal = () => {
         if (fileRows.length === 0) {
             toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay evidencias en la tabla.' });
@@ -369,20 +379,22 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
     };
 
     const executeBulkUpdate = () => {
-    const { path: applyPath, date: applyDate, geo: applyGeo, tipi: applyTipi, gisCode: applyGisCode } = bulkOptions;
-        // Validaciones de seguridad si marcaron la casilla pero no hay datos
+        const { path: applyPath, date: applyDate, geo: applyGeo, tipi: applyTipi, gisCode: applyGisCode } = bulkOptions;
+
         if (applyPath && (!selectedFeederId || !selectedSed)) {
-             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta Alimentador o SED para actualizar la ruta.' });
-             return;
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Falta Alimentador o SED para actualizar la ruta.' });
+            return;
         }
 
         const newFeeder = applyPath ? resolveFeederName(selectedFeederId, feeders) : null;
         let rawSed = selectedSed ? (selectedSed.sedCodigo || selectedSed.label || selectedSed.codigo || "SIN_SED") : "SIN_SED";
         if (typeof rawSed === 'string' && rawSed.includes(" - ")) rawSed = rawSed.split(" - ")[0];
         const newSed = applyPath ? safeSeg(rawSed) : null;
+
         let newType = applyPath ? String(structureType).toUpperCase() : null;
         if (newType && newType.includes('VANO')) newType = 'VANO';
         else if (newType && newType.includes('POST')) newType = 'POSTE';
+
         const newCode = applyPath ? safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode || "SIN_CODIGO") : null;
         const currentGlobalCode = typeof structureCode === 'object' ? structureCode.codigo : structureCode;
         const cleanNewGis = applyGisCode ? safeSeg(currentGlobalCode) : null;
@@ -394,22 +406,18 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
         const updatedRows = fileRows.map(row => {
             const isAudio = parseInt(row.archTipo) === 0;
-            
-            // 💡 SOLO sobrescribe si la casilla está marcada
+
             const finalDate = (applyDate && globalDate) ? new Date(globalDate) : row.archFecha;
             const finalLat = isAudio ? 0 : ((applyGeo && globalLat) ? globalUtm.northing : row.archLatitud);
             const finalLon = isAudio ? 0 : ((applyGeo && globalLon) ? globalUtm.easting : row.archLongitud);
 
             let newPath = row.currentPath;
-            let currentPathParts = row.currentPath.split('/');
+            const currentPathParts = String(row.currentPath || '').split('/');
 
-            // Reconstrucción de la ruta si aplican cambios de Ruta o Tipificación
             if ((applyPath || applyTipi || applyGisCode || applyDate) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
                 const effectiveFeeder = applyPath ? newFeeder : currentPathParts[1];
                 const effectiveSed = applyPath ? newSed : currentPathParts[2];
                 const effectiveType = applyPath ? newType : String(currentPathParts[3]).toUpperCase();
-                
-                // 🔥 4. Si marcó GIS manual, usamos el código limpio de la barra superior
                 const effectiveCode = applyGisCode ? cleanNewGis : (applyPath ? newCode : currentPathParts[4]);
 
                 let fileName = currentPathParts[currentPathParts.length - 1];
@@ -420,24 +428,32 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
                     const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
                     const originalTipi = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
-                    
-                    // Si el usuario marcó Tipificación, usamos la global, si no, mantenemos la original de la foto
-                    const tipiCodeStr = applyTipi ? String(getCodeById(globalTipificacion) || "0000").trim() : String(originalTipi).trim();
+                    const tipiCodeStr = applyTipi
+                        ? String(getCodeById(globalTipificacion) || "0000").trim()
+                        : String(originalTipi).trim();
 
-                    let folderPart = ""; let fileTipiPart = "";
+                    let folderPart = "";
+                    let fileTipiPart = "";
 
                     if (tipiCodeStr === "7004") {
-                        const defs7004 = historicalData.filter(d => String(d.tipiCodigo || getCodeById(d.tipiInterno)).trim() === "7004" || String(d.tipiInterno) === "60");
+                        const defs7004 = historicalData.filter(d =>
+                            String(d.tipiCodigo || getCodeById(d.tipiInterno)).trim() === "7004" ||
+                            String(d.tipiInterno) === "60"
+                        );
+
                         defs7004.sort((a, b) => a.defiInterno - b.defiInterno);
                         const idx = defs7004.findIndex(d => d.defiInterno === row.selectedDeficiencyId);
                         const correlativo = idx !== -1 ? idx + 1 : 1;
-                        
+
                         folderPart = `7004/${correlativo}`;
                         fileTipiPart = `7004_${correlativo}`;
                     } else if (tipiCodeStr === "0000" || tipiCodeStr === "0" || tipiCodeStr === "") {
-                        folderPart = "0000"; fileTipiPart = "0000";
+                        const existingAlias = detectSinDefFolderAliasFromPath(row.currentPath || row.originalName);
+                        folderPart = existingAlias;
+                        fileTipiPart = "0000";
                     } else {
-                        folderPart = safeSeg(tipiCodeStr); fileTipiPart = safeSeg(tipiCodeStr);
+                        folderPart = safeSeg(tipiCodeStr);
+                        fileTipiPart = safeSeg(tipiCodeStr);
                     }
 
                     const compactDate = formatCompactDate(finalDate);
@@ -445,7 +461,14 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                     newPath = `SIGRE.MOVIL/${effectiveFeeder}/${effectiveSed}/${effectiveType}/${effectiveCode}/${folderPart}/${newFileName}`;
                 }
             }
-            return { ...row, currentPath: newPath, archFecha: finalDate, archLatitud: finalLat, archLongitud: finalLon };
+
+            return {
+                ...row,
+                currentPath: newPath,
+                archFecha: finalDate,
+                archLatitud: finalLat,
+                archLongitud: finalLon
+            };
         });
 
         setFileRows(updatedRows);
@@ -453,73 +476,200 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
         toast.current.show({ severity: 'success', summary: 'Actualizado', detail: 'Datos aplicados a la tabla de evidencias.' });
     };
 
-   
 
- // ==============================================================================
+
+    // ==============================================================================
     // 🔥 8. LÓGICA DE GUARDADO EN BD Y DESCARGA ZIP REPARADA 🔥
     // ==============================================================================
     // ==============================================================================
     // 🔥 8. LÓGICA DE DESCARGA ZIP (REPARADA USANDO ENDPOINT SEGURO) 🔥
     // ==============================================================================
-    
+
     // Función auxiliar para fallbacks físicos si el endpoint de API falla
+    // const getCandidateUrls = (row) => {
+    //     if (!row.originalName) return [];
+    //     let base = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
+    //     base = base.replace(/^\/+/, '');
+
+    //     const candidates = new Set();
+    //     const parts = base.split('/');
+    //     const originalFileName = parts.pop();
+    //     const rootPathWithoutFile = parts.length > 0 ? parts.join('/') + '/' : '';
+
+    //     let shortFileName = null;
+    //     const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+    //     if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+
+    //     const addPathVariations = (folderPath) => {
+    //         if (!folderPath) return;
+    //         const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+    //         const formatUrl = (pathStr) => `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+    //         candidates.add(formatUrl(folderPath + originalFileName));
+    //         if (shortFileName) candidates.add(formatUrl(folderPath + shortFileName));
+    //     };
+
+    //     // Obtenemos el dbCode original para no depender de la ruta si ya se sobreescribió
+    //     const fileDef = historicalData?.find(d => d.defiInterno === row.selectedDeficiencyId);
+    //     let dbCode = String((fileDef ? getCodeById(fileDef.tipiInterno) : "0000") || "0000").trim();
+    //     if (dbCode === "0000" || dbCode === "0") dbCode = "SINDEF";
+    //     const currentSupply = fileDef?.defiNumSuministro || '0';
+
+    //     const processDeficiencyFolder = (currentPath) => {
+    //         const complexRegex = new RegExp(`\/(${dbCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
+    //         const matchComplex = currentPath.match(complexRegex);
+    //         addPathVariations(currentPath);
+
+    //         if (currentSupply && currentSupply !== '0') {
+    //             if (matchComplex) {
+    //                 const fullStr = matchComplex[0];
+    //                 addPathVariations(currentPath.replace(fullStr, `/${dbCode}.1.${currentSupply}/`));
+    //                 addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${currentSupply}/`));
+    //             } else {
+    //                 const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
+    //                 if (currentPath.match(simpleDefRegex)) {
+    //                     addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}.1.${currentSupply}/`));
+    //                     addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}/${currentSupply}/`));
+    //                 }
+    //             }
+    //         }
+    //         if (matchComplex) {
+    //             const fullStr = matchComplex[0];
+    //             addPathVariations(currentPath.replace(fullStr, `/${dbCode}/`));
+    //             for(let i=1; i<=20; i++) addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${i}/`));
+    //         } else {
+    //             const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
+    //             if (currentPath.match(simpleDefRegex)) {
+    //                 for(let i=1; i<=20; i++) {
+    //                     if (!currentPath.includes(`/${dbCode}/${i}/`)) {
+    //                         const split = currentPath.split(`/${dbCode}/`);
+    //                         if (split.length > 1) addPathVariations(`${split[0]}/${dbCode}/${i}/${split[1]}`);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     };
+
+    //     const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
+    //     processDeficiencyFolder(pathNoType);
+    //     processDeficiencyFolder(rootPathWithoutFile);
+    //     const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+    //     if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
+
+    //     const match7004 = rootPathWithoutFile.match(/\/(7004)\.(\d+)\.([a-zA-Z0-9]+)\//);
+    //     if (match7004 && dbCode !== "7004") {
+    //         const tempDbCode = dbCode; dbCode = "7004";
+    //         processDeficiencyFolder(rootPathWithoutFile);
+    //         dbCode = tempDbCode;
+    //     }
+
+    //     return Array.from(candidates);
+    // };
+
     const getCandidateUrls = (row) => {
         if (!row.originalName) return [];
-        let base = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
-        base = base.replace(/^\/+/, '');
-        
+
+        let base = row.originalName
+            .replace(/\\/g, '/')
+            .replace(/^.*SIGRE\.MOVIL\//i, '')
+            .replace(/^.*ELIMINADOS\//i, '');
+
         const candidates = new Set();
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        const rootPathWithoutFile = parts.length > 0 ? parts.join('/') + '/' : '';
-        
+
+        if (!originalFileName) return [];
+
+        const rootPathWithoutFile = parts.length > 0 ? `${parts.join('/')}/` : '';
         let shortFileName = null;
+
         const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+        if (typeMatch) {
+            shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+        }
+
+        const escapeRegExp = (text) =>
+            String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const buildFolderAliasVariants = (folderPath) => {
+            const variants = new Set([folderPath]);
+
+            if (/\/SINDEF\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/SINDEF\//gi, '/0000/'));
+            }
+
+            if (/\/0000\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/0000\//gi, '/SINDEF/'));
+            }
+
+            return Array.from(variants);
+        };
 
         const addPathVariations = (folderPath) => {
             if (!folderPath) return;
-            const baseUrl = API_BASE_URL.replace(/\/+$/, '');
-            const formatUrl = (pathStr) => `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
-            candidates.add(formatUrl(folderPath + originalFileName));
-            if (shortFileName) candidates.add(formatUrl(folderPath + shortFileName));
-        };
 
-        // Obtenemos el dbCode original para no depender de la ruta si ya se sobreescribió
-        const fileDef = historicalData?.find(d => d.defiInterno === row.selectedDeficiencyId);
-        let dbCode = String((fileDef ? getCodeById(fileDef.tipiInterno) : "0000") || "0000").trim();
-        if (dbCode === "0000" || dbCode === "0") dbCode = "SINDEF";
-        const currentSupply = fileDef?.defiNumSuministro || '0';
+            for (const variantPath of buildFolderAliasVariants(folderPath)) {
+                const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+                const formatUrl = (pathStr) =>
+                    `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
 
-        const processDeficiencyFolder = (currentPath) => {
-            const complexRegex = new RegExp(`\/(${dbCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
-            const matchComplex = currentPath.match(complexRegex);
-            addPathVariations(currentPath);
-            
-            if (currentSupply && currentSupply !== '0') {
-                if (matchComplex) {
-                    const fullStr = matchComplex[0];
-                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}.1.${currentSupply}/`));
-                    addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${currentSupply}/`));
-                } else {
-                    const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
-                    if (currentPath.match(simpleDefRegex)) {
-                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}.1.${currentSupply}/`));
-                        addPathVariations(currentPath.replace(simpleDefRegex, `/${dbCode}/${currentSupply}/`));
-                    }
+                candidates.add(formatUrl(`${variantPath}${originalFileName}`));
+
+                if (shortFileName) {
+                    candidates.add(formatUrl(`${variantPath}${shortFileName}`));
                 }
             }
-            if (matchComplex) {
-                const fullStr = matchComplex[0];
-                addPathVariations(currentPath.replace(fullStr, `/${dbCode}/`));
-                for(let i=1; i<=20; i++) addPathVariations(currentPath.replace(fullStr, `/${dbCode}/${i}/`));
-            } else {
-                const simpleDefRegex = new RegExp(`\/${dbCode}\/`);
-                if (currentPath.match(simpleDefRegex)) {
-                    for(let i=1; i<=20; i++) {
-                        if (!currentPath.includes(`/${dbCode}/${i}/`)) {
-                            const split = currentPath.split(`/${dbCode}/`);
-                            if (split.length > 1) addPathVariations(`${split[0]}/${dbCode}/${i}/${split[1]}`);
+        };
+
+        const fileDef = historicalData?.find((d) => d.defiInterno === row.selectedDeficiencyId);
+
+        const rawDbCode = String((fileDef ? getCodeById(fileDef.tipiInterno) : '0000') || '0000')
+            .trim()
+            .toUpperCase();
+
+        const defCodesToTry =
+            rawDbCode === '0000' || rawDbCode === '0' || rawDbCode === 'SINDEF'
+                ? ['SINDEF', '0000']
+                : [rawDbCode];
+
+        const currentSupply = fileDef?.defiNumSuministro || '0';
+
+        const processDeficiencyFolder = (currentPath, codeVariants = defCodesToTry) => {
+            for (const pathVariant of buildFolderAliasVariants(currentPath)) {
+                addPathVariations(pathVariant);
+
+                for (const currentCode of codeVariants) {
+                    const escapedCode = escapeRegExp(currentCode);
+                    const complexRegex = new RegExp(`\\/(${escapedCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\\/`, 'i');
+                    const matchComplex = pathVariant.match(complexRegex);
+
+                    if (currentSupply && currentSupply !== '0') {
+                        if (matchComplex) {
+                            const fullStr = matchComplex[0];
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}.1.${currentSupply}/`));
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${currentSupply}/`));
+                        } else {
+                            const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
+                            if (simpleDefRegex.test(pathVariant)) {
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}.1.${currentSupply}/`));
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${currentSupply}/`));
+                            }
+                        }
+                    }
+
+                    if (matchComplex) {
+                        const fullStr = matchComplex[0];
+                        addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/`));
+
+                        for (let i = 1; i <= 20; i++) {
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${i}/`));
+                        }
+                    } else {
+                        const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
+
+                        if (simpleDefRegex.test(pathVariant)) {
+                            for (let i = 1; i <= 20; i++) {
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${i}/`));
+                            }
                         }
                     }
                 }
@@ -529,31 +679,39 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
         const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
         processDeficiencyFolder(pathNoType);
         processDeficiencyFolder(rootPathWithoutFile);
-        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
-        if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
+
+        const pathUpper = rootPathWithoutFile
+            .replace(/\/Vano\//i, '/VANO/')
+            .replace(/\/Poste\//i, '/POSTE/');
+
+        if (pathUpper !== rootPathWithoutFile) {
+            processDeficiencyFolder(pathUpper);
+        }
 
         const match7004 = rootPathWithoutFile.match(/\/(7004)\.(\d+)\.([a-zA-Z0-9]+)\//);
-        if (match7004 && dbCode !== "7004") {
-            const tempDbCode = dbCode; dbCode = "7004";
-            processDeficiencyFolder(rootPathWithoutFile);
-            dbCode = tempDbCode;
+        if (match7004 && !defCodesToTry.includes('7004')) {
+            processDeficiencyFolder(rootPathWithoutFile, ['7004']);
         }
 
         return Array.from(candidates);
     };
+
+
+
+
 
     const handleDownloadRenamedZip = async () => {
         if (fileRows.length === 0) {
             toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay archivos para descargar.' });
             return;
         }
-        
+
         setZipLoading(true);
-        let filesAdded = 0; 
+        let filesAdded = 0;
 
         try {
             const zip = new JSZip();
-            
+
 
 
             // Usamos map para crear las promesas de descarga en paralelo
@@ -572,11 +730,11 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 if (row.archInterno && row.archInterno > 0) {
                     const baseUrl = API_BASE_URL.replace(/\/+$/, '');
                     const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
-                    
+
                     try {
                         const response = await fetch(apiUrl);
                         const contentType = response.headers.get("content-type");
-                        
+
                         if (response.ok && contentType && !contentType.includes("text/html")) {
                             const blob = await response.blob();
                             zip.file(zipPath, blob);
@@ -590,12 +748,12 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
 
                 // 3. FALLBACK: Intentar URLs físicas crudas
                 const urlsToTry = getCandidateUrls(row);
-                
+
                 for (const url of urlsToTry) {
                     try {
                         const response = await fetch(url);
                         const contentType = response.headers.get("content-type");
-                        
+
                         if (response.ok && contentType && !contentType.includes("text/html")) {
                             const blob = await response.blob();
                             zip.file(zipPath, blob);
@@ -606,7 +764,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                         // Sigue el bucle intentando
                     }
                 }
-                
+
                 console.warn(`Fracaso total: No se encontró en servidor: ${row.originalName}`);
                 return false;
             });
@@ -622,9 +780,9 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
             const content = await zip.generateAsync({ type: "blob" });
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
             saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
-            
+
             toast.current.show({ severity: 'success', summary: 'Descargado', detail: `Se empaquetaron ${filesAdded} de ${fileRows.length} archivos.` });
-            
+
         } catch (error) {
             console.error(error);
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo crítico al generar el ZIP.' });
@@ -637,41 +795,41 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
     // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
     // ==============================================================================
     const handleSaveAll = async () => {
-         const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
-         if (fileRows.length === 0) return;
-         setSaving(true);
-         
-         // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
-         toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
-         await handleDownloadRenamedZip(); 
+        const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
+        if (fileRows.length === 0) return;
+        setSaving(true);
 
-         // 2. Guardar en Base de Datos
-         let successCount = 0; let failCount = 0;
-         const updatedRows = [...fileRows];
+        // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
+        toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
+        await handleDownloadRenamedZip();
 
-         const promises = updatedRows.map(async (row, index) => {
-             const payload = {
-                 archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
-                 archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
-                 archFecha: toLocalISOString(row.archFecha), archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0,
-                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
-                 archNombre: row.currentPath, tipiInterno: row.tipiInterno
-             };
-             const success = await addFile(payload);
-             if (success) {
-                 successCount++;
-                 updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
-             } else {
-                 failCount++;
-             }
-         });
+        // 2. Guardar en Base de Datos
+        let successCount = 0; let failCount = 0;
+        const updatedRows = [...fileRows];
 
-         await Promise.all(promises);
-         setFileRows(updatedRows);
-         setSaving(false);
+        const promises = updatedRows.map(async (row, index) => {
+            const payload = {
+                archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
+                archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
+                archFecha: toLocalISOString(row.archFecha), archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0,
+                archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
+                archNombre: row.currentPath, tipiInterno: row.tipiInterno
+            };
+            const success = await addFile(payload);
+            if (success) {
+                successCount++;
+                updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
+            } else {
+                failCount++;
+            }
+        });
 
-         if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
-         else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+        await Promise.all(promises);
+        setFileRows(updatedRows);
+        setSaving(false);
+
+        if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
+        else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
     };
     const handleRemoveRequest = (event, row) => {
         confirmPopup({
@@ -719,10 +877,10 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
         const urls = getCandidateUrls(row);
         const [srcIndex, setSrcIndex] = useState(0);
         const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
-        
+
         if (sessionBlobs && sessionBlobs.current[originalFileName]) {
             return <Image src={URL.createObjectURL(sessionBlobs.current[originalFileName])} alt="Foto" preview className="absolute inset-0 w-full h-full block" imageClassName="w-full h-full object-cover block" />;
-        } 
+        }
 
         if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
 
@@ -737,7 +895,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
     };
 
     return (
-        
+
         <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-700">
             <style>{highContrastStyle}</style>
             <Toast ref={toast} />
@@ -749,7 +907,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 <h4 className="text-sm font-bold text-indigo-800 mb-3 flex items-center">
                     <i className="pi pi-search mr-2"></i>Búsqueda y Configuración Global de Elemento
                 </h4>
-                
+
                 <div className="flex flex-wrap gap-4 items-end mb-4">
                     <div className="flex flex-col">
                         <label className="text-[10px] font-bold text-indigo-700 uppercase">Alimentador *</label>
@@ -765,41 +923,41 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                     </div>
 
                     <div className="flex flex-col flex-1 min-w-[250px]">
-    <label className="text-[10px] font-bold text-indigo-700 uppercase mb-1">
-        Código GIS
-    </label>
-    
-    <div className="p-inputgroup relative">
-        <InputText
-            value={structureCode}
-            onChange={(e) => {
-                const texto = e.target.value.toUpperCase();
-                setStructureCode(texto);
-                
-                // Mantenemos tu lógica para setear el tipo de estructura
-                if (texto.includes('VBT') || texto.includes('VANO')) {
-                    setStructureType('VANO');
-                } else if (texto.includes('PTO') || texto.includes('POST')) {
-                    setStructureType('POST');
-                }
+                        <label className="text-[10px] font-bold text-indigo-700 uppercase mb-1">
+                            Código GIS
+                        </label>
 
-                // Opcional pero recomendado: si el usuario vuelve a escribir, limpiamos el error
-                // setIsGisNotFound(false); 
-            }}
-            placeholder="Escriba el código..."
-            className="w-full p-inputtext-sm font-bold text-blue-900 uppercase"
-            disabled={!selectedFeederId || !selectedSed}
-        />
-        <Button 
-            icon={searchLoading ? "pi pi-spin pi-spinner" : "pi pi-check-circle"} 
-            onClick={handleSearchDeficiencies} 
-            loading={searchLoading} 
-            disabled={!selectedFeederId || !selectedSed || !structureCode} 
-            severity="info" 
-            tooltip="Verificar Elemento y Buscar Historial" 
-        />
-    </div>
-</div>
+                        <div className="p-inputgroup relative">
+                            <InputText
+                                value={structureCode}
+                                onChange={(e) => {
+                                    const texto = e.target.value.toUpperCase();
+                                    setStructureCode(texto);
+
+                                    // Mantenemos tu lógica para setear el tipo de estructura
+                                    if (texto.includes('VBT') || texto.includes('VANO')) {
+                                        setStructureType('VANO');
+                                    } else if (texto.includes('PTO') || texto.includes('POST')) {
+                                        setStructureType('POST');
+                                    }
+
+                                    // Opcional pero recomendado: si el usuario vuelve a escribir, limpiamos el error
+                                    // setIsGisNotFound(false); 
+                                }}
+                                placeholder="Escriba el código..."
+                                className="w-full p-inputtext-sm font-bold text-blue-900 uppercase"
+                                disabled={!selectedFeederId || !selectedSed}
+                            />
+                            <Button
+                                icon={searchLoading ? "pi pi-spin pi-spinner" : "pi pi-check-circle"}
+                                onClick={handleSearchDeficiencies}
+                                loading={searchLoading}
+                                disabled={!selectedFeederId || !selectedSed || !structureCode}
+                                severity="info"
+                                tooltip="Verificar Elemento y Buscar Historial"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Atributos Globales Extra */}
@@ -865,18 +1023,18 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                             </div>
                         )}
                     />
-                    <Toolbar className="mb-4 bg-transparent border-none p-0" 
-    left={
-        <div className="flex gap-2">
-            {/* 🔥 ACTUALIZADO 🔥 */}
-            <Button label="Aplicar Globales" icon="pi pi-arrow-down" severity="info" outlined onClick={openBulkUpdateModal} />
-            <Button label={saving ? "Guardando..." : "Guardar en BD"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-save"} severity="success" onClick={handleSaveAll} disabled={fileRows.length === 0 || saving} />
-        </div>
-    } 
-/>
+                    <Toolbar className="mb-4 bg-transparent border-none p-0"
+                        left={
+                            <div className="flex gap-2">
+                                {/* 🔥 ACTUALIZADO 🔥 */}
+                                <Button label="Aplicar Globales" icon="pi pi-arrow-down" severity="info" outlined onClick={openBulkUpdateModal} />
+                                <Button label={saving ? "Guardando..." : "Guardar en BD"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-save"} severity="success" onClick={handleSaveAll} disabled={fileRows.length === 0 || saving} />
+                            </div>
+                        }
+                    />
                 </div>
-                
-               
+
+
 
                 <div className="flex flex-col gap-6">
                     {/* GALERÍA */}
@@ -919,7 +1077,7 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                             <Column header="Nombre (Ruta)" body={(r) => {
                                 const isModified = r.originalName !== r.currentPath;
                                 return (
-                                    <div className="flex flex-col" style={{maxWidth:'450px'}}>
+                                    <div className="flex flex-col" style={{ maxWidth: '450px' }}>
                                         <code className={`text-[10px] p-1 border rounded break-all font-mono leading-tight ${isModified ? 'bg-yellow-50 border-yellow-300 text-yellow-900' : 'bg-white border-gray-200 text-gray-600'}`}>
                                             {r.currentPath}
                                         </code>
@@ -946,13 +1104,13 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 />
             )}
 
-            
+
             {/* 🔥 MODAL DE ACTUALIZACIÓN MASIVA SELECTIVA 🔥 */}
-            <Dialog 
-                header="¿Qué datos deseas sobrescribir?" 
-                visible={showBulkUpdateModal} 
-                style={{ width: '450px' }} 
-                modal 
+            <Dialog
+                header="¿Qué datos deseas sobrescribir?"
+                visible={showBulkUpdateModal}
+                style={{ width: '450px' }}
+                modal
                 onHide={() => setShowBulkUpdateModal(false)}
                 footer={
                     <div className="flex justify-end gap-2 mt-4">
@@ -962,20 +1120,20 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 }
             >
                 <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                    Selecciona qué configuraciones globales deseas aplicar a las <strong>{fileRows.length}</strong> fotos en la tabla. 
-                    <br/><span className="text-red-500 font-bold">Atención:</span> Esta acción sobrescribirá los datos actuales de las fotos.
+                    Selecciona qué configuraciones globales deseas aplicar a las <strong>{fileRows.length}</strong> fotos en la tabla.
+                    <br /><span className="text-red-500 font-bold">Atención:</span> Esta acción sobrescribirá los datos actuales de las fotos.
                 </p>
 
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center">
-                        <Checkbox inputId="cb_path" checked={bulkOptions.path} onChange={e => setBulkOptions({...bulkOptions, path: e.checked})} />
+                        <Checkbox inputId="cb_path" checked={bulkOptions.path} onChange={e => setBulkOptions({ ...bulkOptions, path: e.checked })} />
                         <label htmlFor="cb_path" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Ubicación y Ruta</label>
                         <span className="ml-2 text-xs text-gray-500">(Alimentador, SED, Código GIS)</span>
                     </div>
-{/* 🔥 NUEVO BLOQUE MEJORADO: Renombrar Código GIS (Usa el global) */}
+                    {/* 🔥 NUEVO BLOQUE MEJORADO: Renombrar Código GIS (Usa el global) */}
                     <div className="flex flex-col bg-blue-50 p-3 rounded-md border border-blue-200 mt-2 mb-2">
                         <div className="flex items-center">
-                            <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({...bulkOptions, gisCode: e.checked})} />
+                            <Checkbox inputId="cb_gisCode" checked={bulkOptions.gisCode} onChange={e => setBulkOptions({ ...bulkOptions, gisCode: e.checked })} />
                             <label htmlFor="cb_gisCode" className="ml-2 text-sm font-bold text-blue-800 cursor-pointer">
                                 Código GIS actual
                             </label>
@@ -993,18 +1151,18 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                     </div>
 
                     <div className="flex items-center">
-                        <Checkbox inputId="cb_tipi" checked={bulkOptions.tipi} onChange={e => setBulkOptions({...bulkOptions, tipi: e.checked})} />
+                        <Checkbox inputId="cb_tipi" checked={bulkOptions.tipi} onChange={e => setBulkOptions({ ...bulkOptions, tipi: e.checked })} />
                         <label htmlFor="cb_tipi" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Tipificación</label>
                         <span className="ml-2 text-xs text-gray-500">({getCodeById(globalTipificacion) || "Ninguna seleccionada"})</span>
                     </div>
 
                     <div className="flex items-center">
-                        <Checkbox inputId="cb_date" checked={bulkOptions.date} onChange={e => setBulkOptions({...bulkOptions, date: e.checked})} />
+                        <Checkbox inputId="cb_date" checked={bulkOptions.date} onChange={e => setBulkOptions({ ...bulkOptions, date: e.checked })} />
                         <label htmlFor="cb_date" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Fecha y Hora de Captura</label>
                     </div>
 
                     <div className="flex items-start bg-red-50 p-3 rounded-md border border-red-200 mt-2">
-                        <Checkbox inputId="cb_geo" checked={bulkOptions.geo} onChange={e => setBulkOptions({...bulkOptions, geo: e.checked})} />
+                        <Checkbox inputId="cb_geo" checked={bulkOptions.geo} onChange={e => setBulkOptions({ ...bulkOptions, geo: e.checked })} />
                         <div className="ml-2 flex flex-col">
                             <label htmlFor="cb_geo" className="text-sm font-extrabold text-red-700 cursor-pointer mb-1">
                                 Coordenadas GPS (Peligro)
@@ -1017,6 +1175,6 @@ const feederLbl = resolveFeederName(selectedFeederId, feeders);
                 </div>
             </Dialog>
         </div>
-        
+
     );
 }
