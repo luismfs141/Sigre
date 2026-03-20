@@ -6,7 +6,7 @@ import { Image } from 'primereact/image';
 import { Tag } from 'primereact/tag';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { useFiles } from '../hooks/useFiles'; 
+import { useFiles } from '../hooks/useFiles';
 import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { useTypification } from '../hooks/useTypification';
 import { latLonToUTM } from '../utils/geoUtils'; // Importamos la función de conversión a UTM
@@ -40,9 +40,16 @@ const resolveFeederName = (feederProp, deficiencyObj) => {
     if (deficiencyObj) { const candidate = deficiencyObj.alimentador || deficiencyObj.Alimentador || deficiencyObj.defiAlimentador || deficiencyObj.nombreAlimentador; if (candidate) return String(candidate).split(' - ')[0].trim().toUpperCase(); }
     return "SIN_FEEDER";
 };
+
+const detectSinDefFolderAliasFromPath = (path) => {
+    const normalized = String(path || '').replace(/\\/g, '/');
+    const match = normalized.match(/\/(SINDEF|0000)(?=\/|$)/i);
+    return match ? match[1].toUpperCase() : 'SINDEF';
+};
+
 const getPhotoTypeName = (typeId) => { const types = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' }; return types[typeId] || `Tipo ${typeId}`; };
 const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.000`; };
-const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
+const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
 const urlToBlob = async (url) => { try { const response = await fetch(url); if (!response.ok) throw new Error("404"); return await response.blob(); } catch { return null; } };
 
 // =====================================================================
@@ -50,61 +57,193 @@ const urlToBlob = async (url) => { try { const response = await fetch(url); if (
 // =====================================================================
 
 const getUtmBandLetter = (lat) => {
-    if (-16 >= lat && lat >= -24) return 'K'; 
-    if (-8 >= lat && lat > -16) return 'L';   
-    if (0 >= lat && lat > -8) return 'M';     
-    return 'S'; 
+    if (-16 >= lat && lat >= -24) return 'K';
+    if (-8 >= lat && lat > -16) return 'L';
+    if (0 >= lat && lat > -8) return 'M';
+    return 'S';
 };
 
 
 
 // --- COMPONENTE IMAGEN ---
-const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode,onDelete }) => {
+const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode, onDelete }) => {
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
+    // const generateCandidates = (rawPath) => {
+    //     if (!rawPath) return [];
+    //     let base = rawPath.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
+    //     const candidates = [];
+    //     const parts = base.split('/');
+    //     const originalFileName = parts.pop();
+    //     const rootPathWithoutFile = parts.join('/') + '/';
+    //     let shortFileName = null;
+    //     const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+    //     if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+
+    //     const addPathVariations = (folderPath) => { candidates.push(folderPath + originalFileName); if (shortFileName) candidates.push(folderPath + shortFileName); };
+    //     const processDeficiencyFolder = (currentPath) => {
+    //         const complexRegex = new RegExp(`\/(${defCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
+    //         const matchComplex = currentPath.match(complexRegex);
+    //         addPathVariations(currentPath);
+    //         if (currentSupply && currentSupply !== '0') {
+    //             if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(fullStr, `/${defCode}/${currentSupply}/`)); }
+    //             else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}/${currentSupply}/`)); } }
+    //         }
+    //         if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}/`)); for (let i = 1; i <= 20; i++) addPathVariations(currentPath.replace(fullStr, `/${defCode}/${i}/`)); }
+    //         else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { for (let i = 1; i <= 20; i++) { if (!currentPath.includes(`/${defCode}/${i}/`)) { const split = currentPath.split(`/${defCode}/`); if (split.length > 1) addPathVariations(`${split[0]}/${defCode}/${i}/${split[1]}`); } } } }
+    //     };
+
+    //     const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
+    //     processDeficiencyFolder(pathNoType); processDeficiencyFolder(rootPathWithoutFile);
+    //     const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
+    //     if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
+
+    //     return candidates.map(c => `${API_BASE_URL}/${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
+    // };
+
+
     const generateCandidates = (rawPath) => {
         if (!rawPath) return [];
-        let base = rawPath.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
-        const candidates = [];
+
+        let base = rawPath
+            .replace(/\\/g, '/')
+            .replace(/^.*SIGRE\.MOVIL\//i, '')
+            .replace(/^.*ELIMINADOS\//i, '');
+
+        const candidates = new Set();
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        const rootPathWithoutFile = parts.join('/') + '/';
-        let shortFileName = null;
-        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-        if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
 
-        const addPathVariations = (folderPath) => { candidates.push(folderPath + originalFileName); if (shortFileName) candidates.push(folderPath + shortFileName); };
-        const processDeficiencyFolder = (currentPath) => {
-            const complexRegex = new RegExp(`\/(${defCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
-            const matchComplex = currentPath.match(complexRegex);
-            addPathVariations(currentPath);
-            if (currentSupply && currentSupply !== '0') {
-                 if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(fullStr, `/${defCode}/${currentSupply}/`)); } 
-                 else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}/${currentSupply}/`)); } }
+        if (!originalFileName) return [];
+
+        const rootPathWithoutFile = parts.length > 0 ? `${parts.join('/')}/` : '';
+        let shortFileName = null;
+
+        const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+        if (typeMatch) {
+            shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+        }
+
+        const escapeRegExp = (text) =>
+            String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const buildFolderAliasVariants = (folderPath) => {
+            const variants = new Set([folderPath]);
+
+            if (/\/SINDEF\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/SINDEF\//gi, '/0000/'));
             }
-            if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}/`)); for(let i=1; i<=20; i++) addPathVariations(currentPath.replace(fullStr, `/${defCode}/${i}/`)); } 
-            else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { for(let i=1; i<=20; i++) { if (!currentPath.includes(`/${defCode}/${i}/`)) { const split = currentPath.split(`/${defCode}/`); if (split.length > 1) addPathVariations(`${split[0]}/${defCode}/${i}/${split[1]}`); } } } }
+
+            if (/\/0000\//i.test(folderPath)) {
+                variants.add(folderPath.replace(/\/0000\//gi, '/SINDEF/'));
+            }
+
+            return Array.from(variants);
+        };
+
+        const addPathVariations = (folderPath) => {
+            if (!folderPath) return;
+
+            for (const variantPath of buildFolderAliasVariants(folderPath)) {
+                candidates.add(`${variantPath}${originalFileName}`);
+
+                if (shortFileName) {
+                    candidates.add(`${variantPath}${shortFileName}`);
+                }
+            }
+        };
+
+        const normalizedDefCode = String(defCode || '').trim().toUpperCase();
+        const defCodesToTry =
+            normalizedDefCode === '0000' ||
+                normalizedDefCode === '0' ||
+                normalizedDefCode === 'SINDEF'
+                ? ['SINDEF', '0000']
+                : [normalizedDefCode];
+
+        const processDeficiencyFolder = (currentPath, codeVariants = defCodesToTry) => {
+            for (const pathVariant of buildFolderAliasVariants(currentPath)) {
+                addPathVariations(pathVariant);
+
+                for (const currentCode of codeVariants) {
+                    const escapedCode = escapeRegExp(currentCode);
+                    const complexRegex = new RegExp(`\\/(${escapedCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\\/`, 'i');
+                    const matchComplex = pathVariant.match(complexRegex);
+
+                    if (currentSupply && currentSupply !== '0') {
+                        if (matchComplex) {
+                            const fullStr = matchComplex[0];
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}.1.${currentSupply}/`));
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${currentSupply}/`));
+                        } else {
+                            const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
+                            if (simpleDefRegex.test(pathVariant)) {
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}.1.${currentSupply}/`));
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${currentSupply}/`));
+                            }
+                        }
+                    }
+
+                    if (matchComplex) {
+                        const fullStr = matchComplex[0];
+                        addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/`));
+
+                        for (let i = 1; i <= 20; i++) {
+                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${i}/`));
+                        }
+                    } else {
+                        const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
+
+                        if (simpleDefRegex.test(pathVariant)) {
+                            for (let i = 1; i <= 20; i++) {
+                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${i}/`));
+                            }
+                        }
+                    }
+                }
+            }
         };
 
         const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
-        processDeficiencyFolder(pathNoType); processDeficiencyFolder(rootPathWithoutFile);
-        const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
-        if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
+        processDeficiencyFolder(pathNoType);
+        processDeficiencyFolder(rootPathWithoutFile);
 
-        return candidates.map(c => `${API_BASE_URL}/${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
+        const pathUpper = rootPathWithoutFile
+            .replace(/\/Vano\//i, '/VANO/')
+            .replace(/\/Poste\//i, '/POSTE/');
+
+        if (pathUpper !== rootPathWithoutFile) {
+            processDeficiencyFolder(pathUpper);
+        }
+
+        return Array.from(candidates).map((candidatePath) =>
+            `${API_BASE_URL}/${(candidatePath.startsWith('/') ? candidatePath.substring(1) : candidatePath)
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')}`
+        );
     };
-    const candidates = useMemo(() => generateCandidates(file.archNombre || file.ARCH_Nombre), [file, currentSupply]);
+
+
+
+    //const candidates = useMemo(() => generateCandidates(file.archNombre || file.ARCH_Nombre), [file, currentSupply]);
+    const candidates = useMemo(
+        () => generateCandidates(file.archNombre || file.ARCH_Nombre),
+        [file, currentSupply, defCode]
+    );
+
+
     const [currentSrc, setCurrentSrc] = useState(candidates[0] || offlinePlaceholder);
     const [tryIndex, setTryIndex] = useState(0);
 
     useEffect(() => { setTryIndex(0); setCurrentSrc(candidates[0] || offlinePlaceholder); }, [candidates]);
     const handleLoad = () => { if (currentSrc !== offlinePlaceholder) onUrlResolved(index, currentSrc); };
     const handleError = () => { const next = tryIndex + 1; if (next < candidates.length) { setTryIndex(next); setCurrentSrc(candidates[next]); } else setCurrentSrc(offlinePlaceholder); };
-    
+
     return (
         <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all" onClick={() => onImageClick(index)}>
             <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
             {/* 🔴 BOTÓN DE ELIMINAR AÑADIDO */}
-            <button 
+            <button
                 onClick={(e) => {
                     e.stopPropagation(); // Evita que se abra el Lightbox al borrar
                     onDelete(file);
@@ -129,10 +268,10 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
 // --- COMPONENTE PRINCIPAL ---
 export default function EvidenceGallery({ deficiency, feeder, sed, suministro, element7004Count, my7004Correlativo }) {
     const toast = useRef(null);
-    const { files, loadFiles, addFile,deleteFile } = useFiles();
+    const { files, loadFiles, addFile, deleteFile } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
-    const resolvedUrlsRef = useRef({}); 
+    const resolvedUrlsRef = useRef({});
     const { getCodeById } = useTypification();
     const [lightboxIndex, setLightboxIndex] = useState(-1);
     const [zoomLevel, setZoomLevel] = useState(1);
@@ -140,17 +279,17 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
 
-    useEffect(() => { 
-        if (deficiency?.defiInterno) { 
-            loadFiles(deficiency.defiInterno); 
-            LocalFileStore.clear().then(() => { resolvedUrlsRef.current = {}; }); 
-        } 
+    useEffect(() => {
+        if (deficiency?.defiInterno) {
+            loadFiles(deficiency.defiInterno);
+            LocalFileStore.clear().then(() => { resolvedUrlsRef.current = {}; });
+        }
     }, [deficiency?.defiInterno, loadFiles]);
 
     const relevantFiles = useMemo(() => {
         if (!files || !deficiency) return [];
         const targetElemento = String(deficiency.defiIdElemento);
-        return files.filter(file => (file.archActivo === 1 || file.archActivo === true) && String(file.archIdElemento || file.ARCH_IdElemento) === targetElemento).filter(f => !(f.archNombre||"").toLowerCase().match(/\.(m4a|mp3)$/));
+        return files.filter(file => (file.archActivo === 1 || file.archActivo === true) && String(file.archIdElemento || file.ARCH_IdElemento) === targetElemento).filter(f => !(f.archNombre || "").toLowerCase().match(/\.(m4a|mp3)$/));
     }, [files, deficiency, suministro]);
     const photos = relevantFiles;
 
@@ -159,13 +298,13 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const currentSupply = String(suministro || deficiency?.defiNumSuministro || deficiency?.suministro || "0").trim();
     const defCode = String(deficiency?.tipiCodigo || "7004").trim();
 
-const getInitialFormData = () => {
+    const getInitialFormData = () => {
         // 1. Buscamos la fecha directamente en el objeto de la deficiencia seleccionada.
         // Cubrimos las posibles variaciones de serialización del backend (camelCase, PascalCase o el nombre exacto de la DB).
-        const _fechaRaw =  deficiency?.defiFecRegistro || deficiency?.FecRegistro || getValue('FecRegistro') || getValue('Fecha');
-        
-        let _fecha = new Date(); 
-        
+        const _fechaRaw = deficiency?.defiFecRegistro || deficiency?.FecRegistro || getValue('FecRegistro') || getValue('Fecha');
+
+        let _fecha = new Date();
+
         // 2. Validamos que la fecha extraída sea válida antes de asignarla.
         if (_fechaRaw) {
             const parsedDate = new Date(_fechaRaw);
@@ -174,74 +313,74 @@ const getInitialFormData = () => {
             }
         }
 
-        return { 
-            id: Date.now(), 
-            deficiencyCode: "", 
-            tipo: null, 
-            date: _fecha, 
-            lat: getValue('Latitud') || deficiency?.defiLatitud || '', 
-            long: getValue('Longitud') || deficiency?.defiLongitud || '', 
-            file: null, 
-            preview: null 
+        return {
+            id: Date.now(),
+            deficiencyCode: "",
+            tipo: null,
+            date: _fecha,
+            lat: getValue('Latitud') || deficiency?.defiLatitud || '',
+            long: getValue('Longitud') || deficiency?.defiLongitud || '',
+            file: null,
+            preview: null
         };
     };
 
-const handleUploadSave = async (dataToSave) => {
+    const handleUploadSave = async (dataToSave) => {
         const feederLbl = resolveFeederName(feeder, deficiency);
         const sedLbl = safeSeg(sed?.sedCodigo || sed?.codigo || "SIN_SED");
-        const codeElemLbl = safeSeg(getValue('CodigoElemento')); 
+        const codeElemLbl = safeSeg(getValue('CodigoElemento'));
         const tipoElemRaw = getValue('TipoElemento') || 'POST';
-        const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'VANO' : 'POSTE'; 
-        
+        const tipoElem = String(tipoElemRaw).toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
+
         const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
         const defCodeBase = String(defCodeRaw).trim();
-        
+
         const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
         const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(deficiency.tipiInterno) === "0";
         let defFolder = "", namePart = "";
-        
-        if (is7004) { 
-            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1; 
-            defFolder = `7004/${folderNum}`; 
+
+        if (is7004) {
+            const folderNum = my7004Correlativo > 0 ? my7004Correlativo : 1;
+            defFolder = `7004/${folderNum}`;
             // 🟢 CAMBIO: Se eliminó la parte del suministro, queda solo 7004_Correlativo
-            namePart = `7004_${folderNum}`; 
-        } 
-        else if (isSinDef) { defFolder = "SINDEF"; namePart = "0000"; } 
+            namePart = `7004_${folderNum}`;
+        }
+        else if (isSinDef) { defFolder = "SINDEF"; namePart = "0000"; }
         else { defFolder = defCodeBase; namePart = defCodeBase; }
-        
+
         const fileName = `FOT-${sedLbl}-${codeElemLbl}-${namePart}-${formatCompactDate(dataToSave.date)}-${dataToSave.tipo}.jpg`;
         const dbPath = `SIGRE.MOVIL/${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defFolder}/${fileName}`;
-        
+
         await LocalFileStore.save(fileName, dataToSave.file);
 
         // 🔥🔥🔥 CONVERSIÓN A UTM ANTES DE GUARDAR 🔥🔥🔥
         const rawLat = parseFloat(dataToSave.lat) || 0;
         const rawLon = parseFloat(dataToSave.long) || 0;
-        
+
         // Usamos la función matemática que tienes al final del archivo
         const utmCoords = latLonToUTM(rawLat, rawLon);
 
-        const payload = { 
+        const payload = {
             archTabla: "Deficiencias",
-            archInterno: 0, 
-            archTipo: String(dataToSave.tipo), 
-            archNombre: dbPath.substring(0, 255), 
-            archCodTabla: Number(getValue('Interno')), 
+            archInterno: 0,
+            archTipo: String(dataToSave.tipo),
+            archNombre: dbPath.substring(0, 255),
+            archCodTabla: Number(getValue('Interno')),
             // 🟢 CAMBIO AQUÍ: Guardamos UTM Norte en latitud y UTM Este en longitud
-            archLatitud: utmCoords.northing, 
+            archLatitud: utmCoords.northing,
             archLongitud: utmCoords.easting,
-            archFecha: toLocalISOString(dataToSave.date), 
-            archTipoElemento: tipoElemRaw, 
-            archIdElemento: Number(getValue('IdElemento')), 
-            tipiInterno: Number(deficiency.tipiInterno), 
-            archActivo: true 
+            archFecha: toLocalISOString(dataToSave.date),
+            archTipoElemento: tipoElemRaw,
+            archIdElemento: Number(getValue('IdElemento')),
+            tipiInterno: Number(deficiency.tipiInterno),
+            archActivo: true
         };
 
-        if (await addFile(payload)) { 
-            toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada (UTM)' }); 
-            setModalVisible(false); 
-            loadFiles(deficiency.defiInterno); 
-        } 
+        if (await addFile(payload)) {
+            toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada (UTM)' });
+            setModalVisible(false);
+            loadFiles(deficiency.defiInterno);
+        }
         else {
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al registrar' });
         }
@@ -257,7 +396,7 @@ const handleUploadSave = async (dataToSave) => {
         }
 
         const success = await deleteFile(idToDelete);
-        
+
         if (success) {
             toast.current.show({ severity: 'success', summary: 'Eliminado', detail: 'Evidencia eliminada correctamente' });
             // No necesitas recargar manualmente si tu useFiles ya hace setFiles filter
@@ -270,58 +409,80 @@ const handleUploadSave = async (dataToSave) => {
     const handleDownloadZip = async () => {
         if (photos.length === 0) return;
         setZipLoading(true);
+
         try {
             const zip = new JSZip();
-            const getBestUrl = (f, i) => resolvedUrlsRef.current[i] || `${API_BASE_URL}/${(f.archNombre || "").replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/\/(?:Vano|Poste)\//gi, '/').split('/').map(encodeURIComponent).join('/')}`;
-            const feederLbl = resolveFeederName(feeder, deficiency); const sedLbl = safeSeg(sed?.sedCodigo || "SIN_SED"); const codeElemLbl = safeSeg(getValue('CodigoElemento'));
+
+            const getBestUrl = (f, i) =>
+                resolvedUrlsRef.current[i] ||
+                `${API_BASE_URL}/${(f.archNombre || "")
+                    .replace(/\\/g, '/')
+                    .replace(/^.*SIGRE\.MOVIL\//i, '')
+                    .split('/')
+                    .map(encodeURIComponent)
+                    .join('/')}`;
+
+            const feederLbl = resolveFeederName(feeder, deficiency);
+            const sedLbl = safeSeg(sed?.sedCodigo || "SIN_SED");
+            const codeElemLbl = safeSeg(getValue('CodigoElemento'));
             const tipoElem = (getValue('TipoElemento') || 'POST').toUpperCase() === 'VANO' ? 'VANO' : 'POSTE';
-            
-            // ✅ AQUÍ ESTÁ LA CORRECCIÓN: Usamos getCodeById como respaldo si tipiCodigo es null
+
             const defCodeRaw = deficiency.tipiCodigo || getCodeById(deficiency.tipiInterno) || "0000";
             const defCodeBase = String(defCodeRaw).trim();
-            
+
             const is7004 = defCodeBase === "7004" || String(deficiency.tipiInterno) === "60";
-            
+            const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || String(deficiency.tipiInterno) === "0";
+
             for (let i = 0; i < photos.length; i++) {
                 const f = photos[i];
                 let pathStr = "";
-                
-                // Si es 7004, usamos la carpeta correcta con el correlativo
+
                 if (is7004 && my7004Correlativo > 0) {
                     pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/7004/${my7004Correlativo}`;
-                } 
-                else {
-                    // Si no es 7004, usamos el código base (que ahora SÍ tiene el código correcto gracias a getCodeById)
+                } else if (isSinDef) {
+                    const existingAlias = detectSinDefFolderAliasFromPath(f.archNombre || f.ARCH_Nombre);
+                    pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${existingAlias}`;
+                } else {
                     pathStr = `${feederLbl}/${sedLbl}/${tipoElem}/${codeElemLbl}/${defCodeBase}`;
                 }
-                
-                const blob = await LocalFileStore.get(f.archNombre.split('/').pop()) || await urlToBlob(getBestUrl(f, i));
-                if (blob) zip.folder(pathStr).file(f.archNombre.split('/').pop(), blob);
+
+                const blob =
+                    await LocalFileStore.get((f.archNombre || '').split('/').pop()) ||
+                    await urlToBlob(getBestUrl(f, i));
+
+                if (blob) {
+                    zip.folder(pathStr).file((f.archNombre || '').split('/').pop(), blob);
+                }
             }
+
             const content = await zip.generateAsync({ type: "blob" });
             saveAs(content, `Deficiencia_${getValue('CodigoElemento')}.zip`);
             toast.current.show({ severity: 'success', summary: 'ZIP', detail: 'Descargando...' });
-        } catch { toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo ZIP' }); } finally { setZipLoading(false); }
+        } catch {
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo ZIP' });
+        } finally {
+            setZipLoading(false);
+        }
     };
 
     // Lightbox Logic (Igual que antes)
     const openLightbox = (index) => { setLightboxIndex(index); setZoomLevel(1); setPosition({ x: 0, y: 0 }); };
     const closeLightbox = () => { setLightboxIndex(-1); setZoomLevel(1); setIsDragging(false); };
-    const navigate = (d) => { setZoomLevel(1); setPosition({x:0,y:0}); setLightboxIndex((lightboxIndex + d + photos.length) % photos.length); };
-    const zoom = (delta) => { setZoomLevel(p => Math.min(Math.max(p + delta, 1), 5)); if(zoomLevel<=1) setPosition({x:0,y:0}); };
+    const navigate = (d) => { setZoomLevel(1); setPosition({ x: 0, y: 0 }); setLightboxIndex((lightboxIndex + d + photos.length) % photos.length); };
+    const zoom = (delta) => { setZoomLevel(p => Math.min(Math.max(p + delta, 1), 5)); if (zoomLevel <= 1) setPosition({ x: 0, y: 0 }); };
     const renderLightbox = () => {
         if (lightboxIndex === -1) return null;
         let src = resolvedUrlsRef.current[lightboxIndex] || `${API_BASE_URL}/${photos[lightboxIndex].archNombre.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').split('/').map(encodeURIComponent).join('/')}`;
         return ReactDOM.createPortal(
             <div className="fixed inset-0 z-[99999] bg-black/95 flex items-center justify-center" onClick={closeLightbox}>
-                 <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="fixed top-4 right-4 z-[100] text-white/80 hover:text-white p-2"><i className="pi pi-times text-2xl"></i></button>
-                 <button onClick={(e) => { e.stopPropagation(); navigate(-1); }} className="fixed left-4 top-1/2 z-[100] text-white/60 hover:text-white"><i className="pi pi-chevron-left text-4xl"></i></button>
-                 <button onClick={(e) => { e.stopPropagation(); navigate(1); }} className="fixed right-4 top-1/2 z-[100] text-white/60 hover:text-white"><i className="pi pi-chevron-right text-4xl"></i></button>
-                 <div className="fixed bottom-10 z-[100] flex gap-4 bg-black/50 px-4 py-2 rounded-full"><button onClick={(e)=>{e.stopPropagation(); zoom(-0.5);}} className="text-white"><i className="pi pi-minus"></i></button><span className="text-white font-bold">{Math.round(zoomLevel*100)}%</span><button onClick={(e)=>{e.stopPropagation(); zoom(0.5);}} className="text-white"><i className="pi pi-plus"></i></button></div>
-                 <img src={src} className="max-w-none transition-transform duration-100 ease-out" style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`, maxHeight: '100vh', maxWidth: '100vw', objectFit: 'contain' }} onClick={(e)=>e.stopPropagation()} 
-                      onMouseDown={(e)=>{if(zoomLevel>1){setIsDragging(true); dragStartRef.current={x:e.clientX-position.x, y:e.clientY-position.y};}}} 
-                      onMouseMove={(e)=>{if(isDragging && zoomLevel>1){e.preventDefault(); setPosition({x:e.clientX-dragStartRef.current.x, y:e.clientY-dragStartRef.current.y});}}} 
-                      onMouseUp={()=>setIsDragging(false)} />
+                <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="fixed top-4 right-4 z-[100] text-white/80 hover:text-white p-2"><i className="pi pi-times text-2xl"></i></button>
+                <button onClick={(e) => { e.stopPropagation(); navigate(-1); }} className="fixed left-4 top-1/2 z-[100] text-white/60 hover:text-white"><i className="pi pi-chevron-left text-4xl"></i></button>
+                <button onClick={(e) => { e.stopPropagation(); navigate(1); }} className="fixed right-4 top-1/2 z-[100] text-white/60 hover:text-white"><i className="pi pi-chevron-right text-4xl"></i></button>
+                <div className="fixed bottom-10 z-[100] flex gap-4 bg-black/50 px-4 py-2 rounded-full"><button onClick={(e) => { e.stopPropagation(); zoom(-0.5); }} className="text-white"><i className="pi pi-minus"></i></button><span className="text-white font-bold">{Math.round(zoomLevel * 100)}%</span><button onClick={(e) => { e.stopPropagation(); zoom(0.5); }} className="text-white"><i className="pi pi-plus"></i></button></div>
+                <img src={src} className="max-w-none transition-transform duration-100 ease-out" style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`, maxHeight: '100vh', maxWidth: '100vw', objectFit: 'contain' }} onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => { if (zoomLevel > 1) { setIsDragging(true); dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y }; } }}
+                    onMouseMove={(e) => { if (isDragging && zoomLevel > 1) { e.preventDefault(); setPosition({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y }); } }}
+                    onMouseUp={() => setIsDragging(false)} />
             </div>, document.body
         );
     };
@@ -348,16 +509,16 @@ const handleUploadSave = async (dataToSave) => {
                         </Tag>
                     )}
                 </div>
-                <Button 
-                    onClick={handleDownloadZip} 
+                <Button
+                    onClick={handleDownloadZip}
                     disabled={photos.length === 0 || zipLoading}
                     tooltip="Descargar todas las fotos en ZIP"
                     className="p-button-sm px-3 h-10 shadow-md border-none flex items-center gap-2 hover:scale-105 transition-transform"
-                    style={{ 
-                        background: (photos.length === 0 || zipLoading) 
-                            ? undefined 
-                            : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
-                        color: '#fff' 
+                    style={{
+                        background: (photos.length === 0 || zipLoading)
+                            ? undefined
+                            : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                        color: '#fff'
                     }}
                 >
                     <i className={`pi ${zipLoading ? "pi-spin pi-spinner" : "pi-download"} text-lg font-bold`}></i>
@@ -372,25 +533,25 @@ const handleUploadSave = async (dataToSave) => {
                 </Button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 bg-gray-100/50">
-                 <div className="flex flex-wrap gap-2 content-start">
+                <div className="flex flex-wrap gap-2 content-start">
                     <div onClick={() => setModalVisible(true)} className="h-24 w-24 rounded border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white group transition-colors bg-gray-50">
                         <i className="pi pi-camera text-2xl text-gray-400 group-hover:text-blue-500"></i>
                         <span className="text-[9px] text-gray-500 font-bold mt-1 uppercase">Agregar</span>
                     </div>
                     {photos.map((f, i) => (
-                        <ResilientImage 
+                        <ResilientImage
                             key={f.archInterno ? f.archInterno : `temp-${i}-${currentSupply}`}
-                            index={i} file={f} 
+                            index={i} file={f}
                             onDelete={handleDeleteImage}
-                            onImageClick={openLightbox} onUrlResolved={handleUrlResolved} 
+                            onImageClick={openLightbox} onUrlResolved={handleUrlResolved}
                             typeName={getPhotoTypeName(parseInt(f.archTipo || f.ARCH_Tipo, 10))}
                             currentSupply={currentSupply} defCode={defCode}
                         />
                     ))}
-                 </div>
+                </div>
             </div>
             {renderLightbox()}
-            <PhotoUploadModal visible={modalVisible} onHide={() => setModalVisible(false)} onSave={handleUploadSave} isEditing={false} initialData={getInitialFormData()} currentPhotos={photos} deficiencyData={deficiency} forcedSupply={suministro} forcedCorrelativo={my7004Correlativo} contextData={{feeder, sed, elementCode: getValue('CodigoElemento'), elementType: getValue('TipoElemento')}} />
+            <PhotoUploadModal visible={modalVisible} onHide={() => setModalVisible(false)} onSave={handleUploadSave} isEditing={false} initialData={getInitialFormData()} currentPhotos={photos} deficiencyData={deficiency} forcedSupply={suministro} forcedCorrelativo={my7004Correlativo} contextData={{ feeder, sed, elementCode: getValue('CodigoElemento'), elementType: getValue('TipoElemento') }} />
         </div>
     );
 }
