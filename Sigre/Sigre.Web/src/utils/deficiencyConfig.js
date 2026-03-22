@@ -20,7 +20,7 @@ export const COMMON_DEFICIENCY_FIELDS = [
     type: "text",
     required: false,
     readonly: true,
-    hidden: true 
+    hidden: true
   },
   {
     key: "defiLatitud",
@@ -60,7 +60,7 @@ export const COMMON_DEFICIENCY_FIELDS = [
     required: true,
     keyboardType: "numeric",
     noSpaces: true,
-    onlyDigits: true, 
+    onlyDigits: true,
     validation: {
       custom: (value) => {
         const s = String(value ?? "").trim();
@@ -100,7 +100,7 @@ export const COMMON_DEFICIENCY_FIELDS = [
     type: "number",
     required: false,
     readonly: true,
-    hidden: true 
+    hidden: true
   },
 ];
 
@@ -140,8 +140,8 @@ export const DEFICIENCY_FIELD_MAP = {
 
   // --- VANOS ---
   "7002": { label: "VANO - CONDUCTOR DESNUDO, FORRADO O AISLADO CON AISLAMIENTO DETERIORADO O INADECUADO.", fields: [...COMMON_DEFICIENCY_FIELDS] },
-  
- "7004": {
+
+  "7004": {
     label: "VANO - CONDUCTOR DE BAJA TENSIÓN SOBRE EDIFICACIÓN O EN CONTACTO CON TECHO O SOPORTE METÁLICO.",
     fields: [
       ...COMMON_BEFORE_OBSERVACION,
@@ -151,7 +151,7 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         // AGREGADO: Texto de ayuda visual
-        helperText: "(Máx: 2.50m)", 
+        helperText: "(Máx: 2.50m)",
         validation: {
           max: 2.5,
           message: "Valores mayores a 2.5m no suelen ser deficiencia horizontal."
@@ -179,7 +179,7 @@ export const DEFICIENCY_FIELD_MAP = {
         validation: {
           custom: (value, formData) => {
             const v = Number(value);
-            const acc = Number(formData?.defiAccesibilidad); 
+            const acc = Number(formData?.defiAccesibilidad);
 
             if (!Number.isFinite(v)) return "Ingrese una distancia válida.";
             if (![1, 2].includes(acc)) return "Seleccione primero la Accesibilidad.";
@@ -205,11 +205,16 @@ export const DEFICIENCY_FIELD_MAP = {
         selectable: true,
         required: true,
         valueMap: {
-          1: "Calle / Camino",
-          2: "Avenida / Carretera",
-          3: "Vía Férrea (Tren)",
-          4: "Longitudinal a Vía (1 piso)",
-          5: "Longitudinal a Vía (Cochera)"
+          // 1: "Calle / Camino",
+          // 2: "Avenida / Carretera",
+          // 3: "Vía Férrea (Tren)",
+          // 4: "Longitudinal a Vía (1 piso)",
+          // 5: "Longitudinal a Vía (Cochera)"
+          1: "Calle",
+          2: "Avenida",
+          3: "Cruce de trenes",
+          4: "Longitudinal un piso",
+          5: "Longitudinal cochera"
         },
         validation: { message: "Seleccione el tipo de cruce" }
       },
@@ -220,21 +225,21 @@ export const DEFICIENCY_FIELD_MAP = {
         type: "number",
         required: true,
         // AGREGADO: Tabla resumida de límites
-        helperText: "(Calle <5.5 | Av <6.5 | Tren <7.5)", 
+        helperText: "(Calle <5.5 | Av <6.5 | Tren <7.5)",
         validation: {
           custom: (value, formData) => {
             const v = Number(value);
             const tipo = Number(formData?.defiTipoCruce);
             if (!Number.isFinite(v)) return "Ingrese la altura medida.";
-            
+
             const limitesSeguridad = { 1: 5.5, 2: 6.5, 3: 7.5, 4: 4.0, 5: 5.5 };
 
             if (!limitesSeguridad[tipo]) return "Seleccione primero el tipo de cruce.";
 
             if (v >= limitesSeguridad[tipo]) {
-               // ... tu lógica de retorno de mensaje ...
-               const labelMap = { 1: "Calle", 2: "Avenida", 3: "Vía Férrea", 4: "Longitudinal", 5: "Longitudinal Cochera" };
-               return `Para ${labelMap[tipo]}, la altura debe ser MENOR a ${limitesSeguridad[tipo].toFixed(2)}m.`;
+              // ... tu lógica de retorno de mensaje ...
+              const labelMap = { 1: "Calle", 2: "Avenida", 3: "Vía Férrea", 4: "Longitudinal", 5: "Longitudinal Cochera" };
+              return `Para ${labelMap[tipo]}, la altura debe ser MENOR a ${limitesSeguridad[tipo].toFixed(2)}m.`;
             }
             return null;
           }
@@ -257,9 +262,9 @@ export const DEFICIENCY_FIELD_MAP = {
         helperText: "(Debe ser < 7.50m)",
         validation: {
           custom: (value) => {
-             const v = Number(value);
-             if (v >= 7.5) return "La distancia debe ser menor a 7.5m para esta deficiencia.";
-             return null;
+            const v = Number(value);
+            if (v >= 7.5) return "La distancia debe ser menor a 7.5m para esta deficiencia.";
+            return null;
           }
         }
       },
@@ -268,18 +273,18 @@ export const DEFICIENCY_FIELD_MAP = {
   }
 };
 export const ALL_DEFICIENCY_OPTIONS = [
-    { code: "0", name: "SIN DEFICIENCIA", type: "BOTH" },
-    { code: "6002", name: "6002 - POSTE EN MAL ESTADO DE CONSERVACIÓN O INAPROPIADO PARA LA FUNCIÓN DE APOYO", type: "POST" },
-    { code: "6004", name: "6004 - POSTE INCLINADO MÁS DE 5° O CON DEFICIENCIAS EN LA CIMENTACIÓN", type: "POST" },
-    { code: "6006", name: "6006 - CAJA PORTAFUSIBLE DE POSTE CON PARTES ENERGIZADAS EXPUESTAS Y ACCESIBLES", type: "POST" },
-    { code: "6008", name: "6008 - PROTECCIÓN MECÁNICA DE CABLE ROTA, INEXISTENTE, INSUFICIENTE O MATERIAL INAPROPIADO", type: "POST" },
-    { code: "6024", name: "6024 - RETENIDA EN MAL ESTADO", type: "POST" },
-    { code: "6026", name: "6026 - PASTORAL DE AP EN MAL ESTADO O POR DESPRENDERSE", type: "POST" },
-    { code: "6028", name: "6028 - ARTEFACTO DE AP DESPRENDIDO O POR DESPRENDERSE", type: "POST" },
-    { code: "7002", name: "7002 - CONDUCTOR DESNUDO, FORRADO O AISLADO CON AISLAMIENTO DETERIORADO O INADECUADO", type: "VANO" },
-    { code: "7004", name: "7004 - CONDUCTOR DE BAJA TENSIÓN SOBRE EDIFICACIÓN O EN CONTACTO CON TECHO O SOPORTE METÁLICO", type: "VANO" },
-    { code: "7006", name: "7006 - CONDUCTOR INCUMPLE DS RESPECTO AL NIVEL DE TERRENO", type: "VANO" },
-    { code: "7008", name: "7008 - CONDUCTOR INCUMPLE DS RESPECTO A GRIFO", type: "VANO" }
+  { code: "0", name: "SIN DEFICIENCIA", type: "BOTH" },
+  { code: "6002", name: "6002 - POSTE EN MAL ESTADO DE CONSERVACIÓN O INAPROPIADO PARA LA FUNCIÓN DE APOYO", type: "POST" },
+  { code: "6004", name: "6004 - POSTE INCLINADO MÁS DE 5° O CON DEFICIENCIAS EN LA CIMENTACIÓN", type: "POST" },
+  { code: "6006", name: "6006 - CAJA PORTAFUSIBLE DE POSTE CON PARTES ENERGIZADAS EXPUESTAS Y ACCESIBLES", type: "POST" },
+  { code: "6008", name: "6008 - PROTECCIÓN MECÁNICA DE CABLE ROTA, INEXISTENTE, INSUFICIENTE O MATERIAL INAPROPIADO", type: "POST" },
+  { code: "6024", name: "6024 - RETENIDA EN MAL ESTADO", type: "POST" },
+  { code: "6026", name: "6026 - PASTORAL DE AP EN MAL ESTADO O POR DESPRENDERSE", type: "POST" },
+  { code: "6028", name: "6028 - ARTEFACTO DE AP DESPRENDIDO O POR DESPRENDERSE", type: "POST" },
+  { code: "7002", name: "7002 - CONDUCTOR DESNUDO, FORRADO O AISLADO CON AISLAMIENTO DETERIORADO O INADECUADO", type: "VANO" },
+  { code: "7004", name: "7004 - CONDUCTOR DE BAJA TENSIÓN SOBRE EDIFICACIÓN O EN CONTACTO CON TECHO O SOPORTE METÁLICO", type: "VANO" },
+  { code: "7006", name: "7006 - CONDUCTOR INCUMPLE DS RESPECTO AL NIVEL DE TERRENO", type: "VANO" },
+  { code: "7008", name: "7008 - CONDUCTOR INCUMPLE DS RESPECTO A GRIFO", type: "VANO" }
 ];
 
 

@@ -313,8 +313,17 @@ export default function DeficiencyForm({
                     defiNumSuministro: getValue('NumSuministro') || '',
                     defiDistHorizontal: getValue('DistHorizontal'),
                     defiDistVertical: getValue('DistVertical'),
-                    defiAccesibilidad: getValue('Accesibilidad'),
-                    defiTipoCruce: getValue('TipoCruce'),
+                    //defiAccesibilidad: getValue('Accesibilidad'),
+                    defiAccesibilidad: getValue('Accesibilidad') != null && getValue('Accesibilidad') !== ''
+                        ? Number(getValue('Accesibilidad'))
+                        : null,
+                    //defiTipoCruce: getValue('TipoCruce'),
+                    defiTipoCruce: getValue('TipoCruce') != null && getValue('TipoCruce') !== ''
+                        ? Number(getValue('TipoCruce'))
+                        : null,
+
+
+
                     defiInspeccionado: Number(getValue('Inspeccionado')) || 0,
                     defiUsuarioInic: getValue('UsuarioInic'),
                     codopInterno: getValue('CodopInterno') != null ? Number(getValue('CodopInterno')) : null,
