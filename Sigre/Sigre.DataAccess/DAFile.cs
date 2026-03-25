@@ -664,8 +664,8 @@ namespace Sigre.DataAccess
         }
 
     
-        // Usamos el disco D:\ como raíz, según tu captura de pantalla
-        private readonly string _baseDirectory = @"D:\";
+        // Usamos el disco H:\ como raíz, 
+        private readonly string _baseDirectory = @"H:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
         {
