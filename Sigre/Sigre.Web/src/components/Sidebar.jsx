@@ -12,7 +12,8 @@ import {
   FileSearch,
   X,
   LogOut,
-  User // <-- Importamos íconos adicionales para el usuario
+  User, // <-- Importamos íconos adicionales para el usuario
+  UploadCloud
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 // 👇 Importamos el hook de usuario
@@ -30,6 +31,7 @@ const navItems = [
   { title: 'Importación Masiva Fotos', href: '/importacion-masiva-fotos', icon: FileSearch },
   { title: 'NUEVA Importación Masiva(EN PRUEBA)', href: '/importacion-masiva-inversa', icon: FileSearch },
   { title: 'Gestión de Inspecciones', href: '/reporteMaestro', icon: FileSearch },
+  {title: 'Migración a AWS S3', href: '/AwsSubida', icon: UploadCloud }
 
 ]
 export function Sidebar({ className, onClose, onLogout }) {
