@@ -697,13 +697,22 @@ namespace Sigre.DataAccess
                 // 🔥 NUEVO: Limpieza automática de la carpeta antigua
                 try
                 {
-                    // Obtenemos la ruta de la carpeta antigua (ej. D:\...\6002)
+                    // 1. Obtenemos la ruta de la carpeta de la deficiencia (ej. ...\6002)
                     string oldDirectory = Path.GetDirectoryName(absoluteOldPath);
 
-                    // Si la carpeta existe y ya no contiene NINGÚN archivo ni subcarpeta, la borramos
+                    // Si la carpeta de deficiencia existe y está vacía, la borramos
                     if (Directory.Exists(oldDirectory) && !Directory.EnumerateFileSystemEntries(oldDirectory).Any())
                     {
-                        Directory.Delete(oldDirectory); // Elimina la carpeta vacía
+                        Directory.Delete(oldDirectory); // Borra el 6002
+
+                        // 2. Ahora miramos la carpeta padre, que es el Elemento (ej. ...\VBT000184260)
+                        string elementDirectory = Path.GetDirectoryName(oldDirectory);
+
+                        // Si la carpeta del elemento existe y también quedó vacía, la borramos
+                        if (Directory.Exists(elementDirectory) && !Directory.EnumerateFileSystemEntries(elementDirectory).Any())
+                        {
+                            Directory.Delete(elementDirectory); // Borra el VBT000184260
+                        }
                     }
                 }
                 catch (Exception ex)

@@ -148,7 +148,7 @@ export default function WebInspectionManager() {
         geo: false   // GPS (Protegido)
     });
     // --- 2. ESTADOS DE DATOS E HISTORIAL ---
-    const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
+    const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles, moveFilePhysical } = useFiles();
     const { getCodeById, fetchTypificationsByTypeElement, masterTypifications } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
 
@@ -413,10 +413,10 @@ export default function WebInspectionManager() {
         // Pre-marcamos inteligentemente las opciones si el usuario llenó los campos arriba
         // 🚨 EL GPS SIEMPRE ESTARÁ EN FALSE POR SEGURIDAD 🚨
         setBulkNewGis('');
-        setBulkOptions({
-            path: !!selectedFeederId && !!selectedSed,
-            date: !!globalDate,
-            tipi: !!globalTipificacion,
+setBulkOptions({
+            path: false, 
+            date: false, 
+            tipi: false, 
             geo: false,
             gisCode: false
         });
@@ -750,102 +750,102 @@ export default function WebInspectionManager() {
 
 
     const handleDownloadRenamedZip = async () => {
-    if (fileRows.length === 0) {
-        toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay archivos para descargar.' });
-        return;
-    }
-
-    const rowsForZip = fileRows.filter(row => parseInt(row.archTipo) !== 0);
-
-    if (rowsForZip.length === 0) {
-        toast.current.show({ severity: 'warn', summary: 'Sin fotos', detail: 'No hay fotos para descargar en el ZIP.' });
-        return;
-    }
-
-    setZipLoading(true);
-    let filesAdded = 0;
-
-    try {
-        const zip = new JSZip();
-
-        const downloadPromises = rowsForZip.map(async (row) => {
-            let zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
-            const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
-
-            // 1. Verificar si es una foto subida recientemente (en la memoria RAM)
-            if (sessionBlobs.current && sessionBlobs.current[originalFileName]) {
-                zip.file(zipPath, sessionBlobs.current[originalFileName]);
-                filesAdded++;
-                return true;
-            }
-
-            // 2. Método principal: endpoint oficial
-            if (row.archInterno && row.archInterno > 0) {
-                const baseUrl = API_BASE_URL.replace(/\/+$/, '');
-                const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
-
-                try {
-                    const response = await fetch(apiUrl);
-                    const contentType = response.headers.get("content-type");
-
-                    if (response.ok && contentType && !contentType.includes("text/html")) {
-                        const blob = await response.blob();
-                        zip.file(zipPath, blob);
-                        filesAdded++;
-                        return true;
-                    }
-                } catch (e) {
-                    console.warn(`Falló la API de descarga para ID ${row.archInterno}, intentando rutas físicas...`);
-                }
-            }
-
-            // 3. Fallback: URLs físicas
-            const urlsToTry = getCandidateUrls(row);
-
-            for (const url of urlsToTry) {
-                try {
-                    const response = await fetch(url);
-                    const contentType = response.headers.get("content-type");
-
-                    if (response.ok && contentType && !contentType.includes("text/html")) {
-                        const blob = await response.blob();
-                        zip.file(zipPath, blob);
-                        filesAdded++;
-                        return true;
-                    }
-                } catch (e) {
-                    // sigue intentando
-                }
-            }
-
-            console.warn(`Fracaso total: No se encontró en servidor: ${row.originalName}`);
-            return false;
-        });
-
-        await Promise.all(downloadPromises);
-
-        if (filesAdded === 0) {
-            toast.current.show({ severity: 'error', summary: 'ZIP Vacío', detail: 'El servidor no devolvió ninguna foto.' });
+        if (fileRows.length === 0) {
+            toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay archivos para descargar.' });
             return;
         }
 
-        const content = await zip.generateAsync({ type: "blob" });
-        const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-        saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
+        const rowsForZip = fileRows.filter(row => parseInt(row.archTipo) !== 0);
 
-        toast.current.show({
-            severity: 'success',
-            summary: 'Descargado',
-            detail: `Se empaquetaron ${filesAdded} de ${rowsForZip.length} fotos.`
-        });
+        if (rowsForZip.length === 0) {
+            toast.current.show({ severity: 'warn', summary: 'Sin fotos', detail: 'No hay fotos para descargar en el ZIP.' });
+            return;
+        }
 
-    } catch (error) {
-        console.error(error);
-        toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo crítico al generar el ZIP.' });
-    } finally {
-        setZipLoading(false);
-    }
-};
+        setZipLoading(true);
+        let filesAdded = 0;
+
+        try {
+            const zip = new JSZip();
+
+            const downloadPromises = rowsForZip.map(async (row) => {
+                let zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
+                const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+
+                // 1. Verificar si es una foto subida recientemente (en la memoria RAM)
+                if (sessionBlobs.current && sessionBlobs.current[originalFileName]) {
+                    zip.file(zipPath, sessionBlobs.current[originalFileName]);
+                    filesAdded++;
+                    return true;
+                }
+
+                // 2. Método principal: endpoint oficial
+                if (row.archInterno && row.archInterno > 0) {
+                    const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+                    const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
+
+                    try {
+                        const response = await fetch(apiUrl);
+                        const contentType = response.headers.get("content-type");
+
+                        if (response.ok && contentType && !contentType.includes("text/html")) {
+                            const blob = await response.blob();
+                            zip.file(zipPath, blob);
+                            filesAdded++;
+                            return true;
+                        }
+                    } catch (e) {
+                        console.warn(`Falló la API de descarga para ID ${row.archInterno}, intentando rutas físicas...`);
+                    }
+                }
+
+                // 3. Fallback: URLs físicas
+                const urlsToTry = getCandidateUrls(row);
+
+                for (const url of urlsToTry) {
+                    try {
+                        const response = await fetch(url);
+                        const contentType = response.headers.get("content-type");
+
+                        if (response.ok && contentType && !contentType.includes("text/html")) {
+                            const blob = await response.blob();
+                            zip.file(zipPath, blob);
+                            filesAdded++;
+                            return true;
+                        }
+                    } catch (e) {
+                        // sigue intentando
+                    }
+                }
+
+                console.warn(`Fracaso total: No se encontró en servidor: ${row.originalName}`);
+                return false;
+            });
+
+            await Promise.all(downloadPromises);
+
+            if (filesAdded === 0) {
+                toast.current.show({ severity: 'error', summary: 'ZIP Vacío', detail: 'El servidor no devolvió ninguna foto.' });
+                return;
+            }
+
+            const content = await zip.generateAsync({ type: "blob" });
+            const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
+            saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
+
+            toast.current.show({
+                severity: 'success',
+                summary: 'Descargado',
+                detail: `Se empaquetaron ${filesAdded} de ${rowsForZip.length} fotos.`
+            });
+
+        } catch (error) {
+            console.error(error);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo crítico al generar el ZIP.' });
+        } finally {
+            setZipLoading(false);
+        }
+    };
 
     // ==============================================================================
     // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
@@ -887,9 +887,15 @@ export default function WebInspectionManager() {
     //     if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
     //     else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
     // };
-    
+
     // ==============================================================================
     // 🔥 9. GUARDADO TOTAL (ZIP + DB + MOVIMIENTO FÍSICO EN SERVIDOR) 🔥
+    // ==============================================================================
+    // No olvides importar API_URL arriba en tu archivo si no lo tienes:
+    // import { API_URL } from '../utils/api'; // Ajusta la ruta según tu proyecto
+
+    // ==============================================================================
+    // 🔥 9. GUARDADO TOTAL (ZIP + DB + MOVIMIENTO FÍSICO OPCIONAL) 🔥
     // ==============================================================================
     const handleSaveAll = async () => {
         const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
@@ -901,38 +907,27 @@ export default function WebInspectionManager() {
         await handleDownloadRenamedZip();
 
         // 2. MOVER Y GUARDAR EN BD
-        toast.current.show({ severity: 'info', summary: 'Procesando', detail: 'Moviendo archivos en servidor y actualizando BD...' });
+        toast.current.show({ severity: 'info', summary: 'Procesando', detail: 'Actualizando base de datos e intentando mover archivos...' });
 
-        let successCount = 0; 
+        let successCount = 0;
         let failCount = 0;
+        let physicalMoveFailed = false; // 🔥 Bandera clave para la degradación elegante
         const updatedRows = [...fileRows];
-
-        // Definimos la URL de tu API en C# (Ajusta el puerto si es necesario)
 
         const promises = updatedRows.map(async (row, index) => {
             const isModified = row.originalName && row.originalName !== row.currentPath;
 
-            // A. Movimiento físico en el disco (Solo si la ruta cambió y no es audio)
+            // A. Intento de movimiento físico en el disco (Solo si la ruta cambió y no es audio)
             if (isModified && parseInt(row.archTipo) !== 0) {
-                try {
-                    const moveResponse = await fetch(`${baseUrl}File/move`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            oldPath: row.originalName,
-                            newPath: row.currentPath
-                        })
-                    });
+                // Usamos nuestro hook limpio. Retorna true si funcionó, false si falló.
+                const successMove = await moveFilePhysical(row.originalName, row.currentPath);
 
-                    if (!moveResponse.ok) throw new Error("Fallo al mover archivo en servidor");
-                } catch (error) {
-                    console.error("Error moviendo archivo físico:", error);
-                    failCount++;
-                    return; // Si falla el movimiento físico, cancelamos la actualización en BD para esta foto
+                if (!successMove) {
+                    physicalMoveFailed = true; // Encendemos la bandera para el mensaje "sticky"
                 }
             }
 
-            // B. Guardar en Base de Datos (Solo llega aquí si el movimiento fue exitoso o no hubo cambios)
+            // B. Guardar en Base de Datos (🔥 SE EJECUTA SIEMPRE, haya fallado o no el paso físico)
             const payload = {
                 archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
                 archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
@@ -940,13 +935,13 @@ export default function WebInspectionManager() {
                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
                 archNombre: row.currentPath, tipiInterno: row.tipiInterno
             };
-            
+
             const success = await addFile(payload);
-            
+
             if (success) {
                 successCount++;
-                // Al guardar con éxito, la ruta actual pasa a ser la nueva original
-                updatedRows[index] = { ...row, originalName: row.currentPath }; 
+                // Al guardar con éxito, la ruta actual pasa a ser la nueva original en la tabla web
+                updatedRows[index] = { ...row, originalName: row.currentPath };
             } else {
                 failCount++;
             }
@@ -956,10 +951,22 @@ export default function WebInspectionManager() {
         setFileRows(updatedRows);
         setSaving(false);
 
+        // C. Lógica de Mensajes Finales
         if (failCount === 0) {
-            toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos respaldados, movidos y actualizados.` });
+            if (physicalMoveFailed) {
+                // 🔥 MENSAJE DURADERO si la BD está bien pero el disco falló
+                toast.current.show({
+                    severity: 'warn',
+                    summary: 'BD Actualizada - Faltan Mover Archivos Fisicos',
+                    detail: 'Los datos se actualizaron en la BD y tienes el ZIP de respaldo. Sin embargo, no se pudieron mover las fotos en las carpetas del servidor (revisa la unidad D/H). Por favor, descomprime el ZIP y reemplázalas manualmente.',
+                    sticky: true // El usuario debe cerrarlo manualmente
+                });
+            } else {
+                // Todo perfecto (ZIP + BD + Disco físico)
+                toast.current.show({ severity: 'success', summary: 'Éxito Total', detail: `${successCount} archivos respaldados, movidos físicamente y actualizados en BD.` });
+            }
         } else {
-            toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+            toast.current.show({ severity: 'error', summary: 'Error de BD', detail: `Se guardaron ${successCount} registros, pero fallaron ${failCount}.`, sticky: true });
         }
     };
 
@@ -1025,7 +1032,7 @@ export default function WebInspectionManager() {
     //         />
     //     );
     // };
-const FallbackImage = ({ row }) => {
+    const FallbackImage = ({ row }) => {
         const isAudio = parseInt(row.archTipo) === 0;
         const [srcIndex, setSrcIndex] = useState(0);
 
@@ -1035,8 +1042,8 @@ const FallbackImage = ({ row }) => {
 
         // 🔥 CORRECCIÓN AQUÍ: Usar originalName para la vista previa porque 
         // el archivo físico sigue ahí hasta que le demos a Guardar en BD.
-        const pathForPreview = (row.originalName && row.originalName !== row.currentPath) 
-            ? row.originalName 
+        const pathForPreview = (row.originalName && row.originalName !== row.currentPath)
+            ? row.originalName
             : row.currentPath;
 
         const normalizedPath = String(pathForPreview || '')
