@@ -179,5 +179,33 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+
+       
+      
+            [HttpPost("move")]
+            public async Task<IActionResult> MoveFileFisico([FromBody] MoveFileRequest request)
+            {
+                if (string.IsNullOrEmpty(request.OldPath) || string.IsNullOrEmpty(request.NewPath))
+                {
+                    return BadRequest(new { mensaje = "Las rutas origen y destino son obligatorias." });
+                }
+
+                try
+                {
+                    var daFile = new DAFile();
+                    bool success = await daFile.MoverArchivoFisicoAsync(request.OldPath, request.NewPath);
+
+                    return Ok(new { mensaje = "Archivo movido y renombrado con éxito en el servidor." });
+                }
+                catch (FileNotFoundException ex)
+                {
+                    return NotFound(new { mensaje = "Archivo original no encontrado", detalle = ex.Message });
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(500, new { mensaje = "Error interno al mover el archivo", detalle = ex.Message });
+                }
+            
+        }
     }
 }

@@ -17,6 +17,7 @@ import { Message } from 'primereact/message';
 import { Dialog } from 'primereact/dialog';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import baseUrl from '../../src/api/apiConfig';
 
 // --- HOOKS ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
@@ -849,20 +850,89 @@ export default function WebInspectionManager() {
     // ==============================================================================
     // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
     // ==============================================================================
+    // const handleSaveAll = async () => {
+    //     const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
+    //     if (fileRows.length === 0) return;
+    //     setSaving(true);
+
+    //     // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
+    //     toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
+    //     await handleDownloadRenamedZip();
+
+    //     // 2. Guardar en Base de Datos
+    //     let successCount = 0; let failCount = 0;
+    //     const updatedRows = [...fileRows];
+
+    //     const promises = updatedRows.map(async (row, index) => {
+    //         const payload = {
+    //             archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
+    //             archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
+    //             archFecha: toLocalISOString(row.archFecha), archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0,
+    //             archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
+    //             archNombre: row.currentPath, tipiInterno: row.tipiInterno
+    //         };
+    //         const success = await addFile(payload);
+    //         if (success) {
+    //             successCount++;
+    //             updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
+    //         } else {
+    //             failCount++;
+    //         }
+    //     });
+
+    //     await Promise.all(promises);
+    //     setFileRows(updatedRows);
+    //     setSaving(false);
+
+    //     if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
+    //     else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+    // };
+    
+    // ==============================================================================
+    // 🔥 9. GUARDADO TOTAL (ZIP + DB + MOVIMIENTO FÍSICO EN SERVIDOR) 🔥
+    // ==============================================================================
     const handleSaveAll = async () => {
         const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
         if (fileRows.length === 0) return;
         setSaving(true);
 
-        // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
-        toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
+        // 1. RESPALDO: Descargar las fotos físicas ANTES de moverlas en el servidor
+        toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos de respaldo...' });
         await handleDownloadRenamedZip();
 
-        // 2. Guardar en Base de Datos
-        let successCount = 0; let failCount = 0;
+        // 2. MOVER Y GUARDAR EN BD
+        toast.current.show({ severity: 'info', summary: 'Procesando', detail: 'Moviendo archivos en servidor y actualizando BD...' });
+
+        let successCount = 0; 
+        let failCount = 0;
         const updatedRows = [...fileRows];
 
+        // Definimos la URL de tu API en C# (Ajusta el puerto si es necesario)
+
         const promises = updatedRows.map(async (row, index) => {
+            const isModified = row.originalName && row.originalName !== row.currentPath;
+
+            // A. Movimiento físico en el disco (Solo si la ruta cambió y no es audio)
+            if (isModified && parseInt(row.archTipo) !== 0) {
+                try {
+                    const moveResponse = await fetch(`${baseUrl}File/move`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            oldPath: row.originalName,
+                            newPath: row.currentPath
+                        })
+                    });
+
+                    if (!moveResponse.ok) throw new Error("Fallo al mover archivo en servidor");
+                } catch (error) {
+                    console.error("Error moviendo archivo físico:", error);
+                    failCount++;
+                    return; // Si falla el movimiento físico, cancelamos la actualización en BD para esta foto
+                }
+            }
+
+            // B. Guardar en Base de Datos (Solo llega aquí si el movimiento fue exitoso o no hubo cambios)
             const payload = {
                 archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
                 archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
@@ -870,10 +940,13 @@ export default function WebInspectionManager() {
                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
                 archNombre: row.currentPath, tipiInterno: row.tipiInterno
             };
+            
             const success = await addFile(payload);
+            
             if (success) {
                 successCount++;
-                updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
+                // Al guardar con éxito, la ruta actual pasa a ser la nueva original
+                updatedRows[index] = { ...row, originalName: row.currentPath }; 
             } else {
                 failCount++;
             }
@@ -883,9 +956,13 @@ export default function WebInspectionManager() {
         setFileRows(updatedRows);
         setSaving(false);
 
-        if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
-        else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+        if (failCount === 0) {
+            toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos respaldados, movidos y actualizados.` });
+        } else {
+            toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
+        }
     };
+
     const handleRemoveRequest = (event, row) => {
         confirmPopup({
             target: event.currentTarget,
@@ -948,7 +1025,7 @@ export default function WebInspectionManager() {
     //         />
     //     );
     // };
-    const FallbackImage = ({ row }) => {
+const FallbackImage = ({ row }) => {
         const isAudio = parseInt(row.archTipo) === 0;
         const [srcIndex, setSrcIndex] = useState(0);
 
@@ -956,7 +1033,13 @@ export default function WebInspectionManager() {
             return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
         }
 
-        const normalizedPath = String(row.currentPath || '')
+        // 🔥 CORRECCIÓN AQUÍ: Usar originalName para la vista previa porque 
+        // el archivo físico sigue ahí hasta que le demos a Guardar en BD.
+        const pathForPreview = (row.originalName && row.originalName !== row.currentPath) 
+            ? row.originalName 
+            : row.currentPath;
+
+        const normalizedPath = String(pathForPreview || '')
             .replace(/\\/g, '/')
             .replace(/^.*SIGRE\.MOVIL\//i, '')
             .replace(/^\/+/, '');

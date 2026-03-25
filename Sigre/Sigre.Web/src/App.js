@@ -20,6 +20,7 @@ import ImportacionMasivaFotos from './pages/ImportacionMasivaFotos';
 import Elementos from './pages/Elementos';
 import ImportacionMasivaInversa from './pages/ImportacionMasivaInversa';
 import ReporteMaestro from './pages/ReporteMaestro';
+import MigrationPanel from './pages/MigrationPanel';
 function App() {
   return (
     // 4. ENVUELVE TODO EL CONTENIDO CON EL PROVIDER
@@ -45,6 +46,7 @@ function App() {
           <Route path="/configuracion" element={<div>Página de Configuración</div>} />
           <Route path="/importacion-masiva-inversa" element={<ImportacionMasivaInversa />} />
           <Route path="/reporteMaestro" element={<ReporteMaestro />} />
+          <Route path="/AwsSubida" element={<MigrationPanel />} />
         </Route>
 
         {/* REDIRECCIÓN */}
