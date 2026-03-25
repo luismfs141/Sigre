@@ -85,6 +85,23 @@ export default function CloneDeficiencyModal({
         // 1. Extraemos el código visual (ej "6026")
         const opcionElegida = typificationOptions.find(o => o.value === selectedTipi);
         const nuevoCodigoTipi = opcionElegida && opcionElegida.value !== 0 ? opcionElegida.label.split(' - ')[0] : 'SINDEF';
+        // 🔥 1.5 LÓGICA DE CARPETAS ESPECIALES (7004 y SINDEF)
+        let folderPath = nuevoCodigoTipi; // Por defecto es el mismo código (ej "6026")
+        
+        if (nuevoCodigoTipi === "7004") {
+            // Filtramos las deficiencias de este elemento que ya son 7004 (o cuyo ID interno equivale a 7004)
+            const defs7004 = existingDeficiencies.filter(d => {
+                const c = d.tipiCodigo || getCodeById(d.tipiInterno) || "";
+                return String(c).trim() === "7004" || String(d.tipiInterno) === "60";
+            });
+            // Calculamos el siguiente correlativo
+            const folderNum = defs7004.length + 1;
+            folderPath = `7004/${folderNum}`; 
+        } else if (nuevoCodigoTipi === "SINDEF" || nuevoCodigoTipi === "0") {
+            folderPath = "SINDEF";
+        }
+
+        console.log(`📂 Ruta calculada para la copia física: ${folderPath}`);
 
         // 🔥 2. OBTENER USUARIO ACTUAL DEL FRONTEND (AUDITORÍA)
         let currentUserId = "20"; // Fallback por defecto

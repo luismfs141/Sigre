@@ -4,7 +4,7 @@ import api from '../api/apiConfig'; // Tu instancia de axios
 export const useCloneDeficiency = () => {
     const [isCloning, setIsCloning] = useState(false);
 
-    const cloneDeficiency = useCallback(async (idOriginal, nuevaTipificacion,nuevoCodigoTipi, usuarioSesion = "20") => {
+    const cloneDeficiency = useCallback(async (idOriginal, nuevaTipificacion,nuevoCodigoTipi, usuarioSesion = "20",folderPath) => {
         setIsCloning(true);
         try {
             console.log(`📡 [POST] Clonando deficiencia ${idOriginal} a tipi ${nuevaTipificacion}`);
@@ -14,7 +14,8 @@ export const useCloneDeficiency = () => {
                 idOriginal,
                 nuevaTipificacion,
                 nuevoCodigoTipi,
-                usuarioSesion
+                usuarioSesion,
+                folderPath
             });
 
             return { success: true, data: response.data };

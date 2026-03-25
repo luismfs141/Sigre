@@ -1971,30 +1971,85 @@ namespace Sigre.DataAccess
                     ctx.Deficiencias.Add(clonDefi);
                     ctx.SaveChanges(); // Guardamos para obtener el nuevo DefiInterno
 
+                    
+
+                    // 🔥 1. LÓGICA DE CARPETAS ESPECIALES (Cálculo del Molde)
+                    string codeNuevoFolder = nuevoCodigoTipi;
+                    string codeNuevoFile = nuevoCodigoTipi;
+
+                    if (nuevoCodigoTipi == "0" || nuevoCodigoTipi == "SINDEF")
+                    {
+                        codeNuevoFolder = "SINDEF";
+                        codeNuevoFile = "0000";
+                    }
+                    else if (nuevoCodigoTipi == "7004")
+                    {
+                        // Buscamos cuántas deficiencias 7004 tiene este poste para sacar el correlativo
+                        var defs7004 = ctx.Deficiencias
+                            .Where(d => d.DefiCodigoElemento == original.DefiCodigoElemento && d.TipiInterno == nuevaTipificacion && d.DefiActivo == true)
+                            .OrderBy(d => d.DefiInterno)
+                            .ToList();
+
+                        // Encontramos qué posición ocupa nuestro clon (que ya fue guardado en la BD arriba)
+                        int index = defs7004.FindIndex(d => d.DefiInterno == clonDefi.DefiInterno);
+                        int folderNum = index != -1 ? index + 1 : (defs7004.Count > 0 ? defs7004.Count : 1);
+
+                        codeNuevoFolder = $"7004/{folderNum}";
+                        codeNuevoFile = $"7004_{folderNum}";
+                    }
+
                     // 4. CLONAR ARCHIVOS (Base de Datos + Físico)
                     var archivosOriginales = ctx.Archivos.Where(a => a.ArchCodTabla == idDeficienciaOriginal && a.ArchActivo == true).ToList();
                     var daFile = new DAFile();
 
                     foreach (var arch in archivosOriginales)
                     {
-                        // 🔥 DEBUG: Ver qué trae la base de datos antes de hacer nada
                         System.Diagnostics.Debug.WriteLine($"🔍 ARCHIVO ORIG: ID={arch.ArchInterno} | Fecha={arch.ArchFecha}");
 
-                        string codeViejo = Path.GetFileName(Path.GetDirectoryName(arch.ArchNombre.Replace("/", "\\")));
-                        string codeNuevo = string.IsNullOrEmpty(nuevoCodigoTipi) || nuevoCodigoTipi == "0" ? "SINDEF" : nuevoCodigoTipi;
+                        string nuevaRutaFisica = arch.ArchNombre;
+                        string elemCodigo = original.DefiCodigoElemento; // Ej: "VBT000262999"
 
-                        string nuevaRutaFisica = arch.ArchNombre.Replace($"/{codeViejo}/", $"/{codeNuevo}/");
-                        nuevaRutaFisica = nuevaRutaFisica.Replace($"-{codeViejo}-", $"-{codeNuevo}-");
+                        // 🔥 2. EXTRACCIÓN INTELIGENTE DE LA RUTA VIEJA
+                        // Como no sabemos si la original era 7006, 6026 o 7004/1, lo extraemos directo del string
+                        string folderPadre = $"/{elemCodigo}/";
+                        int startIdx = arch.ArchNombre.IndexOf(folderPadre, StringComparison.OrdinalIgnoreCase);
 
-                        // Si por alguna razón la ruta no cambió, saltamos al siguiente
+                        if (startIdx >= 0)
+                        {
+                            startIdx += folderPadre.Length;
+                            int endIdx = arch.ArchNombre.LastIndexOf('/');
+                            string codeViejoFolder = arch.ArchNombre.Substring(startIdx, endIdx - startIdx); // Ej saca: "7006" o "7004/1"
+
+                            // Ahora extraemos la parte del nombre del archivo (Ej: "7006" o "7004_1")
+                            string oldFileName = Path.GetFileName(arch.ArchNombre);
+                            string marker = $"-{elemCodigo}-";
+                            int markerIdx = oldFileName.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                            string codeViejoFile = "";
+
+                            if (markerIdx >= 0)
+                            {
+                                markerIdx += marker.Length;
+                                int nextDashIdx = oldFileName.IndexOf('-', markerIdx);
+                                if (nextDashIdx >= 0)
+                                {
+                                    codeViejoFile = oldFileName.Substring(markerIdx, nextDashIdx - markerIdx);
+                                }
+                            }
+
+                            // 🔥 3. REEMPLAZO QUIRÚRGICO
+                            // Reemplazamos exactamente la carpeta y exactamente el nombre de archivo
+                            if (!string.IsNullOrEmpty(codeViejoFolder))
+                                nuevaRutaFisica = nuevaRutaFisica.Replace($"/{elemCodigo}/{codeViejoFolder}/", $"/{elemCodigo}/{codeNuevoFolder}/");
+
+                            if (!string.IsNullOrEmpty(codeViejoFile))
+                                nuevaRutaFisica = nuevaRutaFisica.Replace($"-{elemCodigo}-{codeViejoFile}-", $"-{elemCodigo}-{codeNuevoFile}-");
+                        }
+
                         if (arch.ArchNombre == nuevaRutaFisica) continue;
 
-                        // 🔥 Le preguntamos a nuestra función blindada si logró copiar el archivo.
-                        // Recuerda que esta función (en DAFile.cs) ya sabe que si es un .m4a que no existe,
-                        // no debe explotar, sino simplemente devolver 'false'.
+                        // 4. Copiado físico (Creará subcarpetas si es necesario)
                         bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(arch.ArchNombre, nuevaRutaFisica);
 
-                        // 🔥 Solo si la copia fue exitosa (true), registramos la foto clonada en la BD
                         if (seCopioConExito)
                         {
                             var clonArch = new Archivo
@@ -2010,8 +2065,9 @@ namespace Sigre.DataAccess
                                 ArchIdElemento = arch.ArchIdElemento,
                                 ArchTipoElemento = arch.ArchTipoElemento,
                                 ArchActivo = true,
-                                ArchFecha = arch.ArchFecha
+                                ArchFecha = arch.ArchFecha // <-- Si la BD sigue pisando esto, revisa tus Triggers de SQL
                             };
+
                             System.Diagnostics.Debug.WriteLine($"📝 CLON PRE-SAVE: Fecha={clonArch.ArchFecha}");
                             ctx.Archivos.Add(clonArch);
                         }
