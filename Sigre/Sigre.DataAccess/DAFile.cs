@@ -665,7 +665,7 @@ namespace Sigre.DataAccess
 
     
         // Usamos el disco D:\ como raíz, según tu captura de pantalla
-        private readonly string _baseDirectory = @"H:\";
+        private readonly string _baseDirectory = @"D:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
         {
@@ -731,5 +731,58 @@ namespace Sigre.DataAccess
             }
         
     }
-}
+        public async Task<bool> CopiarArchivoFisicoAsync(string oldPath, string newPath)
+        {
+            try
+            {
+                string absoluteOldPath = Path.Combine(_baseDirectory, oldPath.Replace("/", "\\"));
+                string absoluteNewPath = Path.Combine(_baseDirectory, newPath.Replace("/", "\\"));
+
+                // 🔥 CONTROL ESTRICTO SOLO PARA .m4a
+                if (!File.Exists(absoluteOldPath))
+                {
+                    // Si el archivo que falta es un audio .m4a, lo perdonamos y devolvemos false
+                    if (absoluteOldPath.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+
+                    // Si falta una foto (.jpg) u otro archivo, ¡explotamos y avisamos del error!
+                    throw new FileNotFoundException($"Falta evidencia crítica en el disco: {absoluteOldPath}");
+                }
+
+                string targetDirectory = Path.GetDirectoryName(absoluteNewPath);
+                if (!Directory.Exists(targetDirectory))
+                {
+                    Directory.CreateDirectory(targetDirectory);
+                }
+
+                if (absoluteOldPath.Equals(absoluteNewPath, StringComparison.OrdinalIgnoreCase)) return true;
+
+                int maxRetries = 5;
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    try
+                    {
+                        using (var sourceStream = new FileStream(absoluteOldPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (var destStream = new FileStream(absoluteNewPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await sourceStream.CopyToAsync(destStream);
+                        }
+                        return true;
+                    }
+                    catch (IOException)
+                    {
+                        if (i == maxRetries - 1) throw;
+                        await Task.Delay(1000);
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error de disco al copiar: {ex.Message}", ex);
+            }
+        }
+    }
 }

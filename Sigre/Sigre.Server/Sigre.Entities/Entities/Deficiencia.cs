@@ -174,3 +174,11 @@ public class ResumenEliminadosDTO
     public string Eliminado { get; set; } // "NO" o "SI"
     public int Total { get; set; }
 }
+
+public class CloneDeficiencyRequest
+{
+    public int IdOriginal { get; set; }
+    public int NuevaTipificacion { get; set; }
+    public string NuevoCodigoTipi { get; set; }
+    public string UsuarioSesion { get; set; }
+}

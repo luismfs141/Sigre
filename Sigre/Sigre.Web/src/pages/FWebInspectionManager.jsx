@@ -17,7 +17,6 @@ import { Message } from 'primereact/message';
 import { Dialog } from 'primereact/dialog';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import baseUrl from '../../src/api/apiConfig';
 
 // --- HOOKS ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';

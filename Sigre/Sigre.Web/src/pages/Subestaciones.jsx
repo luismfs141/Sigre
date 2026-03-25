@@ -9,10 +9,9 @@ import { Tag } from 'primereact/tag';
 import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Skeleton } from 'primereact/skeleton';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { InputText } from 'primereact/inputtext';
+import CloneDeficiencyModal from '../components/Modals/DuplicateDeficiencyModal';
 import { FilterMatchMode } from 'primereact/api';
 import * as XLSX from 'xlsx';
-
 // --- API ---
 import api from '../api/apiConfig';
 
@@ -59,12 +58,11 @@ export default function Subestaciones() {
     const [selectedDeficiency, setSelectedDeficiency] = useState(null);
     const [formVisible, setFormVisible] = useState(false);
     const [deficiencyToEdit, setDeficiencyToEdit] = useState(null);
-    const [duplicateVisible, setDuplicateVisible] = useState(false);
-    const [duplicateId, setDuplicateId] = useState(null);
-
+    const [showCloneModal, setShowCloneModal] = useState(false);
     // Estado para exportación WYSIWYG
     const [filteredData, setFilteredData] = useState(null);
     const [globalFilterValue, setGlobalFilterValue] = useState('');
+
     const [evidenceCount, setEvidenceCount] = useState(0);
     // Estados para la impresión masiva
     const [isPreparingPrint, setIsPreparingPrint] = useState(false);
@@ -97,8 +95,8 @@ export default function Subestaciones() {
     const { feeders, loading: loadingFeeders } = useFeeder();
     const feederObject = feeders.find(f => f.value === selectedFeeder);
     const { seds: sedsDelAlimentador, loading: loadingSeds } = useSedsByFeeder(selectedFeeder);
-    
-    
+
+
 
     const {
         deficiencies,
@@ -111,7 +109,7 @@ export default function Subestaciones() {
         getDeficiencyById
     } = useDeficienciesBySed();
 
-    const { getCodeById, loading: loadingTypos } = useTypification();
+    const { getCodeById, masterTypifications, loading: loadingTypos } = useTypification();
     const { getInspectorName, loading: loadingUsers } = useUsuario(true);
 
     // -------------------------------------------------------------------
@@ -493,25 +491,10 @@ export default function Subestaciones() {
 
     };
 
-    const duplicateDeficiency = () => {
-
-        if (!selectedDeficiency) {
-
-            toast.current.show({
-                severity: 'warn',
-                summary: 'Atención',
-                detail: 'Seleccione una deficiencia.'
-            });
-
-            return;
-        }
-
-        setDuplicateId(selectedDeficiency.defiInterno);
-        setDuplicateVisible(true);
-    };
 
 
-        // -------------------------------------------------------------------
+
+    // -------------------------------------------------------------------
     // 7. RENDERIZADO
     // -------------------------------------------------------------------
     return (
@@ -554,25 +537,39 @@ export default function Subestaciones() {
                         <i className="pi pi-plus text-lg font-bold"></i>
                         <div className="flex flex-col items-start leading-none"><span className="font-extrabold text-[10px]">NUEVA</span><span className="text-[9px] font-medium">DEFICIENCIA</span></div>
                     </Button>
-                    <Button onClick={duplicateDeficiency} disabled={!selectedDeficiency} className="p-button-sm px-3 h-10 shadow-lg bg-green-600 border-none flex items-center gap-2 hover:scale-105 transition-transform" style={{ background: 'linear-gradient(135deg, #2256c5 0%, #168ea3 100%)', color: '#fff' }}>
-                        <i className="pi pi-clone text-lg font-bold"></i>
-                        <div className="flex flex-col items-start leading-none"><span className="font-extrabold text-[10px]">CLONAR</span><span className="text-[9px] font-medium">DEFICIENCIA</span></div>
+
+                    <Button
+                        onClick={() => setShowCloneModal(true)}
+                        disabled={!selectedDeficiency}
+                        className="p-button-sm px-3 h-10 shadow-lg border-none flex items-center gap-2 hover:scale-105 transition-transform"
+                        style={{
+                            background: 'linear-gradient(135deg, #2256c5 0%, #168ea3 100%)',
+                            color: '#fff'
+                        }}
+                    >
+                        <i className="pi pi-copy text-lg font-bold"></i>
+
+                        <div className="flex flex-col items-start leading-none">
+                            <span className="font-extrabold text-[10px]">CLONAR</span>
+                            <span className="text-[9px] font-medium">DEFICIENCIA</span>
+                        </div>
                     </Button>
-{deficiencies.length > 0 && (
-    <Button 
-        type="button" 
-        onClick={() => setMassivePrintVisible(true)} 
-        className="p-button-sm px-3 h-10 shadow-md shrink-0 border-none flex items-center gap-2 hover:opacity-90 transition-opacity" 
-        style={{ backgroundColor: '#64748b', color: '#ffffff' }} 
-        tooltip="Imprimir todas las visibles"
-    >
-        <i className="pi pi-file-pdf text-lg font-bold"></i>
-        <div className="flex flex-col items-start leading-none">
-            <span className="font-extrabold text-[10px]">REPORTE</span>
-            <span className="text-[9px] font-medium opacity-90">MASIVO PDF</span>
-        </div>
-    </Button>
-)}
+
+                    {deficiencies.length > 0 && (
+                        <Button
+                            type="button"
+                            onClick={() => setMassivePrintVisible(true)}
+                            className="p-button-sm px-3 h-10 shadow-md shrink-0 border-none flex items-center gap-2 hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: '#64748b', color: '#ffffff' }}
+                            tooltip="Imprimir todas las visibles"
+                        >
+                            <i className="pi pi-file-pdf text-lg font-bold"></i>
+                            <div className="flex flex-col items-start leading-none">
+                                <span className="font-extrabold text-[10px]">REPORTE</span>
+                                <span className="text-[9px] font-medium opacity-90">MASIVO PDF</span>
+                            </div>
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -650,7 +647,7 @@ export default function Subestaciones() {
 
                         {/* REEMPLAZAMOS <EvidenceGallery> POR <EvidenceView> */}
                         <EvidenceView
-                            selectedDeficiency={selectedDeficiency}
+                        selectedDeficiency={showCloneModal ? null : selectedDeficiency}
                             feeder={feederObject}
                             sed={selectedSed}
                             suministro={selectedDeficiency?.defiNumSuministro || "0000"}
@@ -680,25 +677,38 @@ export default function Subestaciones() {
                 existingDeficiencies={mappedDeficiencies} // Pasamos la lista completa para validar duplicados
                 referenceSelection={selectedDeficiency}   // Pasa la selección para pre-llenar (clonar)
             />
-            <DuplicateDeficiencyModal
-                visible={duplicateVisible}
-                deficiencyId={duplicateId}
-                onHide={() => setDuplicateVisible(false)}
-                getDeficiencyById={getDeficiencyById}
-                onSave={handleSaveSuccess}
+            {showCloneModal && (
+                <CloneDeficiencyModal
+                    visible={showCloneModal}
+                    onHide={() => setShowCloneModal(false)}
+                    selectedDeficiency={selectedDeficiency}
+                    masterTypifications={masterTypifications}
+                    getCodeById={getCodeById}
+                    // 🔥 CORRECCIÓN 1: Usamos la lista de datos de este componente
+                    existingDeficiencies={mappedDeficiencies}
+                    loadingTypos={loadingTypos}
+                    onCloneSuccess={async (nuevoId) => {
+                        toast.current.show({ severity: 'success', summary: 'Clonado', detail: `Deficiencia #${nuevoId} creada con éxito.` });
+                        // 🔥 CORRECCIÓN 2: Recargamos la tabla usando la función nativa de este componente
+                        if (selectedSed) {
+                            const idSed = selectedSed.sedInterno || selectedSed.SedInterno || selectedSed.id;
+                            await fetchBySed(idSed);
+                        }
+                    }}
+                />
+            )}
+            <PdfGeneratorModal
+                visible={massivePrintVisible}
+                onHide={() => setMassivePrintVisible(false)}
+                dataToPrint={(filteredData && filteredData.length > 0) ? filteredData : mappedDeficiencies}
+                allData={mappedDeficiencies}
+                empresaInfo={{
+                    sed: selectedSed?.sedCodigo,
+                    alimentador: feederObject?.label,
+                    // 🔥 AÑADIMOS ESTO PARA PODER BUSCAR LOS POSTES LUEGO:
+                    sedId: selectedSed?.sedInterno || selectedSed?.SedInterno || selectedSed?.id
+                }}
             />
-<PdfGeneratorModal 
-    visible={massivePrintVisible} 
-    onHide={() => setMassivePrintVisible(false)} 
-    dataToPrint={(filteredData && filteredData.length > 0) ? filteredData : mappedDeficiencies}
-    allData={mappedDeficiencies} 
-    empresaInfo={{ 
-        sed: selectedSed?.sedCodigo, 
-        alimentador: feederObject?.label,
-        // 🔥 AÑADIMOS ESTO PARA PODER BUSCAR LOS POSTES LUEGO:
-        sedId: selectedSed?.sedInterno || selectedSed?.SedInterno || selectedSed?.id
-    }}
-/>
 
         </div>
     );

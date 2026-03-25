@@ -1894,6 +1894,150 @@ namespace Sigre.DataAccess
         }
 
 
-        
+        public async Task<int> DADEFI_ClonarWeb(int idDeficienciaOriginal, int nuevaTipificacion, string nuevoCodigoTipi, string usuarioSesion)
+        {
+            using (var ctx = new SigreContext())
+            using (var transaction = ctx.Database.BeginTransaction())
+            {
+                try
+                {
+                    var original = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == idDeficienciaOriginal);
+                    if (original == null) throw new Exception("La deficiencia original no existe.");
+
+                    // 🔥 NUEVO CANDADO 1: Prohibido usar un "Sin Deficiencia" como molde para clonar
+                    if (original.TipiInterno == 0)
+                    {
+                        throw new ArgumentException("No está permitido clonar un registro de 'SIN DEFICIENCIA'.");
+                    }
+
+                    // 2. VALIDACIONES ESTRICTAS Y REGLAS DE NEGOCIO
+                    var tipificacionesExistentes = ctx.Deficiencias
+                        .Where(d => d.DefiCodigoElemento == original.DefiCodigoElemento && d.DefiActivo == true)
+                        .Select(d => d.TipiInterno).ToList();
+
+                    bool tieneFallasReales = tipificacionesExistentes.Any(t => t > 0);
+                    bool tieneSinDeficiencia = tipificacionesExistentes.Any(t => t == 0);
+
+                    // Reglas cruzadas que ya tenías
+                    if (nuevaTipificacion == 0 && tieneFallasReales)
+                        throw new ArgumentException("No puede clonar como 'SIN DEFICIENCIA'. Ya existen fallas reales.");
+
+                    if (nuevaTipificacion > 0 && tieneSinDeficiencia)
+                        throw new ArgumentException("El elemento está marcado como 'SIN DEFICIENCIA'.");
+
+                    // 🔥 NUEVO CANDADO 2: Prohibido clonar hacia un nuevo "Sin Deficiencia" si el poste ya tiene uno
+                    if (nuevaTipificacion == 0 && tieneSinDeficiencia)
+                    {
+                        throw new ArgumentException("Ya existe un registro 'SIN DEFICIENCIA' para este elemento. Solo puede haber uno.");
+                    }
+
+                    // 3. CREAR EL CLON (Base de Datos)
+                    var clonDefi = new Deficiencia
+                    {
+                        // 🔥 HEREDAMOS TODO (Reflejo exacto del padre)
+                        DefiCodigoElemento = original.DefiCodigoElemento,
+                        DefiTipoElemento = original.DefiTipoElemento,
+                        DefiIdElemento = original.DefiIdElemento,
+                        TablInterno = original.TablInterno, // <- EL CAMPO VITAL
+                        DefiLatitud = original.DefiLatitud,
+                        DefiLongitud = original.DefiLongitud,
+                        DefiObservacion = original.DefiObservacion,
+                        DefiComentario = original.DefiComentario,
+                        DefiNumSuministro = original.DefiNumSuministro,
+                        DefiEstadoCriticidad = original.DefiEstadoCriticidad,
+                        DefiDistHorizontal = original.DefiDistHorizontal,
+                        DefiDistVertical = original.DefiDistVertical,
+                        DefiAccesibilidad = original.DefiAccesibilidad,
+                        DefiTipoCruce = original.DefiTipoCruce,
+                        CodopInterno = original.CodopInterno,
+                        DefiCol1 = original.DefiCol1,
+                        DefiCol2 = original.DefiCol2,
+                        DefiUsuarioInic = original.DefiUsuarioInic,
+                        // Fechas originales conservadas
+                        DefiFechaCreacion = original.DefiFechaCreacion,
+                        DefiFecRegistro = original.DefiFecRegistro,
+                        DefiInspeccionado = original.DefiInspeccionado,
+                        // 🔥 APLICAMOS LOS CAMBIOS PROPIOS DEL CLON
+                        TipiInterno = nuevaTipificacion,
+                        DefiCol3 = Guid.NewGuid().ToString(), // UUID Nuevo para que no choque
+                        DefiInterno = 0, // 0 = Registro Nuevo
+                        DefiEstado = "N",
+                        DefiActivo = true,
+                        
+                        DefiUsuarioMod = usuarioSesion,
+                        DefiFecModificacion = DateTime.Now
+                    };
+
+                    ctx.Deficiencias.Add(clonDefi);
+                    ctx.SaveChanges(); // Guardamos para obtener el nuevo DefiInterno
+
+                    // 4. CLONAR ARCHIVOS (Base de Datos + Físico)
+                    var archivosOriginales = ctx.Archivos.Where(a => a.ArchCodTabla == idDeficienciaOriginal && a.ArchActivo == true).ToList();
+                    var daFile = new DAFile();
+
+                    foreach (var arch in archivosOriginales)
+                    {
+                        // 🔥 DEBUG: Ver qué trae la base de datos antes de hacer nada
+                        System.Diagnostics.Debug.WriteLine($"🔍 ARCHIVO ORIG: ID={arch.ArchInterno} | Fecha={arch.ArchFecha}");
+
+                        string codeViejo = Path.GetFileName(Path.GetDirectoryName(arch.ArchNombre.Replace("/", "\\")));
+                        string codeNuevo = string.IsNullOrEmpty(nuevoCodigoTipi) || nuevoCodigoTipi == "0" ? "SINDEF" : nuevoCodigoTipi;
+
+                        string nuevaRutaFisica = arch.ArchNombre.Replace($"/{codeViejo}/", $"/{codeNuevo}/");
+                        nuevaRutaFisica = nuevaRutaFisica.Replace($"-{codeViejo}-", $"-{codeNuevo}-");
+
+                        // Si por alguna razón la ruta no cambió, saltamos al siguiente
+                        if (arch.ArchNombre == nuevaRutaFisica) continue;
+
+                        // 🔥 Le preguntamos a nuestra función blindada si logró copiar el archivo.
+                        // Recuerda que esta función (en DAFile.cs) ya sabe que si es un .m4a que no existe,
+                        // no debe explotar, sino simplemente devolver 'false'.
+                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(arch.ArchNombre, nuevaRutaFisica);
+
+                        // 🔥 Solo si la copia fue exitosa (true), registramos la foto clonada en la BD
+                        if (seCopioConExito)
+                        {
+                            var clonArch = new Archivo
+                            {
+                                ArchCodTabla = clonDefi.DefiInterno,
+                                ArchTabla = "Deficiencias",
+                                DefiUUID = clonDefi.DefiCol3,
+                                ArchNombre = nuevaRutaFisica,
+                                TipiInterno = nuevaTipificacion,
+                                ArchTipo = arch.ArchTipo,
+                                ArchLatitud = arch.ArchLatitud,
+                                ArchLongitud = arch.ArchLongitud,
+                                ArchIdElemento = arch.ArchIdElemento,
+                                ArchTipoElemento = arch.ArchTipoElemento,
+                                ArchActivo = true,
+                                ArchFecha = arch.ArchFecha
+                            };
+                            System.Diagnostics.Debug.WriteLine($"📝 CLON PRE-SAVE: Fecha={clonArch.ArchFecha}");
+                            ctx.Archivos.Add(clonArch);
+                        }
+                    }
+
+                    ctx.SaveChanges();
+                    transaction.Commit();
+
+                    return clonDefi.DefiInterno; // Retornamos el ID de la nueva deficiencia
+                }
+                catch (Exception ex)
+                {
+                    // 🔥 AQUÍ SÍ VA EL TRUCO SENIOR
+                    transaction.Rollback();
+
+                    // Escarbar hasta encontrar el error exacto de SQL Server
+                    Exception realError = ex;
+                    while (realError.InnerException != null)
+                    {
+                        realError = realError.InnerException;
+                    }
+
+                    // Esto se lo enviamos al controlador, y el controlador a React
+                    throw new Exception(realError.Message);
+                }
+            }
+        }
     }
 }

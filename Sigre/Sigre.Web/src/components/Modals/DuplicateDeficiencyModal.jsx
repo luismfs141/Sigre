@@ -1,218 +1,162 @@
-import React, { useEffect, useState } from "react";
-import { Dialog } from "primereact/dialog";
-import { InputText } from "primereact/inputtext";
-import { InputTextarea } from "primereact/inputtextarea";
-import { Calendar } from "primereact/calendar";
-import { Dropdown } from "primereact/dropdown";
-import { Button } from "primereact/button";
+import React, { useState, useEffect, useMemo } from 'react';
+import { Dialog } from 'primereact/dialog';
+import { Dropdown } from 'primereact/dropdown';
+import { Button } from 'primereact/button';
+import { Message } from 'primereact/message';
+import { useCloneDeficiency } from '../../hooks/useCloneDeficiency';
 
-export default function CloneDeficiencyModal({
-    visible,
-    deficiencyId,
-    getDeficiencyById,
-    onHide,
-    onSave,
-    tipificaciones = []
+// 🔥 Importamos la lista estática maestra de opciones (ajusta tu ruta)
+import { ALL_DEFICIENCY_OPTIONS } from '../../utils/deficiencyConfig'; // Asegúrate de tener esta lista bien definida
+
+export default function CloneDeficiencyModal({ 
+    visible, 
+    onHide, 
+    onCloneSuccess, 
+    selectedDeficiency, 
+    masterTypifications, 
+    existingDeficiencies, // Necesitamos saber qué deficiencias ya existen
+    getCodeById           // Necesitamos la función para traducir IDs a Códigos
 }) {
-
-    const [deficiency, setDeficiency] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [selectedTipi, setSelectedTipi] = useState(null);
+    const [errorMsg, setErrorMsg] = useState('');
+    
+    const { cloneDeficiency, isCloning } = useCloneDeficiency();
 
     useEffect(() => {
+        if (visible) {
+            setSelectedTipi(null);
+            setErrorMsg('');
+        }
+    }, [visible]);
 
-        const loadDeficiency = async () => {
+    // =========================================================================
+    // 🔥 LÓGICA DE FILTRADO Y REGLAS DE NEGOCIO (Exclusión Mutua)
+    // =========================================================================
+    const typificationOptions = useMemo(() => {
+        if (!selectedDeficiency || !masterTypifications || masterTypifications.length === 0) return [];
 
-            if (!deficiencyId) return;
+        const currentGis = selectedDeficiency.defiCodigoElemento?.trim().toUpperCase();
+        const elementType = selectedDeficiency.defiTipoElemento;
 
-            setLoading(true);
+        // 1. Identificar qué códigos ya están usados para este elemento GIS
+        const usedCodes = existingDeficiencies
+            .filter(d => d.defiActivo && d.defiCodigoElemento?.trim().toUpperCase() === currentGis)
+            .map(d => getCodeById(d.tipiInterno));
 
-            const data = await getDeficiencyById(deficiencyId);
+        const hasCleanRecord = usedCodes.includes("0"); // ¿Ya tiene un "Sin Deficiencia"?
+        const hasRealDeficiencies = usedCodes.some(code => code !== "0"); // ¿Ya tiene fallas reales?
 
-            if (data) {
+        // 2. Filtrar la lista estática aplicando las reglas
+        const validOptions = ALL_DEFICIENCY_OPTIONS.filter(opt => {
+            // A. Filtro de Tipo (POSTE vs VANO)
+            if (opt.code !== "0" && opt.type !== 'BOTH' && opt.type !== elementType) return false;
 
-                setDeficiency({
-                    ...data,
+            // B. Regla de Exclusión Mutua
+            if (opt.code === "0" && hasRealDeficiencies) return false; // Bloquear S/D si ya hay fallas
+            if (opt.code !== "0" && hasCleanRecord) return false;      // Bloquear fallas si ya es S/D
 
-                    defiInterno: 0,
-                    defiObservacion: "",
-                    defiComentario: "",
-                    tipiInterno: null,
+            // C. Regla Anti-Duplicados (No puedes clonar y ponerle una tipificación que ya existe, excepto 7004)
+            if (usedCodes.includes(opt.code) && opt.code !== '7004') return false;
 
-                    defiFechaDenuncia: null,
-                    defiFechaInspeccion: null
-                });
+            return true;
+        });
 
+        // 3. Cruzar con la BD para obtener los IDs (tipiInterno) requeridos por el dropdown
+        return validOptions.map(staticOpt => {
+            if (staticOpt.code === "0") {
+                return { label: staticOpt.name, value: 0 };
             }
+            const matchInDb = masterTypifications.find(t => String(t.code || t.tipiCodigo) === String(staticOpt.code));
+            if (!matchInDb) return null;
 
-            setLoading(false);
-        };
+            return {
+                label: `${staticOpt.code} - ${staticOpt.name}`, // Formato visual claro
+                value: Number(matchInDb.tipiInterno || matchInDb.typificationId)
+            };
+        }).filter(opt => opt !== null);
 
-        if (visible) loadDeficiency();
-
-    }, [visible, deficiencyId]);
+    }, [selectedDeficiency, existingDeficiencies, masterTypifications, getCodeById]);
 
 
-    const updateField = (field, value) => {
-        setDeficiency(prev => ({
-            ...prev,
-            [field]: value
-        }));
+    const handleClone = async () => {
+        if (selectedTipi === null || !selectedDeficiency) return;
+        setErrorMsg('');
+
+        // 1. Extraemos el código visual (ej "6026")
+        const opcionElegida = typificationOptions.find(o => o.value === selectedTipi);
+        const nuevoCodigoTipi = opcionElegida && opcionElegida.value !== 0 ? opcionElegida.label.split(' - ')[0] : 'SINDEF';
+
+        // 🔥 2. OBTENER USUARIO ACTUAL DEL FRONTEND (AUDITORÍA)
+        let currentUserId = "20"; // Fallback por defecto
+        try {
+            const storedUser = localStorage.getItem('usuario');
+            if (storedUser) {
+                // Verificamos si es un objeto JSON (ej. {"id": 15, "nombre": "Admin"})
+                if (storedUser.startsWith('{')) {
+                    const userObj = JSON.parse(storedUser);
+                    // Ajusta 'id' por el nombre de la propiedad que tenga tu objeto de usuario
+                    currentUserId = userObj.usuaInterno ? userObj.usuaInterno.toString() : "20";
+                } else {
+                    // Si guardaron directo el string (ej. "15")
+                    currentUserId = storedUser.toString();
+                }
+            }
+            console.log("🔍 [DEBUG] Usuario que clona:", currentUserId);
+        } catch (e) {
+            console.error("Error obteniendo usuario del storage para clonación:", e);
+        }
+
+        // 3. Le mandamos los 4 parámetros al hook, incluyendo el usuario real
+        const result = await cloneDeficiency(
+            selectedDeficiency.defiInterno, 
+            selectedTipi, 
+            nuevoCodigoTipi, 
+            currentUserId // Aquí viaja el dato limpio
+        );
+
+        if (result.success) {
+            onCloneSuccess(result.data.nuevoId); 
+            onHide(); 
+        } else {
+            setErrorMsg(result.error); 
+        }
     };
 
-
     const footer = (
-        <div className="flex justify-end gap-2">
-
-            <Button
-                label="Cancelar"
-                icon="pi pi-times"
-                className="p-button-text"
-                onClick={onHide}
-            />
-
-            <Button
-                label="Guardar"
-                icon="pi pi-save"
-                onClick={() => onSave(deficiency)}
-                disabled={!deficiency}
-            />
-
+        <div className="flex justify-end gap-2 mt-4">
+            <Button label="Cancelar" icon="pi pi-times" onClick={onHide} className="p-button-text p-button-secondary" disabled={isCloning} />
+            <Button label={isCloning ? "Clonando..." : "Confirmar Clon"} icon={isCloning ? "pi pi-spin pi-spinner" : "pi pi-copy"} onClick={handleClone} className="p-button-primary font-bold" disabled={selectedTipi === null || isCloning} />
         </div>
     );
 
-
     return (
-        <Dialog
-            header={`Deficiencia #${deficiencyId}`}
-            visible={visible}
-            style={{ width: "750px" }}
-            footer={footer}
-            onHide={onHide}
-        >
+        <Dialog header="Clonar Deficiencia y Evidencias" visible={visible} style={{ width: '450px' }} modal onHide={onHide} footer={footer}>
+            <div className="flex flex-col gap-3 pt-2">
+                <p className="text-sm text-gray-600 leading-relaxed">
+                    Se creará una copia exacta de la deficiencia seleccionada (ID: <strong>{selectedDeficiency?.defiInterno}</strong>) para el elemento <strong>{selectedDeficiency?.defiCodigoElemento}</strong>. Se incluirá una copia física de todas sus fotos actuales.
+                </p>
 
-            {loading && <p>Cargando datos...</p>}
+                {errorMsg && <Message severity="error" text={errorMsg} className="w-full justify-start text-xs" />}
 
-            {!loading && deficiency && (
+                {typificationOptions.length === 0 && (
+                    <Message severity="warn" text="No hay tipificaciones disponibles para clonar. El elemento ya posee todas las fallas posibles o un estado bloqueante." className="w-full justify-start text-xs mt-2" />
+                )}
 
-                <div className="p-fluid">
-
-                    {/* FILA 1 */}
-                    <div className="grid mb-3">
-
-                        <div className="col-3">
-                            <label className="font-semibold">Tipo Elemento</label>
-                            <InputText
-                                value={deficiency.tipoElemento || ""}
-                                readOnly
-                            />
-                        </div>
-
-                        <div className="col-3">
-                            <label className="font-semibold">Código Elemento</label>
-                            <InputText
-                                value={deficiency.elementoCodigo || ""}
-                                readOnly
-                            />
-                        </div>
-
-                        <div className="col-3">
-                            <label className="font-semibold">Longitud</label>
-                            <InputText
-                                value={deficiency.longitud || ""}
-                                readOnly
-                            />
-                        </div>
-
-                        <div className="col-3">
-                            <label className="font-semibold">Latitud</label>
-                            <InputText
-                                value={deficiency.latitud || ""}
-                                readOnly
-                            />
-                        </div>
-
-                    </div>
-
-
-                    {/* FILA 2 */}
-                    <div className="grid mb-3">
-
-                        <div className="col-6">
-                            <label className="font-semibold">Tipificación</label>
-                            <Dropdown
-                                value={deficiency.tipiInterno}
-                                options={tipificaciones}
-                                optionLabel="tipiDescripcion"
-                                optionValue="tipiInterno"
-                                placeholder="Seleccione tipificación"
-                                onChange={(e) =>
-                                    updateField("tipiInterno", e.value)
-                                }
-                            />
-                        </div>
-
-                        <div className="col-6">
-                            <label className="font-semibold">Observación</label>
-                            <InputText
-                                value={deficiency.defiObservacion || ""}
-                                onChange={(e) =>
-                                    updateField("defiObservacion", e.target.value)
-                                }
-                            />
-                        </div>
-
-                    </div>
-
-
-                    {/* FILA 3 */}
-                    <div className="grid mb-3">
-                        <div className="col-12">
-                            <label className="font-semibold">Comentario</label>
-                            <InputTextarea
-                                rows={3}
-                                autoResize
-                                value={deficiency.defiComentario || ""}
-                                onChange={(e) =>
-                                    updateField("defiComentario", e.target.value)
-                                }
-                            />
-                        </div>
-                    </div>
-
-
-                    {/* FILA 4 */}
-                    <div className="grid">
-
-                        <div className="col-6">
-                            <label className="font-semibold">Fecha Denuncia</label>
-                            <Calendar
-                                value={deficiency.defiFechaDenuncia}
-                                onChange={(e) =>
-                                    updateField("defiFechaDenuncia", e.value)
-                                }
-                                dateFormat="dd/mm/yy"
-                                showIcon
-                            />
-                        </div>
-
-                        <div className="col-6">
-                            <label className="font-semibold">Fecha Inspección</label>
-                            <Calendar
-                                value={deficiency.defiFechaInspeccion}
-                                onChange={(e) =>
-                                    updateField("defiFechaInspeccion", e.value)
-                                }
-                                dateFormat="dd/mm/yy"
-                                showIcon
-                            />
-                        </div>
-
-                    </div>
-
+                <div className="flex flex-col bg-blue-50 p-3 rounded-md border border-blue-200 mt-2">
+                    <label className="text-xs font-bold text-blue-800 uppercase mb-2">Selecciona la Nueva Tipificación *</label>
+                    <Dropdown 
+                        value={selectedTipi} 
+                        onChange={(e) => setSelectedTipi(e.value)} 
+                        options={typificationOptions} 
+                        optionLabel="label" 
+                        optionValue="value" 
+                        placeholder={typificationOptions.length === 0 ? "Sin opciones disponibles" : "Buscar tipificación..."} 
+                        className="w-full p-inputtext-sm font-bold" 
+                        filter
+                        disabled={typificationOptions.length === 0 || isCloning}
+                    />
                 </div>
-
-            )}
-
+            </div>
         </Dialog>
     );
 }
