@@ -34,3 +34,8 @@ public partial class Archivo
     public string? DefiUUID { get; set; }
 
 }
+public class MoveFileRequest
+{
+    public string OldPath { get; set; }
+    public string NewPath { get; set; }
+}
