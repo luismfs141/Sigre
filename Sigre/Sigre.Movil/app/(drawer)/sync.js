@@ -23,6 +23,29 @@ import { useFeeder } from "../../hooks/useFeeder";
 import { useOffline } from "../../hooks/useOffline";
 import { useSed } from "../../hooks/useSed";
 
+
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const sanitizeFilePart = (value = "") =>
+  String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[\\/:*?"<>|]+/g, "")
+    .replace(/-+/g, "-");
+
+const buildOfflineDbName = (user) => {
+  const now = new Date();
+
+  const fecha = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const hora = `${pad2(now.getHours())}-${pad2(now.getMinutes())}-${pad2(now.getSeconds())}`;
+
+  const usuario = sanitizeFilePart(
+    `${user?.nombre ?? ""}-${user?.apellido ?? ""}`
+  ) || "USUARIO";
+
+  return `SIGRE_${usuario}_${fecha}_${hora}.db`;
+};
+
 export default function Sync() {
 
   const { user } = useContext(AuthContext);
@@ -127,7 +150,8 @@ export default function Sync() {
     let ok = false;
 
     try {
-      const nombreBase = `sigre_offline_${Date.now()}.db`;
+      const nombreBase = buildOfflineDbName(user);
+      
       console.log("⬇️ Descargando base:", nombreBase);
 
       if (user?.proyecto === 0) {
@@ -184,64 +208,64 @@ export default function Sync() {
   // ELIMINAR BASE
   //───────────────────────────────────────────────
   const handleDelete = async () => {
-  if (!dbName) {
-    return Alert.alert("Aviso", "No hay base para eliminar.");
-  }
+    if (!dbName) {
+      return Alert.alert("Aviso", "No hay base para eliminar.");
+    }
 
-  let remaining = 0;
+    let remaining = 0;
 
-  try {
-    const result = await getPendingSyncSummary();
+    try {
+      const result = await getPendingSyncSummary();
 
-    const total = Number(result?.totalPending ?? 0);
-    const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
-    remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
-  } catch (e) {
-    console.log("❌ Error obteniendo pendientes antes de eliminar:", e);
-  }
+      const total = Number(result?.totalPending ?? 0);
+      const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
+      remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
+    } catch (e) {
+      console.log("❌ Error obteniendo pendientes antes de eliminar:", e);
+    }
 
-  const extraWarning =
-  remaining > 0
-    ? `\n\n🚨🚨🚨🚨🚨\nFALTAN ${remaining} REGISTROS PENDIENTES POR SINCRONIZAR.\n🚨🚨🚨🚨🚨\n\nRealice este procedimiento antes de ELIMINAR.`
-    : "";
+    const extraWarning =
+      remaining > 0
+        ? `\n\n🚨🚨🚨🚨🚨\nFALTAN ${remaining} REGISTROS PENDIENTES POR SINCRONIZAR.\n🚨🚨🚨🚨🚨\n\nRealice este procedimiento antes de ELIMINAR.`
+        : "";
 
-  Alert.alert(
-    "Confirmar eliminación",
-    `¿Estás seguro de que deseas eliminar la base local?\nEsta acción no se puede deshacer.${extraWarning}`,
-    [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
-            console.log("🗑 Eliminando DB:", dbPath);
+    Alert.alert(
+      "Confirmar eliminación",
+      `¿Estás seguro de que deseas eliminar la base local?\nEsta acción no se puede deshacer.${extraWarning}`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+              console.log("🗑 Eliminando DB:", dbPath);
 
-            await closeDatabase();
-            await FileSystem.deleteAsync(dbPath, { idempotent: true });
+              await closeDatabase();
+              await FileSystem.deleteAsync(dbPath, { idempotent: true });
 
-            await AsyncStorage.removeItem("selectedFeeders");
-            await AsyncStorage.removeItem("db_name");
+              await AsyncStorage.removeItem("selectedFeeders");
+              await AsyncStorage.removeItem("db_name");
 
-            setSelectedFeeders([]);
-            setSelectedFeeder(null);
-            setSelectedSubstations([]);
-            setSubstationsByFeeder([]);
+              setSelectedFeeders([]);
+              setSelectedFeeder(null);
+              setSelectedSubstations([]);
+              setSubstationsByFeeder([]);
 
-            setDbExists(false);
-            setDbName(null);
+              setDbExists(false);
+              setDbName(null);
 
-            Alert.alert("Listo", "Base eliminada correctamente.");
-          } catch (e) {
-            console.log("❌ Error eliminando base:", e);
-            Alert.alert("Error", "No se pudo eliminar la base.");
-          }
+              Alert.alert("Listo", "Base eliminada correctamente.");
+            } catch (e) {
+              console.log("❌ Error eliminando base:", e);
+              Alert.alert("Error", "No se pudo eliminar la base.");
+            }
+          },
         },
-      },
-    ]
-  );
-};
+      ]
+    );
+  };
 
   //───────────────────────────────────────────────
   // 🔄 SINCRONIZAR OFFLINE → SERVIDOR
