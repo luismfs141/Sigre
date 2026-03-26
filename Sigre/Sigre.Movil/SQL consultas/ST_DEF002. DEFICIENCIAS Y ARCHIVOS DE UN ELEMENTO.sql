@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = 'VBT000184285'
+DECLARE @CODIGO VARCHAR(20) = 'PTO000133506'
 
 
 ------------------------------------------------------------
@@ -18,6 +18,7 @@ SELECT	D.DEFI_Interno,
 		D.DEFI_TipoElemento,
 		D.DEFI_CodigoElemento,
 		CO.CODI_Codigo,
+		
 		
 		CASE
 			WHEN D.DEFI_EstadoCriticidad = 1 THEN 'Leve'
@@ -98,3 +99,93 @@ WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
 GO
 
+
+
+--begin tran
+
+--update Archivos
+--set ARCH_Nombre = 'SIGRE.MOVIL/TECSUP/2755/POSTE/PTO000111434/0000/FOT-2755-PTO000111434-0000-20260320-121126-1.jpg'
+--where ARCH_Interno = 399433	
+--update Archivos
+--set ARCH_Nombre = 'SIGRE.MOVIL/TECSUP/2755/POSTE/PTO000111434/0000/FOT-2755-PTO000111434-0000-20260320-121131-2.jpg'
+--where ARCH_Interno = 399434	
+--update Archivos
+--set ARCH_Nombre = 'SIGRE.MOVIL/TECSUP/2755/POSTE/PTO000111434/0000/FOT-2755-PTO000111434-0000-20260320-121134-3.jpg'
+--where ARCH_Interno = 399435	
+--update Archivos
+--set ARCH_Nombre = 'SIGRE.MOVIL/TECSUP/2755/POSTE/PTO000111434/0000/FOT-2755-PTO000111434-0000-20260320-121142-4.jpg'
+--where ARCH_Interno = 399436	
+--update Archivos
+--set ARCH_Nombre = 'SIGRE.MOVIL/TECSUP/2755/POSTE/PTO000111434/0000/AUD-2755-PTO000111434-0000-20260320-121146-0.m4a'
+--where ARCH_Interno = 399437	
+
+--rollback
+--commit
+
+
+
+
+
+--SELECT	VA.VANO_Codigo AS CODIGO,
+--		VA.ALIM_Interno,
+--		ALI.ALIM_Etiqueta AS [ALIM SEGUN VANO],
+--		VA.VANO_Subestacion,
+--		SE.ALIM_Interno,
+--		ALI2.ALIM_Etiqueta AS [ALIM SEGUN SED],
+--		[***]='',
+--		VA.* 
+--FROM Vanos AS VA
+--LEFT JOIN Alimentadores AS ALI
+--	ON VA.ALIM_Interno = ALI.ALIM_Interno
+--LEFT JOIN Seds AS SE
+--	ON VA.VANO_Subestacion = SE.SED_Interno
+--LEFT JOIN Alimentadores AS ALI2
+--	ON SE.ALIM_Interno = ALI2.ALIM_Interno
+
+
+
+
+
+
+
+--SELECT  VA.VANO_Codigo AS CODIGO,
+--        VA.ALIM_Interno,
+--        ALI.ALIM_Etiqueta AS [ALIM SEGUN VANO],
+--        VA.VANO_Subestacion,
+--        SE.ALIM_Interno,
+--        ALI2.ALIM_Etiqueta AS [ALIM SEGUN SED],
+--        [***] = '',
+--        VA.*
+--FROM Vanos AS VA
+--LEFT JOIN Alimentadores AS ALI
+--    ON VA.ALIM_Interno = ALI.ALIM_Interno
+--LEFT JOIN Seds AS SE
+--    ON VA.VANO_Subestacion = SE.SED_Interno
+--LEFT JOIN Alimentadores AS ALI2
+--    ON SE.ALIM_Interno = ALI2.ALIM_Interno
+--WHERE ISNULL(LTRIM(RTRIM(ALI.ALIM_Etiqueta)), '') <> ISNULL(LTRIM(RTRIM(ALI2.ALIM_Etiqueta)), '');
+
+
+
+
+
+
+
+
+--SELECT  VA.VANO_Codigo AS CODIGO,
+--        VA.ALIM_Interno,
+--        ALI.ALIM_Etiqueta AS [ALIM SEGUN VANO],
+--        VA.VANO_Subestacion,
+--        SE.ALIM_Interno,
+--        ALI2.ALIM_Etiqueta AS [ALIM SEGUN SED],
+--        [***] = '',
+--        VA.*
+--FROM Vanos AS VA
+--LEFT JOIN Alimentadores AS ALI
+--    ON VA.ALIM_Interno = ALI.ALIM_Interno
+--LEFT JOIN Seds AS SE
+--    ON VA.VANO_Subestacion = SE.SED_Interno
+--LEFT JOIN Alimentadores AS ALI2
+--    ON SE.ALIM_Interno = ALI2.ALIM_Interno
+--WHERE ISNULL(VA.ALIM_Interno, -1) <> ISNULL(SE.ALIM_Interno, -1)
+--	AND VA.VANO_EsBT = 1
