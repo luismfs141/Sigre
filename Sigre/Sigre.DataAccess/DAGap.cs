@@ -120,73 +120,90 @@ namespace Sigre.DataAccess
                 return DAGAP_GetPinsByFeeders(x_ids);
         }
 
-        public List<(int localId, int serverId)> DAVANO_SyncFromSQLite( List<VanoSyncDto> vanosOffline)
+        public List<(int localId, int serverId)> DAVANO_SyncFromSQLite(List<VanoSyncDto> vanosOffline)
         {
             using var ctx = new SigreContext();
-            var resultado = new List<(int, int)>();
 
-            foreach (var dto in vanosOffline)
+            if (vanosOffline == null || vanosOffline.Count == 0)
+                return new List<(int localId, int serverId)>();
+
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
             {
-                // 🔹 INSERT
-                if (dto.EstadoOffLine == 2)
+                var mappings = new List<(int localId, Vano entity)>();
+
+                foreach (var dto in vanosOffline)
                 {
-                    var nuevo = new Vano
+                    if (dto.EstadoOffLine == 2)
                     {
-                        VanoCodigo = dto.VanoCodigo,
-                        VanoLatitudIni = dto.VanoLatitudIni,
-                        VanoLongitudIni = dto.VanoLongitudIni,
-                        VanoLatitudFin = dto.VanoLatitudFin,
-                        VanoLongitudFin = dto.VanoLongitudFin,
-                        AlimInterno = dto.AlimInterno,
-                        VanoEtiqueta = dto.VanoEtiqueta,
-                        VanoTerceros = dto.VanoTerceros,
-                        VanoMaterial = dto.VanoMaterial,
-                        VanoNodoInicial = dto.VanoNodoInicial,
-                        VanoNodoFinal = dto.VanoNodoFinal,
-                        VanoInspeccionado = dto.VanoInspeccionado,
-                        VanoSubestacion = dto.VanoSubestacion,
-                        VanoEsMt = dto.VanoEsMt,
-                        VanoEsBt = dto.VanoEsBt,
-                        VanoTramo = dto.VanoTramo,
-                    };
+                        var nuevo = new Vano
+                        {
+                            VanoCodigo = dto.VanoCodigo,
+                            VanoLatitudIni = dto.VanoLatitudIni,
+                            VanoLongitudIni = dto.VanoLongitudIni,
+                            VanoLatitudFin = dto.VanoLatitudFin,
+                            VanoLongitudFin = dto.VanoLongitudFin,
+                            AlimInterno = dto.AlimInterno,
+                            VanoEtiqueta = dto.VanoEtiqueta,
+                            VanoTerceros = dto.VanoTerceros,
+                            VanoMaterial = dto.VanoMaterial,
+                            VanoNodoInicial = dto.VanoNodoInicial,
+                            VanoNodoFinal = dto.VanoNodoFinal,
+                            VanoInspeccionado = dto.VanoInspeccionado,
+                            VanoSubestacion = dto.VanoSubestacion,
+                            VanoEsMt = dto.VanoEsMt,
+                            VanoEsBt = dto.VanoEsBt,
+                            VanoTramo = dto.VanoTramo,
+                        };
 
-                    ctx.Vanos.Add(nuevo);
-                    ctx.SaveChanges();
+                        ctx.Vanos.Add(nuevo);
+                        mappings.Add((dto.VanoInternoLocal > 0 ? dto.VanoInternoLocal : (dto.VanoInterno ?? 0), nuevo));
+                    }
+                    else if (dto.EstadoOffLine == 1 || dto.EstadoOffLine == 0)
+                    {
+                        if (!dto.VanoInterno.HasValue || dto.VanoInterno.Value <= 0)
+                            throw new Exception("Vano UPDATE sin VanoInterno válido.");
 
-                    resultado.Add((dto.VanoInterno ?? 0, nuevo.VanoInterno));
+                        var existente = ctx.Vanos.FirstOrDefault(v => v.VanoInterno == dto.VanoInterno.Value);
+                        if (existente == null)
+                            throw new Exception($"No existe el vano {dto.VanoInterno.Value} para actualizar.");
+
+                        existente.VanoCodigo = dto.VanoCodigo;
+                        existente.VanoLatitudIni = dto.VanoLatitudIni;
+                        existente.VanoLongitudIni = dto.VanoLongitudIni;
+                        existente.VanoLatitudFin = dto.VanoLatitudFin;
+                        existente.VanoLongitudFin = dto.VanoLongitudFin;
+                        existente.VanoEtiqueta = dto.VanoEtiqueta;
+                        existente.VanoTerceros = dto.VanoTerceros;
+                        existente.VanoMaterial = dto.VanoMaterial;
+                        existente.VanoNodoInicial = dto.VanoNodoInicial;
+                        existente.VanoNodoFinal = dto.VanoNodoFinal;
+                        existente.VanoInspeccionado = dto.VanoInspeccionado;
+                        existente.VanoEsMt = dto.VanoEsMt;
+                        existente.VanoEsBt = dto.VanoEsBt;
+                        existente.VanoTramo = dto.VanoTramo;
+
+                        mappings.Add((dto.VanoInterno.Value, existente));
+                    }
+                    else
+                    {
+                        throw new Exception($"EstadoOffLine no soportado para Vano: {dto.EstadoOffLine}");
+                    }
                 }
-                // 🔹 UPDATE
-                else if ((dto.EstadoOffLine == 1 || dto.EstadoOffLine == 0)
-                         && dto.VanoInterno.HasValue)
-                {
-                    var existente = ctx.Vanos
-                        .FirstOrDefault(v => v.VanoInterno == dto.VanoInterno.Value);
 
-                    if (existente == null)
-                        continue;
+                ctx.SaveChanges();
+                tx.Commit();
 
-                    existente.VanoCodigo = dto.VanoCodigo;
-                    existente.VanoLatitudIni = dto.VanoLatitudIni;
-                    existente.VanoLongitudIni = dto.VanoLongitudIni;
-                    existente.VanoLatitudFin = dto.VanoLatitudFin;
-                    existente.VanoLongitudFin = dto.VanoLongitudFin;
-                    existente.VanoEtiqueta = dto.VanoEtiqueta;
-                    existente.VanoTerceros = dto.VanoTerceros;
-                    existente.VanoMaterial = dto.VanoMaterial;
-                    existente.VanoNodoInicial = dto.VanoNodoInicial;
-                    existente.VanoNodoFinal = dto.VanoNodoFinal;
-                    existente.VanoInspeccionado = dto.VanoInspeccionado;
-                    existente.VanoEsMt = dto.VanoEsMt;
-                    existente.VanoEsBt = dto.VanoEsBt;
-                    existente.VanoTramo = dto.VanoTramo;
-
-                    ctx.SaveChanges();
-
-                    resultado.Add((existente.VanoInterno, existente.VanoInterno));
-                }
+                return mappings
+                    .Select(x => (x.localId, x.entity.VanoInterno))
+                    .ToList();
             }
-
-            return resultado;
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
         // En DataAccess/DAGap.cs
 

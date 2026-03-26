@@ -343,7 +343,7 @@ export default function WebInspectionManager() {
             const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || defCodeBase.toUpperCase() === "SINDEF";
 
             let defFolder = defCodeBase === "7004" ? "7004/1" : (isSinDef ? "SINDEF" : defCodeBase);
-            let namePart = isSinDef ? "0000" : defCodeBase;
+            let namePart = isSinDef ? "SINDEF" : defCodeBase;
 
             // Manejo especial correlativos 7004
             if (defCodeBase === "7004") {
@@ -497,8 +497,8 @@ setBulkOptions({
                         // Si el usuario marcó "Tipificación" en Aplicar Globales y la nueva tipificación es S/D,
                         // entonces uniformizamos la carpeta a SINDEF.
                         // Si NO marcó Tipificación, se respeta el alias existente (0000 o SINDEF).
-                        folderPart = applyTipi ? "SINDEF" : detectSinDefFolderAliasFromPath(row.currentPath || row.originalName);
-                        fileTipiPart = "0000";
+                        folderPart =  "SINDEF";
+                        fileTipiPart = "SINDEF";
                     } else {
                         folderPart = safeSeg(tipiCodeStr);
                         fileTipiPart = safeSeg(tipiCodeStr);

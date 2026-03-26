@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = 'PTO000133506'
+DECLARE @CODIGO VARCHAR(20) = 'VBT000067967'
 
 
 ------------------------------------------------------------
@@ -16,6 +16,9 @@ DECLARE @CODIGO VARCHAR(20) = 'PTO000133506'
 SELECT	D.DEFI_Interno,
 		D.DEFI_Activo,
 		D.DEFI_TipoElemento,
+		AL.ALIM_Etiqueta AS [Alim x SED],
+		AL2.ALIM_Etiqueta AS [Alim x Element],
+		SE.SED_Codigo,
 		D.DEFI_CodigoElemento,
 		CO.CODI_Codigo,
 		
@@ -61,6 +64,18 @@ LEFT JOIN Usuarios AS US
 	ON D.DEFI_UsuarioInic = US.USUA_Interno
 LEFT JOIN Usuarios AS US2
 	ON D.DEFI_UsuarioMod = US2.USUA_Interno
+LEFT JOIN Postes AS PO
+	ON D.DEFI_IdElemento = PO.POST_Interno
+LEFT JOIN Vanos AS VA
+	ON D.DEFI_IdElemento = VA.VANO_Interno
+LEFT JOIN Seds AS SE
+	ON VA.VANO_Subestacion = SE.SED_Interno
+	OR PO.POST_Subestacion = SE.SED_Interno
+LEFT JOIN Alimentadores AS AL
+	ON SE.ALIM_Interno = AL.ALIM_Interno
+LEFT JOIN Alimentadores AS AL2
+	ON PO.ALIM_Interno = AL2.ALIM_Interno
+	OR VA.ALIM_Interno = AL2.ALIM_Interno
 WHERE D.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR D.DEFI_CodigoElemento = @CODIGO
 

@@ -88,21 +88,28 @@ export const useGap = () => {
 
   // ------------------- NORMALIZAR -------------------
   const normalizeVanoForSync = (vano) => ({
-    ...vano,
+  ...vano,
 
-    // INT
-    EstadoOffLine: Number(vano.EstadoOffLine ?? 1),
-    AlimInterno: Number(vano.AlimInterno),
+  VanoInterno: vano?.VanoInterno != null ? Number(vano.VanoInterno) : null,
+  VanoInternoLocal: vano?.VanoInterno != null ? Number(vano.VanoInterno) : 0,
 
-    // BOOL
-    VanoTerceros: Boolean(vano.VanoTerceros),
-    VanoInspeccionado: Boolean(vano.VanoInspeccionado),
-    VanoEsMt: Boolean(vano.VanoEsMt),
-    VanoEsBt: Boolean(vano.VanoEsBt),
+  EstadoOffLine:
+    vano?.EstadoOffLine === "" || vano?.EstadoOffLine == null || Number(vano?.EstadoOffLine) === 0
+      ? 1
+      : Number(vano.EstadoOffLine),
 
-    // Limpieza
-    VanoSubestacion: vano.VanoSubestacion ?? null,
-  });
+  AlimInterno: Number(vano?.AlimInterno),
+
+  VanoTerceros: vano?.VanoTerceros === true || Number(vano?.VanoTerceros) === 1,
+  VanoInspeccionado: vano?.VanoInspeccionado === true || Number(vano?.VanoInspeccionado) === 1,
+  VanoEsMt: vano?.VanoEsMt === true || Number(vano?.VanoEsMt) === 1,
+  VanoEsBt: vano?.VanoEsBt === true || Number(vano?.VanoEsBt) === 1,
+
+  VanoSubestacion:
+    vano?.VanoSubestacion != null && vano?.VanoSubestacion !== ""
+      ? Number(vano.VanoSubestacion)
+      : null,
+});
 
   // ------------------- AUTO-SYNC DE UN VANO -------------------
   const autoSyncVano = async (vanoInternoLocal) => {
@@ -145,58 +152,91 @@ export const useGap = () => {
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
   const syncAllGaps = async () => {
-    const online = await isOnline();
-    if (!online) return { ok: false };
+  const online = await isOnline();
+  if (!online) {
+    return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
+  }
 
-    try {
-      const pendientes = await getVanosPendientes();
-      if (!pendientes.length) return { ok: true, synced: 0 };
+  let total = 0;
 
-      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
-      if (!aSincronizar.length) return { ok: true, synced: 0 };
-
-      // 🔹 Normalizar TODAS
-      const payload = aSincronizar.map((v) => normalizeVanoForSync(v));
-
-      const response = await client.post("/Gap/SyncFromSQLite", payload, { timeout: 20000 });
-
-      const respList = Array.isArray(response.data) ? response.data : [];
-      let syncedCount = 0;
-
-      for (const r of respList) {
-        if (!r?.localId || !r?.serverId) {
-          console.warn("⚠ Respuesta inválida:", r);
-          continue;
-        }
-
-        await updateVanoIdAfterSync(r.localId, r.serverId);
-        syncedCount++;
-      }
-
-      return { ok: true, synced: syncedCount };
-    } catch (err) {
-      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
-      return { ok: false };
+  try {
+    const pendientes = await getVanosPendientes();
+    if (!Array.isArray(pendientes) || !pendientes.length) {
+      return { ok: true, total: 0, synced: 0 };
     }
-  };
+
+    const aSincronizar = pendientes.filter((d) =>
+      [1, 2, 3].includes(Number(d?.EstadoOffLine))
+    );
+
+    total = aSincronizar.length;
+
+    if (!total) {
+      return { ok: true, total: 0, synced: 0 };
+    }
+
+    const payload = aSincronizar.map((v) => normalizeVanoForSync(v));
+
+    const response = await client.post("/Gap/SyncFromSQLite", payload, {
+      timeout: 30000,
+    });
+
+    const respList = Array.isArray(response.data) ? response.data : [];
+
+    if (respList.length !== total) {
+      throw new Error(
+        `GAP_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
+      );
+    }
+
+    for (const r of respList) {
+      const localId = Number(r?.localId);
+      const serverId = Number(r?.serverId);
+
+      if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
+        throw new Error(`GAP_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+      }
+    }
+
+    for (const r of respList) {
+      const localId = Number(r.localId);
+      const serverId = Number(r.serverId);
+
+      if (localId !== serverId) {
+        await updateVanoIdAfterSync(localId, serverId);
+      } else {
+        await markVanoAsSynced(serverId);
+      }
+    }
+
+    return { ok: true, total, synced: total };
+  } catch (err) {
+    console.error("❌ Sync masivo vanos falló:", err?.response?.data || err?.message || err);
+    return {
+      ok: false,
+      total,
+      synced: 0,
+      error: err?.response?.data?.message || err?.message || "GAP_SYNC_FAILED",
+    };
+  }
+};
 
   const countPendingGapsLocal = async () => {
-    const dbOk = await checkDatabase();
-    if (!dbOk) return 0;
+  const dbOk = await checkDatabase();
+  if (!dbOk) return 0;
 
-    try {
-      const pendientes = await getVanosPendientes();
-      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+  try {
+    const pendientes = await getVanosPendientes();
+    if (!Array.isArray(pendientes) || !pendientes.length) return 0;
 
-      // mismo criterio que usas para sincronizar
-      return pendientes.filter((d) =>
-        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
-      ).length;
-    } catch (err) {
-      console.error("❌ Error contando vanos pendientes:", err);
-      return 0;
-    }
-  };
+    return pendientes.filter((d) =>
+      [1, 2, 3].includes(Number(d?.EstadoOffLine))
+    ).length;
+  } catch (err) {
+    console.error("❌ Error contando vanos pendientes:", err);
+    return 0;
+  }
+};
 
   return {
     loading,

@@ -109,9 +109,17 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
 export const getDeficienciesByElement = async (idElement, typeElement) => {
   try {
     const deficiency = await runQuery(
-      `SELECT *
-          FROM Deficiencias d
-          WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
+      `
+      SELECT
+        d.*,
+        t.Code AS TipiCode
+      FROM Deficiencias d
+      LEFT JOIN Tipificaciones t
+        ON d.TipiInterno = t.TypificationId
+      WHERE d.DefiIdElemento = ?
+        AND d.DefiTipoElemento = ?
+        AND d.DefiActivo = 1
+      `,
       [idElement, typeElement]
     );
 
@@ -516,15 +524,24 @@ export const fetchDeficienciesForFlatList = async (elementId, typeElement) => {
         d.DefiComentario,
         d.DefiDistVertical,
         d.DefiDistHorizontal,
-        d.DefiInspeccionado,              
+        d.DefiInspeccionado,
+        d.DefiEstadoCriticidad,
+        d.DefiAccesibilidad,
+        d.DefiTipoCruce,
+        d.DefiCol2,
+        d.CodopInterno,
         t.TypificationId AS TipiInterno,
         t.Code,
         t.Component,
         t.Deficiency,
-        t.Typification
+        t.Typification,
+        t.ComentarioEstandar,
+        co.CodopOpcion
       FROM Deficiencias d
       LEFT JOIN Tipificaciones t
         ON d.TipiInterno = t.TypificationId
+      LEFT JOIN CodigosOpciones co
+        ON d.CodopInterno = co.CodopInterno
       WHERE d.DefiIdElemento = ?
         AND d.DefiTipoElemento = ?
         AND d.DefiActivo = 1

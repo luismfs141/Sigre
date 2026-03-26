@@ -15,30 +15,119 @@ import {
   View
 } from "react-native";
 
+import { runQuery } from "../../database/offlineDB/db";
 import styles from "../../styles/mapStyles";
 import { modalStyles } from "../../styles/modalStyles.js";
 
 export const GapSelectorModal = ({ visible, overlappedGaps, onPick, onCancel }) => {
+  const [existsMap, setExistsMap] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadGapExistence = async () => {
+      if (!visible) {
+        setExistsMap({});
+        return;
+      }
+
+      const list = Array.isArray(overlappedGaps) ? overlappedGaps : [];
+      const nextMap = {};
+      const idsToQuery = [];
+
+      for (const gap of list) {
+        const gapId = Number(gap?.VanoInterno);
+        if (!Number.isFinite(gapId)) continue;
+
+        const terceros = gap?.VanoTerceros;
+
+        if (terceros === 0 || terceros === 1 || terceros === "0" || terceros === "1") {
+          nextMap[gapId] = Number(terceros) === 0;
+        } else {
+          idsToQuery.push(gapId);
+        }
+      }
+
+      if (idsToQuery.length > 0) {
+        const uniqueIds = [...new Set(idsToQuery)];
+        const placeholders = uniqueIds.map(() => "?").join(",");
+
+        const rows = await runQuery(
+          `SELECT VanoInterno, VanoTerceros
+           FROM Vanos
+           WHERE VanoInterno IN (${placeholders})`,
+          uniqueIds
+        );
+
+        for (const row of rows ?? []) {
+          const gapId = Number(row?.VanoInterno);
+          if (!Number.isFinite(gapId)) continue;
+
+          nextMap[gapId] = Number(row?.VanoTerceros) === 0;
+        }
+      }
+
+      if (!cancelled) {
+        setExistsMap(nextMap);
+      }
+    };
+
+    loadGapExistence().catch((error) => {
+      console.warn("⚠ Error al validar existencia de vanos en GapSelectorModal:", error);
+      if (!cancelled) setExistsMap({});
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, overlappedGaps]);
+
   if (!visible) return null;
 
   const list = Array.isArray(overlappedGaps) ? overlappedGaps : [];
+
+  const gapExists = (gap) => {
+    const terceros = gap?.VanoTerceros;
+
+    if (terceros === 0 || terceros === 1 || terceros === "0" || terceros === "1") {
+      return Number(terceros) === 0;
+    }
+
+    const gapId = Number(gap?.VanoInterno);
+    if (!Number.isFinite(gapId)) return true;
+
+    if (Object.prototype.hasOwnProperty.call(existsMap, gapId)) {
+      return !!existsMap[gapId];
+    }
+
+    return true;
+  };
 
   return (
     <View style={styles.modalOverlay}>
       <View style={styles.modalBox}>
         <Text style={styles.modalTitle}>Seleccione un Vano</Text>
 
-        {list.map((gap, idx) => (
-          <TouchableOpacity
-            key={gap?.VanoInterno ?? gap?.VanoCodigo ?? idx}
-            style={styles.modalItem}
-            onPress={() => onPick?.(gap)}
-          >
-            <Text style={styles.modalText}>
-              {gap?.VanoCodigo || "Vano sin código"} - {gap?.VanoEtiqueta || ""}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {list.map((gap, idx) => {
+          const exists = gapExists(gap);
+
+          return (
+            <TouchableOpacity
+              key={gap?.VanoInterno ?? gap?.VanoCodigo ?? idx}
+              style={styles.modalItem}
+              onPress={() => onPick?.(gap)}
+            >
+              <Text
+                style={[
+                  styles.modalText,
+                  !exists && { color: "red" },
+                ]}
+              >
+                {gap?.VanoCodigo || "Vano sin código"} - {gap?.VanoEtiqueta || ""}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
 
         <TouchableOpacity style={styles.modalCancel} onPress={onCancel}>
           <Text style={{ color: "red" }}>Cancelar</Text>
