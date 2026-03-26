@@ -42,7 +42,7 @@ export default function DeficiencyForm({
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [isSearchingGis, setIsSearchingGis] = useState(false);
-
+    const isSavingRef = useRef(false);
     const [tipificationOptionOptions, setTipificationOptionOptions] = useState([]);
     const [loadingTipificationOptions, setLoadingTipificationOptions] = useState(false);
 
@@ -570,6 +570,8 @@ export default function DeficiencyForm({
     // 6. GUARDADO
     // =========================================================================
     const handleSubmit = async () => {
+        // 🚨 1. CANDADO SINCRÓNICO: Si ya está guardando, aborta el clic de inmediato
+    if (isSavingRef.current || isSaving) return;
         setSubmitted(true);
 
         // 1. Validaciones Básicas
@@ -660,7 +662,7 @@ export default function DeficiencyForm({
             defiActivo: true,
             defiCol2: formData.defiCol2 ? String(formData.defiCol2).trim() : ''
         };
-
+        isSavingRef.current = true;
         setIsSaving(true);
 
         try {
@@ -676,6 +678,8 @@ export default function DeficiencyForm({
             console.error("Error al guardar:", error);
         } finally {
             // Reactivamos el botón solo si el modal no se cerró por algún error
+            
+            isSavingRef.current = false;
             setIsSaving(false);
         }
     };
@@ -949,7 +953,7 @@ export default function DeficiencyForm({
 
                                 <div className="flex flex-col gap-1 w-full h-full">
                                     {observacionField && renderDynamicField(observacionField)}
-
+                                {!isSinDeficiencia && (
                                     <div className="field mb-3 w-full">
                                         <label className="font-bold text-sm block mb-1 text-gray-700">
                                             Opción de tipificación
@@ -1028,6 +1032,8 @@ export default function DeficiencyForm({
 
 
                                     </div>
+
+                                )}
 
                                     {comentarioField && renderDynamicField(comentarioField)}
                                 </div>

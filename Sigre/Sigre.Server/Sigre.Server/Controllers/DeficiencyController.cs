@@ -478,6 +478,51 @@ namespace Sigre.Server.Controllers
                 });
             }
         }
+        [HttpPost("clone")]
+        public async Task<IActionResult> CloneDeficiency([FromBody] CloneDeficiencyRequest request)
+        {
+            // 1. Validación básica de entrada
+            if (request.IdOriginal <= 0)
+            {
+                return BadRequest(new { mensaje = "El ID de la deficiencia original es inválido." });
+            }
 
+            try
+            {
+                // Instanciamos tu capa DA de Deficiencias
+                var daDeficiency = new DADeficiency();
+
+                // 2. Ejecutamos el motor de clonación (BD + Archivos Físicos)
+                // Nota: Asegúrate de que DADEFI_ClonarWeb tenga firma 'async Task<int>' 
+                // ya que por dentro llama a CopiarArchivoFisicoAsync
+                int nuevoIdDeficiencia = await daDeficiency.DADEFI_ClonarWeb(
+                    request.IdOriginal,
+                    request.NuevaTipificacion,
+                    request.NuevoCodigoTipi,
+                    request.UsuarioSesion
+                );
+
+                return Ok(new
+                {
+                    mensaje = "Deficiencia y evidencias clonadas con éxito.",
+                    nuevoId = nuevoIdDeficiencia
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                // Capturamos las reglas de negocio (ej. "No puede registrar SIN DEFICIENCIA")
+                return BadRequest(new { mensaje = "Operación bloqueada por regla de negocio", detalle = ex.Message });
+            }
+            catch (FileNotFoundException ex)
+            {
+                // Si falló la copia física
+                return NotFound(new { mensaje = "Error en evidencias", detalle = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // Cualquier otro error (ej. SQL Server abajo)
+                return StatusCode(500, new { mensaje = "Error interno al clonar la deficiencia", detalle = ex.Message });
+            }
+        }
     }
 }

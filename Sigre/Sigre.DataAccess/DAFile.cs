@@ -669,7 +669,7 @@ namespace Sigre.DataAccess
         }
 
     
-        // Usamos el disco D:\ como raíz, según tu captura de pantalla
+        // Usamos el disco H:\ como raíz, 
         private readonly string _baseDirectory = @"H:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
@@ -702,13 +702,22 @@ namespace Sigre.DataAccess
                 // 🔥 NUEVO: Limpieza automática de la carpeta antigua
                 try
                 {
-                    // Obtenemos la ruta de la carpeta antigua (ej. D:\...\6002)
+                    // 1. Obtenemos la ruta de la carpeta de la deficiencia (ej. ...\6002)
                     string oldDirectory = Path.GetDirectoryName(absoluteOldPath);
 
-                    // Si la carpeta existe y ya no contiene NINGÚN archivo ni subcarpeta, la borramos
+                    // Si la carpeta de deficiencia existe y está vacía, la borramos
                     if (Directory.Exists(oldDirectory) && !Directory.EnumerateFileSystemEntries(oldDirectory).Any())
                     {
-                        Directory.Delete(oldDirectory); // Elimina la carpeta vacía
+                        Directory.Delete(oldDirectory); // Borra el 6002
+
+                        // 2. Ahora miramos la carpeta padre, que es el Elemento (ej. ...\VBT000184260)
+                        string elementDirectory = Path.GetDirectoryName(oldDirectory);
+
+                        // Si la carpeta del elemento existe y también quedó vacía, la borramos
+                        if (Directory.Exists(elementDirectory) && !Directory.EnumerateFileSystemEntries(elementDirectory).Any())
+                        {
+                            Directory.Delete(elementDirectory); // Borra el VBT000184260
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -727,5 +736,58 @@ namespace Sigre.DataAccess
             }
         
     }
-}
+        public async Task<bool> CopiarArchivoFisicoAsync(string oldPath, string newPath)
+        {
+            try
+            {
+                string absoluteOldPath = Path.Combine(_baseDirectory, oldPath.Replace("/", "\\"));
+                string absoluteNewPath = Path.Combine(_baseDirectory, newPath.Replace("/", "\\"));
+
+                // 🔥 CONTROL ESTRICTO SOLO PARA .m4a
+                if (!File.Exists(absoluteOldPath))
+                {
+                    // Si el archivo que falta es un audio .m4a, lo perdonamos y devolvemos false
+                    if (absoluteOldPath.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+
+                    // Si falta una foto (.jpg) u otro archivo, ¡explotamos y avisamos del error!
+                    throw new FileNotFoundException($"Falta evidencia crítica en el disco: {absoluteOldPath}");
+                }
+
+                string targetDirectory = Path.GetDirectoryName(absoluteNewPath);
+                if (!Directory.Exists(targetDirectory))
+                {
+                    Directory.CreateDirectory(targetDirectory);
+                }
+
+                if (absoluteOldPath.Equals(absoluteNewPath, StringComparison.OrdinalIgnoreCase)) return true;
+
+                int maxRetries = 5;
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    try
+                    {
+                        using (var sourceStream = new FileStream(absoluteOldPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (var destStream = new FileStream(absoluteNewPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await sourceStream.CopyToAsync(destStream);
+                        }
+                        return true;
+                    }
+                    catch (IOException)
+                    {
+                        if (i == maxRetries - 1) throw;
+                        await Task.Delay(1000);
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error de disco al copiar: {ex.Message}", ex);
+            }
+        }
+    }
 }

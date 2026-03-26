@@ -61,6 +61,22 @@ export const useFiles = () => {
             return false;
         }
     };
+    const moveFilePhysical = useCallback(async (oldPath, newPath) => {
+        if (!oldPath || !newPath) return false;
+        
+        try {
+            console.log(`📡 [POST] Moviendo archivo en servidor: ${oldPath} -> ${newPath}`);
+            // Axios ya usa tu baseURL, así que solo pones la ruta final
+            await api.post('/File/move', { 
+                oldPath, 
+                newPath 
+            });
+            return true; // Éxito
+        } catch (err) {
+            console.error("❌ Error moviendo archivo físico:", err);
+            return false; // Falló (ya sea por red, disco H vs D, etc.)
+        }
+    }, []);
 
 
 
@@ -71,5 +87,6 @@ export const useFiles = () => {
         deleteFile, 
         addFile, 
         fetchFilesData,
+        moveFilePhysical
     };
 };
