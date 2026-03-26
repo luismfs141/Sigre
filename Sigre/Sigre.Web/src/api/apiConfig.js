@@ -5,7 +5,7 @@ import axios from 'axios';
 // Producción
 const baseURL = 'https://sigre-api-a6bbh4drgpgjeshw.canadacentral-01.azurewebsites.net/api/';
 
-export const API_URL = baseURL;
+export const API_URL = baseURL; 
 const api = axios.create({
   baseURL: baseURL,
   //timeout: 10000, // un poco más alto por seguridad
