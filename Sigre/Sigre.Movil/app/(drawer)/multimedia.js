@@ -1025,7 +1025,7 @@ export default function Multimedia() {
         return Alert.alert("Error", "No se pudo copiar ninguna foto.");
       }
 
-            setPhotos(nextPhotos);
+      setPhotos(nextPhotos);
       setDeletedIds(nextDeletedIds);
       setIsDirty(true);
       setCopyPhotosModal(false);
@@ -1257,10 +1257,14 @@ export default function Multimedia() {
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "VANO" : "POSTE";
       const sCod = safeSeg(codigo);
-      const tipCode = String(selectedDeficiency?.typificationCode ?? "");
+      const tipCode = String(selectedDeficiency?.typificationCode ?? "").trim();
       const is7004 = tipCode === "7004";
+      const isSinDef = tipCode === "0000";
 
-      let defFolderSegment = safeSeg(tipCode, "SINDEF");
+      let defFolderSegment = isSinDef
+        ? "SINDEF"
+        : safeSeg(tipCode, "SINDEF");
+
       let defNameSegment = defFolderSegment;
 
       const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/`;

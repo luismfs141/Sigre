@@ -391,28 +391,30 @@ export const useDeficiency = () => {
         ? null
         : Number(base.CodopInterno);
 
-    // ✅ defaults
+    const defiCol2Normalized =
+      base?.DefiCol2 === null ||
+        base?.DefiCol2 === undefined ||
+        String(base?.DefiCol2).trim() === ""
+        ? null
+        : String(base.DefiCol2);
+
     const normalized = {
       ...base,
 
       DefiCol3: base?.DefiCol3 ?? generateUUID(),
-      DefiCol2: base?.DefiCol2 ?? "",
+      DefiCol2: defiCol2Normalized,
       DefiAccesibilidad: base?.DefiAccesibilidad ?? "",
       DefiTipoCruce: base?.DefiTipoCruce ?? "",
       CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
 
-      // ✅ SIEMPRE se actualiza al guardar
       DefiUsuarioMod: userId != null ? String(userId) : null,
       DefiFecModificacion: nowIso,
     };
 
     if (isNew) {
-      // ✅ CREACIÓN: se estampa al Guardar/Finalizar (NO al abrir modal)
       normalized.DefiEstado = base?.DefiEstado || "N";
       normalized.DefiFechaCreacion = nowIso;
       normalized.DefiFecRegistro = nowIso;
-
-      // ✅ en creación: modificacion == creacion (mismo stamp)
       normalized.DefiFecModificacion = nowIso;
 
       normalized.DefiUsuarioInic = isBlank(base?.DefiUsuarioInic)
@@ -423,7 +425,6 @@ export const useDeficiency = () => {
       normalized.DefiLongitud = base?.DefiLongitud ?? 0;
       normalized.DefiInspeccionado = base?.DefiInspeccionado ?? 0;
     } else {
-      // ✅ UPDATE: NO tocar creación (solo asegurar que no quede en blanco)
       if (isBlank(base?.DefiFechaCreacion)) normalized.DefiFechaCreacion = nowIso;
       if (isBlank(base?.DefiFecRegistro)) normalized.DefiFecRegistro = nowIso;
     }
@@ -522,85 +523,85 @@ export const useDeficiency = () => {
   };
 
   const countPendingDeficienciesLocal = async () => {
-  const dbOk = await checkDatabase();
-  if (!dbOk) return 0;
+    const dbOk = await checkDatabase();
+    if (!dbOk) return 0;
 
-  try {
-    const pendientes = await getDeficienciesPendientes();
-    if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+    try {
+      const pendientes = await getDeficienciesPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
 
-    return pendientes.filter((d) =>
-      [1, 2, 3].includes(Number(d?.EstadoOffLine))
-    ).length;
-  } catch (err) {
-    console.error("❌ Error contando deficiencias pendientes:", err);
-    return 0;
-  }
-};
+      return pendientes.filter((d) =>
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
+      ).length;
+    } catch (err) {
+      console.error("❌ Error contando deficiencias pendientes:", err);
+      return 0;
+    }
+  };
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
   const syncAllDeficiencies = async () => {
-  const online = await isOnline();
-  if (!online) {
-    return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
-  }
-
-  let total = 0;
-
-  try {
-    const pendientes = await getDeficienciesPendientes();
-    if (!Array.isArray(pendientes) || !pendientes.length) {
-      return { ok: true, total: 0, synced: 0 };
+    const online = await isOnline();
+    if (!online) {
+      return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
     }
 
-    const aSincronizar = pendientes.filter((d) =>
-      [1, 2, 3].includes(Number(d?.EstadoOffLine))
-    );
+    let total = 0;
 
-    total = aSincronizar.length;
-
-    if (!total) {
-      return { ok: true, total: 0, synced: 0 };
-    }
-
-    const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
-
-    const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
-      timeout: 60000,
-    });
-
-    const respList = Array.isArray(response.data) ? response.data : [];
-
-    if (respList.length !== total) {
-      throw new Error(
-        `DEF_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
-      );
-    }
-
-    for (const r of respList) {
-      const localId = Number(r?.localId);
-      const serverId = Number(r?.serverId);
-
-      if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
-        throw new Error(`DEF_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+    try {
+      const pendientes = await getDeficienciesPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) {
+        return { ok: true, total: 0, synced: 0 };
       }
-    }
 
-    for (const r of respList) {
-      await updateDeficiencyIdAfterSync(Number(r.localId), Number(r.serverId));
-    }
+      const aSincronizar = pendientes.filter((d) =>
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
+      );
 
-    return { ok: true, total, synced: total };
-  } catch (err) {
-    console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
-    return {
-      ok: false,
-      total,
-      synced: 0,
-      error: err?.response?.data?.message || err?.message || "DEF_SYNC_FAILED",
-    };
-  }
-};
+      total = aSincronizar.length;
+
+      if (!total) {
+        return { ok: true, total: 0, synced: 0 };
+      }
+
+      const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
+
+      const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
+        timeout: 60000,
+      });
+
+      const respList = Array.isArray(response.data) ? response.data : [];
+
+      if (respList.length !== total) {
+        throw new Error(
+          `DEF_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
+        );
+      }
+
+      for (const r of respList) {
+        const localId = Number(r?.localId);
+        const serverId = Number(r?.serverId);
+
+        if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
+          throw new Error(`DEF_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+        }
+      }
+
+      for (const r of respList) {
+        await updateDeficiencyIdAfterSync(Number(r.localId), Number(r.serverId));
+      }
+
+      return { ok: true, total, synced: total };
+    } catch (err) {
+      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
+      return {
+        ok: false,
+        total,
+        synced: 0,
+        error: err?.response?.data?.message || err?.message || "DEF_SYNC_FAILED",
+      };
+    }
+  };
 
   // ------------------- SAVE + AUTO SYNC (SIN PIN) -------------------
   const saveDeficiency = async (deficiency, userId) => {
@@ -797,8 +798,7 @@ export const useDeficiency = () => {
           orderInCode: nroEnCodigo,
 
           name: hasTypification
-            ? `${def.Code} → ${def.Component ?? "Sin descripción"}${def.DefiNumSuministro ? `\nSuministro: ${def.DefiNumSuministro}` : ""
-            }`
+            ? `${def.Code} → ${def.Deficiency ?? def.Component ?? "Sin descripción"}`
             : `0000 → ${def.Deficiency ?? "Sin Deficiencia"}`,
 
           data: {
@@ -812,16 +812,22 @@ export const useDeficiency = () => {
 
             observacion: def.DefiObservacion ?? "",
             comentario: def.DefiComentario ?? "",
-            distVertical: def.DefiDistVertical ?? 0,
-            distHorizontal: def.DefiDistHorizontal ?? 0,
+            distVertical: def.DefiDistVertical ?? null,
+            distHorizontal: def.DefiDistHorizontal ?? null,
+
+            criticidad: def.DefiEstadoCriticidad ?? null,
+            accesibilidad: def.DefiAccesibilidad ?? null,
+            tipoCruce: def.DefiTipoCruce ?? null,
+            responsabilidad: def.DefiCol2 ?? null,
+            codopInterno: def.CodopInterno ?? null,
+            comentarioEstandar: def.ComentarioEstandar ?? "",
+            opcionLabel: def.CodopOpcion ?? "",
 
             infoTipificacion: def.Code ?? "0000",
             infoDeficiencia: def.Deficiency ?? "",
             infoDescripcion: (def.Typification ?? def.Component) ?? "",
 
             ownerUserId: def.DefiUsuarioInic ?? null,
-
-            // ✅ CAMPO FIJO PARA EL COLOR (0/1)
             defiInspeccionado: defiInspeccionado01,
           },
 

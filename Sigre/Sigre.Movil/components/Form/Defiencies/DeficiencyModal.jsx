@@ -893,10 +893,25 @@ const buildResponsabilidadField = () => ({
 });
 
 const ensureResponsabilidadDefault = (def) => {
-  const v = def?.[RESPONSABILIDAD];
+  const current = def ?? {};
+
+  const code = String(
+    current?.typificationCode ??
+    current?.Code ??
+    current?.data?.typificationCode ??
+    ""
+  ).trim();
+
+  if (code === "0000") {
+    return { ...current, [RESPONSABILIDAD]: null };
+  }
+
+  const v = current?.[RESPONSABILIDAD];
   const empty = v === null || v === undefined || String(v).trim() === "";
-  return empty ? { ...def, [RESPONSABILIDAD]: "SEAL" } : def;
+  return empty ? { ...current, [RESPONSABILIDAD]: "SEAL" } : current;
 };
+
+const isSinDeficienciaCode = (code) => String(code ?? "").trim() === "0000";
 
 const injectResponsabilidadAfterCriticidad = (baseFields) => {
   const fields = Array.isArray(baseFields) ? baseFields : [];
@@ -1084,63 +1099,81 @@ export default function DeficiencyModal({
   }, [deficiency]);
 
   useEffect(() => {
-  if (!visible || !localDef) return;
+    if (!visible || !localDef) return;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  const loadCodigosOpciones = async () => {
-    const typiId =
-      localDef?.TipiInterno ??
-      localDef?.typificationId ??
-      deficiency?.typificationId ??
-      null;
+    const loadCodigosOpciones = async () => {
+      const code =
+        localDef?.typificationCode ??
+        deficiency?.typificationCode ??
+        "";
 
-    if (!typiId) {
-      if (!cancelled) {
-        setCodigosOpcionesItems(prev =>
-          Array.isArray(prev) && prev.length === 0 ? prev : []
-        );
+      if (isSinDeficienciaCode(code)) {
+        if (!cancelled) {
+          setCodigosOpcionesItems([]);
 
+          setLocalDef(prev => {
+            if (!prev) return prev;
+            if (prev[CODOP_INTERNO_FIELD] == null) return prev;
+            return { ...prev, [CODOP_INTERNO_FIELD]: null };
+          });
+        }
+        return;
+      }
+
+      const typiId =
+        localDef?.TipiInterno ??
+        localDef?.typificationId ??
+        deficiency?.typificationId ??
+        null;
+
+      if (!typiId) {
+        if (!cancelled) {
+          setCodigosOpcionesItems(prev =>
+            Array.isArray(prev) && prev.length === 0 ? prev : []
+          );
+
+          setLocalDef(prev => {
+            if (!prev) return prev;
+            if (prev[CODOP_INTERNO_FIELD] == null) return prev;
+            return { ...prev, [CODOP_INTERNO_FIELD]: null };
+          });
+        }
+        return;
+      }
+
+      const items = await fetchCodigosOpcionesTipiLocal(typiId);
+      if (cancelled) return;
+
+      const safeItems = Array.isArray(items) ? items : [];
+
+      setCodigosOpcionesItems(prev => {
+        const prevJson = JSON.stringify(prev ?? []);
+        const nextJson = JSON.stringify(safeItems);
+        return prevJson === nextJson ? prev : safeItems;
+      });
+
+      if (safeItems.length === 0) {
         setLocalDef(prev => {
           if (!prev) return prev;
           if (prev[CODOP_INTERNO_FIELD] == null) return prev;
           return { ...prev, [CODOP_INTERNO_FIELD]: null };
         });
       }
-      return;
-    }
+    };
 
-    const items = await fetchCodigosOpcionesTipiLocal(typiId);
-    if (cancelled) return;
+    loadCodigosOpciones();
 
-    const safeItems = Array.isArray(items) ? items : [];
-
-    setCodigosOpcionesItems(prev => {
-      const prevJson = JSON.stringify(prev ?? []);
-      const nextJson = JSON.stringify(safeItems);
-      return prevJson === nextJson ? prev : safeItems;
-    });
-
-    if (safeItems.length === 0) {
-      setLocalDef(prev => {
-        if (!prev) return prev;
-        if (prev[CODOP_INTERNO_FIELD] == null) return prev;
-        return { ...prev, [CODOP_INTERNO_FIELD]: null };
-      });
-    }
-  };
-
-  loadCodigosOpciones();
-
-  return () => {
-    cancelled = true;
-  };
-}, [
-  visible,
-  localDef?.TipiInterno,
-  localDef?.typificationId,
-  deficiency?.typificationId
-]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    visible,
+    localDef?.TipiInterno,
+    localDef?.typificationId,
+    deficiency?.typificationId
+  ]);
 
   const setFieldValue = (key, val) => {
     setLocalDef(prev => {
@@ -1156,13 +1189,28 @@ export default function DeficiencyModal({
 
   if (!visible || !localDef) return null;
 
-  const code = String(localDef.typificationCode);
+  const code = String(localDef.typificationCode ?? "").trim();
+  const isSinDeficiencia = isSinDeficienciaCode(code);
+
   const baseFields = getDeficiencyFields(code);
-  const fields = injectCodigosOpcionesAfterComentarioEstandar(
-    injectComentarioEstandarBeforeComentarios(
-      injectResponsabilidadAfterCriticidad(baseFields)
-    )
-  );
+
+  const fields = (
+    isSinDeficiencia
+      ? baseFields
+      : injectCodigosOpcionesAfterComentarioEstandar(
+        injectComentarioEstandarBeforeComentarios(
+          injectResponsabilidadAfterCriticidad(baseFields)
+        )
+      )
+  ).filter(field => {
+    if (!isSinDeficiencia) return true;
+
+    return ![
+      RESPONSABILIDAD,
+      TIPI_COMENTARIO_ESTANDAR,
+      CODOP_INTERNO_FIELD,
+    ].includes(field?.key);
+  });
 
   const title = getDeficiencyLabel(code);
 
@@ -1249,23 +1297,32 @@ export default function DeficiencyModal({
         return;
       }
 
+      const payloadBase = {
+        ...localDef,
+
+        DefiIdElemento:
+          localDef?.DefiIdElemento ??
+          deficiency?.elementId ??
+          localDef?.elementId,
+
+        DefiTipoElemento:
+          localDef?.DefiTipoElemento ??
+          deficiency?.typeElement ??
+          localDef?.typeElement,
+
+        elementId: localDef?.elementId ?? deficiency?.elementId,
+        typeElement: localDef?.typeElement ?? deficiency?.typeElement,
+      };
+
       const payload = sanitizeDefForSave(
-        ensureResponsabilidadDefault({
-          ...localDef,
-
-          DefiIdElemento:
-            localDef?.DefiIdElemento ??
-            deficiency?.elementId ??
-            localDef?.elementId,
-
-          DefiTipoElemento:
-            localDef?.DefiTipoElemento ??
-            deficiency?.typeElement ??
-            localDef?.typeElement,
-
-          elementId: localDef?.elementId ?? deficiency?.elementId,
-          typeElement: localDef?.typeElement ?? deficiency?.typeElement,
-        })
+        isSinDeficienciaCode(code)
+          ? {
+            ...payloadBase,
+            DefiCol2: null,
+            CodopInterno: null,
+            DefiComentario: String(payloadBase?.DefiComentario ?? ""),
+          }
+          : ensureResponsabilidadDefault(payloadBase)
       );
 
       const res = await saveDeficiency(payload, userId);

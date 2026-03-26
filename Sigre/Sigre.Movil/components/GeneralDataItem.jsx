@@ -1,8 +1,7 @@
-// components/GeneralDataItem.js
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { usePost } from "../hooks/usePost"; // ✅ usa tu hook real
+import { usePost } from "../hooks/usePost";
 
 const pickFirst = (obj, keys, fallback = "") => {
   for (const k of keys) {
@@ -12,10 +11,17 @@ const pickFirst = (obj, keys, fallback = "") => {
   return fallback;
 };
 
-const asSiNo = (v) => (Number(v) === 1 || v === true ? "NO" : "SÍ");
-
-
 const k = (v) => String(v ?? "").trim();
+
+const asExisteSiNo = (v) => {
+  if (v === null || v === undefined || String(v).trim() === "") return "-";
+  return Number(v) === 1 || v === true ? "NO" : "SÍ";
+};
+
+const asDirectSiNo = (v) => {
+  if (v === null || v === undefined || String(v).trim() === "") return "-";
+  return Number(v) === 1 || v === true ? "SÍ" : "NO";
+};
 
 export default function GeneralDataItem({ item, onEdit }) {
   const { getMaterialsPost, getTipoRetenidasPost } = usePost();
@@ -23,12 +29,39 @@ export default function GeneralDataItem({ item, onEdit }) {
   const [postMaterials, setPostMaterials] = useState([]);
   const [retenidaTipos, setRetenidaTipos] = useState([]);
 
-  // ✅ cargar catálogos (una vez)
-  useEffect(() => {
+
+
+
+
+
+
+  const isPost = item?.PostInterno != null;
+  const isVano =
+    item?.VanoInterno != null ||
+    item?.Vano_Codigo != null ||
+    item?.VanoCodigo != null;
+
+
+
+
+
+
+
+
+
+    useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
+        if (!isPost) {
+          if (!alive) return;
+
+          setPostMaterials((prev) => (prev.length ? [] : prev));
+          setRetenidaTipos((prev) => (prev.length ? [] : prev));
+          return;
+        }
+
         const mats = (await getMaterialsPost()) ?? [];
         const rets = (await getTipoRetenidasPost()) ?? [];
         if (!alive) return;
@@ -36,7 +69,6 @@ export default function GeneralDataItem({ item, onEdit }) {
         setPostMaterials(mats);
         setRetenidaTipos(rets);
       } catch (e) {
-        // si falla, solo se verá "-"
         console.warn("GeneralDataItem: no se pudieron cargar catálogos", e?.message ?? e);
       }
     })();
@@ -44,9 +76,10 @@ export default function GeneralDataItem({ item, onEdit }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isPost]);
 
-  // ✅ maps id -> nombre
+
+
   const materialNameById = useMemo(() => {
     const map = new Map();
     for (const m of postMaterials) {
@@ -64,25 +97,18 @@ export default function GeneralDataItem({ item, onEdit }) {
   }, [retenidaTipos]);
 
   const info = useMemo(() => {
-    const isPost = item?.PostInterno != null;
-    const isVano =
-      item?.VanoInterno != null ||
-      item?.Vano_Codigo != null ||
-      item?.VanoCodigo != null;
+
 
     if (isPost) {
       const codigo = pickFirst(item, ["PostCodigoNodo"], "UNK");
       const etiqueta = pickFirst(item, ["PostEtiqueta"], "");
 
-      // IDs (guardados en el elemento)
       const materialId = pickFirst(item, ["PostMaterial"], "");
       const retenidaId = pickFirst(item, ["PostRetenidaTipo"], "");
 
-      // nombres (si por alguna razón ya vinieran)
       const materialFromProps = pickFirst(item, ["PostMaterialNombre", "PosmtNombre"], "");
       const retenidaFromProps = pickFirst(item, ["PostRetenidaTipoNombre", "RtntpNombre"], "");
 
-      // ✅ nombre real desde catálogos
       const material =
         materialFromProps ||
         materialNameById.get(k(materialId)) ||
@@ -96,18 +122,21 @@ export default function GeneralDataItem({ item, onEdit }) {
       const alturaRaw = pickFirst(item, ["PostAltura"], "");
       const altura = alturaRaw === "" || alturaRaw == null ? "-" : String(alturaRaw);
 
-      const terceros = asSiNo(pickFirst(item, ["PostTerceros"], 0));
+      const postTerceros = pickFirst(item, ["PostTerceros"], null);
+      const postVereda = pickFirst(item, ["PostVereda"], null);
 
       const title = `POSTE: ${codigo}` + (etiqueta ? ` - ${etiqueta}` : "");
+      const isDanger = Number(postTerceros) === 1 || postTerceros === true;
 
       const lines = [
-        `Material: ${material}`,
-        `Retenida: ${retenida}`,
+        `Material del poste: ${material}`,
+        `Tipo de retenida: ${retenida}`,
         `Altura: ${altura}`,
-        `Poste existe: ${terceros}`,
+        `Poste en vereda: ${asDirectSiNo(postVereda)}`,
+        `Poste existente: ${asExisteSiNo(postTerceros)}`,
       ];
 
-      return { title, lines };
+      return { title, lines, isDanger };
     }
 
     if (isVano) {
@@ -116,7 +145,7 @@ export default function GeneralDataItem({ item, onEdit }) {
 
       const nodoIni = pickFirst(item, ["VanoNodoInicial"], "-");
       const nodoFin = pickFirst(item, ["VanoNodoFinal"], "-");
-      const terceros = asSiNo(pickFirst(item, ["VanoTerceros"], 0));
+      const terceros = asExisteSiNo(pickFirst(item, ["VanoTerceros"], 0));
 
       const title = `VANO: ${codigo}` + (etiqueta ? ` - ${etiqueta}` : "");
 
@@ -126,17 +155,19 @@ export default function GeneralDataItem({ item, onEdit }) {
         `Red existe: ${terceros}`,
       ];
 
-      return { title, lines };
+      return { title, lines, isDanger: false };
     }
 
     const codigo = pickFirst(item, ["SedCodigo", "SED_Codigo", "SedInterno"], "UNK");
-    return { title: `SED: ${codigo}`, lines: [] };
+    return { title: `SED: ${codigo}`, lines: [], isDanger: false };
   }, [item, materialNameById, retenidaNameById]);
+
+  const textColor = info.isDanger ? "#D32F2F" : "#111";
 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
           {info.title}
         </Text>
 
@@ -153,7 +184,7 @@ export default function GeneralDataItem({ item, onEdit }) {
       {info.lines.length > 0 && (
         <View style={styles.lines}>
           {info.lines.map((t, idx) => (
-            <Text key={idx} style={styles.lineText}>
+            <Text key={idx} style={[styles.lineText, { color: textColor }]}>
               {t}
             </Text>
           ))}
@@ -178,7 +209,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  title: { flex: 1, fontSize: 16, fontWeight: "800" },
+  title: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+  },
   editBtn: {
     width: 36,
     height: 36,
@@ -189,6 +224,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BFDBFE",
   },
-  lines: { marginTop: 8, gap: 2 },
-  lineText: { fontSize: 14, color: "#333" },
+  lines: {
+    marginTop: 8,
+    gap: 2,
+  },
+  lineText: {
+    fontSize: 14,
+  },
 });
