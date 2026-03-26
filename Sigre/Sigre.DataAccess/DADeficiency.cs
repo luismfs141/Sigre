@@ -1894,6 +1894,206 @@ namespace Sigre.DataAccess
         }
 
 
-        
+        public async Task<int> DADEFI_ClonarWeb(int idDeficienciaOriginal, int nuevaTipificacion, string nuevoCodigoTipi, string usuarioSesion)
+        {
+            using (var ctx = new SigreContext())
+            using (var transaction = ctx.Database.BeginTransaction())
+            {
+                try
+                {
+                    var original = ctx.Deficiencias.FirstOrDefault(d => d.DefiInterno == idDeficienciaOriginal);
+                    if (original == null) throw new Exception("La deficiencia original no existe.");
+
+                    // 🔥 NUEVO CANDADO 1: Prohibido usar un "Sin Deficiencia" como molde para clonar
+                    if (original.TipiInterno == 0)
+                    {
+                        throw new ArgumentException("No está permitido clonar un registro de 'SIN DEFICIENCIA'.");
+                    }
+
+                    // 2. VALIDACIONES ESTRICTAS Y REGLAS DE NEGOCIO
+                    var tipificacionesExistentes = ctx.Deficiencias
+                        .Where(d => d.DefiCodigoElemento == original.DefiCodigoElemento && d.DefiActivo == true)
+                        .Select(d => d.TipiInterno).ToList();
+
+                    bool tieneFallasReales = tipificacionesExistentes.Any(t => t > 0);
+                    bool tieneSinDeficiencia = tipificacionesExistentes.Any(t => t == 0);
+
+                    // Reglas cruzadas que ya tenías
+                    if (nuevaTipificacion == 0 && tieneFallasReales)
+                        throw new ArgumentException("No puede clonar como 'SIN DEFICIENCIA'. Ya existen fallas reales.");
+
+                    if (nuevaTipificacion > 0 && tieneSinDeficiencia)
+                        throw new ArgumentException("El elemento está marcado como 'SIN DEFICIENCIA'.");
+
+                    // 🔥 NUEVO CANDADO 2: Prohibido clonar hacia un nuevo "Sin Deficiencia" si el poste ya tiene uno
+                    if (nuevaTipificacion == 0 && tieneSinDeficiencia)
+                    {
+                        throw new ArgumentException("Ya existe un registro 'SIN DEFICIENCIA' para este elemento. Solo puede haber uno.");
+                    }
+
+                    // 3. CREAR EL CLON (Base de Datos)
+                    var clonDefi = new Deficiencia
+                    {
+                        // 🔥 HEREDAMOS TODO (Reflejo exacto del padre)
+                        DefiCodigoElemento = original.DefiCodigoElemento,
+                        DefiTipoElemento = original.DefiTipoElemento,
+                        DefiIdElemento = original.DefiIdElemento,
+                        TablInterno = original.TablInterno, // <- EL CAMPO VITAL
+                        DefiLatitud = original.DefiLatitud,
+                        DefiLongitud = original.DefiLongitud,
+                        DefiObservacion = original.DefiObservacion,
+                        DefiComentario = original.DefiComentario,
+                        DefiNumSuministro = original.DefiNumSuministro,
+                        DefiEstadoCriticidad = original.DefiEstadoCriticidad,
+                        DefiDistHorizontal = original.DefiDistHorizontal,
+                        DefiDistVertical = original.DefiDistVertical,
+                        DefiAccesibilidad = original.DefiAccesibilidad,
+                        DefiTipoCruce = original.DefiTipoCruce,
+                        CodopInterno = original.CodopInterno,
+                        DefiCol1 = original.DefiCol1,
+                        DefiCol2 = original.DefiCol2,
+                        DefiUsuarioInic = original.DefiUsuarioInic,
+                        // Fechas originales conservadas
+                        DefiFechaCreacion = original.DefiFechaCreacion,
+                        DefiFecRegistro = original.DefiFecRegistro,
+                        DefiInspeccionado = original.DefiInspeccionado,
+                        // 🔥 APLICAMOS LOS CAMBIOS PROPIOS DEL CLON
+                        TipiInterno = nuevaTipificacion,
+                        DefiCol3 = Guid.NewGuid().ToString(), // UUID Nuevo para que no choque
+                        DefiInterno = 0, // 0 = Registro Nuevo
+                        DefiEstado = "N",
+                        DefiActivo = true,
+                        
+                        DefiUsuarioMod = usuarioSesion,
+                        DefiFecModificacion = DateTime.Now
+                    };
+
+                    ctx.Deficiencias.Add(clonDefi);
+                    ctx.SaveChanges(); // Guardamos para obtener el nuevo DefiInterno
+
+                    
+
+                    // 🔥 1. LÓGICA DE CARPETAS ESPECIALES (Cálculo del Molde)
+                    string codeNuevoFolder = nuevoCodigoTipi;
+                    string codeNuevoFile = nuevoCodigoTipi;
+
+                    if (nuevoCodigoTipi == "0" || nuevoCodigoTipi == "SINDEF")
+                    {
+                        codeNuevoFolder = "SINDEF";
+                        codeNuevoFile = "0000";
+                    }
+                    else if (nuevoCodigoTipi == "7004")
+                    {
+                        // Buscamos cuántas deficiencias 7004 tiene este poste para sacar el correlativo
+                        var defs7004 = ctx.Deficiencias
+                            .Where(d => d.DefiCodigoElemento == original.DefiCodigoElemento && d.TipiInterno == nuevaTipificacion && d.DefiActivo == true)
+                            .OrderBy(d => d.DefiInterno)
+                            .ToList();
+
+                        // Encontramos qué posición ocupa nuestro clon (que ya fue guardado en la BD arriba)
+                        int index = defs7004.FindIndex(d => d.DefiInterno == clonDefi.DefiInterno);
+                        int folderNum = index != -1 ? index + 1 : (defs7004.Count > 0 ? defs7004.Count : 1);
+
+                        codeNuevoFolder = $"7004/{folderNum}";
+                        codeNuevoFile = $"7004_{folderNum}";
+                    }
+
+                    // 4. CLONAR ARCHIVOS (Base de Datos + Físico)
+                    var archivosOriginales = ctx.Archivos.Where(a => a.ArchCodTabla == idDeficienciaOriginal && a.ArchActivo == true).ToList();
+                    var daFile = new DAFile();
+
+                    foreach (var arch in archivosOriginales)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"🔍 ARCHIVO ORIG: ID={arch.ArchInterno} | Fecha={arch.ArchFecha}");
+
+                        string nuevaRutaFisica = arch.ArchNombre;
+                        string elemCodigo = original.DefiCodigoElemento; // Ej: "VBT000262999"
+
+                        // 🔥 2. EXTRACCIÓN INTELIGENTE DE LA RUTA VIEJA
+                        // Como no sabemos si la original era 7006, 6026 o 7004/1, lo extraemos directo del string
+                        string folderPadre = $"/{elemCodigo}/";
+                        int startIdx = arch.ArchNombre.IndexOf(folderPadre, StringComparison.OrdinalIgnoreCase);
+
+                        if (startIdx >= 0)
+                        {
+                            startIdx += folderPadre.Length;
+                            int endIdx = arch.ArchNombre.LastIndexOf('/');
+                            string codeViejoFolder = arch.ArchNombre.Substring(startIdx, endIdx - startIdx); // Ej saca: "7006" o "7004/1"
+
+                            // Ahora extraemos la parte del nombre del archivo (Ej: "7006" o "7004_1")
+                            string oldFileName = Path.GetFileName(arch.ArchNombre);
+                            string marker = $"-{elemCodigo}-";
+                            int markerIdx = oldFileName.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                            string codeViejoFile = "";
+
+                            if (markerIdx >= 0)
+                            {
+                                markerIdx += marker.Length;
+                                int nextDashIdx = oldFileName.IndexOf('-', markerIdx);
+                                if (nextDashIdx >= 0)
+                                {
+                                    codeViejoFile = oldFileName.Substring(markerIdx, nextDashIdx - markerIdx);
+                                }
+                            }
+
+                            // 🔥 3. REEMPLAZO QUIRÚRGICO
+                            // Reemplazamos exactamente la carpeta y exactamente el nombre de archivo
+                            if (!string.IsNullOrEmpty(codeViejoFolder))
+                                nuevaRutaFisica = nuevaRutaFisica.Replace($"/{elemCodigo}/{codeViejoFolder}/", $"/{elemCodigo}/{codeNuevoFolder}/");
+
+                            if (!string.IsNullOrEmpty(codeViejoFile))
+                                nuevaRutaFisica = nuevaRutaFisica.Replace($"-{elemCodigo}-{codeViejoFile}-", $"-{elemCodigo}-{codeNuevoFile}-");
+                        }
+
+                        if (arch.ArchNombre == nuevaRutaFisica) continue;
+
+                        // 4. Copiado físico (Creará subcarpetas si es necesario)
+                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(arch.ArchNombre, nuevaRutaFisica);
+
+                        if (seCopioConExito)
+                        {
+                            var clonArch = new Archivo
+                            {
+                                ArchCodTabla = clonDefi.DefiInterno,
+                                ArchTabla = "Deficiencias",
+                                DefiUUID = clonDefi.DefiCol3,
+                                ArchNombre = nuevaRutaFisica,
+                                TipiInterno = nuevaTipificacion,
+                                ArchTipo = arch.ArchTipo,
+                                ArchLatitud = arch.ArchLatitud,
+                                ArchLongitud = arch.ArchLongitud,
+                                ArchIdElemento = arch.ArchIdElemento,
+                                ArchTipoElemento = arch.ArchTipoElemento,
+                                ArchActivo = true,
+                                ArchFecha = arch.ArchFecha // <-- Si la BD sigue pisando esto, revisa tus Triggers de SQL
+                            };
+
+                            System.Diagnostics.Debug.WriteLine($"📝 CLON PRE-SAVE: Fecha={clonArch.ArchFecha}");
+                            ctx.Archivos.Add(clonArch);
+                        }
+                    }
+
+                    ctx.SaveChanges();
+                    transaction.Commit();
+
+                    return clonDefi.DefiInterno; // Retornamos el ID de la nueva deficiencia
+                }
+                catch (Exception ex)
+                {
+                    // 🔥 AQUÍ SÍ VA EL TRUCO SENIOR
+                    transaction.Rollback();
+
+                    // Escarbar hasta encontrar el error exacto de SQL Server
+                    Exception realError = ex;
+                    while (realError.InnerException != null)
+                    {
+                        realError = realError.InnerException;
+                    }
+
+                    // Esto se lo enviamos al controlador, y el controlador a React
+                    throw new Exception(realError.Message);
+                }
+            }
+        }
     }
 }

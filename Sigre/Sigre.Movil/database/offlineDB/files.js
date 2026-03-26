@@ -133,7 +133,7 @@ export const getArchivosByBasePathLocal = async (basePathPrefix) => {
         ArchNombre,
         ArchLatitud,
         ArchLongitud,
-        ArchFecha,r
+        ArchFecha,
         ArchActivo,
         EstadoOffLine,
         DefiUUID

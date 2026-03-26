@@ -35,6 +35,7 @@ export default function EvidenceView({
             {/* PARTE SUPERIOR: Galería (Ocupa el espacio sobrante, aprox 60-70%) */}
             <div className="flex-1 min-h-0 w-full bg-gray-50 border-b border-gray-200 relative">
                 <EvidenceGallery 
+                
                     deficiency={selectedDeficiency} 
                     feeder={feeder} 
                     sed={sed} 

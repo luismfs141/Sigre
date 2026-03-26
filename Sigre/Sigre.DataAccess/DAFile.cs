@@ -662,5 +662,127 @@ namespace Sigre.DataAccess
                 ctx.SaveChanges();
             }
         }
+
+    
+        // Usamos el disco H:\ como raíz, 
+        private readonly string _baseDirectory = @"H:\";
+
+        public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
+        {
+            try
+            {
+                // 1. Normalizamos las barras para Windows (\) y combinamos con la raíz D:\
+                string absoluteOldPath = Path.Combine(_baseDirectory, oldPath.Replace("/", "\\"));
+                string absoluteNewPath = Path.Combine(_baseDirectory, newPath.Replace("/", "\\"));
+
+                // 2. Verificamos si el archivo original realmente existe en el disco
+                if (!File.Exists(absoluteOldPath))
+                {
+                    throw new FileNotFoundException($"El archivo no existe en el disco: {absoluteOldPath}");
+                }
+
+                // 3. Obtenemos la carpeta destino (ej. D:\SIGRE.MOVIL\CHACHANI\1887\POSTE\PTO000055171\SINDEF)
+                string targetDirectory = Path.GetDirectoryName(absoluteNewPath);
+
+                // 4. Si la carpeta destino no existe, la creamos (crea toda la jerarquía de golpe)
+                if (!Directory.Exists(targetDirectory))
+                {
+                    Directory.CreateDirectory(targetDirectory);
+                }
+
+                // 5. Movemos el archivo (esto equivale a cortar, pegar y renombrar)
+                // Nota: El parámetro 'true' permite sobrescribir si ya existe un archivo con ese nombre (.NET Core 3.0+)
+                File.Move(absoluteOldPath, absoluteNewPath, overwrite: true);
+
+                // 🔥 NUEVO: Limpieza automática de la carpeta antigua
+                try
+                {
+                    // 1. Obtenemos la ruta de la carpeta de la deficiencia (ej. ...\6002)
+                    string oldDirectory = Path.GetDirectoryName(absoluteOldPath);
+
+                    // Si la carpeta de deficiencia existe y está vacía, la borramos
+                    if (Directory.Exists(oldDirectory) && !Directory.EnumerateFileSystemEntries(oldDirectory).Any())
+                    {
+                        Directory.Delete(oldDirectory); // Borra el 6002
+
+                        // 2. Ahora miramos la carpeta padre, que es el Elemento (ej. ...\VBT000184260)
+                        string elementDirectory = Path.GetDirectoryName(oldDirectory);
+
+                        // Si la carpeta del elemento existe y también quedó vacía, la borramos
+                        if (Directory.Exists(elementDirectory) && !Directory.EnumerateFileSystemEntries(elementDirectory).Any())
+                        {
+                            Directory.Delete(elementDirectory); // Borra el VBT000184260
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Si falla el borrado de la carpeta (ej. bloqueada por el sistema), 
+                    // lo ignoramos para no interrumpir el flujo, ya que la foto sí se movió.
+                    Console.WriteLine($"No se pudo eliminar la carpeta antigua: {ex.Message}");
+                }
+                // File.Move es muy rápido, retornamos Task.CompletedTask para mantener la firma async
+                await Task.CompletedTask;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error en DA al mover archivo: {ex.Message}", ex);
+            }
+        
+    }
+        public async Task<bool> CopiarArchivoFisicoAsync(string oldPath, string newPath)
+        {
+            try
+            {
+                string absoluteOldPath = Path.Combine(_baseDirectory, oldPath.Replace("/", "\\"));
+                string absoluteNewPath = Path.Combine(_baseDirectory, newPath.Replace("/", "\\"));
+
+                // 🔥 CONTROL ESTRICTO SOLO PARA .m4a
+                if (!File.Exists(absoluteOldPath))
+                {
+                    // Si el archivo que falta es un audio .m4a, lo perdonamos y devolvemos false
+                    if (absoluteOldPath.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+
+                    // Si falta una foto (.jpg) u otro archivo, ¡explotamos y avisamos del error!
+                    throw new FileNotFoundException($"Falta evidencia crítica en el disco: {absoluteOldPath}");
+                }
+
+                string targetDirectory = Path.GetDirectoryName(absoluteNewPath);
+                if (!Directory.Exists(targetDirectory))
+                {
+                    Directory.CreateDirectory(targetDirectory);
+                }
+
+                if (absoluteOldPath.Equals(absoluteNewPath, StringComparison.OrdinalIgnoreCase)) return true;
+
+                int maxRetries = 5;
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    try
+                    {
+                        using (var sourceStream = new FileStream(absoluteOldPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (var destStream = new FileStream(absoluteNewPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await sourceStream.CopyToAsync(destStream);
+                        }
+                        return true;
+                    }
+                    catch (IOException)
+                    {
+                        if (i == maxRetries - 1) throw;
+                        await Task.Delay(1000);
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error de disco al copiar: {ex.Message}", ex);
+            }
+        }
     }
 }
