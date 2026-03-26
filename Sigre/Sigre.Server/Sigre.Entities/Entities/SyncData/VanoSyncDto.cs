@@ -9,6 +9,7 @@ namespace Sigre.Entities.Entities.SyncData
     public class VanoSyncDto
     {
         public int? VanoInterno { get; set; }
+        public int VanoInternoLocal { get; set; }
         public int EstadoOffLine { get; set; }
 
         public string? VanoCodigo { get; set; }

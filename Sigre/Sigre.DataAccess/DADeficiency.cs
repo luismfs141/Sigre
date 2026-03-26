@@ -478,132 +478,120 @@ namespace Sigre.DataAccess
         public List<(int localId, int serverId)> DADefi_SyncFromSQLite(List<DeficienciaSyncDto> deficienciasOffline)
         {
             using var ctx = new SigreContext();
-            var resultado = new List<(int, int)>();
 
-            foreach (var dto in deficienciasOffline)
+            if (deficienciasOffline == null || deficienciasOffline.Count == 0)
+                return new List<(int localId, int serverId)>();
+
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
             {
-                if (string.IsNullOrWhiteSpace(dto.DefiCol3))
-                    continue; // seguridad mínima
+                var mappings = new List<(int localId, Deficiencia entity)>();
 
-                // 🔍 BUSCAR POR IDENTIFICADOR ÚNICO
-                var existente = ctx.Deficiencias
-                    .FirstOrDefault(d => d.DefiCol3 == dto.DefiCol3);
-
-                // ==========================
-                // 🔁 UPDATE
-                // ==========================
-                if (existente != null)
+                foreach (var dto in deficienciasOffline)
                 {
-                    existente.DefiEstado = dto.DefiEstado;
-                    existente.DefiObservacion = dto.DefiObservacion;
+                    if (string.IsNullOrWhiteSpace(dto.DefiCol3))
+                        throw new Exception($"La deficiencia local {dto.DefiInterno} no tiene DefiCol3.");
 
-                    existente.DefiComentario = dto.DefiComentario;
-                    existente.DefiNumSuministro = dto.DefiNumSuministro;
-                    existente.DefiDistHorizontal = dto.DefiDistHorizontal;
-                    existente.DefiDistVertical = dto.DefiDistVertical;
+                    var existente = ctx.Deficiencias.FirstOrDefault(d => d.DefiCol3 == dto.DefiCol3);
 
-                    existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
-                    existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
-                    existente.DefiLatitud = dto.DefiLatitud;
-                    existente.DefiLongitud = dto.DefiLongitud;
-                    existente.DefiInspeccionado = dto.DefiInspeccionado;
-                    existente.DefiUsuarioMod = dto.DefiUsuarioMod;
-
-
-                    existente.DefiFecModificacion = dto.DefiFecModificacion;
-
-                    existente.DefiAccesibilidad = dto.DefiAccesibilidad;
-                    existente.DefiTipoCruce = dto.DefiTipoCruce;
-                    existente.CodopInterno = dto.CodopInterno;
-                    existente.DefiActivo = dto.DefiActivo;
-                    
-                    existente.DefiCol1 = dto.DefiCol1;
-                    existente.DefiCol2 = dto.DefiCol2;
-
-                    ctx.SaveChanges();
-                    resultado.Add((dto.DefiInterno, existente.DefiInterno));
-                }
-                // ==========================
-                // ➕ INSERT
-                // ==========================
-                else
-                {
-                    var nueva = new Deficiencia
+                    if (existente != null)
                     {
-                        DefiEstado = dto.DefiEstado,
-                        InspInterno = dto.InspInterno,
-                        TablInterno = dto.TablInterno,
-                        DefiCodigoElemento = dto.DefiCodigoElemento,
-                        TipiInterno = dto.TipiInterno,
-                        DefiNumSuministro = dto.DefiNumSuministro,
+                        existente.DefiEstado = dto.DefiEstado;
+                        existente.DefiObservacion = dto.DefiObservacion;
+                        existente.DefiComentario = dto.DefiComentario;
+                        existente.DefiNumSuministro = dto.DefiNumSuministro;
+                        existente.DefiDistHorizontal = dto.DefiDistHorizontal;
+                        existente.DefiDistVertical = dto.DefiDistVertical;
+                        existente.DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion;
+                        existente.DefiEstadoCriticidad = dto.DefiEstadoCriticidad;
+                        existente.DefiLatitud = dto.DefiLatitud;
+                        existente.DefiLongitud = dto.DefiLongitud;
+                        existente.DefiInspeccionado = dto.DefiInspeccionado;
+                        existente.DefiUsuarioMod = dto.DefiUsuarioMod;
+                        existente.DefiFecModificacion = dto.DefiFecModificacion;
+                        existente.DefiAccesibilidad = dto.DefiAccesibilidad;
+                        existente.DefiTipoCruce = dto.DefiTipoCruce;
+                        existente.CodopInterno = dto.CodopInterno;
+                        existente.DefiActivo = dto.DefiActivo;
+                        existente.DefiCol1 = dto.DefiCol1;
+                        existente.DefiCol2 = dto.DefiCol2;
 
-                        DefiFechaDenuncia = dto.DefiFechaDenuncia,
-                        DefiFechaInspeccion = dto.DefiFechaInspeccion,
-                        DefiFechaSubsanacion = dto.DefiFechaSubsanacion,
+                        mappings.Add((dto.DefiInterno, existente));
+                    }
+                    else
+                    {
+                        var nueva = new Deficiencia
+                        {
+                            DefiEstado = dto.DefiEstado,
+                            InspInterno = dto.InspInterno,
+                            TablInterno = dto.TablInterno,
+                            DefiCodigoElemento = dto.DefiCodigoElemento,
+                            TipiInterno = dto.TipiInterno,
+                            DefiNumSuministro = dto.DefiNumSuministro,
+                            DefiFechaDenuncia = dto.DefiFechaDenuncia,
+                            DefiFechaInspeccion = dto.DefiFechaInspeccion,
+                            DefiFechaSubsanacion = dto.DefiFechaSubsanacion,
+                            DefiObservacion = dto.DefiObservacion,
+                            DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion,
+                            DefiLatitud = dto.DefiLatitud,
+                            DefiLongitud = dto.DefiLongitud,
+                            DefiTipoElemento = dto.DefiTipoElemento,
+                            DefiDistHorizontal = dto.DefiDistHorizontal,
+                            DefiDistVertical = dto.DefiDistVertical,
+                            DefiDistTransversal = dto.DefiDistTransversal,
+                            DefiIdElemento = dto.DefiIdElemento,
+                            DefiFecRegistro = dto.DefiFecRegistro,
+                            DefiCodDef = dto.DefiCodDef,
+                            DefiCodRes = dto.DefiCodRes,
+                            DefiCodDen = dto.DefiCodDen,
+                            DefiRefer1 = dto.DefiRefer1,
+                            DefiRefer2 = dto.DefiRefer2,
+                            DefiCoordX = dto.DefiCoordX,
+                            DefiCoordY = dto.DefiCoordY,
+                            DefiCodAmt = dto.DefiCodAmt,
+                            DefiNroOrden = dto.DefiNroOrden,
+                            DefiPointX = dto.DefiPointX,
+                            DefiPointY = dto.DefiPointY,
+                            DefiUsuCre = dto.DefiUsuCre,
+                            DefiUsuNpc = dto.DefiUsuNpc,
+                            DefiFecModificacion = dto.DefiFecModificacion,
+                            DefiFechaCreacion = dto.DefiFechaCreacion,
+                            DefiNumPostes = dto.DefiNumPostes,
+                            DefiPozoTierra = dto.DefiPozoTierra,
+                            DefiResponsable = dto.DefiResponsable,
+                            DefiComentario = dto.DefiComentario,
+                            DefiPozoTierra2 = dto.DefiPozoTierra2,
+                            DefiUsuarioInic = dto.DefiUsuarioInic,
+                            DefiUsuarioMod = dto.DefiUsuarioMod,
+                            DefiActivo = dto.DefiActivo,
+                            DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
+                            DefiInspeccionado = dto.DefiInspeccionado,
+                            DefiAccesibilidad = dto.DefiAccesibilidad,
+                            DefiTipoCruce = dto.DefiTipoCruce,
+                            DefiCol3 = dto.DefiCol3,
+                            DefiCol2 = dto.DefiCol2,
+                            DefiCol1 = dto.DefiCol1,
+                            CodopInterno = dto.CodopInterno,
+                        };
 
-                        DefiObservacion = dto.DefiObservacion,
-                        DefiEstadoSubsanacion = dto.DefiEstadoSubsanacion,
-
-                        DefiLatitud = dto.DefiLatitud,
-                        DefiLongitud = dto.DefiLongitud,
-
-                        DefiTipoElemento = dto.DefiTipoElemento,
-                        DefiDistHorizontal = dto.DefiDistHorizontal,
-                        DefiDistVertical = dto.DefiDistVertical,
-                        DefiDistTransversal = dto.DefiDistTransversal,
-
-                        DefiIdElemento = dto.DefiIdElemento,
-                        DefiFecRegistro = dto.DefiFecRegistro,
-
-                        DefiCodDef = dto.DefiCodDef,
-                        DefiCodRes = dto.DefiCodRes,
-                        DefiCodDen = dto.DefiCodDen,
-
-                        DefiRefer1 = dto.DefiRefer1,
-                        DefiRefer2 = dto.DefiRefer2,
-
-                        DefiCoordX = dto.DefiCoordX,
-                        DefiCoordY = dto.DefiCoordY,
-
-                        DefiCodAmt = dto.DefiCodAmt,
-                        DefiNroOrden = dto.DefiNroOrden,
-
-                        DefiPointX = dto.DefiPointX,
-                        DefiPointY = dto.DefiPointY,
-
-                        DefiUsuCre = dto.DefiUsuCre,
-                        DefiUsuNpc = dto.DefiUsuNpc,
-                        DefiFecModificacion = dto.DefiFecModificacion,
-                        DefiFechaCreacion = dto.DefiFechaCreacion,
-
-                        DefiNumPostes = dto.DefiNumPostes,
-                        DefiPozoTierra = dto.DefiPozoTierra,
-                        DefiResponsable = dto.DefiResponsable,
-                        DefiComentario = dto.DefiComentario,
-                        DefiPozoTierra2 = dto.DefiPozoTierra2,
-
-                        DefiUsuarioInic = dto.DefiUsuarioInic,
-                        DefiUsuarioMod = dto.DefiUsuarioMod,
-                        DefiActivo = dto.DefiActivo,
-                        DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
-                        DefiInspeccionado = dto.DefiInspeccionado,
-
-                        DefiAccesibilidad = dto.DefiAccesibilidad,
-                        DefiTipoCruce = dto.DefiTipoCruce,
-                        DefiCol3 = dto.DefiCol3,
-                        DefiCol2 = dto.DefiCol2,
-                        DefiCol1 = dto.DefiCol1,
-                        CodopInterno = dto.CodopInterno,
-                    };
-
-                    ctx.Deficiencias.Add(nueva);
-                    ctx.SaveChanges();
-
-                    resultado.Add((dto.DefiInterno, nueva.DefiInterno));
+                        ctx.Deficiencias.Add(nueva);
+                        mappings.Add((dto.DefiInterno, nueva));
+                    }
                 }
-            }
 
-            return resultado;
+                ctx.SaveChanges();
+                tx.Commit();
+
+                return mappings
+                    .Select(x => (x.localId, x.entity.DefiInterno))
+                    .ToList();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
 
 

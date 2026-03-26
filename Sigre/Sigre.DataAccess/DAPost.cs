@@ -117,77 +117,91 @@ namespace Sigre.DataAccess
         public List<(int localId, int serverId)> DAPOST_SyncFromSQLite(List<PosteSyncDto> postesOffline)
         {
             using var ctx = new SigreContext();
-            var resultado = new List<(int localId, int serverId)>();
 
-            foreach (var dto in postesOffline)
+            if (postesOffline == null || postesOffline.Count == 0)
+                return new List<(int localId, int serverId)>();
+
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
             {
-                // 🔹 INSERT (creado offline)
-                if (dto.EstadoOffLine == 2)
+                var mappings = new List<(int localId, Poste entity)>();
+
+                foreach (var dto in postesOffline)
                 {
-                    var nuevo = new Poste
+                    if (dto.EstadoOffLine == 2)
                     {
-                        PostEtiqueta = dto.PostEtiqueta,
-                        PostCodigoNodo = dto.PostCodigoNodo,
-                        PostLatitud = dto.PostLatitud,
-                        PostLongitud = dto.PostLongitud,
-                        AlimInterno = dto.AlimInterno,
-                        PostMaterial = dto.PostMaterial,
-                        PostArmadoTipo = dto.PostArmadoTipo,
-                        PostArmadoMaterial = dto.PostArmadoMaterial,
-                        PostRetenidaTipo = dto.PostRetenidaTipo,
-                        PostRetenidaMaterial = dto.PostRetenidaMaterial,
-                        PostSubestacion = dto.PostSubestacion,
-                        PostTerceros = dto.PostTerceros,
-                        PostInspeccionado = dto.PostInspeccionado,
-                        PostEsBt = dto.PostEsBt,
-                        PostEsMt = dto.PostEsMt,
-                        PostAltura = dto.PostAltura,
-                        PostTramo = dto.PostTramo,
-                        PostVereda = dto.PostVereda
+                        var nuevo = new Poste
+                        {
+                            PostEtiqueta = dto.PostEtiqueta,
+                            PostCodigoNodo = dto.PostCodigoNodo,
+                            PostLatitud = dto.PostLatitud,
+                            PostLongitud = dto.PostLongitud,
+                            AlimInterno = dto.AlimInterno,
+                            PostMaterial = dto.PostMaterial,
+                            PostArmadoTipo = dto.PostArmadoTipo,
+                            PostArmadoMaterial = dto.PostArmadoMaterial,
+                            PostRetenidaTipo = dto.PostRetenidaTipo,
+                            PostRetenidaMaterial = dto.PostRetenidaMaterial,
+                            PostSubestacion = dto.PostSubestacion,
+                            PostTerceros = dto.PostTerceros,
+                            PostInspeccionado = dto.PostInspeccionado,
+                            PostEsBt = dto.PostEsBt,
+                            PostEsMt = dto.PostEsMt,
+                            PostAltura = dto.PostAltura,
+                            PostTramo = dto.PostTramo,
+                            PostVereda = dto.PostVereda
+                        };
 
-                    };
+                        ctx.Postes.Add(nuevo);
+                        mappings.Add((dto.PostInternoLocal > 0 ? dto.PostInternoLocal : (dto.PostInterno ?? 0), nuevo));
+                    }
+                    else if (dto.EstadoOffLine == 1 || dto.EstadoOffLine == 0)
+                    {
+                        if (!dto.PostInterno.HasValue || dto.PostInterno.Value <= 0)
+                            throw new Exception("Poste UPDATE sin PostInterno válido.");
 
-                    ctx.Postes.Add(nuevo);
-                    ctx.SaveChanges();
+                        var existente = ctx.Postes.FirstOrDefault(p => p.PostInterno == dto.PostInterno.Value);
+                        if (existente == null)
+                            throw new Exception($"No existe el poste {dto.PostInterno.Value} para actualizar.");
 
-                    // localId = PostInterno de SQLite
-                    resultado.Add((dto.PostInterno ?? 0, nuevo.PostInterno));
+                        existente.PostEtiqueta = dto.PostEtiqueta;
+                        existente.PostCodigoNodo = dto.PostCodigoNodo;
+                        existente.PostLatitud = dto.PostLatitud;
+                        existente.PostLongitud = dto.PostLongitud;
+                        existente.PostMaterial = dto.PostMaterial;
+                        existente.PostArmadoTipo = dto.PostArmadoTipo;
+                        existente.PostArmadoMaterial = dto.PostArmadoMaterial;
+                        existente.PostRetenidaTipo = dto.PostRetenidaTipo;
+                        existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
+                        existente.PostTerceros = dto.PostTerceros;
+                        existente.PostInspeccionado = dto.PostInspeccionado;
+                        existente.PostEsBt = dto.PostEsBt;
+                        existente.PostEsMt = dto.PostEsMt;
+                        existente.PostAltura = dto.PostAltura;
+                        existente.PostTramo = dto.PostTramo;
+                        existente.PostVereda = dto.PostVereda;
+
+                        mappings.Add((dto.PostInterno.Value, existente));
+                    }
+                    else
+                    {
+                        throw new Exception($"EstadoOffLine no soportado para Poste: {dto.EstadoOffLine}");
+                    }
                 }
 
-                // 🔹 UPDATE (existente)
-                else if ((dto.EstadoOffLine == 1 || dto.EstadoOffLine == 0)
-                         && dto.PostInterno.HasValue)
-                {
-                    var existente = ctx.Postes
-                        .FirstOrDefault(p => p.PostInterno == dto.PostInterno.Value);
+                ctx.SaveChanges();
+                tx.Commit();
 
-                    if (existente == null)
-                        continue;
-
-                    existente.PostEtiqueta = dto.PostEtiqueta;
-                    existente.PostCodigoNodo = dto.PostCodigoNodo;
-                    existente.PostLatitud = dto.PostLatitud;
-                    existente.PostLongitud = dto.PostLongitud;
-                    existente.PostMaterial = dto.PostMaterial;
-                    existente.PostArmadoTipo = dto.PostArmadoTipo;
-                    existente.PostArmadoMaterial = dto.PostArmadoMaterial;
-                    existente.PostRetenidaTipo = dto.PostRetenidaTipo;
-                    existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
-                    existente.PostTerceros = dto.PostTerceros;
-                    existente.PostInspeccionado = dto.PostInspeccionado;
-                    existente.PostEsBt = dto.PostEsBt;
-                    existente.PostEsMt = dto.PostEsMt;
-                    existente.PostAltura = dto.PostAltura;
-                    existente.PostTramo = dto.PostTramo;
-                    existente.PostVereda = dto.PostVereda;
-
-                    ctx.SaveChanges();
-
-                    resultado.Add((existente.PostInterno, existente.PostInterno));
-                }
+                return mappings
+                    .Select(x => (x.localId, x.entity.PostInterno))
+                    .ToList();
             }
-
-            return resultado;
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
 
 

@@ -57,6 +57,22 @@ export const useDeficiency = () => {
     return Number.isFinite(n) ? n : fallback;
   };
 
+  const toBool = (v, fallback = false) => {
+    if (v === null || v === undefined || v === "") return fallback;
+    if (v === true || v === false) return v;
+    if (v === 1 || v === "1") return true;
+    if (v === 0 || v === "0") return false;
+    return fallback;
+  };
+
+  const toNullableBool = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    if (v === true || v === false) return v;
+    if (v === 1 || v === "1") return true;
+    if (v === 0 || v === "0") return false;
+    return null;
+  };
+
   const normalizeArchivoForSync = (arch) => {
     const activoNum = toNum(arch?.ArchActivo ?? 1, 1);
 
@@ -421,7 +437,6 @@ export const useDeficiency = () => {
     const ms = roundMsForSqlDatetime(msRaw);
     const nowIso = formatLocalISO(ms);
 
-
     const base = def ?? {};
 
     const fecRegistro =
@@ -438,11 +453,9 @@ export const useDeficiency = () => {
         ? null
         : Number(base.CodopInterno);
 
-
     return {
       ...base,
 
-      // 🔹 STRINGS (compatibilidad server)
       DefiUsuarioInic: base?.DefiUsuarioInic != null ? String(base.DefiUsuarioInic) : null,
       DefiUsuarioMod: base?.DefiUsuarioMod != null ? String(base.DefiUsuarioMod) : null,
       DefiUsuCre: base?.DefiUsuCre != null ? String(base.DefiUsuCre) : null,
@@ -451,22 +464,17 @@ export const useDeficiency = () => {
       DefiObservacion: base?.DefiObservacion ?? "",
       DefiComentario: base?.DefiComentario ?? "",
 
-      // 🔹 BOOLEANS
-      DefiActivo: Boolean(base?.DefiActivo),
-      DefiInspeccionado: Boolean(base?.DefiInspeccionado),
-      DefiResponsable: Boolean(base?.DefiResponsable),
+      DefiActivo: toBool(base?.DefiActivo, false),
+      DefiInspeccionado: toBool(base?.DefiInspeccionado, false),
+      DefiResponsable: toNullableBool(base?.DefiResponsable),
 
-      // 🔹 FECHAS ISO
       DefiFecRegistro: normalizeSqlServerDate(fecRegistro),
       DefiFecModificacion: normalizeSqlServerDate(fecMod),
-
-
       DefiFechaCreacion: normalizeSqlServerDate(base?.DefiFechaCreacion),
       DefiFechaDenuncia: normalizeSqlServerDate(base?.DefiFechaDenuncia),
       DefiFechaInspeccion: normalizeSqlServerDate(base?.DefiFechaInspeccion),
       DefiFechaSubsanacion: normalizeSqlServerDate(base?.DefiFechaSubsanacion),
 
-      // 🔹 IDENTIFICADOR ÚNICO
       DefiCol3: base?.DefiCol3 ?? null,
       DefiCol2: base?.DefiCol2 ?? null,
       CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
@@ -514,59 +522,85 @@ export const useDeficiency = () => {
   };
 
   const countPendingDeficienciesLocal = async () => {
-    const dbOk = await checkDatabase();
-    if (!dbOk) return 0;
+  const dbOk = await checkDatabase();
+  if (!dbOk) return 0;
 
-    try {
-      const pendientes = await getDeficienciesPendientes();
-      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+  try {
+    const pendientes = await getDeficienciesPendientes();
+    if (!Array.isArray(pendientes) || !pendientes.length) return 0;
 
-      // mismo criterio que usas para sincronizar
-      return pendientes.filter((d) =>
-        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
-      ).length;
-    } catch (err) {
-      console.error("❌ Error contando deficiencias pendientes:", err);
-      return 0;
-    }
-  };
+    return pendientes.filter((d) =>
+      [1, 2, 3].includes(Number(d?.EstadoOffLine))
+    ).length;
+  } catch (err) {
+    console.error("❌ Error contando deficiencias pendientes:", err);
+    return 0;
+  }
+};
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
   const syncAllDeficiencies = async () => {
-    const online = await isOnline();
-    if (!online) return { ok: false };
+  const online = await isOnline();
+  if (!online) {
+    return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
+  }
 
-    try {
-      const pendientes = await getDeficienciesPendientes();
-      if (!pendientes.length) return { ok: true, synced: 0 };
+  let total = 0;
 
-      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
-      if (!aSincronizar.length) return { ok: true, synced: 0 };
-
-      // 🔹 Normalizar TODAS
-      const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
-
-      const response = await client.post("/Deficiency/SyncFromSQLite", payload, { timeout: 20000 });
-
-      const respList = Array.isArray(response.data) ? response.data : [];
-      let syncedCount = 0;
-
-      for (const r of respList) {
-        if (!r?.localId || !r?.serverId) {
-          console.warn("⚠ Respuesta inválida:", r);
-          continue;
-        }
-
-        await updateDeficiencyIdAfterSync(r.localId, r.serverId);
-        syncedCount++;
-      }
-
-      return { ok: true, synced: syncedCount };
-    } catch (err) {
-      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
-      return { ok: false };
+  try {
+    const pendientes = await getDeficienciesPendientes();
+    if (!Array.isArray(pendientes) || !pendientes.length) {
+      return { ok: true, total: 0, synced: 0 };
     }
-  };
+
+    const aSincronizar = pendientes.filter((d) =>
+      [1, 2, 3].includes(Number(d?.EstadoOffLine))
+    );
+
+    total = aSincronizar.length;
+
+    if (!total) {
+      return { ok: true, total: 0, synced: 0 };
+    }
+
+    const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
+
+    const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
+      timeout: 60000,
+    });
+
+    const respList = Array.isArray(response.data) ? response.data : [];
+
+    if (respList.length !== total) {
+      throw new Error(
+        `DEF_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
+      );
+    }
+
+    for (const r of respList) {
+      const localId = Number(r?.localId);
+      const serverId = Number(r?.serverId);
+
+      if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
+        throw new Error(`DEF_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+      }
+    }
+
+    for (const r of respList) {
+      await updateDeficiencyIdAfterSync(Number(r.localId), Number(r.serverId));
+    }
+
+    return { ok: true, total, synced: total };
+  } catch (err) {
+    console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
+    return {
+      ok: false,
+      total,
+      synced: 0,
+      error: err?.response?.data?.message || err?.message || "DEF_SYNC_FAILED",
+    };
+  }
+};
 
   // ------------------- SAVE + AUTO SYNC (SIN PIN) -------------------
   const saveDeficiency = async (deficiency, userId) => {

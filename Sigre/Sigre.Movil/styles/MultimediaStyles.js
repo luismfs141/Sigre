@@ -35,4 +35,18 @@ export const styles = StyleSheet.create({
   loadingOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
   loadingBox: { backgroundColor: "#fff", padding: 20, borderRadius: 12, minWidth: 220, alignItems: "center" },
   loadingText: { fontSize: 15, fontWeight: "600", textAlign: "center", marginTop: 10 },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  copyButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+    marginLeft: 6,
+  },
 });

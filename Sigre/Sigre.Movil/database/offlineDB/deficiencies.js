@@ -109,9 +109,17 @@ export const getDeficiencyByTypificationElement = async (idElement, typeElement,
 export const getDeficienciesByElement = async (idElement, typeElement) => {
   try {
     const deficiency = await runQuery(
-      `SELECT *
-          FROM Deficiencias d
-          WHERE d.DefiIdElemento = ? AND d.DefiTipoElemento = ? AND d.DefiActivo = 1`,
+      `
+      SELECT
+        d.*,
+        t.Code AS TipiCode
+      FROM Deficiencias d
+      LEFT JOIN Tipificaciones t
+        ON d.TipiInterno = t.TypificationId
+      WHERE d.DefiIdElemento = ?
+        AND d.DefiTipoElemento = ?
+        AND d.DefiActivo = 1
+      `,
       [idElement, typeElement]
     );
 

@@ -101,21 +101,29 @@ namespace Sigre.Server.Controllers
         [HttpPost("SyncFromSQLite")]
         public IActionResult SyncFromSQLite([FromBody] List<DeficienciaSyncDto> deficienciasOffline)
         {
-            DADeficiency dADeficiency = new DADeficiency();
-
-            if (deficienciasOffline == null || deficienciasOffline.Count == 0)
-                return Ok(new List<object>());
-
-            var result = dADeficiency.DADefi_SyncFromSQLite(deficienciasOffline);
-
-            var response = result.Select(r => new
+            try
             {
-                localId = r.localId,
-                serverId = r.serverId
-            });
+                if (deficienciasOffline == null || deficienciasOffline.Count == 0)
+                    return Ok(new List<object>());
 
-            return Ok(response);
+                DADeficiency daDeficiency = new DADeficiency();
+                var result = daDeficiency.DADefi_SyncFromSQLite(deficienciasOffline);
+
+                return Ok(result.Select(r => new
+                {
+                    localId = r.localId,
+                    serverId = r.serverId
+                }));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
         }
+
 
         [HttpGet("GetById")]
         public IActionResult GetById(int x_defiInterno)
