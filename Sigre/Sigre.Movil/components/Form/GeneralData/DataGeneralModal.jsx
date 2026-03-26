@@ -62,7 +62,7 @@ export default function DataGeneralModal({ visible, item, onClose, onSave }) {
         <View style={styles.overlay}>
           <View style={styles.container}>
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 20 }}
             >
