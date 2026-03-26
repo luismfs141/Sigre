@@ -74,28 +74,25 @@ namespace Sigre.DataAccess
         {
             using var ctx = new SigreContext();
 
+            // Apagamos el tracking para ahorrar muchísima memoria RAM
+            ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
             var archPostes =
                 from ar in ctx.Archivos
                 join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
                 join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno
-                join s in ctx.Seds on p.PostSubestacion equals s.SedInterno
-                where df.DefiTipoElemento == "POST"
-                      && x_seds.Contains(s.SedInterno)
+                where df.DefiTipoElemento == "POST" && x_seds.Contains((int)p.PostSubestacion)
                 select ar;
 
             var archVanos =
                 from ar in ctx.Archivos
                 join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
                 join v in ctx.Vanos on df.DefiIdElemento equals v.VanoInterno
-                join s in ctx.Seds on v.VanoSubestacion equals s.SedInterno
-                where df.DefiTipoElemento == "VANO"
-                      && x_seds.Contains(s.SedInterno)
+                where df.DefiTipoElemento == "VANO" && x_seds.Contains((int)v.VanoSubestacion)
                 select ar;
 
-            return archPostes
-                   .Union(archVanos)
-                   .Distinct()
-                   .ToList();
+            // Usamos Concat (UNION ALL) que es infinitamente más ligero
+            return archPostes.Concat(archVanos).ToList();
         }
 
 
