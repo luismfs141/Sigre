@@ -230,37 +230,71 @@ export const usePost = () => {
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
   const syncAllPosts = async () => {
     const online = await isOnline();
-    if (!online) return { ok: false };
+    if (!online) {
+      return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
+    }
+
+    let total = 0;
 
     try {
       const pendientes = await getPostsPendientes();
-      if (!pendientes.length) return { ok: true, synced: 0 };
-
-      const aSincronizar = pendientes.filter((d) => [1, 2, 3, 4].includes(Number(d?.EstadoOffLine)));
-      if (!aSincronizar.length) return { ok: true, synced: 0 };
-
-      // 🔹 Normalizar TODAS
-      const payload = aSincronizar.map((p) => normalizePostForSync(p));
-
-      const response = await client.post("/Post/SyncFromSQLite", payload, { timeout: 20000 });
-
-      const respList = Array.isArray(response.data) ? response.data : [];
-      let syncedCount = 0;
-
-      for (const r of respList) {
-        if (!r?.localId || !r?.serverId) {
-          console.warn("⚠ Respuesta inválida:", r);
-          continue;
-        }
-
-        await updatePostIdAfterSync(r.localId, r.serverId);
-        syncedCount++;
+      if (!Array.isArray(pendientes) || !pendientes.length) {
+        return { ok: true, total: 0, synced: 0 };
       }
 
-      return { ok: true, synced: syncedCount };
+      const aSincronizar = pendientes.filter((d) =>
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
+      );
+
+      total = aSincronizar.length;
+
+      if (!total) {
+        return { ok: true, total: 0, synced: 0 };
+      }
+
+      const payload = aSincronizar.map((p) => normalizePostForSync(p));
+
+      const response = await client.post("/Post/SyncFromSQLite", payload, {
+        timeout: 30000,
+      });
+
+      const respList = Array.isArray(response.data) ? response.data : [];
+
+      if (respList.length !== total) {
+        throw new Error(
+          `POST_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
+        );
+      }
+
+      for (const r of respList) {
+        const localId = Number(r?.localId);
+        const serverId = Number(r?.serverId);
+
+        if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
+          throw new Error(`POST_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+        }
+      }
+
+      for (const r of respList) {
+        const localId = Number(r.localId);
+        const serverId = Number(r.serverId);
+
+        if (localId !== serverId) {
+          await updatePostIdAfterSync(localId, serverId);
+        } else {
+          await markPostAsSynced(serverId);
+        }
+      }
+
+      return { ok: true, total, synced: total };
     } catch (err) {
-      console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
-      return { ok: false };
+      console.error("❌ Sync masivo postes falló:", err?.response?.data || err?.message || err);
+      return {
+        ok: false,
+        total,
+        synced: 0,
+        error: err?.response?.data?.message || err?.message || "POST_SYNC_FAILED",
+      };
     }
   };
 
@@ -293,9 +327,8 @@ export const usePost = () => {
       const pendientes = await getPostsPendientes();
       if (!Array.isArray(pendientes) || !pendientes.length) return 0;
 
-      // mismo criterio que usas para sincronizar
       return pendientes.filter((d) =>
-        [1, 2, 3, 4].includes(Number(d?.EstadoOffLine))
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
       ).length;
     } catch (err) {
       console.error("❌ Error contando posts pendientes:", err);

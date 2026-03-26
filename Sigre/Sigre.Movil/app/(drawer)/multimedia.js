@@ -34,7 +34,8 @@ import PhotoModal from "../../components/Modal/PhotoModal";
 
 import { styles } from "../../styles/MultimediaStyles";
 
-
+import { MaterialIcons } from "@expo/vector-icons";
+import ModalCopyPhotos from "../../components/Multimedia/ModalCopyPhotos";
 
 
 
@@ -110,7 +111,12 @@ export default function Multimedia() {
   const { saveArchivoLocal, fetchMediosByDeficienciaId, markArchivoAsDeleted } = useFiles();
 
 
-  const { fetchDeficiencyByIdLocal, setDefiInspeccionadoLocal, autoSyncDeficiency } = useDeficiency();
+  const {
+    fetchDeficiencyByIdLocal,
+    setDefiInspeccionadoLocal,
+    autoSyncDeficiency,
+    fetchDeficienciesByElement,
+  } = useDeficiency();
 
 
 
@@ -139,6 +145,11 @@ export default function Multimedia() {
   const [defOwnerId, setDefOwnerId] = useState(null);
   const [canEdit, setCanEdit] = useState(false);
 
+  const [copyPhotosModal, setCopyPhotosModal] = useState(false);
+  const [copySourceDefs, setCopySourceDefs] = useState([]);
+  const [expandedCopyDefId, setExpandedCopyDefId] = useState(null);
+  const [loadingCopyDefId, setLoadingCopyDefId] = useState(null);
+  const [copyPhotosByDefId, setCopyPhotosByDefId] = useState({});
 
   // ==========================
   // DRAFT / STAGING (PRIVADO)
@@ -668,6 +679,410 @@ export default function Multimedia() {
     return false;
   };
 
+  const getSelectedElementRef = () => {
+    const elementId =
+      selectedDeficiency?.elementId ||
+      selectedItem?.PostInterno ||
+      selectedItem?.VanoInterno ||
+      0;
+
+    const typeElement =
+      selectedDeficiency?.typeElement ||
+      (selectedItem?.PostInterno ? "POST" : selectedItem?.VanoInterno ? "VANO" : null);
+
+    return {
+      elementId: Number(elementId) || 0,
+      typeElement,
+    };
+  };
+
+  const deleteLocalDraftPhotoSafe = async (photo) => {
+    if (!photo?.uri || photo?.id) return;
+
+    try {
+      const u = cleanUri(photo.uri);
+      const info = await FileSystem.getInfoAsync(u);
+      if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
+    } catch { }
+  };
+
+  const buildDeletedEntryFromPhoto = (photo) => {
+    if (!photo?.id) return null;
+
+    return {
+      id: photo.id,
+      path: photo.originalPath,
+      type: photo.type,
+      sourceUri: photo?.isPlaceholder ? cleanUri(photo.uri) : undefined,
+      isPlaceholder: !!photo?.isPlaceholder,
+    };
+  };
+
+  const applyPhotoInSlotSafe = async ({
+    slotIndex,
+    newPhoto,
+    currentPhotos,
+    currentDeletedIds,
+    existingPhotoOverride = null,
+  }) => {
+    const nextPhotos = [...(currentPhotos ?? [])];
+    const nextDeletedIds = [...(currentDeletedIds ?? [])];
+    const previousPhoto = existingPhotoOverride ?? nextPhotos[slotIndex] ?? null;
+
+    if (previousPhoto) {
+      const deletedEntry = buildDeletedEntryFromPhoto(previousPhoto);
+
+      if (deletedEntry) {
+        nextDeletedIds.push(deletedEntry);
+      } else {
+        await deleteLocalDraftPhotoSafe(previousPhoto);
+      }
+    }
+
+    nextPhotos[slotIndex] = newPhoto;
+
+    return { nextPhotos, nextDeletedIds };
+  };
+
+  const getCopyCoordsFromSource = (sourcePhoto) => {
+    return {
+      latUtm: sourcePhoto?.latUtm ?? null,
+      lonUtm: sourcePhoto?.lonUtm ?? null,
+      utmZone: sourcePhoto?.utmZone ?? null,
+    };
+  };
+
+  const stageCopiedPhotoToDraft = async ({
+    defId,
+    slotIndex,
+    sourceUri,
+    latUtm = null,
+    lonUtm = null,
+  }) => {
+    const raw = getUniqueNowMs();
+    const ms = roundMsForSqlDatetime(raw);
+    const fechaISO = formatLocalISO(ms);
+
+    const { date, time } = getStampPartsFromMs(ms);
+    const fileName = `DRAFT_FOT_${slotIndex + 1}_${date}_${time}.jpg`;
+
+    const dir = getDraftPhotosDir(defId);
+    await ensureDirExists(dir);
+
+    const fromUri = cleanUri(sourceUri);
+    const toUri = dir + fileName;
+
+    await FileSystem.copyAsync({ from: fromUri, to: toUri });
+
+    return {
+      uri: toUri,
+      latUtm,
+      lonUtm,
+      capturedAtMs: ms,
+      fechaISO,
+      isDraft: true,
+    };
+  };
+
+  const buildCopySourceDefs = async () => {
+    const currentDefId = Number(selectedDeficiency?.id);
+    if (!currentDefId) return [];
+
+    const { elementId, typeElement } = getSelectedElementRef();
+    if (!elementId || !typeElement) return [];
+
+    const otherDefsRaw = await fetchDeficienciesByElement(elementId, typeElement);
+
+    const otherDefs = (otherDefsRaw ?? []).filter(
+      (d) =>
+        Number(d?.DefiInterno) !== currentDefId &&
+        Number(d?.DefiActivo ?? 1) === 1
+    );
+
+    if (!otherDefs.length) return [];
+
+    return otherDefs.map((def) => {
+      const code = String(def?.TipiCode ?? "").trim();
+      const title = code ? `Deficiencia ${code}` : "Deficiencia SINDEF";
+
+      return {
+        defId: Number(def.DefiInterno),
+        searchId:
+          Number(def?.DefiServerId) > 0
+            ? Number(def.DefiServerId)
+            : Number(def.DefiInterno),
+        title,
+        subtitle: def?.DefiCodigoElemento
+          ? `Código elemento: ${def.DefiCodigoElemento}`
+          : "",
+      };
+    });
+  };
+
+  const loadCopyPhotosForDef = async (defItem) => {
+    const defId = Number(defItem?.defId);
+    if (!defId) return [];
+
+    const cached = copyPhotosByDefId[String(defId)];
+    if (Array.isArray(cached)) return cached;
+
+    let picturesRoot = null;
+
+    if (Platform.OS === "android") {
+      picturesRoot = await getOrRequestPublicDir("Pictures", KEY_PICTURES_DIR);
+      if (!picturesRoot) return [];
+    }
+
+    const dirCache = new Map();
+
+    const listDirCached = async (dirUri) => {
+      if (!dirUri) return [];
+      if (dirCache.has(dirUri)) return dirCache.get(dirUri);
+
+      try {
+        const children = await readSafDirectoryAsync(dirUri);
+        dirCache.set(dirUri, children);
+        return children;
+      } catch {
+        dirCache.set(dirUri, []);
+        return [];
+      }
+    };
+
+    const resolveSourcePhotoUri = async (archNombre) => {
+      const rel = normalizeRelativePath(archNombre);
+      if (!rel) return null;
+
+      if (Platform.OS !== "android") {
+        const localUri = FileSystem.documentDirectory + rel;
+
+        try {
+          const info = await FileSystem.getInfoAsync(localUri);
+          return info.exists ? localUri : null;
+        } catch {
+          return null;
+        }
+      }
+
+      const fileName = basenameFromAnyPath(rel);
+      if (!fileName || !picturesRoot) return null;
+
+      const dirUri = await safDirForRelativeFileReadOnly(picturesRoot, rel);
+      if (!dirUri) return null;
+
+      const children = await listDirCached(dirUri);
+      return children.find((u) => safNameMatches(u, fileName)) ?? null;
+    };
+
+    const medios = await fetchMediosByDeficienciaId(defItem.searchId);
+
+    const activos = (medios ?? []).filter((m) => {
+      const tipo = Number(m?.ArchTipo);
+      return Number(m?.ArchActivo) === 1 && tipo >= 1 && tipo <= 6;
+    });
+
+    const photos = [];
+
+    for (const m of activos) {
+      const slotIndex = Number(m.ArchTipo) - 1;
+      const uri = await resolveSourcePhotoUri(m.ArchNombre);
+
+      if (!uri) continue;
+
+      photos.push({
+        key: `${defId}-${m.ArchTipo}`,
+        sourceDefId: defId,
+        slotIndex,
+        slotType: Number(m.ArchTipo),
+        slotTitle: PHOTO_SLOTS[slotIndex],
+        uri,
+        originalPath: m.ArchNombre,
+        latUtm: m?.ArchLatitud ?? null,
+        lonUtm: m?.ArchLongitud ?? null,
+        utmZone: null,
+      });
+    }
+
+    const ordered = photos.sort((a, b) => a.slotIndex - b.slotIndex);
+
+    setCopyPhotosByDefId((prev) => ({
+      ...prev,
+      [String(defId)]: ordered,
+    }));
+
+    return ordered;
+  };
+
+  const openCopyPhotosModal = async () => {
+    if (!requireEditPermission()) return;
+
+    try {
+      setLoading({ active: true, msg: "Buscando deficiencias..." });
+
+      const defs = await buildCopySourceDefs();
+
+      if (!defs.length) {
+        setLoading({ active: false, msg: "" });
+        return Alert.alert(
+          "Sin fotos para copiar",
+          "No se encontraron otras deficiencias activas en este elemento."
+        );
+      }
+
+      setCopySourceDefs(defs);
+      setExpandedCopyDefId(null);
+      setLoadingCopyDefId(null);
+      setCopyPhotosByDefId({});
+      setCopyPhotosModal(true);
+    } catch (e) {
+      console.error("❌ Error abriendo copia de fotos:", e);
+      Alert.alert("Error", "No se pudo preparar la copia de fotos.");
+    } finally {
+      setLoading({ active: false, msg: "" });
+    }
+  };
+
+  const toggleCopyDef = async (defItem) => {
+    const defId = Number(defItem?.defId);
+    if (!defId) return;
+
+    if (Number(expandedCopyDefId) === defId) {
+      setExpandedCopyDefId(null);
+      return;
+    }
+
+    setExpandedCopyDefId(defId);
+
+    const cached = copyPhotosByDefId[String(defId)];
+    if (Array.isArray(cached)) return;
+
+    try {
+      setLoadingCopyDefId(defId);
+      await loadCopyPhotosForDef(defItem);
+    } catch (e) {
+      console.error("❌ Error cargando fotos de deficiencia:", e);
+      Alert.alert("Error", "No se pudieron cargar las fotos de esa deficiencia.");
+    } finally {
+      setLoadingCopyDefId(null);
+    }
+  };
+
+  const executeCopySelectedPhotos = async (selectedPhotos) => {
+    const defId = selectedDeficiency?.id;
+
+    if (!defId) {
+      Alert.alert("Error", "No hay deficiencia seleccionada.");
+      return;
+    }
+
+    if (!Array.isArray(selectedPhotos) || !selectedPhotos.length) {
+      Alert.alert("Selecciona fotos", "Debes seleccionar al menos una foto.");
+      return;
+    }
+
+    try {
+      setLoading({ active: true, msg: "Copiando fotos..." });
+
+
+      let nextPhotos = [...photos];
+      let nextDeletedIds = [...deletedIds];
+
+      const copiedSlots = [];
+      const failedSlots = [];
+
+      const orderedSelection = [...selectedPhotos].sort((a, b) => a.slotIndex - b.slotIndex);
+
+      for (const item of orderedSelection) {
+        try {
+          const sourceCoords = getCopyCoordsFromSource(item);
+
+          const staged = await stageCopiedPhotoToDraft({
+            defId,
+            slotIndex: item.slotIndex,
+            sourceUri: item.uri,
+            latUtm: sourceCoords.latUtm,
+            lonUtm: sourceCoords.lonUtm,
+          });
+
+          const applied = await applyPhotoInSlotSafe({
+            slotIndex: item.slotIndex,
+            newPhoto: staged,
+            currentPhotos: nextPhotos,
+            currentDeletedIds: nextDeletedIds,
+          });
+
+          nextPhotos = applied.nextPhotos;
+          nextDeletedIds = applied.nextDeletedIds;
+          copiedSlots.push(PHOTO_SLOTS[item.slotIndex]);
+        } catch (e) {
+          console.error("❌ Error copiando slot:", item?.slotIndex, e);
+          failedSlots.push(PHOTO_SLOTS[item.slotIndex]);
+        }
+      }
+
+      if (!copiedSlots.length) {
+        setLoading({ active: false, msg: "" });
+        return Alert.alert("Error", "No se pudo copiar ninguna foto.");
+      }
+
+      setPhotos(nextPhotos);
+      setDeletedIds(nextDeletedIds);
+      setIsDirty(true);
+      setCopyPhotosModal(false);
+      setCopySourceDefs([]);
+      setExpandedCopyDefId(null);
+      setLoadingCopyDefId(null);
+      setCopyPhotosByDefId({});
+
+      await persistDraftSnapshotSafe({
+        nextPhotos,
+        nextAudios: audios,
+        nextDeletedIds,
+      });
+
+      if (failedSlots.length) {
+        Alert.alert(
+          "Copiado parcial",
+          `Se copiaron:\n\n${copiedSlots.map((x) => `• ${x}`).join("\n")}\n\nNo se pudieron copiar:\n\n${failedSlots
+            .map((x) => `• ${x}`)
+            .join("\n")}`
+        );
+      }
+    } catch (e) {
+      console.error("❌ Error en executeCopySelectedPhotos:", e);
+      Alert.alert("Error", "Ocurrió un problema al copiar las fotos.");
+    } finally {
+      setLoading({ active: false, msg: "" });
+    }
+  };
+
+  const confirmCopySelectedPhotos = (selectedPhotos) => {
+    const occupiedSlots = [
+      ...new Set(
+        (selectedPhotos ?? [])
+          .filter((item) => !!photos[item.slotIndex])
+          .map((item) => PHOTO_SLOTS[item.slotIndex])
+      ),
+    ];
+
+    if (!occupiedSlots.length) {
+      return executeCopySelectedPhotos(selectedPhotos);
+    }
+
+    Alert.alert(
+      "Reemplazar fotos",
+      `Se reemplazarán estas casillas:\n\n${occupiedSlots.map((x) => `• ${x}`).join("\n")}`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reemplazar",
+          style: "destructive",
+          onPress: () => executeCopySelectedPhotos(selectedPhotos),
+        },
+      ]
+    );
+  };
+
   const handleDeletePhoto = async (index) => {
     const photo = photos[index];
     if (!photo) return;
@@ -842,10 +1257,14 @@ export default function Multimedia() {
       const sSed = safeSeg(selectedSed?.SedCodigo, "SINSED");
       const sTipo = tipo === "Vano" ? "VANO" : "POSTE";
       const sCod = safeSeg(codigo);
-      const tipCode = String(selectedDeficiency?.typificationCode ?? "");
+      const tipCode = String(selectedDeficiency?.typificationCode ?? "").trim();
       const is7004 = tipCode === "7004";
+      const isSinDef = tipCode === "0000";
 
-      let defFolderSegment = safeSeg(tipCode, "SINDEF");
+      let defFolderSegment = isSinDef
+        ? "SINDEF"
+        : safeSeg(tipCode, "SINDEF");
+
       let defNameSegment = defFolderSegment;
 
       const elementBaseRel = `SIGRE.MOVIL/${sAlim}/${sSed}/${sTipo}/${sCod}/`;
@@ -1358,6 +1777,11 @@ export default function Multimedia() {
     setReplaceTarget(null);
     setCameraModal(false);
     setAudioModal(false);
+    setCopyPhotosModal(false);
+    setCopySourceDefs([]);
+    setExpandedCopyDefId(null);
+    setLoadingCopyDefId(null);
+    setCopyPhotosByDefId({});
   };
 
 
@@ -1418,6 +1842,11 @@ export default function Multimedia() {
         setPhotoIndex(null);
         setCameraModal(false);
         setAudioModal(false);
+        setCopyPhotosModal(false);
+        setCopySourceDefs([]);
+        setExpandedCopyDefId(null);
+        setLoadingCopyDefId(null);
+        setCopyPhotosByDefId({});
         setDeletedIds([]);
         setPlaceholderQueue([]);
         setPendingOriginalSnapshot(false);
@@ -1510,6 +1939,15 @@ export default function Multimedia() {
         <View style={styles.section}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>📸 Registro de Fotos</Text>
+
+            <TouchableOpacity
+              style={[styles.copyButton, !canEdit && { opacity: 0.45 }]}
+              onPress={openCopyPhotosModal}
+              disabled={!canEdit}
+            >
+              <MaterialIcons name="content-copy" size={18} color="#fff" />
+              <Text style={styles.copyButtonText}>COPIAR</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.grid}>
@@ -1609,45 +2047,19 @@ export default function Multimedia() {
         onRequestClose={() => closeCamera(true)}
         onPhoto={async (p) => {
           const defId = selectedDeficiency?.id;
+
           if (!defId) {
             Alert.alert("Error", "No hay deficiencia seleccionada.");
             return;
           }
+
           if (photoIndex == null) {
             Alert.alert("Error", "No hay slot de foto seleccionado.");
             return;
           }
 
-          const target = replaceTargetRef.current;
-
-          // 1) construir nextDeleted si estamos reemplazando
-          let nextDeleted = [...deletedIds];
-
-          if (target?.oldPhoto) {
-            const old = target.oldPhoto;
-
-            if (old?.id) {
-              nextDeleted = [
-                ...nextDeleted,
-                {
-                  id: old.id,
-                  path: old.originalPath,
-                  type: old.type,
-                  sourceUri: old?.isPlaceholder ? cleanUri(old.uri) : undefined,
-                  isPlaceholder: !!old?.isPlaceholder,
-                },
-              ];
-            } else if (old?.uri) {
-              try {
-                const u = cleanUri(old.uri);
-                const info = await FileSystem.getInfoAsync(u);
-                if (info.exists) await FileSystem.deleteAsync(u, { idempotent: true });
-              } catch { }
-            }
-          }
-
-          // 2) mover/copiado a DRAFT privado (staging)
           let staged = null;
+
           try {
             staged = await stagePhotoToDraft({
               defId,
@@ -1660,21 +2072,24 @@ export default function Multimedia() {
             return;
           }
 
-          // 3) aplicar en state
-          const nextPhotos = [...photos];
-          nextPhotos[photoIndex] = staged;
+          const applied = await applyPhotoInSlotSafe({
+            slotIndex: photoIndex,
+            newPhoto: staged,
+            currentPhotos: photos,
+            currentDeletedIds: deletedIds,
+            existingPhotoOverride: replaceTargetRef.current?.oldPhoto ?? null,
+          });
 
-          setDeletedIds(nextDeleted);
-          setPhotos(nextPhotos);
+          setDeletedIds(applied.nextDeletedIds);
+          setPhotos(applied.nextPhotos);
           setIsDirty(true);
 
           await persistDraftSnapshotSafe({
-            nextPhotos,
+            nextPhotos: applied.nextPhotos,
             nextAudios: audios,
-            nextDeletedIds: nextDeleted,
+            nextDeletedIds: applied.nextDeletedIds,
           });
 
-          // UI reset
           setPreviewPhoto(null);
           setPreviewIndex(null);
 
@@ -1758,6 +2173,23 @@ export default function Multimedia() {
             }
             : undefined
         }
+      />
+
+      <ModalCopyPhotos
+        visible={copyPhotosModal}
+        defs={copySourceDefs}
+        expandedDefId={expandedCopyDefId}
+        loadingDefId={loadingCopyDefId}
+        photosByDefId={copyPhotosByDefId}
+        onToggleDef={toggleCopyDef}
+        onClose={() => {
+          setCopyPhotosModal(false);
+          setCopySourceDefs([]);
+          setExpandedCopyDefId(null);
+          setLoadingCopyDefId(null);
+          setCopyPhotosByDefId({});
+        }}
+        onConfirm={confirmCopySelectedPhotos}
       />
 
       <Modal visible={loading.active} transparent animationType="fade">

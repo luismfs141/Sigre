@@ -32,15 +32,29 @@ namespace Sigre.Server.Controllers
         [HttpPost("SyncFromSQLite")]
         public IActionResult SyncFromSQLite([FromBody] List<PosteSyncDto> postesOffline)
         {
-            DAPost _daPost = new DAPost();
-            var result = _daPost.DAPOST_SyncFromSQLite(postesOffline);
-
-            return Ok(result.Select(r => new
+            try
             {
-                localId = r.localId,
-                serverId = r.serverId
-            }));
+                if (postesOffline == null || postesOffline.Count == 0)
+                    return Ok(new List<object>());
+
+                DAPost daPost = new DAPost();
+                var result = daPost.DAPOST_SyncFromSQLite(postesOffline);
+
+                return Ok(result.Select(r => new
+                {
+                    localId = r.localId,
+                    serverId = r.serverId
+                }));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
         }
+
         [HttpPost("GuardarPosteWeb")] // Nombre genérico
         public IActionResult GuardarPosteWeb([FromBody] Poste x_poste)
         {

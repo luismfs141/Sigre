@@ -336,12 +336,36 @@ export const markVanoAsSynced = async (vanoInterno) => {
 
 // 🔹 Actualizar ID local por ID servidor (INSERT)
 export const updateVanoIdAfterSync = async (localId, serverId) => {
-  const query = `
-    UPDATE Vanos
-    SET VanoInterno = ?, EstadoOffLine = NULL
-    WHERE VanoInterno = ?
-  `;
-  await runQuery(query, [serverId, localId]);
+  await runQuery("BEGIN TRANSACTION;");
+  try {
+    await runQuery(
+      `UPDATE Vanos
+       SET VanoInterno = ?, EstadoOffLine = NULL
+       WHERE VanoInterno = ?;`,
+      [serverId, localId]
+    );
+
+    await runQuery(
+      `UPDATE Deficiencias
+       SET DefiIdElemento = ?
+       WHERE DefiTipoElemento = 'VANO'
+         AND DefiIdElemento = ?;`,
+      [serverId, localId]
+    );
+
+    await runQuery(
+      `UPDATE Archivos
+       SET ArchIdElemento = ?
+       WHERE ArchTipoElemento = 'VANO'
+         AND ArchIdElemento = ?;`,
+      [serverId, localId]
+    );
+
+    await runQuery("COMMIT;");
+  } catch (e) {
+    await runQuery("ROLLBACK;");
+    throw e;
+  }
 };
 
 // ======================= INSPECCIONADO (VANOS) =======================

@@ -54,21 +54,29 @@ namespace Sigre.Server.Controllers
         [HttpPost("SyncFromSQLite")]
         public IActionResult SyncFromSQLite([FromBody] List<ArchivoSyncDto> archivosOffline)
         {
-            DAFile dAFile = new DAFile();
-
-            if (archivosOffline == null || archivosOffline.Count == 0)
-                return Ok(new List<object>());
-
-            var result = dAFile.DAARCH_SyncFromSQLite(archivosOffline);
-
-            var response = result.Select(r => new
+            try
             {
-                localId = r.localId,
-                serverId = r.serverId
-            });
+                if (archivosOffline == null || archivosOffline.Count == 0)
+                    return Ok(new List<object>());
 
-            return Ok(response);
+                DAFile daFile = new DAFile();
+                var result = daFile.DAARCH_SyncFromSQLite(archivosOffline);
+
+                return Ok(result.Select(r => new
+                {
+                    localId = r.localId,
+                    serverId = r.serverId
+                }));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
         }
+
         [HttpPost("SoftDelete")]
         public IActionResult SoftDelete(int id)
         {

@@ -110,92 +110,97 @@ namespace Sigre.DataAccess
         public List<(int localId, int serverId)> DAARCH_SyncFromSQLite(List<ArchivoSyncDto> archivosOffline)
         {
             using var ctx = new SigreContext();
-            var resultado = new List<(int, int)>();
 
-            var daDef = new DADeficiency();
+            if (archivosOffline == null || archivosOffline.Count == 0)
+                return new List<(int localId, int serverId)>();
 
-            foreach (var dto in archivosOffline)
+            using var tx = ctx.Database.BeginTransaction();
+
+            try
             {
-                // =========================
-                // 1) Resolver Deficiencia padre (ID SERVER)
-                // =========================
-                int idDeficiency;
+                var daDef = new DADeficiency();
+                var mappings = new List<(int localId, Archivo entity)>();
 
-                if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+                foreach (var dto in archivosOffline)
                 {
-                    idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
-                }
-                else
-                {
-                    idDeficiency = daDef.DADEFI_GetDeficiencyIDByElementAndType(
-                        dto.ArchIdElemento ?? 0,
-                        dto.ArchTipoElemento ?? string.Empty,
-                        dto.TipiInterno ?? 0
-                    );
-                }
+                    if (string.IsNullOrWhiteSpace(dto.ArchNombre))
+                        throw new Exception($"El archivo local {dto.ArchInterno} no tiene ArchNombre.");
 
-                // Si no se pudo resolver la deficiencia, no sincronizamos este archivo
-                if (idDeficiency <= 0)
-                    continue;
+                    int idDeficiency;
 
-                // Guardamos en el DTO si quieres mantener consistencia (aunque sea int? en el dto)
-                dto.ArchCodTabla = idDeficiency;
+                    if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+                    {
+                        idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
+                    }
+                    else
+                    {
+                        idDeficiency = daDef.DADEFI_GetDeficiencyIDByElementAndType(
+                            dto.ArchIdElemento ?? 0,
+                            dto.ArchTipoElemento ?? string.Empty,
+                            dto.TipiInterno ?? 0
+                        );
+                    }
 
-                // =========================
-                // 2) Normalizar ruta para comparar sin raíz (SIGRE.MOVIL / ELIMINADOS)
-                // =========================
-                var key = NormalizarRutaSinRaiz(dto.ArchNombre);
+                    if (idDeficiency <= 0)
+                        throw new Exception($"No se pudo resolver la deficiencia padre del archivo local {dto.ArchInterno}.");
 
-                // =========================
-                // 3) Buscar existente:
-                //    - SIEMPRE dentro de la misma deficiencia (idDeficiency)
-                //    - Match por nombre exacto O por EndsWith(key)
-                // =========================
-                var existente = ctx.Archivos
-                    .Where(a => a.ArchCodTabla == idDeficiency && a.ArchNombre != null)
-                    .Where(a =>
-                        a.ArchNombre == dto.ArchNombre
-                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith(key))
-                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("/" + key))
-                        || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("\\" + key))
-                    )
-                    .OrderByDescending(a => a.ArchInterno) // por si hay duplicados antiguos, toma el último
-                    .FirstOrDefault();
-
-                if (existente != null)
-                {
-                    // =========================
-                    // 4) UPDATE (no duplica aunque cambie raíz)
-                    // =========================
-                    existente.ArchCodTabla = idDeficiency;      // ✅ int -> int (evita CS0266)
-                    existente.ArchNombre = dto.ArchNombre;    // ✅ guarda la ruta NUEVA (SIGRE.MOVIL / ELIMINADOS / etc.)
-                    existente.ArchLongitud = dto.ArchLongitud;
-                    existente.ArchLatitud = dto.ArchLatitud;
-                    existente.ArchActivo = dto.ArchActivo;    // ✅ aquí cae tu ArchActivo=0
-                    existente.ArchFecha = dto.ArchFecha;
-
-                    ctx.SaveChanges();
-
-                    resultado.Add((dto.ArchInterno, existente.ArchInterno));
-                }
-                else
-                {
-                    // =========================
-                    // 5) INSERT
-                    // =========================
-                    // Asegura que el convert use el idDeficiency ya resuelto
                     dto.ArchCodTabla = idDeficiency;
 
-                    var archivo = DAARCH_ConvertFile(dto);
-                    ctx.Archivos.Add(archivo);
+                    var key = NormalizarRutaSinRaiz(dto.ArchNombre);
 
-                    ctx.SaveChanges(); // para obtener ID
+                    var existente = ctx.Archivos
+                        .Where(a => a.ArchCodTabla == idDeficiency && a.ArchNombre != null)
+                        .Where(a =>
+                            a.ArchNombre == dto.ArchNombre
+                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith(key))
+                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("/" + key))
+                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("\\" + key))
+                        )
+                        .OrderByDescending(a => a.ArchInterno)
+                        .FirstOrDefault();
 
-                    resultado.Add((dto.ArchInterno, archivo.ArchInterno));
+                    if (existente != null)
+                    {
+                        existente.ArchCodTabla = idDeficiency;
+                        existente.ArchNombre = dto.ArchNombre;
+                        existente.ArchLongitud = dto.ArchLongitud;
+                        existente.ArchLatitud = dto.ArchLatitud;
+                        existente.ArchActivo = dto.ArchActivo;
+                        existente.ArchFecha = dto.ArchFecha;
+                        existente.ArchTipo = dto.ArchTipo;
+                        existente.ArchTabla = dto.ArchTabla;
+                        existente.ArchTipoElemento = dto.ArchTipoElemento;
+                        existente.ArchIdElemento = dto.ArchIdElemento;
+                        existente.TipiInterno = dto.TipiInterno;
+
+                        if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+                        {
+                            var uuid = dto.DefiUUID.Trim();
+                            existente.DefiUUID = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
+                        }
+
+                        mappings.Add((dto.ArchInterno, existente));
+                    }
+                    else
+                    {
+                        var archivo = DAARCH_ConvertFile(dto);
+                        ctx.Archivos.Add(archivo);
+                        mappings.Add((dto.ArchInterno, archivo));
+                    }
                 }
-            }
 
-            return resultado;
+                ctx.SaveChanges();
+                tx.Commit();
+
+                return mappings
+                    .Select(x => (x.localId, x.entity.ArchInterno))
+                    .ToList();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
 
         /// <summary>

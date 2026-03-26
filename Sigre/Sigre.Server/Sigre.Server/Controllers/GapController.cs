@@ -37,19 +37,29 @@ namespace Sigre.Server.Controllers
         [HttpPost("SyncFromSQLite")]
         public IActionResult SyncFromSQLite([FromBody] List<VanoSyncDto> vanosOffline)
         {
-            DAGap dAGap = new DAGap();
-
-            if (vanosOffline == null || vanosOffline.Count == 0)
-                return BadRequest("Lista vacía");
-
-            var result = dAGap.DAVANO_SyncFromSQLite(vanosOffline);
-
-            return Ok(result.Select(r => new
+            try
             {
-                localId = r.localId,
-                serverId = r.serverId
-            }));
+                if (vanosOffline == null || vanosOffline.Count == 0)
+                    return Ok(new List<object>());
+
+                DAGap daGap = new DAGap();
+                var result = daGap.DAVANO_SyncFromSQLite(vanosOffline);
+
+                return Ok(result.Select(r => new
+                {
+                    localId = r.localId,
+                    serverId = r.serverId
+                }));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
         }
+
         [HttpGet("GetGapsBySubestacion")]
         public IActionResult GetGapsBySubestacion(int idSed)
         {

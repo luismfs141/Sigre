@@ -953,7 +953,7 @@ export default function DeficiencyForm({
 
                                 <div className="flex flex-col gap-1 w-full h-full">
                                     {observacionField && renderDynamicField(observacionField)}
-
+                                {!isSinDeficiencia && (
                                     <div className="field mb-3 w-full">
                                         <label className="font-bold text-sm block mb-1 text-gray-700">
                                             Opción de tipificación
@@ -1032,6 +1032,8 @@ export default function DeficiencyForm({
 
 
                                     </div>
+
+                                )}
 
                                     {comentarioField && renderDynamicField(comentarioField)}
                                 </div>

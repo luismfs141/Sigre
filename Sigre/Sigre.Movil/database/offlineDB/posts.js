@@ -459,11 +459,26 @@ export const updatePostIdAfterSync = async (localId, serverId) => {
       [serverId, localId]
     );
 
-    // ✅ actualizar pin asociado (IdOriginal guarda el id del poste)
     await runQuery(
       `UPDATE Pines
        SET IdOriginal = ?
        WHERE IdOriginal = ? AND Type = 5;`,
+      [serverId, localId]
+    );
+
+    await runQuery(
+      `UPDATE Deficiencias
+       SET DefiIdElemento = ?
+       WHERE DefiTipoElemento = 'POST'
+         AND DefiIdElemento = ?;`,
+      [serverId, localId]
+    );
+
+    await runQuery(
+      `UPDATE Archivos
+       SET ArchIdElemento = ?
+       WHERE ArchTipoElemento = 'POST'
+         AND ArchIdElemento = ?;`,
       [serverId, localId]
     );
 
