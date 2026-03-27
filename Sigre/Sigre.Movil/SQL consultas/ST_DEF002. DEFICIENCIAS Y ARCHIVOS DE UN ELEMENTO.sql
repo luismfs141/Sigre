@@ -4,7 +4,7 @@
   (opcional) Descripción corta / objetivo
 ==============================================================================*/
 
-DECLARE @CODIGO VARCHAR(20) = 'VBT000067967'
+DECLARE @CODIGO VARCHAR(20) = '223218'
 
 
 ------------------------------------------------------------
@@ -113,6 +113,7 @@ WHERE Q.DEFI_CodigoElemento LIKE '%'+@CODIGO
 	OR Q.DEFI_CodigoElemento = @CODIGO
 ORDER BY Q.ElementoEtiqueta DESC;
 GO
+
 
 
 

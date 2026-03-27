@@ -49,7 +49,7 @@ export default function GeneralDataItem({ item, onEdit }) {
 
 
 
-    useEffect(() => {
+  useEffect(() => {
     let alive = true;
 
     (async () => {
@@ -145,9 +145,12 @@ export default function GeneralDataItem({ item, onEdit }) {
 
       const nodoIni = pickFirst(item, ["VanoNodoInicial"], "-");
       const nodoFin = pickFirst(item, ["VanoNodoFinal"], "-");
-      const terceros = asExisteSiNo(pickFirst(item, ["VanoTerceros"], 0));
+
+      const vanoTerceros = pickFirst(item, ["VanoTerceros"], null);
+      const terceros = asExisteSiNo(vanoTerceros);
 
       const title = `VANO: ${codigo}` + (etiqueta ? ` - ${etiqueta}` : "");
+      const isDanger = Number(vanoTerceros) === 1 || vanoTerceros === true;
 
       const lines = [
         `Nodo inicial: ${nodoIni}`,
@@ -155,7 +158,7 @@ export default function GeneralDataItem({ item, onEdit }) {
         `Red existe: ${terceros}`,
       ];
 
-      return { title, lines, isDanger: false };
+      return { title, lines, isDanger };
     }
 
     const codigo = pickFirst(item, ["SedCodigo", "SED_Codigo", "SedInterno"], "UNK");
