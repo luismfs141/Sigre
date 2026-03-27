@@ -1940,10 +1940,40 @@ namespace Sigre.DataAccess
                         DefiInterno = 0, // 0 = Registro Nuevo
                         DefiEstado = "N",
                         DefiActivo = true,
-                        
+
                         DefiUsuarioMod = usuarioSesion,
                         DefiFecModificacion = DateTime.Now
                     };
+
+                        switch (nuevoCodigoTipi)
+                    {
+                        case "7004":
+                            // 7004 usa Accesibilidad, Horizontal y Vertical. Solo sobra TipoCruce.
+                            clonDefi.DefiTipoCruce = null;
+                            break;
+
+                        case "7006":
+                            // 7006 usa TipoCruce y Vertical. Sobra Accesibilidad y Horizontal.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiDistHorizontal = null;
+                            break;
+
+                        case "7008":
+                            // 7008 usa solo Horizontal. Sobra todo lo demás.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiTipoCruce = null;
+                            clonDefi.DefiDistVertical = null;
+                            break;
+
+                        default:
+                            // Para 6002, 6026 y todas las demás (que no usan estos campos), limpiamos todo.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiTipoCruce = null;
+                            clonDefi.DefiDistHorizontal = null;
+                            clonDefi.DefiDistVertical = null;
+                            break;
+                    
+                };
 
                     ctx.Deficiencias.Add(clonDefi);
                     ctx.SaveChanges(); // Guardamos para obtener el nuevo DefiInterno
@@ -2024,8 +2054,22 @@ namespace Sigre.DataAccess
 
                         if (arch.ArchNombre == nuevaRutaFisica) continue;
 
-                        // 4. Copiado físico (Creará subcarpetas si es necesario)
-                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(arch.ArchNombre, nuevaRutaFisica);
+                        // 🔥 LA MAGIA RESCATADORA AQUÍ 🔥
+                        // Extraemos la ruta real (por si la BD tiene el formato sucio 7004.X.Y)
+                        // Como instanciaste 'daFile' unas líneas arriba, usamos esa misma instancia
+                        // Extraemos la ruta resiliente
+                        string rutaViejaReal = daFile.ObtenerRutaFisicaReal(arch.ArchNombre);
+
+                        // Le decimos a C# que continúe si a pesar de los rescates, el archivo no existe en el disco
+                        if (!File.Exists(Path.Combine(daFile._baseDirectory, rutaViejaReal.Replace("/", "\\"))))
+                        {
+                            continue;
+                        }
+
+                        // Clonamos
+                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(rutaViejaReal, nuevaRutaFisica);
+
+                       
 
                         if (seCopioConExito)
                         {

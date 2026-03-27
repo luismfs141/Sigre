@@ -31,6 +31,8 @@ import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { latLonToUTM } from '../utils/geoUtils';
 import { Checkbox } from 'primereact/checkbox';
 import { API_BASE_URL } from '../utils/ngrok';
+import ResilientImage from '../utils/ResilientImage';
+
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
       background-color: #bfdbfe !important; /* Azul más fuerte */
@@ -1032,61 +1034,61 @@ setBulkOptions({
     //         />
     //     );
     // };
-    const FallbackImage = ({ row }) => {
-        const isAudio = parseInt(row.archTipo) === 0;
-        const [srcIndex, setSrcIndex] = useState(0);
+    // const FallbackImage = ({ row }) => {
+    //     const isAudio = parseInt(row.archTipo) === 0;
+    //     const [srcIndex, setSrcIndex] = useState(0);
 
-        if (isAudio) {
-            return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
-        }
+    //     if (isAudio) {
+    //         return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
+    //     }
 
-        // 🔥 CORRECCIÓN AQUÍ: Usar originalName para la vista previa porque 
-        // el archivo físico sigue ahí hasta que le demos a Guardar en BD.
-        const pathForPreview = (row.originalName && row.originalName !== row.currentPath)
-            ? row.originalName
-            : row.currentPath;
+    //     // 🔥 CORRECCIÓN AQUÍ: Usar originalName para la vista previa porque 
+    //     // el archivo físico sigue ahí hasta que le demos a Guardar en BD.
+    //     const pathForPreview = (row.originalName && row.originalName !== row.currentPath)
+    //         ? row.originalName
+    //         : row.currentPath;
 
-        const normalizedPath = String(pathForPreview || '')
-            .replace(/\\/g, '/')
-            .replace(/^.*SIGRE\.MOVIL\//i, '')
-            .replace(/^\/+/, '');
+    //     const normalizedPath = String(pathForPreview || '')
+    //         .replace(/\\/g, '/')
+    //         .replace(/^.*SIGRE\.MOVIL\//i, '')
+    //         .replace(/^\/+/, '');
 
-        const buildUrl = (path) =>
-            `${API_BASE_URL.replace(/\/+$/, '')}/${path
-                .split('/')
-                .map(encodeURIComponent)
-                .join('/')}?t=${Date.now()}`;
+    //     const buildUrl = (path) =>
+    //         `${API_BASE_URL.replace(/\/+$/, '')}/${path
+    //             .split('/')
+    //             .map(encodeURIComponent)
+    //             .join('/')}?t=${Date.now()}`;
 
-        const srcs = [];
+    //     const srcs = [];
 
-        if (normalizedPath) {
-            srcs.push(buildUrl(normalizedPath));
+    //     if (normalizedPath) {
+    //         srcs.push(buildUrl(normalizedPath));
 
-            if (/\/SINDEF\//i.test(normalizedPath)) {
-                srcs.push(buildUrl(normalizedPath.replace(/\/SINDEF\//gi, '/0000/')));
-            } else if (/\/0000\//i.test(normalizedPath)) {
-                srcs.push(buildUrl(normalizedPath.replace(/\/0000\//gi, '/SINDEF/')));
-            }
-        }
+    //         if (/\/SINDEF\//i.test(normalizedPath)) {
+    //             srcs.push(buildUrl(normalizedPath.replace(/\/SINDEF\//gi, '/0000/')));
+    //         } else if (/\/0000\//i.test(normalizedPath)) {
+    //             srcs.push(buildUrl(normalizedPath.replace(/\/0000\//gi, '/SINDEF/')));
+    //         }
+    //     }
 
-        return (
-            <Image
-                src={srcs[srcIndex] || ''}
-                alt="Foto"
-                preview
-                className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100"
-                imageClassName="w-full h-full object-cover block"
-                onError={(e) => {
-                    if (srcIndex < srcs.length - 1) {
-                        setSrcIndex(srcIndex + 1);
-                    } else {
-                        e.target.onerror = null;
-                        e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto';
-                    }
-                }}
-            />
-        );
-    };
+    //     return (
+    //         <Image
+    //             src={srcs[srcIndex] || ''}
+    //             alt="Foto"
+    //             preview
+    //             className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100"
+    //             imageClassName="w-full h-full object-cover block"
+    //             onError={(e) => {
+    //                 if (srcIndex < srcs.length - 1) {
+    //                     setSrcIndex(srcIndex + 1);
+    //                 } else {
+    //                     e.target.onerror = null;
+    //                     e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto';
+    //                 }
+    //             }}
+    //         />
+    //     );
+    // };
 
     return (
 
@@ -1240,19 +1242,53 @@ setBulkOptions({
                                     <i className="pi pi-camera text-3xl text-gray-400 group-hover:text-blue-500 mb-1 transition-colors"></i>
                                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider group-hover:text-blue-600">Añadir Foto</span>
                                 </div>
-                                {fileRows.map((row) => (
-                                    <div key={row.tempId} className="h-28 w-28 rounded-lg border border-gray-200 overflow-hidden relative group hover:shadow-md transition-shadow bg-white flex flex-col">
-                                        <div className="flex-1 flex items-center justify-center bg-gray-50 relative">
-                                            <FallbackImage row={row} />
-                                            <button onClick={(e) => { e.stopPropagation(); handleRemoveRequest(e, row); }} className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded border border-white flex items-center justify-center shadow-md transition-all z-10" title="Eliminar archivo">
-                                                <i className="pi pi-trash text-[10px] font-bold"></i>
-                                            </button>
-                                        </div>
-                                        <div className="h-6 w-full bg-slate-800 text-white text-[9px] font-bold flex items-center justify-center uppercase tracking-tighter shrink-0 z-10 relative">
-                                            {photoTypes[row.archTipo] || `Tipo ${row.archTipo}`}
-                                        </div>
-                                    </div>
-                                ))}
+                                {fileRows.map((row, index) => {
+    const isAudio = parseInt(row.archTipo) === 0;
+    const typeLabel = photoTypes[row.archTipo] || `Tipo ${row.archTipo}`;
+
+    // 1. MANTENEMOS TU DISEÑO PARA LOS AUDIOS
+    if (isAudio) {
+        return (
+            <div key={row.tempId} className="h-28 w-28 rounded-lg border border-gray-200 overflow-hidden relative group hover:shadow-md transition-shadow bg-white flex flex-col">
+                <div className="flex-1 flex items-center justify-center bg-gray-50 relative">
+                    <i className="pi pi-volume-up text-4xl text-gray-400"></i>
+                    <button onClick={(e) => { e.stopPropagation(); handleRemoveRequest(e, row); }} className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded border border-white flex items-center justify-center shadow-md transition-all z-10" title="Eliminar archivo">
+                        <i className="pi pi-trash text-[10px] font-bold"></i>
+                    </button>
+                </div>
+                <div className="h-6 w-full bg-slate-800 text-white text-[9px] font-bold flex items-center justify-center uppercase tracking-tighter shrink-0 z-10 relative">
+                    {typeLabel}
+                </div>
+            </div>
+        );
+    }
+
+    // 2. BUSCAMOS LA TIPIFICACIÓN ORIGINAL PARA EL RESILIENT
+    const parentDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
+    const defCodeStr = parentDef ? getCodeById(parentDef.tipiInterno) : null;
+
+    // 3. REEMPLAZAMOS LA TARJETA DE IMAGEN POR NUESTRO COMPONENTE SENIOR
+    return (
+        <div key={row.tempId} className="h-28 w-28 shrink-0 flex items-center justify-center">
+            <ResilientImage
+                // 🔥 Adaptamos la fila (row) para que ResilientImage la lea correctamente
+                file={{ ...row, archNombre: row.currentPath || row.originalName, archTipo: row.archTipo }}
+                index={index}
+                onImageClick={() => {}} // Vacío porque aquí no hay Lightbox
+                onUrlResolved={() => {}} 
+                typeName={typeLabel}
+                currentSupply={null}
+                defCode={defCodeStr}
+                // Conectamos la eliminación a tu función existente
+                onDelete={(fileToDelete) => handleRemoveRequest({ currentTarget: document.body }, fileToDelete)}
+                onCropRequest={() => {}}
+                onReplaceRequest={() => {}}
+                allowDirectEdit={false} // 🔥 Apagamos los botones azul y verde para esta vista gerencial
+                cacheBuster={Date.now()}
+            />
+        </div>
+    );
+})}
                             </div>
                         </div>
                     </div>

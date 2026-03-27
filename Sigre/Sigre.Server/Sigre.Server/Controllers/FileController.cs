@@ -237,5 +237,28 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+        [HttpGet("ValidarRutaReal")]
+        public IActionResult ValidarRutaReal([FromQuery] string rutaBaseDatos)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(rutaBaseDatos))
+                    return BadRequest("Debe enviar una ruta para validar.");
+                var daFile = new DAFile();
+                // Llamamos a tu función en DAFile
+                string rutaFisicaReal = daFile.ObtenerRutaFisicaReal(rutaBaseDatos);
+
+                return Ok(new
+                {
+                    RutaOriginal = rutaBaseDatos,
+                    RutaRescatada = rutaFisicaReal,
+                    FueRescatada = rutaBaseDatos != rutaFisicaReal // True si el rescatador hizo su magia
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al validar la ruta: {ex.Message}");
+            }
+        }
     }
 }
