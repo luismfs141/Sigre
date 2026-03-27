@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
@@ -667,7 +668,7 @@ namespace Sigre.DataAccess
 
     
         // Usamos el disco H:\ como raíz, 
-        private readonly string _baseDirectory = @"H:\";
+        private readonly string _baseDirectory = @"D:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
         {
@@ -784,6 +785,47 @@ namespace Sigre.DataAccess
             catch (Exception ex)
             {
                 throw new Exception($"Error de disco al copiar: {ex.Message}", ex);
+            }
+        }
+        public async Task<bool> OverwritePhysicalImageAsync(int archInterno, IFormFile file)
+        {
+            try
+            {
+                using (var ctx = new SigreContext())
+                {
+                    // 1. Buscamos el registro
+                    var archivoDB = await ctx.Archivos.FindAsync(archInterno);
+                    if (archivoDB == null)
+                        throw new Exception($"El archivo con ID {archInterno} no existe en la base de datos.");
+
+                    // 2. Construimos las rutas
+                    string absolutePath = Path.Combine(_baseDirectory, archivoDB.ArchNombre.Replace("/", "\\"));
+                    string directory = Path.GetDirectoryName(absolutePath);
+
+                    // 3. Verificamos carpeta
+                    if (!Directory.Exists(directory))
+                        Directory.CreateDirectory(directory);
+
+                    // 4. Pisamos el archivo viejo
+                    using (var stream = new FileStream(absolutePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Escarbamos para sacar el error real (útil para SQL o permisos de disco)
+                Exception realError = ex;
+                while (realError.InnerException != null)
+                {
+                    realError = realError.InnerException;
+                }
+
+                // Lanzamos el error hacia arriba (al controlador)
+                throw new Exception($"DAFile Error: {realError.Message}");
             }
         }
     }

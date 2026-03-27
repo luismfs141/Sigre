@@ -624,7 +624,7 @@ export default function Subestaciones() {
                             globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento', 'tipificacionLabel', 'inspectorLabel', 'DefiTipoMaterial', 'DefiNodoInicial', 'DefiNodoFinal', 'DefiAmrmadoMaterial']}
                             onFilter={(e) => setFilters(e.filters)}
                         >
-                            <Column field="defiIdElemento" header="ID" sortable  style={{ width: '90px' }} />
+                            <Column field="defiInterno" header="ID" sortable  style={{ width: '90px' }} />
                             <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable  style={{ width: '100px', textAlign: 'center' }} />
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column field="defiNumSuministro" header="Num Suministro" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
