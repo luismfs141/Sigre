@@ -11,6 +11,10 @@ import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { useTypification } from '../hooks/useTypification';
 import { latLonToUTM } from '../utils/geoUtils'; // Importamos la función de conversión a UTM
 import { API_BASE_URL } from '../utils/ngrok';
+import ReactCrop from 'react-image-crop';
+import { Dialog } from 'primereact/dialog';
+import 'react-image-crop/dist/ReactCrop.css';
+import { getCroppedImg } from '../utils/cropImageUtils';
 
 // --- ALMACENAMIENTO LOCAL ---
 const LocalFileStore = {
@@ -48,8 +52,8 @@ const detectSinDefFolderAliasFromPath = (path) => {
 };
 
 const getPhotoTypeName = (typeId) => { const types = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' }; return types[typeId] || `Tipo ${typeId}`; };
-const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.000`; };
-const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
+const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); const padMs = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${padMs(d.getMilliseconds())}`; };
+const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0');const padMs = (n) => n.toString().padStart(3, '0'); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${padMs(d.getMilliseconds())}`; };
 const urlToBlob = async (url) => { try { const response = await fetch(url); if (!response.ok) throw new Error("404"); return await response.blob(); } catch { return null; } };
 
 // =====================================================================
@@ -66,40 +70,9 @@ const getUtmBandLetter = (lat) => {
 
 
 // --- COMPONENTE IMAGEN ---
-const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode, onDelete }) => {
+// --- COMPONENTE IMAGEN ---
+const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode, onDelete, onCropRequest, onReplaceRequest, allowDirectEdit, cacheBuster }) => {
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
-    // const generateCandidates = (rawPath) => {
-    //     if (!rawPath) return [];
-    //     let base = rawPath.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '').replace(/\/0000\//g, '/SINDEF/');
-    //     const candidates = [];
-    //     const parts = base.split('/');
-    //     const originalFileName = parts.pop();
-    //     const rootPathWithoutFile = parts.join('/') + '/';
-    //     let shortFileName = null;
-    //     const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
-    //     if (typeMatch) shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
-
-    //     const addPathVariations = (folderPath) => { candidates.push(folderPath + originalFileName); if (shortFileName) candidates.push(folderPath + shortFileName); };
-    //     const processDeficiencyFolder = (currentPath) => {
-    //         const complexRegex = new RegExp(`\/(${defCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\/`);
-    //         const matchComplex = currentPath.match(complexRegex);
-    //         addPathVariations(currentPath);
-    //         if (currentSupply && currentSupply !== '0') {
-    //             if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(fullStr, `/${defCode}/${currentSupply}/`)); }
-    //             else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}.1.${currentSupply}/`)); addPathVariations(currentPath.replace(simpleDefRegex, `/${defCode}/${currentSupply}/`)); } }
-    //         }
-    //         if (matchComplex) { const fullStr = matchComplex[0]; addPathVariations(currentPath.replace(fullStr, `/${defCode}/`)); for (let i = 1; i <= 20; i++) addPathVariations(currentPath.replace(fullStr, `/${defCode}/${i}/`)); }
-    //         else { const simpleDefRegex = new RegExp(`\/${defCode}\/`); if (currentPath.match(simpleDefRegex)) { for (let i = 1; i <= 20; i++) { if (!currentPath.includes(`/${defCode}/${i}/`)) { const split = currentPath.split(`/${defCode}/`); if (split.length > 1) addPathVariations(`${split[0]}/${defCode}/${i}/${split[1]}`); } } } }
-    //     };
-
-    //     const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
-    //     processDeficiencyFolder(pathNoType); processDeficiencyFolder(rootPathWithoutFile);
-    //     const pathUpper = rootPathWithoutFile.replace(/\/Vano\//i, '/VANO/').replace(/\/Poste\//i, '/POSTE/');
-    //     if (pathUpper !== rootPathWithoutFile) processDeficiencyFolder(pathUpper);
-
-    //     return candidates.map(c => `${API_BASE_URL}/${(c.startsWith('/') ? c.substring(1) : c).split('/').map(encodeURIComponent).join('/')}`);
-    // };
-
 
     const generateCandidates = (rawPath) => {
         if (!rawPath) return [];
@@ -219,18 +192,14 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
             `${API_BASE_URL}/${(candidatePath.startsWith('/') ? candidatePath.substring(1) : candidatePath)
                 .split('/')
                 .map(encodeURIComponent)
-                .join('/')}`
+                .join('/')}?t=${cacheBuster}`
         );
     };
 
-
-
-    //const candidates = useMemo(() => generateCandidates(file.archNombre || file.ARCH_Nombre), [file, currentSupply]);
     const candidates = useMemo(
         () => generateCandidates(file.archNombre || file.ARCH_Nombre),
-        [file, currentSupply, defCode]
+        [file, currentSupply, defCode, cacheBuster]
     );
-
 
     const [currentSrc, setCurrentSrc] = useState(candidates[0] || offlinePlaceholder);
     const [tryIndex, setTryIndex] = useState(0);
@@ -239,27 +208,50 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
     const handleLoad = () => { if (currentSrc !== offlinePlaceholder) onUrlResolved(index, currentSrc); };
     const handleError = () => { const next = tryIndex + 1; if (next < candidates.length) { setTryIndex(next); setCurrentSrc(candidates[next]); } else setCurrentSrc(offlinePlaceholder); };
 
+    // 🔥 Declaramos si es tipo 6 antes de pintar la tarjeta
+    const esTipoAdicional = String(file.archTipo || file.ARCH_Tipo) === "6";
+
+    // 🔥 UN SOLO RETURN FINAL CON TODA LA MAGIA
     return (
-        <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all" onClick={() => onImageClick(index)}>
-            <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
-            {/* 🔴 BOTÓN DE ELIMINAR AÑADIDO */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation(); // Evita que se abra el Lightbox al borrar
-                    onDelete(file);
-                }}
-                // SE HAN HECHO LOS SIGUIENTES CAMBIOS PARA RESALTARLO:
-                // 1. !bg-red-600 y hover:!bg-red-700: El signo '!' fuerza el color rojo intenso.
-                // 2. w-7 h-7: Se aumentó el tamaño (antes era w-6 h-6).
-                // 3. border-2 border-white: Se añade un borde blanco para contraste.
-                // 4. shadow-md: Añade una pequeña sombra para que "flote".
-                // 5. z-20: Aseguramos que esté por encima de todo.
-                className="absolute top-0 right-0 !bg-red-600 text-white w-7 h-7 border-2 border-white flex items-center justify-center rounded-bl-md shadow-md hover:!bg-red-700 transition-all z-20"
-                title="Eliminar foto"
-            >
-                {/* Se aumentó ligeramente el tamaño del icono (de text-[10px] a text-xs) */}
+        <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all">
+            <div onClick={() => onImageClick(index)} className="w-full h-full">
+                <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
+            </div>
+
+            {/* BOTÓN ROJO: ELIMINAR (Siempre visible) */}
+            <button onClick={(e) => { e.stopPropagation(); onDelete(file); }} className="absolute top-0 right-0 !bg-red-600 text-white w-7 h-7 border-2 border-white flex items-center justify-center rounded-bl-md shadow-md hover:!bg-red-700 transition-all z-20" title="Eliminar foto">
                 <i className="pi pi-trash text-xs font-bold"></i>
             </button>
+
+            {/* 🔥 BOTONES MÁGICOS (Solo si el candado está abierto, es decir, es un clon) */}
+            {allowDirectEdit && (
+                <>
+                    {/* Botón Verde: REEMPLAZAR */}
+                    <input type="file" id={`replace-file-${index}`} className="hidden" accept="image/*"
+                        onChange={(e) => {
+                            e.stopPropagation();
+                            if (e.target.files && e.target.files.length > 0) onReplaceRequest(file, e.target.files[0]);
+                        }}
+                    />
+                    <label htmlFor={`replace-file-${index}`} onClick={(e) => e.stopPropagation()} className="absolute top-0 left-0 bg-green-600 text-white w-5 h-7 border-2 border-white flex items-center justify-center rounded-br-md shadow-md hover:bg-green-700 transition-all z-20 cursor-pointer" title="Reemplazar foto física">
+                        <i className="pi pi-upload text-xs font-bold"></i>
+                    </label>
+
+                    {/* Botón Azul: RECORTAR (Solo si es foto Adicional / Tipo 6) */}
+                    {esTipoAdicional && currentSrc !== offlinePlaceholder && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onCropRequest(file, currentSrc);
+                            }}
+                            className="absolute bottom-5 right-1 bg-blue-600 text-white w-7 h-7 border-2 border-white flex items-center justify-center rounded shadow-md hover:bg-blue-700 transition-all z-20"
+                            title="Enfocar Deficiencia"
+                        >
+                            <i className="pi pi-search-plus text-xs font-bold"></i>
+                        </button>
+                    )}
+                </>
+            )}
             <div className="absolute bottom-0 w-full bg-black/70 text-white text-[9px] font-bold text-center py-0.5 uppercase tracking-tighter">{typeName}</div>
         </div>
     );
@@ -268,7 +260,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
 // --- COMPONENTE PRINCIPAL ---
 export default function EvidenceGallery({ deficiency, feeder, sed, suministro, element7004Count, my7004Correlativo }) {
     const toast = useRef(null);
-    const { files, loadFiles, addFile, deleteFile } = useFiles();
+    const { files, loadFiles, addFile, deleteFile, overwritePhysicalImage } = useFiles();
     const [modalVisible, setModalVisible] = useState(false);
     const [zipLoading, setZipLoading] = useState(false);
     const resolvedUrlsRef = useRef({});
@@ -278,7 +270,13 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
-
+    const [cropModalVisible, setCropModalVisible] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState(null);
+    const [crop, setCrop] = useState({ unit: '%', width: 50, aspect: 1 });
+    const [completedCrop, setCompletedCrop] = useState(null);
+    const imgRef = useRef(null);
+    const [isCroppingSave, setIsCroppingSave] = useState(false);
+    const [cacheBuster, setCacheBuster] = useState(Date.now());
     useEffect(() => {
         if (deficiency?.defiInterno) {
             loadFiles(deficiency.defiInterno);
@@ -465,6 +463,55 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
         }
     };
 
+    const isClonedFlow = useMemo(() => {
+        if (!deficiency) return false;
+        try {
+            const fechaOriginal = new Date(deficiency.defiFecRegistro || deficiency.FecRegistro);
+            const fechaTecnica = new Date(deficiency.defiFecModificacion || deficiency.FecModificacion || new Date());
+            const diferenciaHoras = Math.abs(fechaTecnica - fechaOriginal) / (1000 * 60 * 60);
+            return diferenciaHoras > 24; // Es un clon si pasaron más de 24h
+        } catch (e) { return false; }
+    }, [deficiency]);
+
+    const openCropModal = (file, src) => { setImageToCrop({ file, src }); setCrop({ unit: '%', width: 50, aspect: 1 }); setCompletedCrop(null); setCropModalVisible(true); };
+    // --- MANEJADOR DEL RECORTE ---
+    // --- MANEJADOR DEL RECORTE ---
+    const handleSaveCrop = async () => {
+        if (!completedCrop || !imgRef.current || !imageToCrop) return;
+        setIsCroppingSave(true);
+        try {
+            // 🔥 OJO AQUÍ: Ya no enviamos imgRef.current.src, enviamos el elemento entero
+            const croppedFile = await getCroppedImg(imgRef.current, completedCrop);
+            const idArchivoBD = imageToCrop.file.archInterno || imageToCrop.file.ARCH_Interno;
+
+            const result = await overwritePhysicalImage(idArchivoBD, croppedFile);
+
+            if (result.success) {
+                toast.current.show({ severity: 'success', summary: 'Éxito', detail: result.message });
+                setCropModalVisible(false);
+                resolvedUrlsRef.current = {}; setCacheBuster(Date.now()); loadFiles(deficiency.defiInterno);
+            } else {
+                toast.current.show({ severity: 'error', summary: 'Fallo al recortar', detail: result.message, life: 5000 });
+            }
+        } finally { setIsCroppingSave(false); }
+    };
+
+    // --- MANEJADOR DE SUBIR FOTO NUEVA ---
+    const handleReplaceImage = async (archivoBD, newFileToUpload) => {
+        toast.current.show({ severity: 'info', summary: 'Subiendo...', detail: 'Enviando imagen...' });
+        const idArchivoBD = archivoBD.archInterno || archivoBD.ARCH_Interno;
+
+        const result = await overwritePhysicalImage(idArchivoBD, newFileToUpload);
+
+        if (result.success) {
+            toast.current.show({ severity: 'success', summary: 'Éxito', detail: result.message });
+            resolvedUrlsRef.current = {}; setCacheBuster(Date.now()); loadFiles(deficiency.defiInterno);
+        } else {
+            // Muestra el error exacto de C#
+            toast.current.show({ severity: 'error', summary: 'Fallo al reemplazar', detail: result.message, life: 5000 });
+        }
+    };
+
     // Lightbox Logic (Igual que antes)
     const openLightbox = (index) => { setLightboxIndex(index); setZoomLevel(1); setPosition({ x: 0, y: 0 }); };
     const closeLightbox = () => { setLightboxIndex(-1); setZoomLevel(1); setIsDragging(false); };
@@ -543,15 +590,37 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
                             key={f.archInterno ? f.archInterno : `temp-${i}-${currentSupply}`}
                             index={i} file={f}
                             onDelete={handleDeleteImage}
+                            onCropRequest={openCropModal}        // Pasa las funciones
+                            onReplaceRequest={handleReplaceImage} // Pasa las funciones
+                            allowDirectEdit={isClonedFlow}
+                            cacheBuster={cacheBuster}
                             onImageClick={openLightbox} onUrlResolved={handleUrlResolved}
                             typeName={getPhotoTypeName(parseInt(f.archTipo || f.ARCH_Tipo, 10))}
                             currentSupply={currentSupply} defCode={defCode}
                         />
                     ))}
                 </div>
+                <Dialog header="Enfocar Deficiencia" visible={cropModalVisible} onHide={() => setCropModalVisible(false)} style={{ width: '90vw', maxWidth: '600px' }} modal>
+                    <div className="flex flex-col items-center">
+                        <p className="text-sm text-gray-600 mb-3">Arrastra para seleccionar el área que muestra el problema.</p>
+                        {imageToCrop && (
+                            <div className="border border-gray-300 rounded overflow-hidden max-h-[60vh]">
+                                <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={1}>
+                                    <img ref={imgRef} src={imageToCrop.src} alt="Crop" style={{ maxWidth: '100%', maxHeight: '60vh' }} crossOrigin="anonymous" />
+                                </ReactCrop>
+                            </div>
+                        )}
+                        <div className="flex w-full justify-end mt-4 gap-2">
+                            <Button label="Cancelar" icon="pi pi-times" className="p-button-text" onClick={() => setCropModalVisible(false)} />
+                            <Button label={isCroppingSave ? "Guardando..." : "Guardar Recorte"} icon="pi pi-check" className="p-button-success" onClick={handleSaveCrop} loading={isCroppingSave} />
+                        </div>
+                    </div>
+                </Dialog>
             </div>
             {renderLightbox()}
             <PhotoUploadModal visible={modalVisible} onHide={() => setModalVisible(false)} onSave={handleUploadSave} isEditing={false} initialData={getInitialFormData()} currentPhotos={photos} deficiencyData={deficiency} forcedSupply={suministro} forcedCorrelativo={my7004Correlativo} contextData={{ feeder, sed, elementCode: getValue('CodigoElemento'), elementType: getValue('TipoElemento') }} />
+
+
         </div>
     );
 }

@@ -84,7 +84,8 @@ export default function Subestaciones() {
         DefiNodoInicial: { value: null, matchMode: FilterMatchMode.CONTAINS },
         DefiNodoFinal: { value: null, matchMode: FilterMatchMode.CONTAINS },
         defiCol2: { value: null, matchMode: FilterMatchMode.EQUALS },
-        DefiAmrmadoMaterial: { value: null, matchMode: FilterMatchMode.CONTAINS }
+        DefiAmrmadoMaterial: { value: null, matchMode: FilterMatchMode.CONTAINS },
+        esTercero: { value: null, matchMode: FilterMatchMode.EQUALS }
     };
 
     const [filters, setFilters] = useState(initialFilters);
@@ -382,7 +383,7 @@ export default function Subestaciones() {
     const typeTemplate = (rowData) => <Tag value={rowData.defiTipoElemento} severity={rowData.defiTipoElemento === 'POST' ? 'info' : 'warning'} icon={rowData.defiTipoElemento === 'POST' ? 'pi pi-arrows-v' : 'pi pi-arrows-h'} />;
 
     const statusFilterTemplate = (options) => (
-        <Dropdown value={options.value} options={[{ label: 'Todos', value: null }, { label: 'Activo', value: true }, { label: 'Eliminado', value: false }]} onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => option.value === null ? <span>Todos</span> : <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />} placeholder="Estado" className="p-column-filter" showClear />
+        <Dropdown value={options.value} options={[ { label: 'Activo', value: true }, { label: 'Eliminado', value: false }]} onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => option.value === null ? <span>Todos</span> : <Tag value={option.label} severity={option.value ? 'success' : 'danger'} />} placeholder="Estado" className="p-column-filter" showClear />
     );
     const responsabilidadTemplate = (rowData) => {
         // CAMBIO CLAVE: Usar 'defiCol2' (d minúscula) para coincidir con el JSON
@@ -401,7 +402,6 @@ export default function Subestaciones() {
         <Dropdown
             value={options.value}
             options={[
-                { label: 'Todos', value: null },
                 { label: 'SEAL', value: 'SEAL' },
                 { label: 'TERCEROS', value: 'TERCEROS' }
             ]}
@@ -425,6 +425,30 @@ export default function Subestaciones() {
         const estadoNumerico = rowData.esTercero ? 1 : 0;
         return <EstadoBadge estado={estadoNumerico} />;
     };
+    const terceroFilterTemplate = (options) => {
+    // Definimos las opciones basadas en tu lógica booleana
+    const filterOptions = [
+        { label: 'No Existe', value: true },
+        { label: 'Existe', value: false }
+    ];
+
+    return (
+        <Dropdown 
+            value={options.value} 
+            options={filterOptions} 
+            onChange={(e) => options.filterApplyCallback(e.value)} 
+            itemTemplate={(option) => {
+            
+                // Si es true/false, usamos tu EstadoBadge para que se vea igual que en la tabla
+                const estadoNumerico = option.value ? 1 : 0;
+                return <EstadoBadge estado={estadoNumerico} />;
+            }} 
+            placeholder="Seleccione" 
+            className="p-column-filter" 
+            showClear 
+        />
+    );
+};
     const actionBodyTemplate = (rowData) => {
         // 1. Si la deficiencia está eliminada (Soft Delete), solo mostramos Restaurar Deficiencia
         const isDeleted = rowData.defiActivo === false || rowData.defiActivo === 0;
@@ -600,8 +624,8 @@ export default function Subestaciones() {
                             globalFilterFields={['defiCodigoElemento', 'defiTipoElemento', 'defiIdElemento', 'tipificacionLabel', 'inspectorLabel', 'DefiTipoMaterial', 'DefiNodoInicial', 'DefiNodoFinal', 'DefiAmrmadoMaterial']}
                             onFilter={(e) => setFilters(e.filters)}
                         >
-                            <Column field="defiIdElemento" header="ID" sortable filter filterPlaceholder="Buscar ID" style={{ width: '90px' }} />
-                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable filter filterPlaceholder="Filtrar" style={{ width: '100px', textAlign: 'center' }} />
+                            <Column field="defiInterno" header="ID" sortable  style={{ width: '90px' }} />
+                            <Column field="defiTipoElemento" header="Tipo" body={typeTemplate} sortable  style={{ width: '100px', textAlign: 'center' }} />
                             <Column field="defiCodigoElemento" header="GIS" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
                             <Column field="defiNumSuministro" header="Num Suministro" sortable filter filterPlaceholder="Buscar Código" style={{ fontWeight: 'bold', color: '#1e40af', minWidth: '120px' }} />
 
@@ -619,6 +643,9 @@ export default function Subestaciones() {
                                 header="En Campo"
                                 body={terceroTemplate}
                                 sortable
+                                filter
+                                filterElement={terceroFilterTemplate}
+                                showFilterMenu={false}
                                 style={{ textAlign: 'center', width: '110px' }}
                             />
                             <Column header="Acciones" body={actionBodyTemplate} style={{ width: '90px', textAlign: 'center' }} alignFrozen="right" frozen />
@@ -633,10 +660,6 @@ export default function Subestaciones() {
                                 showFilterMenu={false}
                                 style={{ minWidth: '150px', textAlign: 'center' }}
                             />
-                            <Column field="DefiTipoMaterial" header="Material" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
-                            <Column field="DefiNodoInicial" header="N. Inicial" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
-                            <Column field="DefiNodoFinal" header="N. Final" sortable filter filterPlaceholder="Buscar..." style={{ width: '100px' }} />
-                            <Column field="DefiAmrmadoMaterial" header="Armado" sortable filter filterPlaceholder="Buscar..." style={{ width: '120px' }} />
                         </DataTable>
                     </SplitterPanel>
 

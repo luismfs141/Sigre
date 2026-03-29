@@ -369,33 +369,22 @@ namespace Sigre.DataAccess
         {
             using (var ctx = new SigreContext())
             {
-                // Obtener los IDs de postes correspondientes a las subestaciones
-                var Idpostes = ctx.Postes
-                    .Where(p => x_seds.Contains((int)p.PostSubestacion))
-                    .Select(p => p.PostInterno)
-                    .ToList();
+                // 1. Desactivamos el Tracking para consultas de solo lectura (MEJORA CRÍTICA DE RAM)
+                ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
-                // Obtener los IDs de vanos correspondientes a las subestaciones
-                var Idvanos = ctx.Vanos
-                    .Where(v => x_seds.Contains((int)v.VanoSubestacion))
-                    .Select(v => v.VanoInterno)
-                    .ToList();
+                // 2. Usamos JOINS directos en lugar de traer los IDs a memoria
+                var defPostes = from d in ctx.Deficiencias
+                                join p in ctx.Postes on d.DefiIdElemento equals p.PostInterno
+                                where d.DefiTipoElemento == "POST" && x_seds.Contains((int)p.PostSubestacion)
+                                select d;
 
-                // Traer las deficiencias de postes y vanos de forma materializada (ToList)
-                var defPostes = ctx.Deficiencias
-                    .Where(dp => dp.DefiTipoElemento == "POST" && Idpostes.Contains((int)dp.DefiIdElemento))
-                    .ToList();
+                var defVanos = from d in ctx.Deficiencias
+                               join v in ctx.Vanos on d.DefiIdElemento equals v.VanoInterno
+                               where d.DefiTipoElemento == "VANO" && x_seds.Contains((int)v.VanoSubestacion)
+                               select d;
 
-                var defVanos = ctx.Deficiencias
-                    .Where(dv => dv.DefiTipoElemento == "VANO" && Idvanos.Contains((int)dv.DefiIdElemento))
-                    .ToList();
-
-                // Combinar resultados
-                var deficiencias = new List<Deficiencia>();
-                deficiencias.AddRange(defPostes);
-                deficiencias.AddRange(defVanos);
-
-                return deficiencias;
+                // 3. Unimos las consultas a nivel de SQL y ejecutamos un solo viaje a la BD
+                return defPostes.Union(defVanos).ToList();
             }
         }
 
@@ -1951,10 +1940,40 @@ namespace Sigre.DataAccess
                         DefiInterno = 0, // 0 = Registro Nuevo
                         DefiEstado = "N",
                         DefiActivo = true,
-                        
+
                         DefiUsuarioMod = usuarioSesion,
                         DefiFecModificacion = DateTime.Now
                     };
+
+                        switch (nuevoCodigoTipi)
+                    {
+                        case "7004":
+                            // 7004 usa Accesibilidad, Horizontal y Vertical. Solo sobra TipoCruce.
+                            clonDefi.DefiTipoCruce = null;
+                            break;
+
+                        case "7006":
+                            // 7006 usa TipoCruce y Vertical. Sobra Accesibilidad y Horizontal.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiDistHorizontal = null;
+                            break;
+
+                        case "7008":
+                            // 7008 usa solo Horizontal. Sobra todo lo demás.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiTipoCruce = null;
+                            clonDefi.DefiDistVertical = null;
+                            break;
+
+                        default:
+                            // Para 6002, 6026 y todas las demás (que no usan estos campos), limpiamos todo.
+                            clonDefi.DefiAccesibilidad = null;
+                            clonDefi.DefiTipoCruce = null;
+                            clonDefi.DefiDistHorizontal = null;
+                            clonDefi.DefiDistVertical = null;
+                            break;
+                    
+                };
 
                     ctx.Deficiencias.Add(clonDefi);
                     ctx.SaveChanges(); // Guardamos para obtener el nuevo DefiInterno
@@ -2035,8 +2054,22 @@ namespace Sigre.DataAccess
 
                         if (arch.ArchNombre == nuevaRutaFisica) continue;
 
-                        // 4. Copiado físico (Creará subcarpetas si es necesario)
-                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(arch.ArchNombre, nuevaRutaFisica);
+                        // 🔥 LA MAGIA RESCATADORA AQUÍ 🔥
+                        // Extraemos la ruta real (por si la BD tiene el formato sucio 7004.X.Y)
+                        // Como instanciaste 'daFile' unas líneas arriba, usamos esa misma instancia
+                        // Extraemos la ruta resiliente
+                        string rutaViejaReal = daFile.ObtenerRutaFisicaReal(arch.ArchNombre);
+
+                        // Le decimos a C# que continúe si a pesar de los rescates, el archivo no existe en el disco
+                        if (!File.Exists(Path.Combine(daFile._baseDirectory, rutaViejaReal.Replace("/", "\\"))))
+                        {
+                            continue;
+                        }
+
+                        // Clonamos
+                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(rutaViejaReal, nuevaRutaFisica);
+
+                       
 
                         if (seCopioConExito)
                         {

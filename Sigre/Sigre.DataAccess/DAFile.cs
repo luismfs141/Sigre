@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
@@ -74,28 +75,25 @@ namespace Sigre.DataAccess
         {
             using var ctx = new SigreContext();
 
+            // Apagamos el tracking para ahorrar muchísima memoria RAM
+            ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
             var archPostes =
                 from ar in ctx.Archivos
                 join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
                 join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno
-                join s in ctx.Seds on p.PostSubestacion equals s.SedInterno
-                where df.DefiTipoElemento == "POST"
-                      && x_seds.Contains(s.SedInterno)
+                where df.DefiTipoElemento == "POST" && x_seds.Contains((int)p.PostSubestacion)
                 select ar;
 
             var archVanos =
                 from ar in ctx.Archivos
                 join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
                 join v in ctx.Vanos on df.DefiIdElemento equals v.VanoInterno
-                join s in ctx.Seds on v.VanoSubestacion equals s.SedInterno
-                where df.DefiTipoElemento == "VANO"
-                      && x_seds.Contains(s.SedInterno)
+                where df.DefiTipoElemento == "VANO" && x_seds.Contains((int)v.VanoSubestacion)
                 select ar;
 
-            return archPostes
-                   .Union(archVanos)
-                   .Distinct()
-                   .ToList();
+            // Usamos Concat (UNION ALL) que es infinitamente más ligero
+            return archPostes.Concat(archVanos).ToList();
         }
 
 
@@ -668,9 +666,9 @@ namespace Sigre.DataAccess
             }
         }
 
-    
+
         // Usamos el disco H:\ como raíz, 
-        private readonly string _baseDirectory = @"H:\";
+        public string _baseDirectory = @"H:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
         {
@@ -788,6 +786,98 @@ namespace Sigre.DataAccess
             {
                 throw new Exception($"Error de disco al copiar: {ex.Message}", ex);
             }
+        }
+        public async Task<bool> OverwritePhysicalImageAsync(int archInterno, IFormFile file)
+        {
+            try
+            {
+                using (var ctx = new SigreContext())
+                {
+                    // 1. Buscamos el registro
+                    var archivoDB = await ctx.Archivos.FindAsync(archInterno);
+                    if (archivoDB == null)
+                        throw new Exception($"El archivo con ID {archInterno} no existe en la base de datos.");
+
+                    // 2. Construimos las rutas
+                    string absolutePath = Path.Combine(_baseDirectory, archivoDB.ArchNombre.Replace("/", "\\"));
+                    string directory = Path.GetDirectoryName(absolutePath);
+
+                    // 3. Verificamos carpeta
+                    if (!Directory.Exists(directory))
+                        Directory.CreateDirectory(directory);
+
+                    // 4. Pisamos el archivo viejo
+                    using (var stream = new FileStream(absolutePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Escarbamos para sacar el error real (útil para SQL o permisos de disco)
+                Exception realError = ex;
+                while (realError.InnerException != null)
+                {
+                    realError = realError.InnerException;
+                }
+
+                // Lanzamos el error hacia arriba (al controlador)
+                throw new Exception($"DAFile Error: {realError.Message}");
+            }
+        }
+        public string ObtenerRutaFisicaReal(string rutaRelativaBD)
+        {
+            // 1. Armamos la ruta absoluta para que C# pueda buscar en el disco real (D:\...)
+            string rutaAbsoluta = Path.Combine(_baseDirectory, rutaRelativaBD.Replace("/", "\\"));
+
+            // 2. Si existe tal cual, devolvemos la relativa intacta
+            if (File.Exists(rutaAbsoluta))
+            {
+                return rutaRelativaBD;
+            }
+
+            // 3. Rescate de carpeta 7004
+            string directorioAbsoluto = Path.GetDirectoryName(rutaAbsoluta);
+            string nombreArchivoOriginal = Path.GetFileName(rutaAbsoluta);
+            string nombreCarpetaFalla = new DirectoryInfo(directorioAbsoluto).Name; // Ej: "7004.1.148773"
+
+            if (nombreCarpetaFalla.StartsWith("7004."))
+            {
+                string[] partes = nombreCarpetaFalla.Split('.');
+                if (partes.Length >= 2)
+                {
+                    string correlativo = partes[1];
+                    string directorioPadreAbsoluto = Path.GetDirectoryName(directorioAbsoluto);
+
+                    // 🔥 INTENTO A: Carpeta limpia + Nombre de archivo SUCIO (Como se ve en tu captura)
+                    // Busca en: D:\...\7004\1\FOT-...-7004.1.148773-...jpg
+                    string rutaRescateAbsolutaA = Path.Combine(directorioPadreAbsoluto, "7004", correlativo, nombreArchivoOriginal);
+
+                    if (File.Exists(rutaRescateAbsolutaA))
+                    {
+                        // Devolvemos la ruta relativa reconstruida para que la clonación funcione
+                        string dirRelativoPadre = Path.GetDirectoryName(Path.GetDirectoryName(rutaRelativaBD));
+                        return Path.Combine(dirRelativoPadre, "7004", correlativo, nombreArchivoOriginal).Replace("\\", "/");
+                    }
+
+                    // 🔥 INTENTO B: Carpeta limpia + Nombre de archivo LIMPIO (Por si alguna vez se renombraron)
+                    // Busca en: D:\...\7004\1\FOT-...-7004_1-...jpg
+                    string nombreLimpio = nombreArchivoOriginal.Replace(nombreCarpetaFalla, $"7004_{correlativo}");
+                    string rutaRescateAbsolutaB = Path.Combine(directorioPadreAbsoluto, "7004", correlativo, nombreLimpio);
+
+                    if (File.Exists(rutaRescateAbsolutaB))
+                    {
+                        string dirRelativoPadre = Path.GetDirectoryName(Path.GetDirectoryName(rutaRelativaBD));
+                        return Path.Combine(dirRelativoPadre, "7004", correlativo, nombreLimpio).Replace("\\", "/");
+                    }
+                }
+            }
+
+            // Si nada de la magia funcionó, devuelve la original (probablemente la foto se borró de la computadora)
+            return rutaRelativaBD;
         }
     }
 }

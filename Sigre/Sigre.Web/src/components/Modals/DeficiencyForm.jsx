@@ -520,6 +520,33 @@ export default function DeficiencyForm({
                     newData.defiEstadoCriticidad = 0;
                     newData.defiNumSuministro = '';
                     newData.defiObservacion = '';
+                } else {
+                    // 🔥 LÓGICA SENIOR: Limpieza dinámica de campos atrapados
+                    // 1. Obtenemos la configuración de la NUEVA tipificación seleccionada
+                    const newCode = getCodeById(value);
+                    const newConfig = DEFICIENCY_FIELD_MAP[newCode];
+
+                    if (newConfig) {
+                        // 2. Extraemos qué campos SÍ son válidos para esta nueva tipificación
+                        const validKeys = newConfig.fields.map(f => f.key);
+
+                        // 3. Lista de los campos "especiales" que cambian entre tipificaciones
+                        // (Aquí pones los campos que detectaste que se quedan atrapados)
+                        const camposDinamicos = [
+                            'defiDistHorizontal',
+                            'defiDistVertical',
+                            'defiAccesibilidad',
+                            'defiTipoCruce',
+                            'defiNumSuministro'
+                        ];
+
+                        // 4. Si un campo dinámico NO existe en la nueva tipificación, lo purgamos
+                        camposDinamicos.forEach(campo => {
+                            if (!validKeys.includes(campo)) {
+                                newData[campo] = null; // También puedes usar '' dependiendo de tu DB
+                            }
+                        });
+                    }
                 }
             }
 

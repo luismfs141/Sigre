@@ -215,6 +215,50 @@ namespace Sigre.Server.Controllers
                 }
             
         }
+        [HttpPost("OverwritePhysicalImage")]
+        public async Task<IActionResult> OverwritePhysicalImage([FromForm] int archInterno, [FromForm] IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest(new { success = false, message = "El frontend no envió ninguna imagen." });
 
+                // Instanciamos tu capa DA (o la inyectas si usas Inyección de Dependencias)
+                var daFile = new DAFile();
+
+                // Ejecutamos la lógica física
+                await daFile.OverwritePhysicalImageAsync(archInterno, file);
+
+                return Ok(new { success = true, message = "Imagen reemplazada físicamente con éxito." });
+            }
+            catch (Exception ex)
+            {
+                // Aquí capturamos el error exacto que lanzó DAFile y lo mandamos al Front
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        [HttpGet("ValidarRutaReal")]
+        public IActionResult ValidarRutaReal([FromQuery] string rutaBaseDatos)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(rutaBaseDatos))
+                    return BadRequest("Debe enviar una ruta para validar.");
+                var daFile = new DAFile();
+                // Llamamos a tu función en DAFile
+                string rutaFisicaReal = daFile.ObtenerRutaFisicaReal(rutaBaseDatos);
+
+                return Ok(new
+                {
+                    RutaOriginal = rutaBaseDatos,
+                    RutaRescatada = rutaFisicaReal,
+                    FueRescatada = rutaBaseDatos != rutaFisicaReal // True si el rescatador hizo su magia
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al validar la ruta: {ex.Message}");
+            }
+        }
     }
 }

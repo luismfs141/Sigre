@@ -78,6 +78,28 @@ export const useFiles = () => {
         }
     }, []);
 
+    const overwritePhysicalImage = async (archInterno, fileToUpload) => {
+        try {
+            const formData = new FormData();
+            formData.append('archInterno', archInterno);
+            formData.append('file', fileToUpload);
+
+            const response = await api.post('/File/OverwritePhysicalImage', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            // Retornamos éxito y el mensaje del Backend
+            return { success: true, message: response.data.message };
+        } catch (error) {
+            console.error("Error sobrescribiendo imagen:", error);
+            
+            // Extraemos el mensaje exacto que C# nos mandó en el StatusCode(500, ...)
+            const errorMsg = error.response?.data?.message || "Error desconocido al conectar con el servidor.";
+            
+            return { success: false, message: errorMsg };
+        }
+    };
+
 
 
     return { 
@@ -87,6 +109,7 @@ export const useFiles = () => {
         deleteFile, 
         addFile, 
         fetchFilesData,
-        moveFilePhysical
+        moveFilePhysical,
+        overwritePhysicalImage
     };
 };
