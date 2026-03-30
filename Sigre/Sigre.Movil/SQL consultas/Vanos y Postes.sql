@@ -59,7 +59,7 @@ WHERE v.VANO_Codigo like @VanoCodigo
 -- BUSCAR TODOS LOS ELEMENTOS DE UNA SUBESTACIÓN -----------------
 ------------------------------------------------------------------
 
-DECLARE @SUB_ETI VARCHAR(20) = '%2755%'-- <-- tu SED_Codigo
+DECLARE @SUB_ETI VARCHAR(20) = '%1200 %'-- <-- tu SED_Codigo
 (
     SELECT  
             ALI.ALIM_Interno AS [Id Alimentador],

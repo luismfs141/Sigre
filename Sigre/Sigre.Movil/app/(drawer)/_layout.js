@@ -96,7 +96,7 @@ export default function DrawerLayout() {
           ),
           drawerItemStyle: {
             display: isAdmin ? "flex" : "none",
-            display: "none"
+            display: "truepasa"
           },
 
         }}
