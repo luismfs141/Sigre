@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
+using Newtonsoft.Json;
 using Sigre.DataAccess;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
@@ -260,5 +261,71 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, $"Error al validar la ruta: {ex.Message}");
             }
         }
+
+        [HttpPost("GetBySeds")]
+        public IActionResult GetBySeds([FromBody] List<int> seds)
+        {
+            try
+            {
+                if (seds == null || seds.Count == 0)
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "Debe enviar al menos una SED."
+                    });
+                }
+
+                DAFile dAFile = new DAFile();
+
+                var archivos = dAFile.DAARCH_GetBySeds(seds);
+
+                return Ok(archivos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = ex.Message,
+                    detalle = ex.InnerException?.Message
+                });
+            }
+        }
+
+        [HttpPost("GetFileStructBySeds")]
+        public IActionResult GetFileStructBySeds([FromBody] List<int> seds)
+        {
+            try
+            {
+                if (seds == null || seds.Count == 0)
+                {
+                    return BadRequest(new
+                    {
+                        estado = "Error",
+                        mensaje = "Debe enviar al menos una SED."
+                    });
+                }
+
+                DAFile dAFile = new DAFile();
+                var data = dAFile.DAARCH_GetFileStructBySeds(seds);
+
+                return Ok(new
+                {
+                    estado = "OK",
+                    data
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    estado = "Error",
+                    mensaje = ex.Message,
+                    detalle = ex.InnerException?.Message
+                });
+            }
+        }
+
     }
 }

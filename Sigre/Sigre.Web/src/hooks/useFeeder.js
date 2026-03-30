@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import api from '../api/apiConfig';
-
 // ---------------------------------------------
 // HOOK 1: Obtener lista de Alimentadores
 // ---------------------------------------------

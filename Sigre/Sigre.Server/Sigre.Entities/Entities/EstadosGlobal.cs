@@ -1,35 +1,30 @@
-﻿using System;
+﻿using Sigre.Entities.Entities;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Sigre.Entities.Entities
+namespace Sigre.Entities.Entities;
+
+public partial class EstadosGlobal
 {
-    public class EstadosGlobal
-    {
-        [Key]
-        public int EsgoInterno { get; set; }
+    public int EsgoInterno { get; set; }
 
-        public string EsgoNombre { get; set; }
+    public string EsgoNombre { get; set; } = null!;
 
-        public string EsgoColor { get; set; }
+    public string? EsgoColor { get; set; }
 
-        public string EsgoDescripcion { get; set; }
+    public string? EsgoDescripcion { get; set; }
 
-        public string EsgoTabla { get; set; }
+    public string EsgoTabla { get; set; } = null!;
 
-        public bool EsgoActivo { get; set; }
+    public bool EsgoActivo { get; set; }
 
-        public ICollection<Poste> Postes { get; set; }
+    public virtual ICollection<Archivo> Archivos { get; set; } = new List<Archivo>();
 
-        public ICollection<Vano> Vanos { get; set; }
+    public virtual ICollection<Deficiencia> Deficiencia { get; set; } = new List<Deficiencia>();
 
-        public ICollection<Sed> Seds { get; set; }
+    public virtual ICollection<Poste> Postes { get; set; } = new List<Poste>();
 
-        public ICollection<Deficiencia> Deficiencias { get; set; }
+    public virtual ICollection<Sed> Seds { get; set; } = new List<Sed>();
 
-        public ICollection<Archivo> Archivos { get; set; }
-    }
+    public virtual ICollection<Vano> Vanos { get; set; } = new List<Vano>();
 }

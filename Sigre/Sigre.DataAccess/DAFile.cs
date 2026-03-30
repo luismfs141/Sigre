@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.SyncData;
+using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -96,6 +98,70 @@ namespace Sigre.DataAccess
             return archPostes.Concat(archVanos).ToList();
         }
 
+        public List<FileStruct> DAARCH_GetFileStructBySeds(List<int> x_seds)
+        {
+            using var ctx = new SigreContext();
+
+            ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+            var query =
+                from ar in ctx.Archivos
+
+                join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
+
+                join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno into postes
+                from p in postes.DefaultIfEmpty()
+
+                join v in ctx.Vanos on df.DefiIdElemento equals v.VanoInterno into vanos
+                from v in vanos.DefaultIfEmpty()
+
+                join t in ctx.Tipificaciones on ar.TipiInterno equals t.TipiInterno into tipis
+                from t in tipis.DefaultIfEmpty()
+
+                join c in ctx.Codigos on t.CodiInterno equals c.CodiInterno into codigos
+                from c in codigos.DefaultIfEmpty()
+
+                where
+                    ((df.DefiTipoElemento == "POST" && p != null && x_seds.Contains((int)p.PostSubestacion)) ||
+                    (df.DefiTipoElemento == "VANO" && v != null && x_seds.Contains((int)v.VanoSubestacion))) &&
+                    ar.ArchActivo == true
+
+                select new
+                {
+                    Archivo = ar,
+                    TipoElemento = df.DefiTipoElemento,
+                    IdElemento = df.DefiTipoElemento == "POST" ? p!.PostInterno : v!.VanoInterno,
+                    CodigoElemento = df.DefiTipoElemento == "POST" ? p!.PostCodigoNodo : v!.VanoCodigo,
+                    CodigoTipificacion = c != null ? c.CodiCodigo : null
+                };
+
+            var data = query.ToList();
+
+            var result = data
+                .GroupBy(x => new {
+                    x.TipoElemento,
+                    x.IdElemento,
+                    x.CodigoTipificacion
+                })
+                .Select(g => new FileStruct
+                {
+                    IdElemento = g.Key.IdElemento,
+                    TipoElemento = g.Key.TipoElemento,
+                    CodigoElemento = g.First().CodigoElemento,
+
+                    CodigoTipificacion = g.Key.CodigoTipificacion,
+
+                    Estado = g.First().Archivo.EsgoInternoNavigation != null
+                        ? g.First().Archivo.EsgoInternoNavigation.EsgoNombre
+                        : null,
+
+                    Archivos = g.Select(x => x.Archivo).ToList()
+                })
+                .ToList();
+
+            return result;
+        }
+
 
         public Archivo DAARCH_GetTableData()
         {
@@ -174,7 +240,7 @@ namespace Sigre.DataAccess
                         if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
                         {
                             var uuid = dto.DefiUUID.Trim();
-                            existente.DefiUUID = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
+                            existente.DefiUuid = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
                         }
 
                         mappings.Add((dto.ArchInterno, existente));
@@ -293,7 +359,7 @@ namespace Sigre.DataAccess
                 if (x_archivo.ArchInterno == 0)
                 {
                     // Heredamos el UUID del padre en lugar de inventar uno nuevo
-                    x_archivo.DefiUUID = uuidHeredado;
+                    x_archivo.DefiUuid = uuidHeredado;
 
                     x_archivo.ArchActivo = true;
                     if (x_archivo.ArchFecha == DateTime.MinValue || x_archivo.ArchFecha == null)
@@ -321,9 +387,9 @@ namespace Sigre.DataAccess
                             original.ArchFecha = x_archivo.ArchFecha;
 
                         // Si por alguna razón histórica no tiene UUID, lo reparamos heredándolo del padre
-                        if (string.IsNullOrEmpty(original.DefiUUID) && !string.IsNullOrEmpty(uuidHeredado))
+                        if (string.IsNullOrEmpty(original.DefiUuid) && !string.IsNullOrEmpty(uuidHeredado))
                         {
-                            original.DefiUUID = uuidHeredado;
+                            original.DefiUuid = uuidHeredado;
                         }
 
                         idDeficienciaAsociada = original.ArchCodTabla;
@@ -489,7 +555,7 @@ namespace Sigre.DataAccess
                 ArchActivo = arch_offline.ArchActivo,
 
                 // ✅ INSERT también guarda DEFI_UUID
-                DefiUUID = defiUuid
+                DefiUuid = defiUuid
             };
         }
         public List<Archivo> DAARCH_GetByDeficiencyWeb(int x_deficiency)
@@ -523,7 +589,7 @@ namespace Sigre.DataAccess
 
                         // === 👇 LA NUEVA COLUMNA (CRUCIAL) 👇 ===
                         // Asegúrate de que coincida con el nombre en tu clase Archivo.cs (DefiUUID)
-                        DefiUUID = a.DefiUUID
+                        DefiUuid = a.DefiUuid
                     });
 
                 return query.ToList();
@@ -582,7 +648,7 @@ namespace Sigre.DataAccess
                     a.ArchIdElemento,
                     a.TipiInterno,
                     a.ArchActivo,
-                    a.DefiUUID
+                    a.DefiUuid
                 );
             }
 
@@ -878,6 +944,112 @@ namespace Sigre.DataAccess
 
             // Si nada de la magia funcionó, devuelve la original (probablemente la foto se borró de la computadora)
             return rutaRelativaBD;
+        }
+
+        public async Task<List<object>> DAARCH_MigrarArchivosAWS(
+            List<Archivo> archivos,
+            string rutaOrigen,
+            IConfiguration config)
+        {
+            using var ctx = new SigreContext();
+            var resultados = new List<object>();
+
+            var awsConfig = config.GetSection("AWS");
+
+            var accessKey = awsConfig["AccessKey"];
+            var secretKey = awsConfig["SecretKey"];
+            var bucket = awsConfig["Bucket"];
+            var region = Amazon.RegionEndpoint.GetBySystemName(awsConfig["Region"]);
+
+            using var client = new Amazon.S3.AmazonS3Client(accessKey, secretKey, region);
+            var transfer = new Amazon.S3.Transfer.TransferUtility(client);
+
+            foreach (var arch in archivos)
+            {
+                try
+                {
+                    // 🔥 UUID correcto
+                    if (arch.ArchUuid == null)
+                        arch.ArchUuid = Guid.NewGuid();
+
+                    // 📁 Ruta local
+                    string rutaLocal = Path.Combine(
+                        rutaOrigen,
+                        arch.ArchNombre.Replace("/", Path.DirectorySeparatorChar.ToString())
+                    );
+
+                    if (!File.Exists(rutaLocal))
+                    {
+                        resultados.Add(new
+                        {
+                            arch.ArchInterno,
+                            error = "Archivo no existe",
+                            rutaLocal
+                        });
+                        continue;
+                    }
+
+                    // 📄 Extensión
+                    string extension = Path.GetExtension(rutaLocal);
+
+                    // ☁️ Key S3
+                    string key = $"{arch.ArchUuid}{extension}";
+
+                    // 🔥 Detectar MIME
+                    string contentType = GetContentType(extension);
+
+                    using (var stream = new FileStream(rutaLocal, FileMode.Open, FileAccess.Read))
+                    {
+                        await transfer.UploadAsync(new Amazon.S3.Transfer.TransferUtilityUploadRequest
+                        {
+                            InputStream = stream,
+                            BucketName = bucket,
+                            Key = key,
+                            ContentType = contentType
+                        });
+                    }
+
+                    // 💾 Update BD
+                    var entity = ctx.Archivos.FirstOrDefault(a => a.ArchInterno == arch.ArchInterno);
+
+                    if (entity != null)
+                    {
+                        entity.ArchUuid = arch.ArchUuid;
+                        entity.ArchNombre = key;
+                    }
+
+                    resultados.Add(new
+                    {
+                        arch.ArchInterno,
+                        uuid = arch.ArchUuid,
+                        rutaAWS = key
+                    });
+                }
+                catch (Exception ex)
+                {
+                    resultados.Add(new
+                    {
+                        arch.ArchInterno,
+                        error = ex.Message
+                    });
+                }
+            }
+
+            await ctx.SaveChangesAsync();
+
+            return resultados;
+        }
+
+        private string GetContentType(string extension)
+        {
+            return extension.ToLower() switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
         }
     }
 }

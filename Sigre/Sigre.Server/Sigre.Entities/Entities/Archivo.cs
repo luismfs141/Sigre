@@ -1,7 +1,7 @@
-﻿using System;
+﻿using Sigre.Entities.Entities;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Sigre.Entities.Entities;
 
@@ -30,16 +30,17 @@ public partial class Archivo
 
     public int? TipiInterno { get; set; }
 
-    public bool? ArchActivo { get; set; }
-    public string? DefiUUID { get; set; }
+    public bool ArchActivo { get; set; }
 
-    public string? ArchUUID { get; set; }
+    public string? DefiUuid { get; set; }
+
+    public Guid? ArchUuid { get; set; }
 
     public int? EsgoInterno { get; set; }
 
-    public EstadosGlobal EstadoGlobal { get; set; }
-
+    public virtual EstadosGlobal? EsgoInternoNavigation { get; set; }
 }
+
 public class MoveFileRequest
 {
     public string OldPath { get; set; }

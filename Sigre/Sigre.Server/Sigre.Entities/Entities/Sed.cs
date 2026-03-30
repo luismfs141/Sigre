@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sigre.Entities.Entities;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -43,9 +44,9 @@ public partial class Sed
 
     public int? EsgoInterno { get; set; }
 
-    public EstadosGlobal EstadoGlobal { get; set; }
+    public virtual EstadosGlobal? EsgoInternoNavigation { get; set; }
 
-    public virtual ICollection<Sed> InverseSedMaterialNavigation { get; } = new List<Sed>();
+    public virtual ICollection<Sed> InverseSedMaterialNavigation { get; set; } = new List<Sed>();
 
     public virtual ArmadoMaterial? SedArmadoMaterialNavigation { get; set; }
 
@@ -56,5 +57,6 @@ public partial class Sed
     public virtual RetenidaMaterial? SedRetenidaMaterialNavigation { get; set; }
 
     public virtual RetenidaTipo? SedRetenidaTipoNavigation { get; set; }
+
     public virtual Tramo? TramInternoNavigation { get; set; }
 }

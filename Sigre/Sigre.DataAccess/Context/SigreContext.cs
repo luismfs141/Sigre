@@ -1,6 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
+
 
 namespace Sigre.DataAccess.Context;
 
@@ -25,7 +28,7 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Codigo> Codigos { get; set; }
 
-    public virtual DbSet<CodigosOpciones> CodigosOpciones { get; set; }
+    public virtual DbSet<CodigosOpcione> CodigosOpciones { get; set; }
 
     public virtual DbSet<Componente> Componentes { get; set; }
 
@@ -35,7 +38,7 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Equipo> Equipos { get; set; }
 
-    public virtual DbSet<EstadosGlobal> EstadosGlobales { get; set; }
+    public virtual DbSet<EstadosGlobal> EstadosGlobals { get; set; }
 
     public virtual DbSet<Inspeccione> Inspecciones { get; set; }
 
@@ -70,28 +73,28 @@ public partial class SigreContext : DbContext
     public virtual DbSet<Tabla> Tablas { get; set; }
 
     public virtual DbSet<Tipificacione> Tipificaciones { get; set; }
+
     public virtual DbSet<Tramo> Tramos { get; set; }
+
     public virtual DbSet<Usuario> Usuarios { get; set; }
+
     public virtual DbSet<UsuariosAlimentadore> UsuariosAlimentadores { get; set; }
 
     public virtual DbSet<Vano> Vanos { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
-
-    => optionsBuilder.UseSqlServer("Server=localhost;Database=Sigre;User Id=sa;Password=1342;TrustServerCertificate=True;");
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+        => optionsBuilder.UseSqlServer("Server=localhost;Database=sigre;User Id=sa;Password=1342;TrustServerCertificate=True;Encrypt=False;");
     //=> optionsBuilder.UseSqlServer(
     //      "server=tcp:serversigre.database.windows.net,1433;" +
     //      "database=sigre;" +
     //      "authentication=active directory managed identity;" +
     //      "encrypt=true;");
-
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Alimentadore>(entity =>
         {
-            entity.HasKey(e => e.AlimInterno).HasName("PK__Alimenta__A914B65AA77AF4C0");
+            entity.HasKey(e => e.AlimInterno).HasName("PK__Alimenta__A914B65AE0879313");
 
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
             entity.Property(e => e.AlimCodigo)
@@ -112,8 +115,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.ArchInterno).HasColumnName("ARCH_Interno");
             entity.Property(e => e.ArchActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("ARCH_Activo");
             entity.Property(e => e.ArchCodTabla).HasColumnName("ARCH_CodTabla");
             entity.Property(e => e.ArchFecha)
@@ -139,23 +141,16 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(4)
                 .IsUnicode(false)
                 .HasColumnName("ARCH_TipoElemento");
-            entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
-            entity.Property(e => e.DefiUUID)
+            entity.Property(e => e.ArchUuid).HasColumnName("ARCH_UUID");
+            entity.Property(e => e.DefiUuid)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_UUID");
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
+            entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
 
-            entity.Property(e => e.ArchUUID)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("ARCH_UUID");
-
-            entity.Property(e => e.EsgoInterno)
-                .HasColumnName("ESGO_Interno");
-
-            entity.HasOne(e => e.EstadoGlobal)
-                .WithMany()
-                .HasForeignKey(e => e.EsgoInterno)
+            entity.HasOne(d => d.EsgoInternoNavigation).WithMany(p => p.Archivos)
+                .HasForeignKey(d => d.EsgoInterno)
                 .HasConstraintName("FK_Archivos_EstadosGlobal");
         });
 
@@ -167,11 +162,10 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.ArmmtInterno).HasColumnName("ARMMT_Interno");
             entity.Property(e => e.ArmmtActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("ARMMT_Activo");
             entity.Property(e => e.ArmmtNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .HasColumnName("ARMMT_Nombre");
         });
 
@@ -183,34 +177,31 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.ArmtpInterno).HasColumnName("ARMTP_Interno");
             entity.Property(e => e.ArmtpActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("ARMTP_Activo");
             entity.Property(e => e.ArmtpNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .HasColumnName("ARMTP_Nombre");
         });
 
         modelBuilder.Entity<Codigo>(entity =>
         {
-            entity.HasKey(e => e.CodiInterno).HasName("PK__Codigos__23087E738F238967");
+            entity.HasKey(e => e.CodiInterno).HasName("PK__Codigos__23087E7380FD70C7");
 
             entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
             entity.Property(e => e.CodiCodigo)
                 .HasMaxLength(6)
                 .IsUnicode(false)
                 .HasColumnName("CODI_Codigo");
+            entity.Property(e => e.CodiComentarioEstandar)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasColumnName("CODI_ComentarioEstandar");
             entity.Property(e => e.CodiDeficiencia)
                 .HasMaxLength(500)
                 .IsUnicode(false)
                 .HasColumnName("CODI_Deficiencia");
-
             entity.Property(e => e.CompInterno).HasColumnName("COMP_Interno");
-
-            entity.Property(e => e.CodiComentarioEstandar)
-                .HasMaxLength(500)
-                .IsUnicode(false)
-                .HasColumnName("CODI_ComentarioEstandar");
 
             entity.HasOne(d => d.CompInternoNavigation).WithMany(p => p.Codigos)
                 .HasForeignKey(d => d.CompInterno)
@@ -218,22 +209,23 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("fk_CODI_COMP");
         });
 
-
-        modelBuilder.Entity<CodigosOpciones>(entity =>
+        modelBuilder.Entity<CodigosOpcione>(entity =>
         {
-            entity.HasKey(e => e.CodopInterno).HasName("PK_CodigosOpciones");
+            entity.HasKey(e => e.CodopInterno);
+
+            entity.HasIndex(e => e.CodiInterno, "IX_CodigosOpciones_CODI_Interno");
 
             entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
             entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
-            entity.Property(e => e.CodopOpcion)
-                .HasMaxLength(60)
-                .HasColumnName("CODOP_Opcion");
             entity.Property(e => e.CodopCol1)
                 .HasMaxLength(60)
                 .HasColumnName("CODOP_Col1");
             entity.Property(e => e.CodopCol2)
                 .HasMaxLength(60)
                 .HasColumnName("CODOP_Col2");
+            entity.Property(e => e.CodopOpcion)
+                .HasMaxLength(60)
+                .HasColumnName("CODOP_Opcion");
 
             entity.HasOne(d => d.CodiInternoNavigation).WithMany(p => p.CodigosOpciones)
                 .HasForeignKey(d => d.CodiInterno)
@@ -241,10 +233,9 @@ public partial class SigreContext : DbContext
                 .HasConstraintName("FK_CodigosOpciones_Codigos");
         });
 
-
         modelBuilder.Entity<Componente>(entity =>
         {
-            entity.HasKey(e => e.CompInterno).HasName("PK__Componen__5CC4ECD0D14E0A39");
+            entity.HasKey(e => e.CompInterno).HasName("PK__Componen__5CC4ECD0CF2C6764");
 
             entity.Property(e => e.CompInterno).HasColumnName("COMP_Interno");
             entity.Property(e => e.CompComponente)
@@ -261,12 +252,20 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Deficiencia>(entity =>
         {
-            entity.HasKey(e => e.DefiInterno).HasName("PK__Deficien__CCD4DCC0294C4C3D");
+            entity.HasKey(e => e.DefiInterno).HasName("PK__Deficien__CCD4DCC036B422C0");
+
+            entity.HasIndex(e => e.DefiCol3, "UX_Deficiencias_DefiCol3")
+                .IsUnique()
+                .HasFilter("([DEFI_Col3] IS NOT NULL)");
 
             entity.Property(e => e.DefiInterno).HasColumnName("DEFI_Interno");
+            entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
+            entity.Property(e => e.DefiAccesibilidad)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("DEFI_Accesibilidad");
             entity.Property(e => e.DefiActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("DEFI_Activo");
             entity.Property(e => e.DefiArmadoMaterial)
                 .HasMaxLength(2)
@@ -286,37 +285,21 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_CodigoElemento");
-
             entity.Property(e => e.DefiCol1)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col1");
-
             entity.Property(e => e.DefiCol2)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col2");
-
-
             entity.Property(e => e.DefiCol3)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Col3");
-
             entity.Property(e => e.DefiComentario)
-                .HasMaxLength(120)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Comentario");
-
-            entity.Property(e => e.DefiAccesibilidad)
-                .HasMaxLength(20)
-                .IsUnicode(false)
-                .HasColumnName("DEFI_Accesibilidad");
-
-            entity.Property(e => e.DefiTipoCruce)
-                .HasMaxLength(20)
-                .IsUnicode(false)
-                .HasColumnName("DEFI_TipoCruce");
             entity.Property(e => e.DefiCoordX).HasColumnName("DEFI_CoordX");
             entity.Property(e => e.DefiCoordY).HasColumnName("DEFI_CoordY");
             entity.Property(e => e.DefiDistHorizontal)
@@ -365,6 +348,7 @@ public partial class SigreContext : DbContext
                 .HasColumnName("DEFI_KeyWords");
             entity.Property(e => e.DefiLatitud).HasColumnName("DEFI_Latitud");
             entity.Property(e => e.DefiLongitud).HasColumnName("DEFI_Longitud");
+            entity.Property(e => e.DefiMovil).HasColumnName("DEFI_Movil");
             entity.Property(e => e.DefiNodoFinal)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -404,7 +388,7 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .HasColumnName("DEFI_Refer2");
             entity.Property(e => e.DefiResponsable)
-                .HasDefaultValueSql("((0))")
+                .HasDefaultValue(false)
                 .HasColumnName("DEFI_Responsable");
             entity.Property(e => e.DefiRetenidaMaterial)
                 .HasMaxLength(2)
@@ -414,6 +398,10 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_TipoArmado");
+            entity.Property(e => e.DefiTipoCruce)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("DEFI_TipoCruce");
             entity.Property(e => e.DefiTipoElemento)
                 .HasMaxLength(4)
                 .IsUnicode(false)
@@ -438,34 +426,25 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.DefiUsuarioInic)
                 .HasMaxLength(30)
                 .IsUnicode(false)
-                .HasDefaultValueSql("('')")
+                .HasDefaultValue("")
                 .HasColumnName("DEFI_UsuarioInic");
             entity.Property(e => e.DefiUsuarioMod)
                 .HasMaxLength(30)
                 .IsUnicode(false)
-                .HasDefaultValueSql("('')")
+                .HasDefaultValue("")
                 .HasColumnName("DEFI_UsuarioMod");
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
             entity.Property(e => e.InspInterno).HasColumnName("INSP_Interno");
             entity.Property(e => e.TablInterno).HasColumnName("TABL_Interno");
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
 
-            entity.Property(e => e.CodopInterno).HasColumnName("CODOP_Interno");
+            entity.HasOne(d => d.EsgoInternoNavigation).WithMany(p => p.Deficiencia)
+                .HasForeignKey(d => d.EsgoInterno)
+                .HasConstraintName("FK_Deficiencias_EstadosGlobal");
 
             entity.HasOne(d => d.InspInternoNavigation).WithMany(p => p.Deficiencia)
                 .HasForeignKey(d => d.InspInterno)
                 .HasConstraintName("fk_DEFI_INSP");
-
-            entity.Property(e => e.EsgoInterno)
-                .HasColumnName("ESGO_Interno");
-
-            entity.HasOne(e => e.EstadoGlobal)
-                .WithMany()
-                .HasForeignKey(e => e.EsgoInterno)
-                .HasConstraintName("FK_Deficiencias_EstadosGlobal");
-
-            entity.Property(e => e.DefiMovil)
-                .HasColumnName("DEFI_Movil")
-                .HasDefaultValue(false);
         });
 
         modelBuilder.Entity<DeficienciasSeal>(entity =>
@@ -520,7 +499,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Equipo>(entity =>
         {
-            entity.HasKey(e => e.EquiInterno).HasName("PK__Equipos__F076A0C9E703944E");
+            entity.HasKey(e => e.EquiInterno).HasName("PK__Equipos__F076A0C9CCE74C29");
 
             entity.Property(e => e.EquiInterno).HasColumnName("EQUI_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_interno");
@@ -539,40 +518,35 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<EstadosGlobal>(entity =>
         {
-            entity.HasKey(e => e.EsgoInterno);
+            entity.HasKey(e => e.EsgoInterno).HasName("PK__EstadosG__2EF7FD5CE8C74ED9");
 
             entity.ToTable("EstadosGlobal");
 
-            entity.Property(e => e.EsgoInterno)
-                .HasColumnName("ESGO_Interno");
-
-            entity.Property(e => e.EsgoNombre)
-                .HasMaxLength(100)
-                .IsUnicode(false)
-                .HasColumnName("ESGO_Nombre");
-
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
+            entity.Property(e => e.EsgoActivo)
+                .HasDefaultValue(true)
+                .HasColumnName("ESGO_Activo");
             entity.Property(e => e.EsgoColor)
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("ESGO_Color");
-
             entity.Property(e => e.EsgoDescripcion)
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("ESGO_Descripcion");
-
+            entity.Property(e => e.EsgoNombre)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("ESGO_Nombre");
             entity.Property(e => e.EsgoTabla)
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("ESGO_Tabla");
-
-            entity.Property(e => e.EsgoActivo)
-                .HasColumnName("ESGO_Activo");
         });
 
         modelBuilder.Entity<Inspeccione>(entity =>
         {
-            entity.HasKey(e => e.InspInterno).HasName("PK__Inspecci__0E84CC597BA2C045");
+            entity.HasKey(e => e.InspInterno).HasName("PK__Inspecci__0E84CC59EF9C335A");
 
             entity.Property(e => e.InspInterno).HasColumnName("INSP_Interno");
             entity.Property(e => e.InspCodigoElemento)
@@ -592,7 +566,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<KeyWord>(entity =>
         {
-            entity.HasKey(e => e.KeywInterno).HasName("PK__KeyWords__14F70153A7AA82AF");
+            entity.HasKey(e => e.KeywInterno).HasName("PK__KeyWords__14F70153176C2E2F");
 
             entity.Property(e => e.KeywInterno).HasColumnName("KEYW_Interno");
             entity.Property(e => e.KeywPalClave)
@@ -613,8 +587,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.MoviInterno).HasColumnName("MOVI_Interno");
             entity.Property(e => e.MoviActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("MOVI_Activo");
             entity.Property(e => e.MoviCorporativo).HasColumnName("MOVI_Corporativo");
             entity.Property(e => e.MoviDescripcion)
@@ -641,7 +614,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Ordene>(entity =>
         {
-            entity.HasKey(e => e.OrdeInterno).HasName("PK__Ordenes__DD34E2BC2C36966C");
+            entity.HasKey(e => e.OrdeInterno).HasName("PK__Ordenes__DD34E2BC285CDE44");
 
             entity.Property(e => e.OrdeInterno).HasColumnName("ORDE_Interno");
             entity.Property(e => e.OrdeCodAmt).HasColumnName("ORDE_CodAMT");
@@ -659,8 +632,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PerfInterno).HasColumnName("PERF_Interno");
             entity.Property(e => e.PerfActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("PERF_Activo");
             entity.Property(e => e.PerfNombre)
                 .HasMaxLength(50)
@@ -674,8 +646,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PfcdInterno).HasColumnName("PFCD_Interno");
             entity.Property(e => e.PfcdActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("PFCD_Activo");
             entity.Property(e => e.PfcdCodigo).HasColumnName("PFCD_Codigo");
             entity.Property(e => e.PfcdPerfil).HasColumnName("PFCD_Perfil");
@@ -695,11 +666,7 @@ public partial class SigreContext : DbContext
         {
             entity.HasKey(e => e.PfusInterno);
 
-            entity.Property(e => e.PfusInterno)
-                .ValueGeneratedOnAdd()
-                .UseIdentityColumn()
-                .HasColumnName("PFUS_Interno");
-
+            entity.Property(e => e.PfusInterno).HasColumnName("PFUS_Interno");
             entity.Property(e => e.PfusActivo).HasColumnName("PFUS_Activo");
             entity.Property(e => e.PfusPerfil).HasColumnName("PFUS_Perfil");
             entity.Property(e => e.PfusUsuario).HasColumnName("PFUS_Usuario");
@@ -721,8 +688,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PermInterno).HasColumnName("PERM_Interno");
             entity.Property(e => e.PermActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("PERM_Activo");
             entity.Property(e => e.PermNombre)
                 .HasMaxLength(50)
@@ -740,8 +706,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PmpfInterno).HasColumnName("PMPF_Interno");
             entity.Property(e => e.PmpfActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("PMPF_Activo");
             entity.Property(e => e.PmpfPerfil).HasColumnName("PMPF_Perfil");
             entity.Property(e => e.PmpfPermiso).HasColumnName("PMPF_Permiso");
@@ -763,6 +728,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PostInterno).HasColumnName("POST_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
             entity.Property(e => e.PostAltura)
                 .HasColumnType("numeric(10, 2)")
                 .HasColumnName("POST_Altura");
@@ -786,11 +752,17 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.PostRetenidaTipo).HasColumnName("POST_RetenidaTipo");
             entity.Property(e => e.PostSubestacion).HasColumnName("POST_Subestacion");
             entity.Property(e => e.PostTerceros).HasColumnName("POST_Terceros");
-            entity.Property(e => e.PostVereda).HasColumnName("POST_Vereda");
             entity.Property(e => e.PostTramo)
                 .HasMaxLength(20)
                 .HasColumnName("POST_Tramo");
+            entity.Property(e => e.PostVereda)
+                .HasDefaultValue(true)
+                .HasColumnName("POST_Vereda");
             entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
+
+            entity.HasOne(d => d.EsgoInternoNavigation).WithMany(p => p.Postes)
+                .HasForeignKey(d => d.EsgoInterno)
+                .HasConstraintName("FK_Postes_EstadosGlobal");
 
             entity.HasOne(d => d.PostArmadoMaterialNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.PostArmadoMaterial)
@@ -815,13 +787,6 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Postes_Tramos");
-            entity.Property(e => e.EsgoInterno)
-               .HasColumnName("ESGO_Interno");
-
-            entity.HasOne(e => e.EstadoGlobal)
-                .WithMany()
-                .HasForeignKey(e => e.EsgoInterno)
-                .HasConstraintName("FK_Postes_EstadosGlobal");
         });
 
         modelBuilder.Entity<PosteMaterial>(entity =>
@@ -832,11 +797,10 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.PosmtInterno).HasColumnName("POSMT_Interno");
             entity.Property(e => e.PosmtNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .HasColumnName("POSMT_Nombre");
             entity.Property(e => e.PostActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("POST_Activo");
         });
 
@@ -848,11 +812,10 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.RtnmtInterno).HasColumnName("RTNMT_Interno");
             entity.Property(e => e.RtnmtActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("RTNMT_Activo");
             entity.Property(e => e.RtnmtNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .HasColumnName("RTNMT_Nombre");
         });
 
@@ -864,11 +827,10 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.RtntpInterno).HasColumnName("RTNTP_Interno");
             entity.Property(e => e.RtntpActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("RTNTP_Activo");
             entity.Property(e => e.RtntpNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .IsFixedLength()
                 .HasColumnName("RTNTP_Nombre");
         });
@@ -879,6 +841,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.SedInterno).HasColumnName("SED_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
             entity.Property(e => e.SedArmadoMaterial).HasColumnName("SED_ArmadoMaterial");
             entity.Property(e => e.SedArmadoTipo).HasColumnName("SED_ArmadoTipo");
             entity.Property(e => e.SedCodigo)
@@ -904,10 +867,14 @@ public partial class SigreContext : DbContext
             entity.Property(e => e.SedTipo)
                 .HasMaxLength(1)
                 .IsUnicode(false)
-                .HasDefaultValueSql("('M')")
+                .HasDefaultValue("M")
                 .IsFixedLength()
                 .HasColumnName("SED_Tipo");
             entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
+
+            entity.HasOne(d => d.EsgoInternoNavigation).WithMany(p => p.Seds)
+                .HasForeignKey(d => d.EsgoInterno)
+                .HasConstraintName("FK_Seds_EstadosGlobal");
 
             entity.HasOne(d => d.SedArmadoMaterialNavigation).WithMany(p => p.Seds)
                 .HasForeignKey(d => d.SedArmadoMaterial)
@@ -932,14 +899,6 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Seds)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Seds_Tramos");
-
-            entity.Property(e => e.EsgoInterno)
-                .HasColumnName("ESGO_Interno");
-
-            entity.HasOne(e => e.EstadoGlobal)
-                .WithMany()
-                .HasForeignKey(e => e.EsgoInterno)
-                .HasConstraintName("FK_Seds_EstadosGlobal");
         });
 
         modelBuilder.Entity<SedMaterial>(entity =>
@@ -950,17 +909,16 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.SedmtInterno).HasColumnName("SEDMT_Interno");
             entity.Property(e => e.SedmtActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("SEDMT_Activo");
             entity.Property(e => e.SedmtNombre)
-                .HasMaxLength(10)
+                .HasMaxLength(50)
                 .HasColumnName("SEDMT_Nombre");
         });
 
         modelBuilder.Entity<Tabla>(entity =>
         {
-            entity.HasKey(e => e.TablInterno).HasName("PK__Tablas__81723721D3D93E07");
+            entity.HasKey(e => e.TablInterno).HasName("PK__Tablas__81723721480CC94C");
 
             entity.Property(e => e.TablInterno).HasColumnName("TABL_Interno");
             entity.Property(e => e.TablNombre)
@@ -971,7 +929,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Tipificacione>(entity =>
         {
-            entity.HasKey(e => e.TipiInterno).HasName("PK__Tipifica__A60961BB994EE79F");
+            entity.HasKey(e => e.TipiInterno).HasName("PK__Tipifica__A60961BB8DCAA056");
 
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
             entity.Property(e => e.CodiInterno).HasColumnName("CODI_Interno");
@@ -988,7 +946,7 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Tramo>(entity =>
         {
-            entity.HasKey(e => e.TramInterno).HasName("PK__Tramos__0A1B1E0768F26A86");
+            entity.HasKey(e => e.TramInterno).HasName("PK__Tramos__0A1B1E07AC59C0DA");
 
             entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
             entity.Property(e => e.TramActivo)
@@ -1005,10 +963,11 @@ public partial class SigreContext : DbContext
         {
             entity.HasKey(e => e.UsuaInterno).HasName("PK__Usuarios__D34094097AE6F930");
 
+            entity.HasIndex(e => e.UsuaCorreo, "UX_Usuarios_Correo").IsUnique();
+
             entity.Property(e => e.UsuaInterno).HasColumnName("USUA_Interno");
             entity.Property(e => e.UsuaActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("USUA_Activo");
             entity.Property(e => e.UsuaApellidos)
                 .HasMaxLength(50)
@@ -1033,8 +992,7 @@ public partial class SigreContext : DbContext
 
             entity.Property(e => e.UsalInterno).HasColumnName("USAL_Interno");
             entity.Property(e => e.UsalActivo)
-                .IsRequired()
-                .HasDefaultValueSql("((1))")
+                .HasDefaultValue(true)
                 .HasColumnName("USAL_Activo");
             entity.Property(e => e.UsalAlimentador).HasColumnName("USAL_Alimentador");
             entity.Property(e => e.UsalUsuario).HasColumnName("USAL_Usuario");
@@ -1052,10 +1010,11 @@ public partial class SigreContext : DbContext
 
         modelBuilder.Entity<Vano>(entity =>
         {
-            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F4FB8301A9");
+            entity.HasKey(e => e.VanoInterno).HasName("PK__Vanos__535F26F4560F27D5");
 
             entity.Property(e => e.VanoInterno).HasColumnName("VANO_Interno");
             entity.Property(e => e.AlimInterno).HasColumnName("ALIM_Interno");
+            entity.Property(e => e.EsgoInterno).HasColumnName("ESGO_Interno");
             entity.Property(e => e.TramInterno).HasColumnName("TRAM_Interno");
             entity.Property(e => e.VanoCodigo)
                 .HasMaxLength(50)
@@ -1095,21 +1054,15 @@ public partial class SigreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_VANO_ALIM");
 
+            entity.HasOne(d => d.EsgoInternoNavigation).WithMany(p => p.Vanos)
+                .HasForeignKey(d => d.EsgoInterno)
+                .HasConstraintName("FK_Vanos_EstadosGlobal");
+
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Vanos)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Vanos_Tramos");
-
-            entity.Property(e => e.EsgoInterno)
-                .HasColumnName("ESGO_Interno");
-
-            entity.HasOne(e => e.EstadoGlobal)
-                .WithMany()
-                .HasForeignKey(e => e.EsgoInterno)
-                .HasConstraintName("FK_Vanos_EstadosGlobal");
         });
-
         modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);
-
         OnModelCreatingPartial(modelBuilder);
     }
 

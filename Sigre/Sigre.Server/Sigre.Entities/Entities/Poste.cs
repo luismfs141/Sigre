@@ -45,11 +45,12 @@ public partial class Poste
     public int? TramInterno { get; set; }
 
     public string? PostTramo { get; set; }
+
     public bool PostVereda { get; set; }
 
     public int? EsgoInterno { get; set; }
 
-    public EstadosGlobal EstadoGlobal { get; set; }
+    public virtual EstadosGlobal? EsgoInternoNavigation { get; set; }
 
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 
@@ -60,6 +61,7 @@ public partial class Poste
     public virtual RetenidaMaterial? PostRetenidaMaterialNavigation { get; set; }
 
     public virtual RetenidaTipo? PostRetenidaTipoNavigation { get; set; }
+
     public virtual Tramo? TramInternoNavigation { get; set; }
 }
 // Puedes poner esto en un archivo llamado "PagedResult.cs" o al inicio de tu DAPost.cs
