@@ -46,6 +46,92 @@ const buildOfflineDbName = (user) => {
   return `SIGRE_${usuario}_${fecha}_${hora}.db`;
 };
 
+const buildSyncProgressMessage = (progress) => {
+  const stageMap = {
+    postes: "POSTES",
+    vanos: "VANOS",
+    deficiencias: "DEFICIENCIAS",
+    archivos: "ARCHIVOS",
+  };
+
+  const stageLabel = stageMap[progress?.stage] ?? "SINCRONIZANDO";
+  const currentBatch = Number(progress?.currentBatch ?? 0);
+  const totalBatches = Number(progress?.totalBatches ?? 0);
+  const batchSize = Number(progress?.batchSize ?? 0);
+  const totalRecords = Number(progress?.totalRecords ?? 0);
+  const syncedRecords = Number(progress?.syncedRecords ?? 0);
+
+  return [
+    "Sincronizando información...",
+    "",
+    stageLabel,
+    `Paquete ${currentBatch} de ${totalBatches}`,
+    `Registros del paquete: ${batchSize}`,
+    `Registros procesados: ${syncedRecords} de ${totalRecords}`,
+  ].join("\n");
+};
+
+
+
+const SYNC_BATCH_SIZE = 100;
+
+const getBatchCount = (count) => {
+  const n = Number(count ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.ceil(n / SYNC_BATCH_SIZE);
+};
+
+const buildSyncFinalSummaryMessage = (result) => {
+  const postBefore = Number(result?.detail?.post?.before ?? 0);
+  const postAfter = Number(result?.detail?.post?.after ?? 0);
+  const postSynced = Math.max(postBefore - postAfter, 0);
+
+  const gapBefore = Number(result?.detail?.gap?.before ?? 0);
+  const gapAfter = Number(result?.detail?.gap?.after ?? 0);
+  const gapSynced = Math.max(gapBefore - gapAfter, 0);
+
+  const defBefore = Number(result?.detail?.def?.before ?? 0);
+  const defAfter = Number(result?.detail?.def?.after ?? 0);
+  const defSynced = Math.max(defBefore - defAfter, 0);
+
+  const archBefore = Number(result?.detail?.arch?.before ?? 0);
+  const archAfter = Number(result?.detail?.arch?.after ?? 0);
+  const archSynced = Math.max(archBefore - archAfter, 0);
+
+  const total = Number(
+    result?.totalPending ??
+    (postBefore + gapBefore + defBefore + archBefore)
+  );
+
+  const synced = Number(
+    result?.syncedCount ??
+    result?.synced ??
+    (postSynced + gapSynced + defSynced + archSynced)
+  );
+
+  const remaining = Number(
+    result?.remainingPending ??
+    (postAfter + gapAfter + defAfter + archAfter)
+  );
+
+  return [
+    "RESUMEN DE SINCRONIZACIÓN",
+    "",
+    `POSTES: ${postSynced} de ${postBefore}`,
+    `VANOS: ${gapSynced} de ${gapBefore}`,
+    `DEFICIENCIAS: ${defSynced} de ${defBefore}`,
+    `ARCHIVOS: ${archSynced} de ${archBefore}`,
+    "",
+    `PENDIENTES POSTES: ${postAfter}`,
+    `PENDIENTES VANOS: ${gapAfter}`,
+    `PENDIENTES DEFICIENCIAS: ${defAfter}`,
+    `PENDIENTES ARCHIVOS: ${archAfter}`,
+    "",
+    `TOTAL SINCRONIZADOS: ${synced} de ${total}`,
+    `TOTAL PENDIENTES: ${remaining}`,
+  ].join("\n");
+};
+
 export default function Sync() {
 
   const { user } = useContext(AuthContext);
@@ -151,7 +237,7 @@ export default function Sync() {
 
     try {
       const nombreBase = buildOfflineDbName(user);
-      
+
       console.log("⬇️ Descargando base:", nombreBase);
 
       if (user?.proyecto === 0) {
@@ -212,21 +298,36 @@ export default function Sync() {
       return Alert.alert("Aviso", "No hay base para eliminar.");
     }
 
+    let postPending = 0;
+    let gapPending = 0;
+    let defPending = 0;
+    let archPending = 0;
     let remaining = 0;
 
     try {
       const result = await getPendingSyncSummary();
 
-      const total = Number(result?.totalPending ?? 0);
-      const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
-      remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
+      postPending = Number(result?.detail?.post?.after ?? result?.detail?.post?.before ?? 0);
+      gapPending = Number(result?.detail?.gap?.after ?? result?.detail?.gap?.before ?? 0);
+      defPending = Number(result?.detail?.def?.after ?? result?.detail?.def?.before ?? 0);
+      archPending = Number(result?.detail?.arch?.after ?? result?.detail?.arch?.before ?? 0);
+
+      remaining = postPending + gapPending + defPending + archPending;
     } catch (e) {
       console.log("❌ Error obteniendo pendientes antes de eliminar:", e);
     }
 
     const extraWarning =
       remaining > 0
-        ? `\n\n🚨🚨🚨🚨🚨\nFALTAN ${remaining} REGISTROS PENDIENTES POR SINCRONIZAR.\n🚨🚨🚨🚨🚨\n\nRealice este procedimiento antes de ELIMINAR.`
+        ? `\n\n🚨🚨🚨🚨🚨
+FALTAN REGISTROS PENDIENTES POR SINCRONIZAR:
+• Postes: ${postPending}
+• Vanos: ${gapPending}
+• Deficiencias: ${defPending}
+• Archivos: ${archPending}
+🚨🚨🚨🚨🚨
+
+Realice este procedimiento antes de ELIMINAR.`
         : "";
 
     Alert.alert(
@@ -284,16 +385,18 @@ export default function Sync() {
     dispatch({ type: "APP/SET_LOADING", payload: true });
 
     try {
-      const result = await syncAllPending();
-
-      const total = Number(result?.totalPending ?? 0);
-      const synced = Number(result?.syncedCount ?? result?.synced ?? 0);
-      const remaining = Number(result?.remainingPending ?? Math.max(total - synced, 0));
+      const result = await syncAllPending((progress) => {
+        dispatch({
+          type: "APP/SET_LOADING_MESSAGE",
+          payload: buildSyncProgressMessage(progress),
+        });
+      });
 
       Alert.alert(
         result?.ok ? "Sincronización completa" : "Sincronización incompleta",
-        `Se sincronizaron ${synced} de ${total} registros.\nFaltan ${remaining} por sincronizar.`
+        buildSyncFinalSummaryMessage(result)
       );
+
     } catch (e) {
       console.log("❌ Error sincronizando:", e);
       Alert.alert("Error", "Ocurrió un error durante la sincronización. Intenta nuevamente.");

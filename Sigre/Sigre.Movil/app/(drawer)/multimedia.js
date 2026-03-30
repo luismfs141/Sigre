@@ -1290,16 +1290,24 @@ export default function Multimedia() {
       let relativeFolderPath = null;
 
       if (is7004) {
+        // 1) Si esta misma deficiencia 7004 ya tiene ruta previa cargada en pantalla,
+        //    se conserva su correlativo actual.
         const anyPath =
-          photos.find((p) => p?.id && p?.originalPath)?.originalPath ||
-          deletedIds.find((d) => d?.path)?.path;
+          photos.find((p) => {
+            const n = extract7004IndexFromPath(p?.originalPath);
+            return Number.isFinite(n);
+          })?.originalPath ||
+          deletedIds.find((d) => {
+            const n = extract7004IndexFromPath(d?.path);
+            return Number.isFinite(n);
+          })?.path ||
+          null;
 
         let correlativo = extract7004IndexFromPath(anyPath);
 
-        if (correlativo == null) {
-          correlativo = await get7004CorrelativoFromDbSafe(deficiencyData);
-        }
-
+        // 2) Si esta deficiencia aún no tiene carpeta 7004 asignada,
+        //    se calcula SOLO desde la BD local por elemento:
+        //    SIGRE.MOVIL + ELIMINADOS, tomando el mayor y continuando.
         if (correlativo == null) {
           correlativo = await getNext7004Correlativo(elementBaseRel);
         }

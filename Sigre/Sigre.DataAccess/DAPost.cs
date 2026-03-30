@@ -23,9 +23,12 @@ namespace Sigre.DataAccess
     {
         public List<PinStruct> DAPOST_PinsByFeeders(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
-            var posts = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).Select(p =>
-                new PinStruct()
+            using var ctx = new SigreContext();
+
+            var posts = ctx.Postes
+                .AsNoTracking()
+                .Where(p => x_feeders.Contains(p.AlimInterno))
+                .Select(p => new PinStruct()
                 {
                     Id = p.PostInterno,
                     Label = p.PostEtiqueta,
@@ -37,26 +40,29 @@ namespace Sigre.DataAccess
                     Inspeccionado = p.PostInspeccionado,
                     Tercero = p.PostTerceros,
                     IdSed = p.PostSubestacion
-                }
-            );
+                });
+
             return posts.ToList();
         }
+
         public List<Poste> DAPOST_GetByListFeeder(List<int> x_feeders)
         {
             using var ctx = new SigreContext();
 
-            var postes = ctx.Postes.Where(p => x_feeders.Contains(p.AlimInterno)).ToList();
-
-            return postes;
+            return ctx.Postes
+                .AsNoTracking()
+                .Where(p => x_feeders.Contains(p.AlimInterno))
+                .ToList();
         }
 
         public List<Poste> DAPOST_GetByListSeds(List<int> x_seds)
         {
             using var ctx = new SigreContext();
 
-            var postes = ctx.Postes.Where(p => x_seds.Contains((int)p.PostSubestacion)).ToList();
-
-            return postes;
+            return ctx.Postes
+                .AsNoTracking()
+                .Where(p => x_seds.Contains((int)p.PostSubestacion))
+                .ToList();
         }
 
         public List<Poste> DAPOST_GetByProject(List<int> x_ids, int x_project)
@@ -79,26 +85,26 @@ namespace Sigre.DataAccess
 
         public List<PinStruct> DAPOST_PinsBySubestacion(List<int> x_subestaciones)
         {
-            using (var ctx = new SigreContext())
-            {
-                var posts = ctx.Postes
-                    .Where(p => x_subestaciones.Contains((int)p.PostSubestacion)) // asumimos que hay SubestacionInterna
-                    .Select(p => new PinStruct()
-                    {
-                        Id = p.PostInterno,
-                        Label = p.PostEtiqueta,
-                        Latitude = p.PostLatitud ?? 0,
-                        Longitude = p.PostLongitud ?? 0,
-                        Type = ElectricElement.Post,
-                        ElementCode = p.PostCodigoNodo,
-                        IdAlimentador = p.AlimInterno,
-                        Inspeccionado = p.PostInspeccionado,
-                        Tercero = p.PostTerceros,
-                        IdSed = (int)p.PostSubestacion
-                    }).ToList();
+            using var ctx = new SigreContext();
 
-                return posts;
-            }
+            var posts = ctx.Postes
+                .AsNoTracking()
+                .Where(p => x_subestaciones.Contains((int)p.PostSubestacion))
+                .Select(p => new PinStruct()
+                {
+                    Id = p.PostInterno,
+                    Label = p.PostEtiqueta,
+                    Latitude = p.PostLatitud ?? 0,
+                    Longitude = p.PostLongitud ?? 0,
+                    Type = ElectricElement.Post,
+                    ElementCode = p.PostCodigoNodo,
+                    IdAlimentador = p.AlimInterno,
+                    Inspeccionado = p.PostInspeccionado,
+                    Tercero = p.PostTerceros,
+                    IdSed = (int)p.PostSubestacion
+                });
+
+            return posts.ToList();
         }
 
         //0 -> Baja Tension, 1 -> Media Tension

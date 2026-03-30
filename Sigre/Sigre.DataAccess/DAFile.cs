@@ -183,7 +183,9 @@ namespace Sigre.DataAccess
             try
             {
                 var daDef = new DADeficiency();
-                var mappings = new List<(int localId, Archivo entity)>();
+
+                // 1) Resolver primero la deficiencia padre y la key normalizada de cada archivo offline
+                var resolved = new List<(ArchivoSyncDto dto, int defId, string syncKey)>();
 
                 foreach (var dto in archivosOffline)
                 {
@@ -210,20 +212,50 @@ namespace Sigre.DataAccess
 
                     dto.ArchCodTabla = idDeficiency;
 
-                    var key = NormalizarRutaSinRaiz(dto.ArchNombre);
+                    var syncKey = BuildArchivoSyncKey(idDeficiency, dto.ArchNombre);
 
-                    var existente = ctx.Archivos
-                        .Where(a => a.ArchCodTabla == idDeficiency && a.ArchNombre != null)
-                        .Where(a =>
-                            a.ArchNombre == dto.ArchNombre
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith(key))
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("/" + key))
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("\\" + key))
-                        )
-                        .OrderByDescending(a => a.ArchInterno)
-                        .FirstOrDefault();
+                    resolved.Add((dto, idDeficiency, syncKey));
+                }
 
-                    if (existente != null)
+                // 2) Traer de una sola vez los archivos existentes de esas deficiencias
+                var defIds = resolved
+                    .Select(x => x.defId)
+                    .Distinct()
+                    .ToList();
+
+                var existentes = ctx.Archivos
+                    .Where(a => defIds.Contains(a.ArchCodTabla) && a.ArchNombre != null)
+                    .OrderByDescending(a => a.ArchInterno)
+                    .ToList();
+
+                // 3) Crear diccionario por key normalizada
+                var existingByKey = new Dictionary<string, Archivo>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var a in existentes)
+                {
+                    var key = BuildArchivoSyncKey(a.ArchCodTabla, a.ArchNombre);
+
+                    if (string.IsNullOrWhiteSpace(key))
+                        continue;
+
+                    // Nos quedamos con el primero según OrderByDescending(ArchInterno)
+                    if (!existingByKey.ContainsKey(key))
+                    {
+                        existingByKey[key] = a;
+                    }
+                }
+
+                // 4) Actualizar si existe; insertar si no existe
+                var mappings = new List<(int localId, Archivo entity)>();
+
+                foreach (var item in resolved)
+                {
+                    var dto = item.dto;
+                    var idDeficiency = item.defId;
+                    var syncKey = item.syncKey;
+
+                    if (!string.IsNullOrWhiteSpace(syncKey) &&
+                        existingByKey.TryGetValue(syncKey, out var existente))
                     {
                         existente.ArchCodTabla = idDeficiency;
                         existente.ArchNombre = dto.ArchNombre;
@@ -249,6 +281,13 @@ namespace Sigre.DataAccess
                     {
                         var archivo = DAARCH_ConvertFile(dto);
                         ctx.Archivos.Add(archivo);
+
+                        // importante: evita duplicados dentro del mismo lote
+                        if (!string.IsNullOrWhiteSpace(syncKey))
+                        {
+                            existingByKey[syncKey] = archivo;
+                        }
+
                         mappings.Add((dto.ArchInterno, archivo));
                     }
                 }
@@ -300,7 +339,20 @@ namespace Sigre.DataAccess
             return path;
         }
 
+        private static string BuildArchivoSyncKey(int archCodTabla, string archNombre)
+        {
+            var key = NormalizarRutaSinRaiz(archNombre);
 
+            if (string.IsNullOrWhiteSpace(key))
+                return string.Empty;
+
+            key = key.Replace("\\", "/").Trim();
+
+            while (key.StartsWith("/"))
+                key = key.Substring(1);
+
+            return $"{archCodTabla}|{key}";
+        }
 
         // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
         public bool DAFILE_SoftDelete(int idArchivo)

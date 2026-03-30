@@ -216,7 +216,7 @@ export const useOffline = () => {
   /* ============================
    🔄 SINCRONIZACIÓN OFFLINE
 ============================ */
-  const syncAllPending = async () => {
+  const syncAllPending = async (onProgress) => {
     setSyncing(true);
 
     const before = await readPendingCounts();
@@ -266,22 +266,22 @@ export const useOffline = () => {
     };
 
     try {
-      const postResult = await syncAllPosts();
+      const postResult = await syncAllPosts(onProgress);
       if (!postResult?.ok || Number(postResult.synced ?? 0) !== Number(postResult.total ?? 0)) {
         return await buildStageFail("postes", postResult?.error ?? "POST_STAGE_FAILED");
       }
 
-      const gapResult = await syncAllGaps();
+      const gapResult = await syncAllGaps(onProgress);
       if (!gapResult?.ok || Number(gapResult.synced ?? 0) !== Number(gapResult.total ?? 0)) {
         return await buildStageFail("vanos", gapResult?.error ?? "GAP_STAGE_FAILED");
       }
 
-      const defResult = await syncAllDeficiencies();
+      const defResult = await syncAllDeficiencies(onProgress);
       if (!defResult?.ok || Number(defResult.synced ?? 0) !== Number(defResult.total ?? 0)) {
         return await buildStageFail("deficiencias", defResult?.error ?? "DEF_STAGE_FAILED");
       }
 
-      const archResult = await syncAllArchivos();
+      const archResult = await syncAllArchivos(onProgress);
       if (!archResult?.ok || Number(archResult.synced ?? 0) !== Number(archResult.total ?? 0)) {
         return await buildStageFail("archivos", archResult?.error ?? "FILE_STAGE_FAILED");
       }

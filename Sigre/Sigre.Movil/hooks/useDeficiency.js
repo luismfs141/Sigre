@@ -31,6 +31,23 @@ import { formatLocalISO, getUniqueNowMs, roundMsForSqlDatetime } from "../utils/
 
 import { useConnectivity } from "./useConnectivity";
 
+const DEF_SYNC_BATCH_SIZE = 100;
+const DEF_FILE_SYNC_BATCH_SIZE = 100;
+
+const chunkArray = (items, size) => {
+  if (!Array.isArray(items) || !items.length) return [];
+  if (!Number.isFinite(size) || size <= 0) return [items];
+
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+};
+
+
 export const useDeficiency = () => {
   const {
     checkDatabase,
@@ -106,7 +123,6 @@ export const useDeficiency = () => {
   };
 
   const autoSyncArchivosByIds = async (archIds) => {
-
     if (!Array.isArray(archIds) || !archIds.length) return;
     if (!isAutoSyncOnline) return;
 
@@ -127,17 +143,42 @@ export const useDeficiency = () => {
       const payload = rows.filter(Boolean).map(normalizeArchivoForSync);
       if (!payload.length) return;
 
-      //console.log("📤 Sincronización de update de archivos");
+      const lotes = chunkArray(payload, DEF_FILE_SYNC_BATCH_SIZE);
 
+      for (let i = 0; i < lotes.length; i++) {
+        const lote = lotes[i];
 
-      const response = await client.post("/File/SyncFromSQLite", payload, {
-        timeout: 20000,
-      });
+        const response = await client.post("/File/SyncFromSQLite", lote, {
+          timeout: 20000,
+        });
 
-      const respList = Array.isArray(response.data) ? response.data : [];
-      for (const r of respList) {
-        if (!r?.localId || !r?.serverId) continue;
-        await updateArchivoIdAfterSyncFile(r.localId, r.serverId);
+        const respList = Array.isArray(response.data) ? response.data : [];
+
+        if (respList.length !== lote.length) {
+          throw new Error(
+            `DEF_FILE_SYNC_PARTIAL_RESPONSE: lote=${i + 1}, enviados=${lote.length}, respondidos=${respList.length}`
+          );
+        }
+
+        for (const r of respList) {
+          const localId = Number(r?.localId);
+          const serverId = Number(r?.serverId);
+
+          if (
+            !Number.isFinite(localId) ||
+            !Number.isFinite(serverId) ||
+            localId <= 0 ||
+            serverId <= 0
+          ) {
+            throw new Error(
+              `DEF_FILE_SYNC_INVALID_MAPPING: lote=${i + 1}, data=${JSON.stringify(r)}`
+            );
+          }
+        }
+
+        for (const r of respList) {
+          await updateArchivoIdAfterSyncFile(Number(r.localId), Number(r.serverId));
+        }
       }
     } catch (err) {
       console.error("❌ autoSyncArchivosByIds falló:", err?.response?.data || err?.message || err);
@@ -540,15 +581,21 @@ export const useDeficiency = () => {
   };
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
-  const syncAllDeficiencies = async () => {
+  const syncAllDeficiencies = async (onProgress) => {
     const online = await isOnline();
     if (!online) {
       return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
     }
 
     let total = 0;
+    let synced = 0;
 
     try {
+      const dbOk = await checkDatabase();
+      if (!dbOk) {
+        return { ok: false, total: 0, synced: 0, error: "DB_NOT_READY" };
+      }
+
       const pendientes = await getDeficienciesPendientes();
       if (!Array.isArray(pendientes) || !pendientes.length) {
         return { ok: true, total: 0, synced: 0 };
@@ -564,40 +611,62 @@ export const useDeficiency = () => {
         return { ok: true, total: 0, synced: 0 };
       }
 
-      const payload = aSincronizar.map((d) => normalizeDeficiencyForSync(d));
+      const lotes = chunkArray(aSincronizar, DEF_SYNC_BATCH_SIZE);
 
-      const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
-        timeout: 60000,
-      });
+      for (let i = 0; i < lotes.length; i++) {
+        const lote = lotes[i];
 
-      const respList = Array.isArray(response.data) ? response.data : [];
+        onProgress?.({
+          stage: "deficiencias",
+          currentBatch: i + 1,
+          totalBatches: lotes.length,
+          batchSize: lote.length,
+          totalRecords: total,
+          syncedRecords: synced,
+        });
 
-      if (respList.length !== total) {
-        throw new Error(
-          `DEF_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
-        );
-      }
+        const payload = lote.map((d) => normalizeDeficiencyForSync(d));
 
-      for (const r of respList) {
-        const localId = Number(r?.localId);
-        const serverId = Number(r?.serverId);
+        const response = await client.post("/Deficiency/SyncFromSQLite", payload, {
+          timeout: 60000,
+        });
 
-        if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
-          throw new Error(`DEF_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+        const respList = Array.isArray(response.data) ? response.data : [];
+
+        if (respList.length !== lote.length) {
+          throw new Error(
+            `DEF_SYNC_PARTIAL_RESPONSE: lote=${i + 1}, enviados=${lote.length}, respondidos=${respList.length}`
+          );
         }
+
+        for (const r of respList) {
+          const localId = Number(r?.localId);
+          const serverId = Number(r?.serverId);
+
+          if (
+            !Number.isFinite(localId) ||
+            !Number.isFinite(serverId) ||
+            localId <= 0 ||
+            serverId <= 0
+          ) {
+            throw new Error(`DEF_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+          }
+        }
+
+        for (const r of respList) {
+          await updateDeficiencyIdAfterSync(Number(r.localId), Number(r.serverId));
+        }
+
+        synced += lote.length;
       }
 
-      for (const r of respList) {
-        await updateDeficiencyIdAfterSync(Number(r.localId), Number(r.serverId));
-      }
-
-      return { ok: true, total, synced: total };
+      return { ok: true, total, synced };
     } catch (err) {
       console.error("❌ Sync masivo deficiencias falló:", err?.response?.data || err?.message || err);
       return {
         ok: false,
         total,
-        synced: 0,
+        synced,
         error: err?.response?.data?.message || err?.message || "DEF_SYNC_FAILED",
       };
     }
