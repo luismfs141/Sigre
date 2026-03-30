@@ -52,8 +52,8 @@ const detectSinDefFolderAliasFromPath = (path) => {
 };
 
 const getPhotoTypeName = (typeId) => { const types = { 1: 'Panorámica', 2: 'Frontal', 3: 'Izquierda', 4: 'Derecha', 5: 'Medidor', 6: 'Adicional', 0: 'Otro' }; return types[typeId] || `Tipo ${typeId}`; };
-const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.000`; };
-const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
+const toLocalISOString = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0'); const padMs = (n) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${padMs(d.getMilliseconds())}`; };
+const formatCompactDate = (date) => { const d = new Date(date); const pad = (n) => n.toString().padStart(2, '0');const padMs = (n) => n.toString().padStart(3, '0'); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${padMs(d.getMilliseconds())}`; };
 const urlToBlob = async (url) => { try { const response = await fetch(url); if (!response.ok) throw new Error("404"); return await response.blob(); } catch { return null; } };
 
 // =====================================================================
@@ -71,7 +71,7 @@ const getUtmBandLetter = (lat) => {
 
 // --- COMPONENTE IMAGEN ---
 // --- COMPONENTE IMAGEN ---
-const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode, onDelete, onCropRequest, onReplaceRequest, allowDirectEdit }) => {
+const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, currentSupply, defCode, onDelete, onCropRequest, onReplaceRequest, allowDirectEdit, cacheBuster }) => {
     const offlinePlaceholder = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20150%20150%22%3E%3Crect%20fill%3D%22%23eeeeee%22%20width%3D%22150%22%20height%3D%22150%22%2F%3E%3Ctext%20fill%3D%22%23999999%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ESIN%20IMAGEN%3C%2Ftext%3E%3C%2Fsvg%3E";
 
     const generateCandidates = (rawPath) => {
@@ -192,13 +192,13 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
             `${API_BASE_URL}/${(candidatePath.startsWith('/') ? candidatePath.substring(1) : candidatePath)
                 .split('/')
                 .map(encodeURIComponent)
-                .join('/')}`
+                .join('/')}?t=${cacheBuster}`
         );
     };
 
     const candidates = useMemo(
         () => generateCandidates(file.archNombre || file.ARCH_Nombre),
-        [file, currentSupply, defCode]
+        [file, currentSupply, defCode, cacheBuster]
     );
 
     const [currentSrc, setCurrentSrc] = useState(candidates[0] || offlinePlaceholder);
@@ -276,7 +276,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const [completedCrop, setCompletedCrop] = useState(null);
     const imgRef = useRef(null);
     const [isCroppingSave, setIsCroppingSave] = useState(false);
-
+    const [cacheBuster, setCacheBuster] = useState(Date.now());
     useEffect(() => {
         if (deficiency?.defiInterno) {
             loadFiles(deficiency.defiInterno);
@@ -475,11 +475,13 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
 
     const openCropModal = (file, src) => { setImageToCrop({ file, src }); setCrop({ unit: '%', width: 50, aspect: 1 }); setCompletedCrop(null); setCropModalVisible(true); };
     // --- MANEJADOR DEL RECORTE ---
+    // --- MANEJADOR DEL RECORTE ---
     const handleSaveCrop = async () => {
         if (!completedCrop || !imgRef.current || !imageToCrop) return;
         setIsCroppingSave(true);
         try {
-            const croppedFile = await getCroppedImg(imgRef.current.src, completedCrop);
+            // 🔥 OJO AQUÍ: Ya no enviamos imgRef.current.src, enviamos el elemento entero
+            const croppedFile = await getCroppedImg(imgRef.current, completedCrop);
             const idArchivoBD = imageToCrop.file.archInterno || imageToCrop.file.ARCH_Interno;
 
             const result = await overwritePhysicalImage(idArchivoBD, croppedFile);
@@ -487,9 +489,8 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
             if (result.success) {
                 toast.current.show({ severity: 'success', summary: 'Éxito', detail: result.message });
                 setCropModalVisible(false);
-                resolvedUrlsRef.current = {}; loadFiles(deficiency.defiInterno);
+                resolvedUrlsRef.current = {}; setCacheBuster(Date.now()); loadFiles(deficiency.defiInterno);
             } else {
-                // Muestra el error exacto de C# (Ej: "DAFile Error: Acceso denegado a la ruta...")
                 toast.current.show({ severity: 'error', summary: 'Fallo al recortar', detail: result.message, life: 5000 });
             }
         } finally { setIsCroppingSave(false); }
@@ -504,7 +505,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
 
         if (result.success) {
             toast.current.show({ severity: 'success', summary: 'Éxito', detail: result.message });
-            resolvedUrlsRef.current = {}; loadFiles(deficiency.defiInterno);
+            resolvedUrlsRef.current = {}; setCacheBuster(Date.now()); loadFiles(deficiency.defiInterno);
         } else {
             // Muestra el error exacto de C#
             toast.current.show({ severity: 'error', summary: 'Fallo al reemplazar', detail: result.message, life: 5000 });
@@ -592,6 +593,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
                             onCropRequest={openCropModal}        // Pasa las funciones
                             onReplaceRequest={handleReplaceImage} // Pasa las funciones
                             allowDirectEdit={isClonedFlow}
+                            cacheBuster={cacheBuster}
                             onImageClick={openLightbox} onUrlResolved={handleUrlResolved}
                             typeName={getPhotoTypeName(parseInt(f.archTipo || f.ARCH_Tipo, 10))}
                             currentSupply={currentSupply} defCode={defCode}

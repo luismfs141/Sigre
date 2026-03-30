@@ -718,9 +718,9 @@ namespace Sigre.DataAccess
             }
         }
 
-    
+
         // Usamos el disco H:\ como raíz, 
-        private readonly string _baseDirectory = @"D:\";
+        public string _baseDirectory = @"H:\";
 
         public async Task<bool> MoverArchivoFisicoAsync(string oldPath, string newPath)
         {
@@ -879,6 +879,57 @@ namespace Sigre.DataAccess
                 // Lanzamos el error hacia arriba (al controlador)
                 throw new Exception($"DAFile Error: {realError.Message}");
             }
+        }
+        public string ObtenerRutaFisicaReal(string rutaRelativaBD)
+        {
+            // 1. Armamos la ruta absoluta para que C# pueda buscar en el disco real (D:\...)
+            string rutaAbsoluta = Path.Combine(_baseDirectory, rutaRelativaBD.Replace("/", "\\"));
+
+            // 2. Si existe tal cual, devolvemos la relativa intacta
+            if (File.Exists(rutaAbsoluta))
+            {
+                return rutaRelativaBD;
+            }
+
+            // 3. Rescate de carpeta 7004
+            string directorioAbsoluto = Path.GetDirectoryName(rutaAbsoluta);
+            string nombreArchivoOriginal = Path.GetFileName(rutaAbsoluta);
+            string nombreCarpetaFalla = new DirectoryInfo(directorioAbsoluto).Name; // Ej: "7004.1.148773"
+
+            if (nombreCarpetaFalla.StartsWith("7004."))
+            {
+                string[] partes = nombreCarpetaFalla.Split('.');
+                if (partes.Length >= 2)
+                {
+                    string correlativo = partes[1];
+                    string directorioPadreAbsoluto = Path.GetDirectoryName(directorioAbsoluto);
+
+                    // 🔥 INTENTO A: Carpeta limpia + Nombre de archivo SUCIO (Como se ve en tu captura)
+                    // Busca en: D:\...\7004\1\FOT-...-7004.1.148773-...jpg
+                    string rutaRescateAbsolutaA = Path.Combine(directorioPadreAbsoluto, "7004", correlativo, nombreArchivoOriginal);
+
+                    if (File.Exists(rutaRescateAbsolutaA))
+                    {
+                        // Devolvemos la ruta relativa reconstruida para que la clonación funcione
+                        string dirRelativoPadre = Path.GetDirectoryName(Path.GetDirectoryName(rutaRelativaBD));
+                        return Path.Combine(dirRelativoPadre, "7004", correlativo, nombreArchivoOriginal).Replace("\\", "/");
+                    }
+
+                    // 🔥 INTENTO B: Carpeta limpia + Nombre de archivo LIMPIO (Por si alguna vez se renombraron)
+                    // Busca en: D:\...\7004\1\FOT-...-7004_1-...jpg
+                    string nombreLimpio = nombreArchivoOriginal.Replace(nombreCarpetaFalla, $"7004_{correlativo}");
+                    string rutaRescateAbsolutaB = Path.Combine(directorioPadreAbsoluto, "7004", correlativo, nombreLimpio);
+
+                    if (File.Exists(rutaRescateAbsolutaB))
+                    {
+                        string dirRelativoPadre = Path.GetDirectoryName(Path.GetDirectoryName(rutaRelativaBD));
+                        return Path.Combine(dirRelativoPadre, "7004", correlativo, nombreLimpio).Replace("\\", "/");
+                    }
+                }
+            }
+
+            // Si nada de la magia funcionó, devuelve la original (probablemente la foto se borró de la computadora)
+            return rutaRelativaBD;
         }
     }
 }
