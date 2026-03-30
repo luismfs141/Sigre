@@ -35,6 +35,8 @@ public partial class SigreContext : DbContext
 
     public virtual DbSet<Equipo> Equipos { get; set; }
 
+    public virtual DbSet<EstadosGlobal> EstadosGlobales { get; set; }
+
     public virtual DbSet<Inspeccione> Inspecciones { get; set; }
 
     public virtual DbSet<KeyWord> KeyWords { get; set; }
@@ -138,12 +140,23 @@ public partial class SigreContext : DbContext
                 .IsUnicode(false)
                 .HasColumnName("ARCH_TipoElemento");
             entity.Property(e => e.TipiInterno).HasColumnName("TIPI_Interno");
-
-
             entity.Property(e => e.DefiUUID)
-            .HasMaxLength(50)
-       .IsUnicode(false)
-       .HasColumnName("DEFI_UUID");
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("DEFI_UUID");
+
+            entity.Property(e => e.ArchUUID)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ARCH_UUID");
+
+            entity.Property(e => e.EsgoInterno)
+                .HasColumnName("ESGO_Interno");
+
+            entity.HasOne(e => e.EstadoGlobal)
+                .WithMany()
+                .HasForeignKey(e => e.EsgoInterno)
+                .HasConstraintName("FK_Archivos_EstadosGlobal");
         });
 
         modelBuilder.Entity<ArmadoMaterial>(entity =>
@@ -304,12 +317,6 @@ public partial class SigreContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("DEFI_TipoCruce");
-
-
-
-
-
-
             entity.Property(e => e.DefiCoordX).HasColumnName("DEFI_CoordX");
             entity.Property(e => e.DefiCoordY).HasColumnName("DEFI_CoordY");
             entity.Property(e => e.DefiDistHorizontal)
@@ -447,6 +454,18 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.InspInternoNavigation).WithMany(p => p.Deficiencia)
                 .HasForeignKey(d => d.InspInterno)
                 .HasConstraintName("fk_DEFI_INSP");
+
+            entity.Property(e => e.EsgoInterno)
+                .HasColumnName("ESGO_Interno");
+
+            entity.HasOne(e => e.EstadoGlobal)
+                .WithMany()
+                .HasForeignKey(e => e.EsgoInterno)
+                .HasConstraintName("FK_Deficiencias_EstadosGlobal");
+
+            entity.Property(e => e.DefiMovil)
+                .HasColumnName("DEFI_Movil")
+                .HasDefaultValue(false);
         });
 
         modelBuilder.Entity<DeficienciasSeal>(entity =>
@@ -516,6 +535,39 @@ public partial class SigreContext : DbContext
                 .HasForeignKey(d => d.AlimInterno)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_EQUI_ALIM");
+        });
+
+        modelBuilder.Entity<EstadosGlobal>(entity =>
+        {
+            entity.HasKey(e => e.EsgoInterno);
+
+            entity.ToTable("EstadosGlobal");
+
+            entity.Property(e => e.EsgoInterno)
+                .HasColumnName("ESGO_Interno");
+
+            entity.Property(e => e.EsgoNombre)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("ESGO_Nombre");
+
+            entity.Property(e => e.EsgoColor)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("ESGO_Color");
+
+            entity.Property(e => e.EsgoDescripcion)
+                .HasMaxLength(255)
+                .IsUnicode(false)
+                .HasColumnName("ESGO_Descripcion");
+
+            entity.Property(e => e.EsgoTabla)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("ESGO_Tabla");
+
+            entity.Property(e => e.EsgoActivo)
+                .HasColumnName("ESGO_Activo");
         });
 
         modelBuilder.Entity<Inspeccione>(entity =>
@@ -763,6 +815,13 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Postes)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Postes_Tramos");
+            entity.Property(e => e.EsgoInterno)
+               .HasColumnName("ESGO_Interno");
+
+            entity.HasOne(e => e.EstadoGlobal)
+                .WithMany()
+                .HasForeignKey(e => e.EsgoInterno)
+                .HasConstraintName("FK_Postes_EstadosGlobal");
         });
 
         modelBuilder.Entity<PosteMaterial>(entity =>
@@ -873,6 +932,14 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Seds)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Seds_Tramos");
+
+            entity.Property(e => e.EsgoInterno)
+                .HasColumnName("ESGO_Interno");
+
+            entity.HasOne(e => e.EstadoGlobal)
+                .WithMany()
+                .HasForeignKey(e => e.EsgoInterno)
+                .HasConstraintName("FK_Seds_EstadosGlobal");
         });
 
         modelBuilder.Entity<SedMaterial>(entity =>
@@ -1031,6 +1098,14 @@ public partial class SigreContext : DbContext
             entity.HasOne(d => d.TramInternoNavigation).WithMany(p => p.Vanos)
                 .HasForeignKey(d => d.TramInterno)
                 .HasConstraintName("FK_Vanos_Tramos");
+
+            entity.Property(e => e.EsgoInterno)
+                .HasColumnName("ESGO_Interno");
+
+            entity.HasOne(e => e.EstadoGlobal)
+                .WithMany()
+                .HasForeignKey(e => e.EsgoInterno)
+                .HasConstraintName("FK_Vanos_EstadosGlobal");
         });
 
         modelBuilder.Entity<DeficiencyDto>().HasNoKey().ToView(null);

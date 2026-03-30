@@ -33,6 +33,12 @@ public partial class Archivo
     public bool? ArchActivo { get; set; }
     public string? DefiUUID { get; set; }
 
+    public string? ArchUUID { get; set; }
+
+    public int? EsgoInterno { get; set; }
+
+    public EstadosGlobal EstadoGlobal { get; set; }
+
 }
 public class MoveFileRequest
 {

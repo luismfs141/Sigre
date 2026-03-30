@@ -127,7 +127,11 @@ public partial class Deficiencia
 
     public int? CodopInterno { get; set; }
 
+    public int? EsgoInterno { get; set; }
 
+    public EstadosGlobal EstadoGlobal { get; set; }
+
+    public bool DefiMovil { get; set; }
 
     [NotMapped]
     public bool EsTercero { get; set; }

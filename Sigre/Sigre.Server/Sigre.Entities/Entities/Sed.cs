@@ -38,7 +38,12 @@ public partial class Sed
     public int? SedRetenidaTipo { get; set; }
 
     public int? SedRetenidaMaterial { get; set; }
+
     public int? TramInterno { get; set; }
+
+    public int? EsgoInterno { get; set; }
+
+    public EstadosGlobal EstadoGlobal { get; set; }
 
     public virtual ICollection<Sed> InverseSedMaterialNavigation { get; } = new List<Sed>();
 

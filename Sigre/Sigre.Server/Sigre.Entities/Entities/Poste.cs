@@ -47,6 +47,10 @@ public partial class Poste
     public string? PostTramo { get; set; }
     public bool PostVereda { get; set; }
 
+    public int? EsgoInterno { get; set; }
+
+    public EstadosGlobal EstadoGlobal { get; set; }
+
     public virtual ArmadoMaterial? PostArmadoMaterialNavigation { get; set; }
 
     public virtual ArmadoTipo? PostArmadoTipoNavigation { get; set; }
