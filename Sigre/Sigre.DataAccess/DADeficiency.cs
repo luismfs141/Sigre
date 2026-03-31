@@ -564,7 +564,7 @@ namespace Sigre.DataAccess
                         existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                         existente.DefiTipoCruce = dto.DefiTipoCruce;
                         existente.CodopInterno = dto.CodopInterno;
-                        existente.DefiActivo = dto.DefiActivo;
+                        existente.DefiActivo = (bool)dto.DefiActivo;
                         existente.DefiCol1 = dto.DefiCol1;
                         existente.DefiCol2 = dto.DefiCol2;
 
@@ -615,7 +615,7 @@ namespace Sigre.DataAccess
                             DefiPozoTierra2 = dto.DefiPozoTierra2,
                             DefiUsuarioInic = dto.DefiUsuarioInic,
                             DefiUsuarioMod = dto.DefiUsuarioMod,
-                            DefiActivo = dto.DefiActivo,
+                            DefiActivo = (bool)dto.DefiActivo,
                             DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
                             DefiInspeccionado = dto.DefiInspeccionado,
                             DefiAccesibilidad = dto.DefiAccesibilidad,
@@ -1053,7 +1053,7 @@ namespace Sigre.DataAccess
                                 foreach (var arch in archivosViejos)
                                 {
                                     arch.ArchCodTabla = input.DefiInterno;
-                                    arch.DefiUUID = input.DefiCol3;
+                                    arch.DefiUuid = input.DefiCol3;
                                     if (cambioGis)
                                     {
                                         arch.ArchIdElemento = input.DefiIdElemento;
@@ -2139,7 +2139,7 @@ namespace Sigre.DataAccess
                             {
                                 ArchCodTabla = clonDefi.DefiInterno,
                                 ArchTabla = "Deficiencias",
-                                DefiUUID = clonDefi.DefiCol3,
+                                DefiUuid = clonDefi.DefiCol3,
                                 ArchNombre = nuevaRutaFisica,
                                 TipiInterno = nuevaTipificacion,
                                 ArchTipo = arch.ArchTipo,

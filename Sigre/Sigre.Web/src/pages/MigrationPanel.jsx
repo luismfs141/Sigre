@@ -4,95 +4,317 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
+import { Dropdown } from 'primereact/dropdown';
+import { InputText } from 'primereact/inputtext';
+import { Dialog } from 'primereact/dialog';
+
+import { useFeeder } from '../hooks/useFeeder';
+import { useSed } from '../hooks/useSed';
+import { useFiles } from '../hooks/useFiles';
 
 export default function MigrationPanel() {
-    const [errors, setErrors] = useState([]);
+
+    const [archivos, setArchivos] = useState([]);
+    const [selectedArchivos, setSelectedArchivos] = useState([]);
+
     const [loading, setLoading] = useState(false);
-    const [fetchingErrors, setFetchingErrors] = useState(false);
+    const [filtrosLoading, setFiltrosLoading] = useState(false);
+
+    const [seds, setSeds] = useState([]);
+    const [rutaOrigen, setRutaOrigen] = useState('');
+
+    const [visibleDialog, setVisibleDialog] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
+
+    const inputFolderRef = useRef(null);
     const toast = useRef(null);
 
-    // Función para cargar la tabla de errores
-    const loadErrors = async () => {
-        setFetchingErrors(true);
+    const { feeders, loading: feedersLoading } = useFeeder();
+    const { getSedsByFeeder, loading: sedsLoading } = useSed();
+    const { getFileStructBySeds } = useFiles();
+
+    const [filtro, setFiltro] = useState({
+        alim: null,
+        sed: null,
+        elemento: ''
+    });
+
+    useEffect(() => {
+        loadCombos();
+    }, []);
+
+    const loadCombos = async () => {
         try {
-            // Reemplaza con tu endpoint real
-            const response = await fetch('/api/migration/errors');
-            const data = await response.json();
-            setErrors(data);
-        } catch (error) {
-            console.error("Error al cargar errores:", error);
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los registros fallidos.', life: 3000 });
-        } finally {
-            setFetchingErrors(false);
+            const res = await fetch('/api/filtros');
+            const data = await res.json();
+            setSeds(data.seds);
+        } catch {
+            toast.current.show({
+                severity: 'error',
+                summary: 'Error',
+                detail: 'Error cargando filtros'
+            });
         }
     };
 
-    // Cargar errores al montar el componente
-    useEffect(() => {
-        loadErrors();
-    }, []);
+    const handleChangeAlim = async (e) => {
+        const value = e.value;
 
-    // Función para disparar la migración masiva
-    const handleStartMigration = async () => {
-        setLoading(true);
+        setFiltro({
+            ...filtro,
+            alim: value,
+            sed: null
+        });
+
+        const data = await getSedsByFeeder(value);
+        setSeds(data);
+    };
+
+    const buscarArchivos = async () => {
+
+        if (!filtro.sed) {
+            toast.current.show({
+                severity: 'warn',
+                summary: 'Filtro requerido',
+                detail: 'Selecciona una SED'
+            });
+            return;
+        }
+
+        setFiltrosLoading(true);
+
         try {
-            // Reemplaza con tu endpoint real
-            const response = await fetch('/api/migration/start', {
+            const data = await getFileStructBySeds([filtro.sed]);
+            setArchivos(data);
+            setSelectedArchivos([]);
+        } catch {
+            toast.current.show({
+                severity: 'error',
+                summary: 'Error',
+                detail: 'Error al buscar archivos'
+            });
+        } finally {
+            setFiltrosLoading(false);
+        }
+    };
+
+    const seleccionarCarpeta = (e) => {
+        const files = e.target.files;
+
+        if (files.length > 0) {
+            const fullPath = files[0].webkitRelativePath;
+            const folder = fullPath.split('/')[0];
+
+            setRutaOrigen(folder);
+
+            toast.current.show({
+                severity: 'info',
+                summary: 'Carpeta seleccionada',
+                detail: folder
+            });
+        }
+    };
+
+    const flattenFiles = (lista) => {
+        return lista.flatMap(item => item.archivos || []);
+    };
+
+    const subirAWS = async () => {
+
+        const lista = selectedArchivos.length > 0 ? selectedArchivos : archivos;
+
+        if (!rutaOrigen) {
+            toast.current.show({
+                severity: 'warn',
+                summary: 'Ruta requerida',
+                detail: 'Selecciona una carpeta raíz'
+            });
+            return;
+        }
+
+        if (lista.length === 0) {
+            toast.current.show({
+                severity: 'warn',
+                summary: 'Sin datos',
+                detail: 'No hay archivos para subir'
+            });
+            return;
+        }
+
+        const payload = flattenFiles(lista);
+
+        setLoading(true);
+
+        try {
+            const response = await fetch(`/api/File/MigrarAWS?rutaOrigen=${rutaOrigen}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
-            if (response.ok) {
-                toast.current.show({ severity: 'success', summary: 'Iniciado', detail: 'La migración se está ejecutando en segundo plano.', life: 5000 });
-            } else {
-                toast.current.show({ severity: 'warn', summary: 'Atención', detail: 'La migración ya está en curso o hubo un problema.', life: 5000 });
-            }
-        } catch (error) {
-            console.error("Error al iniciar migración:", error);
-            toast.current.show({ severity: 'error', summary: 'Error de Red', detail: 'No se pudo contactar al servidor.', life: 3000 });
+            const result = await response.json();
+
+            toast.current.show({
+                severity: 'success',
+                summary: 'Completado',
+                detail: `Migrados: ${result.length}`,
+                life: 4000
+            });
+
+        } catch {
+            toast.current.show({
+                severity: 'error',
+                summary: 'Error',
+                detail: 'Error en migración AWS'
+            });
         } finally {
             setLoading(false);
         }
     };
 
-    // Plantilla para mostrar filas vacías de forma amigable si no hay errores
-    const emptyMessage = "No se encontraron errores. Todo está sincronizado correctamente.";
+    // 👉 abrir modal
+    const verArchivos = (rowData) => {
+        setSelectedItem(rowData);
+        setVisibleDialog(true);
+    };
+
+    // 👉 template columna
+    const archivosTemplate = (rowData) => {
+        const count = rowData.archivos?.length || 0;
+
+        return (
+            <Button
+                label={`Ver Archivos (${count})`}
+                icon="pi pi-folder-open"
+                className="p-button-text"
+                onClick={() => verArchivos(rowData)}
+            />
+        );
+    };
 
     return (
         <div className="p-m-4">
             <Toast ref={toast} />
-            
-            <Card title="Migración Masiva a AWS S3" subTitle="Sincronización de fotos pendientes" className="p-mb-4">
-                <p className="p-m-0 p-mb-3">
-                    Al iniciar, el servidor buscará todas las fotos con estado PENDIENTE y las subirá a S3 en lotes. 
-                    Puedes cerrar esta ventana; el proceso continuará en el servidor.
-                </p>
-                <Button 
-                    label={loading ? "Iniciando..." : "Iniciar Sincronización"} 
-                    icon={loading ? "pi pi-spin pi-spinner" : "pi pi-cloud-upload"} 
-                    onClick={handleStartMigration} 
-                    disabled={loading}
-                    className="p-button-primary" 
-                />
-            </Card>
 
-            <Card title="Reporte de Errores" subTitle="Fotos que no pudieron ser migradas">
-                <div className="p-d-flex p-jc-end p-mb-2">
-                    <Button icon="pi pi-refresh" className="p-button-rounded p-button-text" onClick={loadErrors} tooltip="Actualizar tabla" />
+            <Card title="Migración AWS S3">
+
+                {/* FILTROS */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'nowrap' }}>
+
+                    <Dropdown
+                        value={filtro.alim}
+                        options={feeders}
+                        onChange={handleChangeAlim}
+                        placeholder="Alimentador"
+                        optionLabel="label"
+                        optionValue="value"
+                        filter
+                        showClear
+                        loading={feedersLoading}
+                        style={{ width: '300px' }}
+                    />
+
+                    <Dropdown
+                        value={filtro.sed}
+                        options={seds}
+                        onChange={(e) => setFiltro({ ...filtro, sed: e.value })}
+                        placeholder="SED"
+                        optionLabel="sedCodigo"
+                        optionValue="sedInterno"
+                        filter
+                        showClear
+                        loading={sedsLoading}
+                        disabled={!filtro.alim}
+                        style={{ width: '200px' }}
+                    />
+
+                    <InputText
+                        value={filtro.elemento}
+                        onChange={(e) => setFiltro({ ...filtro, elemento: e.target.value })}
+                        placeholder="Código elemento"
+                        style={{ width: '180px' }}
+                    />
+
+                    <Button
+                        label="Buscar"
+                        icon="pi pi-search"
+                        onClick={buscarArchivos}
+                        loading={filtrosLoading}
+                    />
+
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+                        <Button
+                            label="Carpeta"
+                            icon="pi pi-folder-open"
+                            className="p-button-secondary"
+                            onClick={() => inputFolderRef.current.click()}
+                        />
+
+                        <small>{rutaOrigen || 'Sin carpeta'}</small>
+
+                        <Button
+                            label="Subir AWS"
+                            icon="pi pi-cloud-upload"
+                            onClick={subirAWS}
+                            loading={loading}
+                            className="p-button-success"
+                        />
+
+                        <input
+                            type="file"
+                            ref={inputFolderRef}
+                            style={{ display: 'none' }}
+                            webkitdirectory="true"
+                            directory=""
+                            onChange={seleccionarCarpeta}
+                        />
+                    </div>
                 </div>
-                <DataTable 
-                    value={errors} 
-                    loading={fetchingErrors} 
-                    emptyMessage={emptyMessage} 
-                    paginator rows={10} 
-                    rowsPerPageOptions={[5, 10, 25, 50]}
+
+                {/* TABLA */}
+                <DataTable
+                    value={archivos}
+                    loading={filtrosLoading}
+                    paginator rows={10}
                     responsiveLayout="scroll"
+                    selection={selectedArchivos}
+                    onSelectionChange={(e) => setSelectedArchivos(e.value)}
+                    dataKey="idElemento"
                 >
-                    <Column field="ARCH_Interno" header="ID Interno" sortable></Column>
-                    <Column field="DEFI_UUID" header="UUID Deficiencia" sortable></Column>
-                    <Column field="ErrorMessage" header="Mensaje de Error AWS"></Column>
-                    <Column field="FechaLog" header="Fecha de Error" sortable></Column>
+                    <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
+
+                    <Column field="idElemento" header="ID Elemento" />
+                    <Column field="tipoElemento" header="Tipo" />
+                    <Column field="codigoElemento" header="Código" />
+                    <Column field="codigoTipificacion" header="Tipificación" />
+
+                    {/* NUEVA COLUMNA */}
+                    <Column header="Archivos" body={archivosTemplate} />
+
+                    <Column field="estado" header="Estado" />
                 </DataTable>
+
+                {/* MODAL */}
+                <Dialog
+                    header={`Archivos - ${selectedItem?.codigoElemento || ''}`}
+                    visible={visibleDialog}
+                    style={{ width: '60vw' }}
+                    onHide={() => setVisibleDialog(false)}
+                >
+                    {selectedItem && (
+                        <DataTable value={selectedItem.archivos} responsiveLayout="scroll">
+                            <Column field="archNombre" header="Ruta" />
+                            <Column field="archTipo" header="Tipo" />
+                            <Column field="archActivo" header="Estado" />
+                        </DataTable>
+                    )}
+                </Dialog>
+
+                <div style={{ marginTop: '10px' }}>
+                    <small>Seleccionados: {selectedArchivos.length}</small>
+                </div>
+
             </Card>
         </div>
     );

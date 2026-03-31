@@ -461,12 +461,12 @@ namespace Sigre.DataAccess
                 // =================================================
 
                 // 🔹 Prioridad: DEFI_UUID
-                if (!string.IsNullOrWhiteSpace(archivo.DefiUUID))
+                if (!string.IsNullOrWhiteSpace(archivo.DefiUuid))
                 {
                     foreach (DataRow r in dtDefOnline.Rows)
                     {
                         if (r["DEFI_Col3"] != DBNull.Value &&
-                            r["DEFI_Col3"].ToString() == archivo.DefiUUID)
+                            r["DEFI_Col3"].ToString() == archivo.DefiUuid)
                         {
                             codTabla = Convert.ToInt32(r["DEFI_Interno"]);
                             defiUUID = r["DEFI_Col3"].ToString();
@@ -496,7 +496,7 @@ namespace Sigre.DataAccess
 
                 // Setear Deficiencia
                 archivo.ArchCodTabla = codTabla;
-                archivo.DefiUUID = defiUUID;
+                archivo.DefiUuid = defiUUID;
 
                 // =================================================
                 // 2️⃣ VERIFICAR SI EL ARCHIVO EXISTE

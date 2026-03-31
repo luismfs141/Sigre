@@ -106,7 +106,7 @@ public partial class Deficiencia
 
     public string DefiUsuarioMod { get; set; } = null!;
 
-    public bool? DefiActivo { get; set; }
+    public bool DefiActivo { get; set; }
 
     public int? DefiEstadoCriticidad { get; set; }
 
@@ -120,14 +120,19 @@ public partial class Deficiencia
 
     public string? DefiCol3 { get; set; }
 
-    public virtual Inspeccione? InspInternoNavigation { get; set; }
-
     public string? DefiAccesibilidad { get; set; }
+
     public string? DefiTipoCruce { get; set; }
 
     public int? CodopInterno { get; set; }
 
+    public int? EsgoInterno { get; set; }
 
+    public bool DefiMovil { get; set; }
+
+    public virtual EstadosGlobal? EsgoInternoNavigation { get; set; }
+
+    public virtual Inspeccione? InspInternoNavigation { get; set; }
 
     [NotMapped]
     public bool EsTercero { get; set; }
