@@ -31,8 +31,6 @@ import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { latLonToUTM } from '../utils/geoUtils';
 import { Checkbox } from 'primereact/checkbox';
 import { API_BASE_URL } from '../utils/ngrok';
-import ResilientImage from '../utils/ResilientImage';
-
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
       background-color: #bfdbfe !important; /* Azul más fuerte */
@@ -57,8 +55,7 @@ function formatCompactDate(date) {
     const d = new Date(date);
     if (isNaN(d.getTime())) return "00000000-000000";
     const pad = (n) => String(n).padStart(2, '0');
-    const padMs = (n) => n.toString().padStart(3, '0');
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${padMs(d.getMilliseconds())}`;
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 const toLocalISOString = (date) => {
@@ -109,11 +106,6 @@ function detectSinDefFolderAliasFromPath(path) {
     return match ? match[1].toUpperCase() : "SINDEF";
 }
 
-function normalizeSinDefFolderOnly(path, targetAlias = "SINDEF") {
-    return String(path || '')
-        .replace(/\\/g, '/')
-        .replace(/\/(SINDEF|0000)(?=\/|$)/i, `/${targetAlias}`);
-}
 
 // ==============================================================================
 // 🚀 COMPONENTE PRINCIPAL UNIFICADO
@@ -150,7 +142,7 @@ export default function WebInspectionManager() {
         geo: false   // GPS (Protegido)
     });
     // --- 2. ESTADOS DE DATOS E HISTORIAL ---
-    const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles, moveFilePhysical } = useFiles();
+    const { files: dbFiles, loadFiles, deleteFile, addFile, loadingFiles } = useFiles();
     const { getCodeById, fetchTypificationsByTypeElement, masterTypifications } = useTypification();
     const { fetchPostesChunk, fetchVanosChunk } = useElements();
 
@@ -163,7 +155,6 @@ export default function WebInspectionManager() {
     const [zipLoading, setZipLoading] = useState(false);
     const [showPhotoModal, setShowPhotoModal] = useState(false);
     const sessionBlobs = useRef({});
-    const pendingSinDefNormalizationRef = useRef(null);
 
     // --- 4. EFECTOS GLOBALES ---
     useEffect(() => {
@@ -187,59 +178,30 @@ export default function WebInspectionManager() {
     // 🔥 MAPEO DE ARCHIVOS DE LA BD A LA TABLA INTERNA 🔥
     useEffect(() => {
         if (dbFiles && dbFiles.length > 0) {
-            const activeFiles = dbFiles.filter(f => f.archActivo === true);
+            const mappedFiles = dbFiles
+                .filter(f => f.archActivo === true)
+                .map((f) => {
+                    const safeHistoricalData = historicalData || [];
+                    const parentDef = safeHistoricalData.find(d => d.defiInterno === f.archCodTabla);
+                    const tipiActual = parentDef ? parentDef.tipiInterno : 0;
+                    const idElementoRecuperado = parentDef ? parentDef.defiIdElemento : (f.archIdElemento || f.IdElemento || 0);
 
-            const targetDefId = pendingSinDefNormalizationRef.current;
-
-            const hasTargetDef = targetDefId
-                ? activeFiles.some(f => Number(f.archCodTabla) === Number(targetDefId))
-                : false;
-
-            const hasSinDefFolder = activeFiles.some(f =>
-                /\/SINDEF(?=\/|$)/i.test(String(f.archNombre || '').replace(/\\/g, '/'))
-            );
-
-            const has0000Folder = activeFiles.some(f =>
-                /\/0000(?=\/|$)/i.test(String(f.archNombre || '').replace(/\\/g, '/'))
-            );
-
-            // 🔥 SOLO normalizamos si:
-            // 1) venimos de agregar una foto nueva S/D
-            // 2) el lote actual quedó mezclado entre 0000 y SINDEF
-            const shouldForceSinDefFolder = !!targetDefId && hasTargetDef && hasSinDefFolder && has0000Folder;
-
-            const mappedFiles = activeFiles.map((f) => {
-                const safeHistoricalData = historicalData || [];
-                const parentDef = safeHistoricalData.find(d => d.defiInterno === f.archCodTabla);
-                const tipiActual = parentDef ? parentDef.tipiInterno : 0;
-                const idElementoRecuperado = parentDef ? parentDef.defiIdElemento : (f.archIdElemento || f.IdElemento || 0);
-
-                const currentPath = shouldForceSinDefFolder
-                    ? normalizeSinDefFolderOnly(f.archNombre, "SINDEF")
-                    : f.archNombre;
-
-                return {
-                    tempId: `db-${f.archInterno}`,
-                    isDatabase: true,
-                    archInterno: f.archInterno,
-                    archIdElemento: idElementoRecuperado,
-                    originalName: f.archNombre,
-                    currentPath,
-                    selectedDeficiencyId: f.archCodTabla,
-                    archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1),
-                    archFecha: new Date(f.archFecha),
-                    archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
-                    archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
-                    tipiInterno: tipiActual,
-                };
-            });
-
+                    return {
+                        tempId: `db-${f.archInterno}`,
+                        isDatabase: true,
+                        archInterno: f.archInterno,
+                        archIdElemento: idElementoRecuperado,
+                        originalName: f.archNombre,
+                        currentPath: f.archNombre,
+                        selectedDeficiencyId: f.archCodTabla,
+                        archTipo: parseInt(f.archTipo !== null ? f.archTipo : 1),
+                        archFecha: new Date(f.archFecha),
+                        archLatitud: f.archLatitud !== null ? f.archLatitud : 0,
+                        archLongitud: f.archLongitud !== null ? f.archLongitud : 0,
+                        tipiInterno: tipiActual,
+                    };
+                });
             setFileRows(mappedFiles);
-
-            // 🔥 Limpiamos la marca solo después de procesar la carga originada por la nueva foto
-            if (hasTargetDef) {
-                pendingSinDefNormalizationRef.current = null;
-            }
         } else {
             setFileRows([]);
         }
@@ -343,10 +305,9 @@ export default function WebInspectionManager() {
             const defId = selectedDeficiency ? selectedDeficiency.defiInterno : 0;
             const defTipiInterno = selectedDeficiency ? selectedDeficiency.tipiInterno : 0;
             const defCodeBase = String(selectedDeficiency?.tipiCodigo || getCodeById(defTipiInterno) || "0000").trim();
-            const isSinDef = defCodeBase === "0000" || defCodeBase === "0" || defCodeBase.toUpperCase() === "SINDEF";
 
-            let defFolder = defCodeBase === "7004" ? "7004/1" : (isSinDef ? "SINDEF" : defCodeBase);
-            let namePart = isSinDef ? "SINDEF" : defCodeBase;
+            let defFolder = defCodeBase === "7004" ? "7004/1" : (defCodeBase === "0000" ? "SINDEF" : defCodeBase);
+            let namePart = defCodeBase === "0000" ? "0000" : defCodeBase;
 
             // Manejo especial correlativos 7004
             if (defCodeBase === "7004") {
@@ -386,17 +347,8 @@ export default function WebInspectionManager() {
             if (result) {
                 toast.current.show({ severity: 'success', summary: 'OK', detail: 'Foto guardada' });
                 setShowPhotoModal(false);
-
-                // 🔥 SOLO si acabo de agregar una foto nueva a una deficiencia S/D,
-                // marcamos esta carga para uniformizar carpeta 0000 -> SINDEF
-                // sin tocar el nombre del archivo.
-                if (isSinDef && defId) {
-                    pendingSinDefNormalizationRef.current = Number(defId);
-                }
-
                 if (defId) loadFiles(defId);
             }
-
         } catch (error) {
             console.error(error);
             toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar la foto.' });
@@ -415,10 +367,10 @@ export default function WebInspectionManager() {
         // Pre-marcamos inteligentemente las opciones si el usuario llenó los campos arriba
         // 🚨 EL GPS SIEMPRE ESTARÁ EN FALSE POR SEGURIDAD 🚨
         setBulkNewGis('');
-setBulkOptions({
-            path: false, 
-            date: false, 
-            tipi: false, 
+        setBulkOptions({
+            path: !!selectedFeederId && !!selectedSed,
+            date: !!globalDate,
+            tipi: !!globalTipificacion,
             geo: false,
             gisCode: false
         });
@@ -475,9 +427,9 @@ setBulkOptions({
                     const fileExt = isAudio ? "m4a" : "jpg";
 
                     const targetDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
-                    const originalTipi = targetDef ? getCodeById(targetDef.tipiInterno) : "0000";
+                    const originalTipi = targetDef ? getCodeById(targetDef.tipiInterno) : "SINDEF";
                     const tipiCodeStr = applyTipi
-                        ? String(getCodeById(globalTipificacion) || "0000").trim()
+                        ? String(getCodeById(globalTipificacion) || "SINDEF").trim()
                         : String(originalTipi).trim();
 
                     let folderPart = "";
@@ -496,11 +448,8 @@ setBulkOptions({
                         folderPart = `7004/${correlativo}`;
                         fileTipiPart = `7004_${correlativo}`;
                     } else if (tipiCodeStr === "0000" || tipiCodeStr === "0" || tipiCodeStr === "") {
-                        // 🔥 REGLA:
-                        // Si el usuario marcó "Tipificación" en Aplicar Globales y la nueva tipificación es S/D,
-                        // entonces uniformizamos la carpeta a SINDEF.
-                        // Si NO marcó Tipificación, se respeta el alias existente (0000 o SINDEF).
-                        folderPart =  "SINDEF";
+                        const existingAlias = detectSinDefFolderAliasFromPath(row.currentPath || row.originalName);
+                        folderPart = existingAlias;
                         fileTipiPart = "SINDEF";
                     } else {
                         folderPart = safeSeg(tipiCodeStr);
@@ -757,20 +706,16 @@ setBulkOptions({
             return;
         }
 
-        const rowsForZip = fileRows.filter(row => parseInt(row.archTipo) !== 0);
-
-        if (rowsForZip.length === 0) {
-            toast.current.show({ severity: 'warn', summary: 'Sin fotos', detail: 'No hay fotos para descargar en el ZIP.' });
-            return;
-        }
-
         setZipLoading(true);
         let filesAdded = 0;
 
         try {
             const zip = new JSZip();
 
-            const downloadPromises = rowsForZip.map(async (row) => {
+
+
+            // Usamos map para crear las promesas de descarga en paralelo
+            const downloadPromises = fileRows.map(async (row) => {
                 let zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
                 const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
 
@@ -781,7 +726,7 @@ setBulkOptions({
                     return true;
                 }
 
-                // 2. Método principal: endpoint oficial
+                // 2. 🚀 MÉTODO PRINCIPAL: Usar el endpoint API Oficial del Backend (No pierde la pista de los nombres cambiados)
                 if (row.archInterno && row.archInterno > 0) {
                     const baseUrl = API_BASE_URL.replace(/\/+$/, '');
                     const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
@@ -794,14 +739,14 @@ setBulkOptions({
                             const blob = await response.blob();
                             zip.file(zipPath, blob);
                             filesAdded++;
-                            return true;
+                            return true; // Éxito, no hacer el fallback
                         }
                     } catch (e) {
                         console.warn(`Falló la API de descarga para ID ${row.archInterno}, intentando rutas físicas...`);
                     }
                 }
 
-                // 3. Fallback: URLs físicas
+                // 3. FALLBACK: Intentar URLs físicas crudas
                 const urlsToTry = getCandidateUrls(row);
 
                 for (const url of urlsToTry) {
@@ -816,7 +761,7 @@ setBulkOptions({
                             return true;
                         }
                     } catch (e) {
-                        // sigue intentando
+                        // Sigue el bucle intentando
                     }
                 }
 
@@ -824,6 +769,7 @@ setBulkOptions({
                 return false;
             });
 
+            // Esperar que finalicen TODAS las descargas antes de comprimir el ZIP
             await Promise.all(downloadPromises);
 
             if (filesAdded === 0) {
@@ -835,11 +781,7 @@ setBulkOptions({
             const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
             saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
 
-            toast.current.show({
-                severity: 'success',
-                summary: 'Descargado',
-                detail: `Se empaquetaron ${filesAdded} de ${rowsForZip.length} fotos.`
-            });
+            toast.current.show({ severity: 'success', summary: 'Descargado', detail: `Se empaquetaron ${filesAdded} de ${fileRows.length} archivos.` });
 
         } catch (error) {
             console.error(error);
@@ -852,84 +794,20 @@ setBulkOptions({
     // ==============================================================================
     // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
     // ==============================================================================
-    // const handleSaveAll = async () => {
-    //     const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
-    //     if (fileRows.length === 0) return;
-    //     setSaving(true);
-
-    //     // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
-    //     toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
-    //     await handleDownloadRenamedZip();
-
-    //     // 2. Guardar en Base de Datos
-    //     let successCount = 0; let failCount = 0;
-    //     const updatedRows = [...fileRows];
-
-    //     const promises = updatedRows.map(async (row, index) => {
-    //         const payload = {
-    //             archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
-    //             archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
-    //             archFecha: toLocalISOString(row.archFecha), archLatitud: parseFloat(String(row.archLatitud).replace(',', '.')) || 0,
-    //             archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
-    //             archNombre: row.currentPath, tipiInterno: row.tipiInterno
-    //         };
-    //         const success = await addFile(payload);
-    //         if (success) {
-    //             successCount++;
-    //             updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
-    //         } else {
-    //             failCount++;
-    //         }
-    //     });
-
-    //     await Promise.all(promises);
-    //     setFileRows(updatedRows);
-    //     setSaving(false);
-
-    //     if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
-    //     else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
-    // };
-
-    // ==============================================================================
-    // 🔥 9. GUARDADO TOTAL (ZIP + DB + MOVIMIENTO FÍSICO EN SERVIDOR) 🔥
-    // ==============================================================================
-    // No olvides importar API_URL arriba en tu archivo si no lo tienes:
-    // import { API_URL } from '../utils/api'; // Ajusta la ruta según tu proyecto
-
-    // ==============================================================================
-    // 🔥 9. GUARDADO TOTAL (ZIP + DB + MOVIMIENTO FÍSICO OPCIONAL) 🔥
-    // ==============================================================================
     const handleSaveAll = async () => {
         const elementId = selectedDeficiency ? selectedDeficiency.defiIdElemento : structureIdInt;
         if (fileRows.length === 0) return;
         setSaving(true);
 
-        // 1. RESPALDO: Descargar las fotos físicas ANTES de moverlas en el servidor
-        toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos de respaldo...' });
+        // 1. Descargar las fotos físicas ANTES de que la BD pierda la pista
+        toast.current.show({ severity: 'info', summary: 'Preparando', detail: 'Empaquetando fotos antes de guardar...' });
         await handleDownloadRenamedZip();
 
-        // 2. MOVER Y GUARDAR EN BD
-        toast.current.show({ severity: 'info', summary: 'Procesando', detail: 'Actualizando base de datos e intentando mover archivos...' });
-
-        let successCount = 0;
-        let failCount = 0;
-        let physicalMoveFailed = false; // 🔥 Bandera clave para la degradación elegante
+        // 2. Guardar en Base de Datos
+        let successCount = 0; let failCount = 0;
         const updatedRows = [...fileRows];
 
         const promises = updatedRows.map(async (row, index) => {
-            const isModified = row.originalName && row.originalName !== row.currentPath;
-
-            // A. Intento de movimiento físico en el disco (Solo si la ruta cambió y no es audio)
-            if (isModified && parseInt(row.archTipo) !== 0) {
-                // Usamos nuestro hook limpio. Retorna true si funcionó, false si falló.
-                const successMove = await moveFilePhysical(row.originalName, row.currentPath);
-
-                if (!successMove) {
-                    physicalMoveFailed = true; // Encendemos la bandera para el mensaje "sticky"
-                }
-            }
-
-            // B. Guardar en Base de Datos (🔥 SE EJECUTA SIEMPRE, haya fallado o no el paso físico)
             const payload = {
                 archTabla: "Deficiencias", archInterno: row.archInterno, archCodTabla: row.selectedDeficiencyId,
                 archTipo: String(row.archTipo), archIdElemento: row.archIdElemento || elementId,
@@ -937,13 +815,10 @@ setBulkOptions({
                 archLongitud: parseFloat(String(row.archLongitud).replace(',', '.')) || 0,
                 archNombre: row.currentPath, tipiInterno: row.tipiInterno
             };
-
             const success = await addFile(payload);
-
             if (success) {
                 successCount++;
-                // Al guardar con éxito, la ruta actual pasa a ser la nueva original en la tabla web
-                updatedRows[index] = { ...row, originalName: row.currentPath };
+                updatedRows[index] = { ...row, originalName: row.currentPath }; // Al guardar con éxito, original pasa a ser el nuevo
             } else {
                 failCount++;
             }
@@ -953,25 +828,9 @@ setBulkOptions({
         setFileRows(updatedRows);
         setSaving(false);
 
-        // C. Lógica de Mensajes Finales
-        if (failCount === 0) {
-            if (physicalMoveFailed) {
-                // 🔥 MENSAJE DURADERO si la BD está bien pero el disco falló
-                toast.current.show({
-                    severity: 'warn',
-                    summary: 'BD Actualizada - Faltan Mover Archivos Fisicos',
-                    detail: 'Los datos se actualizaron en la BD y tienes el ZIP de respaldo. Sin embargo, no se pudieron mover las fotos en las carpetas del servidor (revisa la unidad D/H). Por favor, descomprime el ZIP y reemplázalas manualmente.',
-                    sticky: true // El usuario debe cerrarlo manualmente
-                });
-            } else {
-                // Todo perfecto (ZIP + BD + Disco físico)
-                toast.current.show({ severity: 'success', summary: 'Éxito Total', detail: `${successCount} archivos respaldados, movidos físicamente y actualizados en BD.` });
-            }
-        } else {
-            toast.current.show({ severity: 'error', summary: 'Error de BD', detail: `Se guardaron ${successCount} registros, pero fallaron ${failCount}.`, sticky: true });
-        }
+        if (failCount === 0) toast.current.show({ severity: 'success', summary: 'Guardado', detail: `${successCount} archivos actualizados en BD.` });
+        else toast.current.show({ severity: 'warn', summary: 'Atención', detail: `Guardados: ${successCount}. Errores: ${failCount}` });
     };
-
     const handleRemoveRequest = (event, row) => {
         confirmPopup({
             target: event.currentTarget,
@@ -1013,82 +872,27 @@ setBulkOptions({
         );
     };
 
-    // const FallbackImage = ({ row }) => {
-    //     const isAudio = parseInt(row.archTipo) === 0;
-    //     const urls = getCandidateUrls(row);
-    //     const [srcIndex, setSrcIndex] = useState(0);
-    //     const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+    const FallbackImage = ({ row }) => {
+        const isAudio = parseInt(row.archTipo) === 0;
+        const urls = getCandidateUrls(row);
+        const [srcIndex, setSrcIndex] = useState(0);
+        const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
 
-    //     if (sessionBlobs && sessionBlobs.current[originalFileName]) {
-    //         return <Image src={URL.createObjectURL(sessionBlobs.current[originalFileName])} alt="Foto" preview className="absolute inset-0 w-full h-full block" imageClassName="w-full h-full object-cover block" />;
-    //     }
+        if (sessionBlobs && sessionBlobs.current[originalFileName]) {
+            return <Image src={URL.createObjectURL(sessionBlobs.current[originalFileName])} alt="Foto" preview className="absolute inset-0 w-full h-full block" imageClassName="w-full h-full object-cover block" />;
+        }
 
-    //     if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
+        if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
 
-    //     return (
-    //         <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block"
-    //             onError={(e) => {
-    //                 if (srcIndex < urls.length - 1) setSrcIndex(srcIndex + 1);
-    //                 else { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto'; }
-    //             }}
-    //         />
-    //     );
-    // };
-    // const FallbackImage = ({ row }) => {
-    //     const isAudio = parseInt(row.archTipo) === 0;
-    //     const [srcIndex, setSrcIndex] = useState(0);
-
-    //     if (isAudio) {
-    //         return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
-    //     }
-
-    //     // 🔥 CORRECCIÓN AQUÍ: Usar originalName para la vista previa porque 
-    //     // el archivo físico sigue ahí hasta que le demos a Guardar en BD.
-    //     const pathForPreview = (row.originalName && row.originalName !== row.currentPath)
-    //         ? row.originalName
-    //         : row.currentPath;
-
-    //     const normalizedPath = String(pathForPreview || '')
-    //         .replace(/\\/g, '/')
-    //         .replace(/^.*SIGRE\.MOVIL\//i, '')
-    //         .replace(/^\/+/, '');
-
-    //     const buildUrl = (path) =>
-    //         `${API_BASE_URL.replace(/\/+$/, '')}/${path
-    //             .split('/')
-    //             .map(encodeURIComponent)
-    //             .join('/')}?t=${Date.now()}`;
-
-    //     const srcs = [];
-
-    //     if (normalizedPath) {
-    //         srcs.push(buildUrl(normalizedPath));
-
-    //         if (/\/SINDEF\//i.test(normalizedPath)) {
-    //             srcs.push(buildUrl(normalizedPath.replace(/\/SINDEF\//gi, '/0000/')));
-    //         } else if (/\/0000\//i.test(normalizedPath)) {
-    //             srcs.push(buildUrl(normalizedPath.replace(/\/0000\//gi, '/SINDEF/')));
-    //         }
-    //     }
-
-    //     return (
-    //         <Image
-    //             src={srcs[srcIndex] || ''}
-    //             alt="Foto"
-    //             preview
-    //             className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100"
-    //             imageClassName="w-full h-full object-cover block"
-    //             onError={(e) => {
-    //                 if (srcIndex < srcs.length - 1) {
-    //                     setSrcIndex(srcIndex + 1);
-    //                 } else {
-    //                     e.target.onerror = null;
-    //                     e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto';
-    //                 }
-    //             }}
-    //         />
-    //     );
-    // };
+        return (
+            <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block"
+                onError={(e) => {
+                    if (srcIndex < urls.length - 1) setSrcIndex(srcIndex + 1);
+                    else { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto'; }
+                }}
+            />
+        );
+    };
 
     return (
 
@@ -1242,53 +1046,19 @@ setBulkOptions({
                                     <i className="pi pi-camera text-3xl text-gray-400 group-hover:text-blue-500 mb-1 transition-colors"></i>
                                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider group-hover:text-blue-600">Añadir Foto</span>
                                 </div>
-                                {fileRows.map((row, index) => {
-    const isAudio = parseInt(row.archTipo) === 0;
-    const typeLabel = photoTypes[row.archTipo] || `Tipo ${row.archTipo}`;
-
-    // 1. MANTENEMOS TU DISEÑO PARA LOS AUDIOS
-    if (isAudio) {
-        return (
-            <div key={row.tempId} className="h-28 w-28 rounded-lg border border-gray-200 overflow-hidden relative group hover:shadow-md transition-shadow bg-white flex flex-col">
-                <div className="flex-1 flex items-center justify-center bg-gray-50 relative">
-                    <i className="pi pi-volume-up text-4xl text-gray-400"></i>
-                    <button onClick={(e) => { e.stopPropagation(); handleRemoveRequest(e, row); }} className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded border border-white flex items-center justify-center shadow-md transition-all z-10" title="Eliminar archivo">
-                        <i className="pi pi-trash text-[10px] font-bold"></i>
-                    </button>
-                </div>
-                <div className="h-6 w-full bg-slate-800 text-white text-[9px] font-bold flex items-center justify-center uppercase tracking-tighter shrink-0 z-10 relative">
-                    {typeLabel}
-                </div>
-            </div>
-        );
-    }
-
-    // 2. BUSCAMOS LA TIPIFICACIÓN ORIGINAL PARA EL RESILIENT
-    const parentDef = historicalData.find(d => d.defiInterno === row.selectedDeficiencyId);
-    const defCodeStr = parentDef ? getCodeById(parentDef.tipiInterno) : null;
-
-    // 3. REEMPLAZAMOS LA TARJETA DE IMAGEN POR NUESTRO COMPONENTE SENIOR
-    return (
-        <div key={row.tempId} className="h-28 w-28 shrink-0 flex items-center justify-center">
-            <ResilientImage
-                // 🔥 Adaptamos la fila (row) para que ResilientImage la lea correctamente
-                file={{ ...row, archNombre: row.currentPath || row.originalName, archTipo: row.archTipo }}
-                index={index}
-                onImageClick={() => {}} // Vacío porque aquí no hay Lightbox
-                onUrlResolved={() => {}} 
-                typeName={typeLabel}
-                currentSupply={null}
-                defCode={defCodeStr}
-                // Conectamos la eliminación a tu función existente
-                onDelete={(fileToDelete) => handleRemoveRequest({ currentTarget: document.body }, fileToDelete)}
-                onCropRequest={() => {}}
-                onReplaceRequest={() => {}}
-                allowDirectEdit={false} // 🔥 Apagamos los botones azul y verde para esta vista gerencial
-                cacheBuster={Date.now()}
-            />
-        </div>
-    );
-})}
+                                {fileRows.map((row) => (
+                                    <div key={row.tempId} className="h-28 w-28 rounded-lg border border-gray-200 overflow-hidden relative group hover:shadow-md transition-shadow bg-white flex flex-col">
+                                        <div className="flex-1 flex items-center justify-center bg-gray-50 relative">
+                                            <FallbackImage row={row} />
+                                            <button onClick={(e) => { e.stopPropagation(); handleRemoveRequest(e, row); }} className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded border border-white flex items-center justify-center shadow-md transition-all z-10" title="Eliminar archivo">
+                                                <i className="pi pi-trash text-[10px] font-bold"></i>
+                                            </button>
+                                        </div>
+                                        <div className="h-6 w-full bg-slate-800 text-white text-[9px] font-bold flex items-center justify-center uppercase tracking-tighter shrink-0 z-10 relative">
+                                            {photoTypes[row.archTipo] || `Tipo ${row.archTipo}`}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
