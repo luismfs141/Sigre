@@ -14,6 +14,23 @@ import {
   updateVanoIdAfterSync
 } from "../database/offlineDB/gaps";
 
+
+const GAP_SYNC_BATCH_SIZE = 100;
+
+const chunkArray = (items, size) => {
+  if (!Array.isArray(items) || !items.length) return [];
+  if (!Number.isFinite(size) || size <= 0) return [items];
+
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+};
+
+
 export const useGap = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -88,28 +105,28 @@ export const useGap = () => {
 
   // ------------------- NORMALIZAR -------------------
   const normalizeVanoForSync = (vano) => ({
-  ...vano,
+    ...vano,
 
-  VanoInterno: vano?.VanoInterno != null ? Number(vano.VanoInterno) : null,
-  VanoInternoLocal: vano?.VanoInterno != null ? Number(vano.VanoInterno) : 0,
+    VanoInterno: vano?.VanoInterno != null ? Number(vano.VanoInterno) : null,
+    VanoInternoLocal: vano?.VanoInterno != null ? Number(vano.VanoInterno) : 0,
 
-  EstadoOffLine:
-    vano?.EstadoOffLine === "" || vano?.EstadoOffLine == null || Number(vano?.EstadoOffLine) === 0
-      ? 1
-      : Number(vano.EstadoOffLine),
+    EstadoOffLine:
+      vano?.EstadoOffLine === "" || vano?.EstadoOffLine == null || Number(vano?.EstadoOffLine) === 0
+        ? 1
+        : Number(vano.EstadoOffLine),
 
-  AlimInterno: Number(vano?.AlimInterno),
+    AlimInterno: Number(vano?.AlimInterno),
 
-  VanoTerceros: vano?.VanoTerceros === true || Number(vano?.VanoTerceros) === 1,
-  VanoInspeccionado: vano?.VanoInspeccionado === true || Number(vano?.VanoInspeccionado) === 1,
-  VanoEsMt: vano?.VanoEsMt === true || Number(vano?.VanoEsMt) === 1,
-  VanoEsBt: vano?.VanoEsBt === true || Number(vano?.VanoEsBt) === 1,
+    VanoTerceros: vano?.VanoTerceros === true || Number(vano?.VanoTerceros) === 1,
+    VanoInspeccionado: vano?.VanoInspeccionado === true || Number(vano?.VanoInspeccionado) === 1,
+    VanoEsMt: vano?.VanoEsMt === true || Number(vano?.VanoEsMt) === 1,
+    VanoEsBt: vano?.VanoEsBt === true || Number(vano?.VanoEsBt) === 1,
 
-  VanoSubestacion:
-    vano?.VanoSubestacion != null && vano?.VanoSubestacion !== ""
-      ? Number(vano.VanoSubestacion)
-      : null,
-});
+    VanoSubestacion:
+      vano?.VanoSubestacion != null && vano?.VanoSubestacion !== ""
+        ? Number(vano.VanoSubestacion)
+        : null,
+  });
 
   // ------------------- AUTO-SYNC DE UN VANO -------------------
   const autoSyncVano = async (vanoInternoLocal) => {
@@ -151,92 +168,120 @@ export const useGap = () => {
   };
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
-  const syncAllGaps = async () => {
-  const online = await isOnline();
-  if (!online) {
-    return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
-  }
-
-  let total = 0;
-
-  try {
-    const pendientes = await getVanosPendientes();
-    if (!Array.isArray(pendientes) || !pendientes.length) {
-      return { ok: true, total: 0, synced: 0 };
+  const syncAllGaps = async (onProgress) => {
+    const online = await isOnline();
+    if (!online) {
+      return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
     }
 
-    const aSincronizar = pendientes.filter((d) =>
-      [1, 2, 3].includes(Number(d?.EstadoOffLine))
-    );
+    let total = 0;
+    let synced = 0;
 
-    total = aSincronizar.length;
+    try {
+      const dbOk = await checkDatabase();
+      if (!dbOk) {
+        return { ok: false, total: 0, synced: 0, error: "DB_NOT_READY" };
+      }
 
-    if (!total) {
-      return { ok: true, total: 0, synced: 0 };
-    }
+      const pendientes = await getVanosPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) {
+        return { ok: true, total: 0, synced: 0 };
+      }
 
-    const payload = aSincronizar.map((v) => normalizeVanoForSync(v));
-
-    const response = await client.post("/Gap/SyncFromSQLite", payload, {
-      timeout: 30000,
-    });
-
-    const respList = Array.isArray(response.data) ? response.data : [];
-
-    if (respList.length !== total) {
-      throw new Error(
-        `GAP_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
+      const aSincronizar = pendientes.filter((d) =>
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
       );
-    }
 
-    for (const r of respList) {
-      const localId = Number(r?.localId);
-      const serverId = Number(r?.serverId);
+      total = aSincronizar.length;
 
-      if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
-        throw new Error(`GAP_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+      if (!total) {
+        return { ok: true, total: 0, synced: 0 };
       }
-    }
 
-    for (const r of respList) {
-      const localId = Number(r.localId);
-      const serverId = Number(r.serverId);
+      const lotes = chunkArray(aSincronizar, GAP_SYNC_BATCH_SIZE);
 
-      if (localId !== serverId) {
-        await updateVanoIdAfterSync(localId, serverId);
-      } else {
-        await markVanoAsSynced(serverId);
+      for (let i = 0; i < lotes.length; i++) {
+        const lote = lotes[i];
+
+        onProgress?.({
+          stage: "vanos",
+          currentBatch: i + 1,
+          totalBatches: lotes.length,
+          batchSize: lote.length,
+          totalRecords: total,
+          syncedRecords: synced,
+        });
+
+        const payload = lote.map((v) => normalizeVanoForSync(v));
+
+        const response = await client.post("/Gap/SyncFromSQLite", payload, {
+          timeout: 30000,
+        });
+
+        const respList = Array.isArray(response.data) ? response.data : [];
+
+        if (respList.length !== lote.length) {
+          throw new Error(
+            `GAP_SYNC_PARTIAL_RESPONSE: lote=${i + 1}, enviados=${lote.length}, respondidos=${respList.length}`
+          );
+        }
+
+        for (const r of respList) {
+          const localId = Number(r?.localId);
+          const serverId = Number(r?.serverId);
+
+          if (
+            !Number.isFinite(localId) ||
+            !Number.isFinite(serverId) ||
+            localId <= 0 ||
+            serverId <= 0
+          ) {
+            throw new Error(`GAP_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+          }
+        }
+
+        for (const r of respList) {
+          const localId = Number(r.localId);
+          const serverId = Number(r.serverId);
+
+          if (localId !== serverId) {
+            await updateVanoIdAfterSync(localId, serverId);
+          } else {
+            await markVanoAsSynced(serverId);
+          }
+        }
+
+        synced += lote.length;
       }
-    }
 
-    return { ok: true, total, synced: total };
-  } catch (err) {
-    console.error("❌ Sync masivo vanos falló:", err?.response?.data || err?.message || err);
-    return {
-      ok: false,
-      total,
-      synced: 0,
-      error: err?.response?.data?.message || err?.message || "GAP_SYNC_FAILED",
-    };
-  }
-};
+      return { ok: true, total, synced };
+    } catch (err) {
+      console.error("❌ Sync masivo vanos falló:", err?.response?.data || err?.message || err);
+      return {
+        ok: false,
+        total,
+        synced,
+        error: err?.response?.data?.message || err?.message || "GAP_SYNC_FAILED",
+      };
+    }
+  };
 
   const countPendingGapsLocal = async () => {
-  const dbOk = await checkDatabase();
-  if (!dbOk) return 0;
+    const dbOk = await checkDatabase();
+    if (!dbOk) return 0;
 
-  try {
-    const pendientes = await getVanosPendientes();
-    if (!Array.isArray(pendientes) || !pendientes.length) return 0;
+    try {
+      const pendientes = await getVanosPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) return 0;
 
-    return pendientes.filter((d) =>
-      [1, 2, 3].includes(Number(d?.EstadoOffLine))
-    ).length;
-  } catch (err) {
-    console.error("❌ Error contando vanos pendientes:", err);
-    return 0;
-  }
-};
+      return pendientes.filter((d) =>
+        [1, 2, 3].includes(Number(d?.EstadoOffLine))
+      ).length;
+    } catch (err) {
+      console.error("❌ Error contando vanos pendientes:", err);
+      return 0;
+    }
+  };
 
   return {
     loading,

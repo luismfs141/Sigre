@@ -100,7 +100,29 @@ export const useFiles = () => {
         }
     };
 
+    const getFilesBySeds = useCallback(async (seds) => {
+        if (!seds || seds.length === 0) return [];
 
+        try {
+            const response = await api.post('/File/GetBySeds', seds);
+            return response.data || [];
+        } catch (error) {
+            console.error("Error obteniendo archivos por SEDs:", error);
+            return [];
+        }
+    }, []);
+
+    const getFileStructBySeds = useCallback(async (seds) => {
+        if (!seds || seds.length === 0) return [];
+
+        try {
+            const response = await api.post('/File/GetFileStructBySeds', seds);
+            return response.data?.data || []; // 👈 importante (viene envuelto)
+        } catch (error) {
+            console.error("Error obteniendo FileStruct por SEDs:", error);
+            return [];
+        }
+    }, []);
 
     return { 
         files, 
@@ -110,6 +132,8 @@ export const useFiles = () => {
         addFile, 
         fetchFilesData,
         moveFilePhysical,
-        overwritePhysicalImage
+        overwritePhysicalImage,
+        getFilesBySeds,
+        getFileStructBySeds
     };
 };

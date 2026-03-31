@@ -43,20 +43,22 @@ namespace Sigre.DataAccess
 
         public List<Vano> DAGAP_GetByListFeeder(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var vanos = ctx.Vanos.Where(v => x_feeders.Contains(v.AlimInterno)).ToList();
-
-            return vanos;
+            return ctx.Vanos
+                .AsNoTracking()
+                .Where(v => x_feeders.Contains(v.AlimInterno))
+                .ToList();
         }
 
         public List<Vano> DAGAP_GetByListSeds(List<int> x_seds)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var vanos = ctx.Vanos.Where(v => x_seds.Contains((int)v.VanoSubestacion)).ToList();
-
-            return vanos;
+            return ctx.Vanos
+                .AsNoTracking()
+                .Where(v => x_seds.Contains((int)v.VanoSubestacion))
+                .ToList();
         }
 
         //0-> Baja Tension, 1 -> Media Tension
@@ -72,21 +74,23 @@ namespace Sigre.DataAccess
 
         public List<PinStruct> DAGAP_GetPinsByFeeders(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            List<PinStruct> pinVanos = ctx.Vanos.Where(v => x_feeders.Contains(v.AlimInterno)).Select(v => new PinStruct()
-            {
-                Id = v.VanoInterno,
-                IdAlimentador = v.AlimInterno,
-                Label = "",
-                Type = ElectricElement.Gap,
-                NodoInicial = v.VanoNodoInicial,
-                NodoFinal = v.VanoNodoFinal,
-                Inspeccionado = v.VanoInspeccionado,
-                IdSed = v.VanoSubestacion
-            }).ToList();
-
-            return pinVanos;
+            return ctx.Vanos
+                .AsNoTracking()
+                .Where(v => x_feeders.Contains(v.AlimInterno))
+                .Select(v => new PinStruct()
+                {
+                    Id = v.VanoInterno,
+                    IdAlimentador = v.AlimInterno,
+                    Label = "",
+                    Type = ElectricElement.Gap,
+                    NodoInicial = v.VanoNodoInicial,
+                    NodoFinal = v.VanoNodoFinal,
+                    Inspeccionado = v.VanoInspeccionado,
+                    IdSed = v.VanoSubestacion
+                })
+                .ToList();
         }
 
         public List<PinStruct> DAGAP_GetPinsBySubestacion(List<int> x_subestaciones)

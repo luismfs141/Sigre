@@ -15,6 +15,21 @@ import {
 } from "../database/offlineDB/posts";
 import { useConnectivity } from "./useConnectivity";
 
+const POST_SYNC_BATCH_SIZE = 100;
+
+const chunkArray = (items, size) => {
+  if (!Array.isArray(items) || !items.length) return [];
+  if (!Number.isFinite(size) || size <= 0) return [items];
+
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+};
+
 export const usePost = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -228,15 +243,21 @@ export const usePost = () => {
 
 
   // ------------------- SYNC MASIVO (robusto + compatible) -------------------
-  const syncAllPosts = async () => {
+  const syncAllPosts = async (onProgress) => {
     const online = await isOnline();
     if (!online) {
       return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
     }
 
     let total = 0;
+    let synced = 0;
 
     try {
+      const dbOk = await checkDatabase();
+      if (!dbOk) {
+        return { ok: false, total: 0, synced: 0, error: "DB_NOT_READY" };
+      }
+
       const pendientes = await getPostsPendientes();
       if (!Array.isArray(pendientes) || !pendientes.length) {
         return { ok: true, total: 0, synced: 0 };
@@ -252,47 +273,69 @@ export const usePost = () => {
         return { ok: true, total: 0, synced: 0 };
       }
 
-      const payload = aSincronizar.map((p) => normalizePostForSync(p));
+      const lotes = chunkArray(aSincronizar, POST_SYNC_BATCH_SIZE);
 
-      const response = await client.post("/Post/SyncFromSQLite", payload, {
-        timeout: 30000,
-      });
+      for (let i = 0; i < lotes.length; i++) {
+        const lote = lotes[i];
 
-      const respList = Array.isArray(response.data) ? response.data : [];
+        onProgress?.({
+          stage: "postes",
+          currentBatch: i + 1,
+          totalBatches: lotes.length,
+          batchSize: lote.length,
+          totalRecords: total,
+          syncedRecords: synced,
+        });
 
-      if (respList.length !== total) {
-        throw new Error(
-          `POST_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
-        );
-      }
+        const payload = lote.map((p) => normalizePostForSync(p));
 
-      for (const r of respList) {
-        const localId = Number(r?.localId);
-        const serverId = Number(r?.serverId);
+        const response = await client.post("/Post/SyncFromSQLite", payload, {
+          timeout: 30000,
+        });
 
-        if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
-          throw new Error(`POST_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+        const respList = Array.isArray(response.data) ? response.data : [];
+
+        if (respList.length !== lote.length) {
+          throw new Error(
+            `POST_SYNC_PARTIAL_RESPONSE: lote=${i + 1}, enviados=${lote.length}, respondidos=${respList.length}`
+          );
         }
-      }
 
-      for (const r of respList) {
-        const localId = Number(r.localId);
-        const serverId = Number(r.serverId);
+        for (const r of respList) {
+          const localId = Number(r?.localId);
+          const serverId = Number(r?.serverId);
 
-        if (localId !== serverId) {
-          await updatePostIdAfterSync(localId, serverId);
-        } else {
-          await markPostAsSynced(serverId);
+          if (
+            !Number.isFinite(localId) ||
+            !Number.isFinite(serverId) ||
+            localId <= 0 ||
+            serverId <= 0
+          ) {
+            throw new Error(`POST_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+          }
         }
+
+        for (const r of respList) {
+          const localId = Number(r.localId);
+          const serverId = Number(r.serverId);
+
+          if (localId !== serverId) {
+            await updatePostIdAfterSync(localId, serverId);
+          } else {
+            await markPostAsSynced(serverId);
+          }
+        }
+
+        synced += lote.length;
       }
 
-      return { ok: true, total, synced: total };
+      return { ok: true, total, synced };
     } catch (err) {
       console.error("❌ Sync masivo postes falló:", err?.response?.data || err?.message || err);
       return {
         ok: false,
         total,
-        synced: 0,
+        synced,
         error: err?.response?.data?.message || err?.message || "POST_SYNC_FAILED",
       };
     }

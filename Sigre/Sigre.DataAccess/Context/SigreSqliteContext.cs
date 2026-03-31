@@ -29,7 +29,7 @@ namespace Sigre.DataAccess.Context
         public DbSet<PinStruct> Pines { get; set; }
         public DbSet<Alimentadore> Alimentadores { get; set; }
         public DbSet<Codigo> Codigos { get; set; }
-        public DbSet<CodigosOpciones> CodigosOpciones { get; set; }
+        public DbSet<CodigosOpcione> CodigosOpciones { get; set; }
 
 
 
@@ -67,7 +67,7 @@ namespace Sigre.DataAccess.Context
                 entity.Property(e => e.CodiInterno).ValueGeneratedNever();
             });
 
-            modelBuilder.Entity<CodigosOpciones>(entity =>
+            modelBuilder.Entity<CodigosOpcione>(entity =>
             {
                 entity.HasKey(e => e.CodopInterno);
                 entity.Property(e => e.CodopInterno).ValueGeneratedNever();

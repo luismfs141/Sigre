@@ -18,7 +18,16 @@ export default function Loading() {
         }}
       >
         <ActivityIndicator size="large" color="black" />
-        <Text style={{ marginTop: 10, color: "#000" }}>
+        <Text
+          style={{
+            marginTop: 10,
+            color: "#000",
+            textAlign: "center",
+            width: 280,
+            lineHeight: 22,
+            fontWeight: "600",
+          }}
+        >
           {isLoadingMessage}
         </Text>
       </View>

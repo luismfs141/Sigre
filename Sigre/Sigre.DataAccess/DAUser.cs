@@ -38,11 +38,11 @@ namespace Sigre.DataAccess
 
         public Usuario DAUS_GetUser(int x_usuario)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            Usuario usuario = ctx.Usuarios.SingleOrDefault(u => u.UsuaInterno == x_usuario);
-
-            return usuario;
+            return ctx.Usuarios
+                .AsNoTracking()
+                .SingleOrDefault(u => u.UsuaInterno == x_usuario);
         }
 
         public void DAUS_SaveUser(Usuario us, List<int> perfiles)

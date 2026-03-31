@@ -17,46 +17,57 @@ namespace Sigre.DataAccess
     {
         public List<PinStruct> DASed_PinsByFeeders(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
-            var query = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).Select(s => new PinStruct() {
-                Id = s.SedInterno,
-                Label = s.SedEtiqueta,
-                IdAlimentador = s.AlimInterno,
-                Latitude = s.SedLatitud,
-                Longitude = s.SedLongitud,
-                ElementCode = s.SedCodigo,
-                Inspeccionado = s.SedInspeccionado,
-                Tercero = s.SedTerceros,
-                Type = 
-                    s.SedTipo == "M" ? ElectricElement.SedMP :
-                    s.SedTipo == "B" ? ElectricElement.SedBP :
-                    s.SedTipo == "C" ? ElectricElement.SedCA :
-                    s.SedTipo == "P" ? ElectricElement.SedPV :
-                    s.SedTipo == "S" ? ElectricElement.SedST : ElectricElement.Unknown
-            });
+            using var ctx = new SigreContext();
+
+            var query = ctx.Seds
+                .AsNoTracking()
+                .Where(s => x_feeders.Contains(s.AlimInterno))
+                .Select(s => new PinStruct()
+                {
+                    Id = s.SedInterno,
+                    Label = s.SedEtiqueta,
+                    IdAlimentador = s.AlimInterno,
+                    Latitude = s.SedLatitud,
+                    Longitude = s.SedLongitud,
+                    ElementCode = s.SedCodigo,
+                    Inspeccionado = s.SedInspeccionado,
+                    Tercero = s.SedTerceros,
+                    Type =
+                        s.SedTipo == "M" ? ElectricElement.SedMP :
+                        s.SedTipo == "B" ? ElectricElement.SedBP :
+                        s.SedTipo == "C" ? ElectricElement.SedCA :
+                        s.SedTipo == "P" ? ElectricElement.SedPV :
+                        s.SedTipo == "S" ? ElectricElement.SedST : ElectricElement.Unknown
+                });
+
             return query.ToList();
         }
 
         public List<PinStruct> DASed_PinsBySeds(List<int> x_seds)
         {
-            SigreContext ctx = new SigreContext();
-            var query = ctx.Seds.Where(s => x_seds.Contains(s.SedInterno)).Select(s => new PinStruct()
-            {
-                Id = s.SedInterno,
-                Label = s.SedEtiqueta,
-                IdAlimentador = s.AlimInterno,
-                Latitude = s.SedLatitud,
-                Longitude = s.SedLongitud,
-                ElementCode = s.SedCodigo,
-                Inspeccionado = s.SedInspeccionado,
-                Tercero = s.SedTerceros,
-                Type =
-                    s.SedTipo == "M" ? ElectricElement.SedMP :
-                    s.SedTipo == "B" ? ElectricElement.SedBP :
-                    s.SedTipo == "C" ? ElectricElement.SedCA :
-                    s.SedTipo == "P" ? ElectricElement.SedPV :
-                    s.SedTipo == "S" ? ElectricElement.SedST : ElectricElement.Unknown
-            });
+            using var ctx = new SigreContext();
+
+            var query = ctx.Seds
+                .AsNoTracking()
+                .Where(s => x_seds.Contains(s.SedInterno))
+                .Select(s => new PinStruct()
+                {
+                    Id = s.SedInterno,
+                    Label = s.SedEtiqueta,
+                    IdAlimentador = s.AlimInterno,
+                    Latitude = s.SedLatitud,
+                    Longitude = s.SedLongitud,
+                    ElementCode = s.SedCodigo,
+                    Inspeccionado = s.SedInspeccionado,
+                    Tercero = s.SedTerceros,
+                    Type =
+                        s.SedTipo == "M" ? ElectricElement.SedMP :
+                        s.SedTipo == "B" ? ElectricElement.SedBP :
+                        s.SedTipo == "C" ? ElectricElement.SedCA :
+                        s.SedTipo == "P" ? ElectricElement.SedPV :
+                        s.SedTipo == "S" ? ElectricElement.SedST : ElectricElement.Unknown
+                });
+
             return query.ToList();
         }
 
@@ -71,20 +82,22 @@ namespace Sigre.DataAccess
 
         public List<Sed> DASed_GetByListFeeder(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var seds = ctx.Seds.Where(s => x_feeders.Contains(s.AlimInterno)).ToList();
-
-            return seds;
+            return ctx.Seds
+                .AsNoTracking()
+                .Where(s => x_feeders.Contains(s.AlimInterno))
+                .ToList();
         }
 
         public List<Sed> DASed_GetByListSeds(List<int> x_seds)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var seds = ctx.Seds.Where(s => x_seds.Contains(s.SedInterno)).ToList();
-
-            return seds;
+            return ctx.Seds
+                .AsNoTracking()
+                .Where(s => x_seds.Contains(s.SedInterno))
+                .ToList();
         }
 
         public List<Sed> DASed_GetByProject(List<int> x_ids, int proyecto)
@@ -108,11 +121,11 @@ namespace Sigre.DataAccess
 
         public Sed DASed_GetByCodigo(string codigo)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var sed = ctx.Seds.SingleOrDefault(s => s.SedCodigo == codigo);
-
-            return sed;
+            return ctx.Seds
+                .AsNoTracking()
+                .SingleOrDefault(s => s.SedCodigo == codigo);
         }
     }
 }

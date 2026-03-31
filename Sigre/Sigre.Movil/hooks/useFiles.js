@@ -24,6 +24,21 @@ const toNum = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const chunkArray = (items, size) => {
+  if (!Array.isArray(items) || !items.length) return [];
+  if (!Number.isFinite(size) || size <= 0) return [items];
+
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+};
+
+const FILE_SYNC_BATCH_SIZE = 100;
+
 export function useFiles() {
   const { checkDatabase, isAutoSyncOnline } = useDatos();
   const { isOnline } = useConnectivity();
@@ -310,73 +325,102 @@ export function useFiles() {
 
 
 
-  const syncAllArchivos = useCallback(async () => {
-  const online = await isOnline();
-  if (!online) {
-    return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
-  }
-
-  let total = 0;
-
-  try {
-    const dbOk = await checkDatabase();
-    if (!dbOk) {
-      return { ok: false, total: 0, synced: 0, error: "DB_NOT_READY" };
+  const syncAllArchivos = useCallback(async (onProgress) => {
+    const online = await isOnline();
+    if (!online) {
+      return { ok: false, total: 0, synced: 0, error: "OFFLINE" };
     }
 
-    const pendientes = await getArchivosPendientes();
-    if (!Array.isArray(pendientes) || !pendientes.length) {
-      return { ok: true, total: 0, synced: 0 };
-    }
+    let total = 0;
+    let synced = 0;
 
-    const aSincronizar = pendientes.filter((a) =>
-      [1, 2, 3].includes(Number(a?.EstadoOffLine))
-    );
-
-    total = aSincronizar.length;
-
-    if (!total) {
-      return { ok: true, total: 0, synced: 0 };
-    }
-
-    const payload = aSincronizar.map(normalizeArchivoForSync);
-
-    const response = await client.post("/File/SyncFromSQLite", payload, {
-      timeout: 60000,
-    });
-
-    const respList = Array.isArray(response?.data) ? response.data : [];
-
-    if (respList.length !== total) {
-      throw new Error(
-        `FILE_SYNC_PARTIAL_RESPONSE: enviados=${total}, respondidos=${respList.length}`
-      );
-    }
-
-    for (const r of respList) {
-      const localId = Number(r?.localId);
-      const serverId = Number(r?.serverId);
-
-      if (!Number.isFinite(localId) || !Number.isFinite(serverId) || localId <= 0 || serverId <= 0) {
-        throw new Error(`FILE_SYNC_INVALID_MAPPING: ${JSON.stringify(r)}`);
+    try {
+      const dbOk = await checkDatabase();
+      if (!dbOk) {
+        return { ok: false, total: 0, synced: 0, error: "DB_NOT_READY" };
       }
-    }
 
-    for (const r of respList) {
-      await updateArchivoIdAfterSync(Number(r.localId), Number(r.serverId));
-    }
+      const pendientes = await getArchivosPendientes();
+      if (!Array.isArray(pendientes) || !pendientes.length) {
+        return { ok: true, total: 0, synced: 0 };
+      }
 
-    return { ok: true, total, synced: total };
-  } catch (err) {
-    console.error("❌ Sync masivo archivos falló:", err?.response?.data || err?.message || err);
-    return {
-      ok: false,
-      total,
-      synced: 0,
-      error: err?.response?.data?.message || err?.message || "FILE_SYNC_FAILED",
-    };
-  }
-}, [checkDatabase, isOnline, client]);
+      const aSincronizar = pendientes.filter((a) =>
+        [1, 2, 3].includes(Number(a?.EstadoOffLine))
+      );
+
+      total = aSincronizar.length;
+
+      if (!total) {
+        return { ok: true, total: 0, synced: 0 };
+      }
+
+      const lotes = chunkArray(aSincronizar, FILE_SYNC_BATCH_SIZE);
+
+      for (let i = 0; i < lotes.length; i++) {
+        const lote = lotes[i];
+
+        onProgress?.({
+          stage: "archivos",
+          currentBatch: i + 1,
+          totalBatches: lotes.length,
+          batchSize: lote.length,
+          totalRecords: total,
+          syncedRecords: synced,
+        });
+
+        const payload = lote.map(normalizeArchivoForSync);
+
+        const response = await client.post("/File/SyncFromSQLite", payload, {
+          timeout: 60000,
+        });
+
+        const respList = Array.isArray(response?.data) ? response.data : [];
+
+        if (respList.length !== lote.length) {
+          throw new Error(
+            `FILE_SYNC_PARTIAL_RESPONSE: lote=${i + 1}, enviados=${lote.length}, respondidos=${respList.length}`
+          );
+        }
+
+        for (const r of respList) {
+          const localId = Number(r?.localId);
+          const serverId = Number(r?.serverId);
+
+          if (
+            !Number.isFinite(localId) ||
+            !Number.isFinite(serverId) ||
+            localId <= 0 ||
+            serverId <= 0
+          ) {
+            throw new Error(
+              `FILE_SYNC_INVALID_MAPPING: lote=${i + 1}, data=${JSON.stringify(r)}`
+            );
+          }
+        }
+
+        for (const r of respList) {
+          await updateArchivoIdAfterSync(Number(r.localId), Number(r.serverId));
+        }
+
+        synced += lote.length;
+      }
+
+      return { ok: true, total, synced };
+    } catch (err) {
+      console.error(
+        "❌ Sync masivo archivos falló:",
+        err?.response?.data || err?.message || err
+      );
+
+      return {
+        ok: false,
+        total,
+        synced,
+        error: err?.response?.data?.message || err?.message || "FILE_SYNC_FAILED",
+      };
+    }
+  }, [checkDatabase, isOnline, client]);
 
 
   return {

@@ -45,7 +45,11 @@ public partial class Vano
 
     public string? VanoTramo { get; set; }
 
-    public virtual Alimentadore? AlimInternoNavigation { get; set; } = null!;
+    public int? EsgoInterno { get; set; }
+
+    public virtual Alimentadore AlimInternoNavigation { get; set; } = null!;
+
+    public virtual EstadosGlobal? EsgoInternoNavigation { get; set; }
 
     public virtual Tramo? TramInternoNavigation { get; set; }
 }

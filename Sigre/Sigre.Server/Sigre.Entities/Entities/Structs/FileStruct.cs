@@ -1,20 +1,20 @@
-﻿using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using Sigre.Entities.Entities;
 
 namespace Sigre.Entities.Structs
 {
     public class FileStruct
     {
-        public string Table { get; set; }
-        public string ElectricElement { get; set; }
-        public string DeficiencyCode { get; set; }
-        public string DeficiencyType { get; set; }
-        public string PhotoType { get; set; }
-        public string PhotoName { get; set; }
-        public IFormFile FormFile { get; set; }
+        public int IdElemento { get; set; }
+        public string TipoElemento { get; set; } = null!;
+        public string? CodigoElemento { get; set; }
+
+        public string? CodigoTipificacion { get; set; }
+
+        public string? Estado { get; set; }
+
+        public List<Archivo> Archivos { get; set; } = new();
+
+        public int CantFotos => Archivos.Count;
     }
 }

@@ -22,6 +22,6 @@ public partial class Codigo
 
     public virtual ICollection<Tipificacione> Tipificaciones { get; } = new List<Tipificacione>();
 
-    public virtual ICollection<CodigosOpciones> CodigosOpciones { get; } = new List<CodigosOpciones>();
+    public virtual ICollection<CodigosOpcione> CodigosOpciones { get; } = new List<CodigosOpcione>();
 
 }

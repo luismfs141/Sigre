@@ -148,11 +148,11 @@ namespace Sigre.DataAccess
 
         public List<PinStruct> DADEFI_GetPinsByFeeders(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var query = (
-                from a in ctx.Alimentadores
-                join d in ctx.Deficiencias on a.AlimCodigo equals d.DefiCodAmt
+            var query =
+                from a in ctx.Alimentadores.AsNoTracking()
+                join d in ctx.Deficiencias.AsNoTracking() on a.AlimCodigo equals d.DefiCodAmt
                 where x_feeders.Contains(a.AlimInterno)
                 select new PinStruct
                 {
@@ -163,8 +163,7 @@ namespace Sigre.DataAccess
                     Latitude = d.DefiLatitud,
                     Longitude = d.DefiLongitud,
                     Inspeccionado = d.DefiInspeccionado
-                }
-            );
+                };
 
             return query.ToList();
         }
@@ -293,13 +292,16 @@ namespace Sigre.DataAccess
 
         public List<Deficiencia> DADEFI_GetByListFeeders(List<int> x_feeders)
         {
-            SigreContext ctx = new SigreContext();
+            using var ctx = new SigreContext();
 
-            var deficiencias = (
-                from d in ctx.Deficiencias
-                join a in ctx.Alimentadores on d.DefiCodAmt equals a.AlimCodigo
+            var query =
+                from d in ctx.Deficiencias.AsNoTracking()
+                join a in ctx.Alimentadores.AsNoTracking() on d.DefiCodAmt equals a.AlimCodigo
                 where x_feeders.Contains(a.AlimInterno)
-                select new Deficiencia
+                select d;
+
+            var deficiencias = query
+                .Select(d => new Deficiencia
                 {
                     DefiActivo = d.DefiActivo,
                     DefiInterno = d.DefiInterno,
@@ -350,42 +352,102 @@ namespace Sigre.DataAccess
                     DefiUsuCre = d.DefiUsuCre,
                     DefiUsuNpc = d.DefiUsuNpc,
                     InspInterno = d.InspInterno,
-                    InspInternoNavigation = d.InspInternoNavigation,
                     TablInterno = d.TablInterno,
-                    TipiInterno = d.TipiInterno,//
+                    TipiInterno = d.TipiInterno,
                     DefiInspeccionado = d.DefiInspeccionado,
                     DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
                     DefiAccesibilidad = d.DefiAccesibilidad,
                     DefiTipoCruce = d.DefiTipoCruce,
                     CodopInterno = d.CodopInterno,
-                    EstadoOffLine = 0,
-                }
-            ).ToList();
+                    EstadoOffLine = 0
+                })
+                .ToList();
 
             return deficiencias;
         }
 
         public List<Deficiencia> DADEFI_GetByListSeds(List<int> x_seds)
         {
-            using (var ctx = new SigreContext())
-            {
-                // 1. Desactivamos el Tracking para consultas de solo lectura (MEJORA CRÍTICA DE RAM)
-                ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+            using var ctx = new SigreContext();
 
-                // 2. Usamos JOINS directos en lugar de traer los IDs a memoria
-                var defPostes = from d in ctx.Deficiencias
-                                join p in ctx.Postes on d.DefiIdElemento equals p.PostInterno
-                                where d.DefiTipoElemento == "POST" && x_seds.Contains((int)p.PostSubestacion)
-                                select d;
+            var defPostes =
+                from d in ctx.Deficiencias.AsNoTracking()
+                join p in ctx.Postes.AsNoTracking() on d.DefiIdElemento equals p.PostInterno
+                where d.DefiTipoElemento == "POST" && x_seds.Contains((int)p.PostSubestacion)
+                select d;
 
-                var defVanos = from d in ctx.Deficiencias
-                               join v in ctx.Vanos on d.DefiIdElemento equals v.VanoInterno
-                               where d.DefiTipoElemento == "VANO" && x_seds.Contains((int)v.VanoSubestacion)
-                               select d;
+            var defVanos =
+                from d in ctx.Deficiencias.AsNoTracking()
+                join v in ctx.Vanos.AsNoTracking() on d.DefiIdElemento equals v.VanoInterno
+                where d.DefiTipoElemento == "VANO" && x_seds.Contains((int)v.VanoSubestacion)
+                select d;
 
-                // 3. Unimos las consultas a nivel de SQL y ejecutamos un solo viaje a la BD
-                return defPostes.Union(defVanos).ToList();
-            }
+            var query = defPostes.Concat(defVanos);
+
+            var deficiencias = query
+                .Select(d => new Deficiencia
+                {
+                    DefiActivo = d.DefiActivo,
+                    DefiInterno = d.DefiInterno,
+                    DefiArmadoMaterial = d.DefiArmadoMaterial,
+                    DefiCodAmt = d.DefiCodAmt,
+                    DefiCodDef = d.DefiCodDef,
+                    DefiCodDen = d.DefiCodDen,
+                    DefiCodigoElemento = d.DefiCodigoElemento,
+                    DefiCodRes = d.DefiCodRes,
+                    DefiComentario = d.DefiComentario,
+                    DefiCoordX = d.DefiCoordX,
+                    DefiCoordY = d.DefiCoordY,
+                    DefiDistHorizontal = d.DefiDistHorizontal,
+                    DefiDistTransversal = d.DefiDistTransversal,
+                    DefiDistVertical = d.DefiDistVertical,
+                    DefiEstado = d.DefiEstado,
+                    DefiEstadoCriticidad = d.DefiEstadoCriticidad,
+                    DefiEstadoSubsanacion = d.DefiEstadoSubsanacion,
+                    DefiFechaCreacion = d.DefiFechaCreacion,
+                    DefiFechaDenuncia = d.DefiFechaDenuncia,
+                    DefiFechaInspeccion = d.DefiFechaInspeccion,
+                    DefiFechaSubsanacion = d.DefiFechaSubsanacion,
+                    DefiFecModificacion = d.DefiFecModificacion,
+                    DefiFecRegistro = d.DefiFecRegistro,
+                    DefiIdElemento = d.DefiIdElemento,
+                    DefiLatitud = d.DefiLatitud,
+                    DefiLongitud = d.DefiLongitud,
+                    DefiNodoFinal = d.DefiNodoFinal,
+                    DefiNodoInicial = d.DefiNodoInicial,
+                    DefiNroOrden = d.DefiNroOrden,
+                    DefiNumPostes = d.DefiNumPostes,
+                    DefiNumSuministro = d.DefiNumSuministro,
+                    DefiObservacion = d.DefiObservacion,
+                    DefiPointX = d.DefiPointX,
+                    DefiPointY = d.DefiPointY,
+                    DefiPozoTierra = d.DefiPozoTierra,
+                    DefiPozoTierra2 = d.DefiPozoTierra2,
+                    DefiRefer1 = d.DefiRefer1,
+                    DefiRefer2 = d.DefiRefer2,
+                    DefiResponsable = d.DefiResponsable,
+                    DefiRetenidaMaterial = d.DefiRetenidaMaterial,
+                    DefiTipoArmado = d.DefiTipoArmado,
+                    DefiTipoElemento = d.DefiTipoElemento,
+                    DefiTipoMaterial = d.DefiTipoMaterial,
+                    DefiTipoRetenida = d.DefiTipoRetenida,
+                    DefiUsuarioInic = d.DefiUsuarioInic,
+                    DefiUsuarioMod = d.DefiUsuarioMod,
+                    DefiUsuCre = d.DefiUsuCre,
+                    DefiUsuNpc = d.DefiUsuNpc,
+                    InspInterno = d.InspInterno,
+                    TablInterno = d.TablInterno,
+                    TipiInterno = d.TipiInterno,
+                    DefiInspeccionado = d.DefiInspeccionado,
+                    DefiKeyWords = d.DefiKeyWords == null ? "" : d.DefiKeyWords,
+                    DefiAccesibilidad = d.DefiAccesibilidad,
+                    DefiTipoCruce = d.DefiTipoCruce,
+                    CodopInterno = d.CodopInterno,
+                    EstadoOffLine = 0
+                })
+                .ToList();
+
+            return deficiencias;
         }
 
         public List<Deficiencia> DADEFI_GetByProject(List<int> x_ids, int x_project)
@@ -502,7 +564,7 @@ namespace Sigre.DataAccess
                         existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                         existente.DefiTipoCruce = dto.DefiTipoCruce;
                         existente.CodopInterno = dto.CodopInterno;
-                        existente.DefiActivo = dto.DefiActivo;
+                        existente.DefiActivo = (bool)dto.DefiActivo;
                         existente.DefiCol1 = dto.DefiCol1;
                         existente.DefiCol2 = dto.DefiCol2;
 
@@ -553,7 +615,7 @@ namespace Sigre.DataAccess
                             DefiPozoTierra2 = dto.DefiPozoTierra2,
                             DefiUsuarioInic = dto.DefiUsuarioInic,
                             DefiUsuarioMod = dto.DefiUsuarioMod,
-                            DefiActivo = dto.DefiActivo,
+                            DefiActivo = (bool)dto.DefiActivo,
                             DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
                             DefiInspeccionado = dto.DefiInspeccionado,
                             DefiAccesibilidad = dto.DefiAccesibilidad,
@@ -991,7 +1053,7 @@ namespace Sigre.DataAccess
                                 foreach (var arch in archivosViejos)
                                 {
                                     arch.ArchCodTabla = input.DefiInterno;
-                                    arch.DefiUUID = input.DefiCol3;
+                                    arch.DefiUuid = input.DefiCol3;
                                     if (cambioGis)
                                     {
                                         arch.ArchIdElemento = input.DefiIdElemento;
@@ -2077,7 +2139,7 @@ namespace Sigre.DataAccess
                             {
                                 ArchCodTabla = clonDefi.DefiInterno,
                                 ArchTabla = "Deficiencias",
-                                DefiUUID = clonDefi.DefiCol3,
+                                DefiUuid = clonDefi.DefiCol3,
                                 ArchNombre = nuevaRutaFisica,
                                 TipiInterno = nuevaTipificacion,
                                 ArchTipo = arch.ArchTipo,

@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.SyncData;
+using Sigre.Entities.Structs;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -96,6 +98,70 @@ namespace Sigre.DataAccess
             return archPostes.Concat(archVanos).ToList();
         }
 
+        public List<FileStruct> DAARCH_GetFileStructBySeds(List<int> x_seds)
+        {
+            using var ctx = new SigreContext();
+
+            ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+            var query =
+                from ar in ctx.Archivos
+
+                join df in ctx.Deficiencias on ar.ArchCodTabla equals df.DefiInterno
+
+                join p in ctx.Postes on df.DefiIdElemento equals p.PostInterno into postes
+                from p in postes.DefaultIfEmpty()
+
+                join v in ctx.Vanos on df.DefiIdElemento equals v.VanoInterno into vanos
+                from v in vanos.DefaultIfEmpty()
+
+                join t in ctx.Tipificaciones on ar.TipiInterno equals t.TipiInterno into tipis
+                from t in tipis.DefaultIfEmpty()
+
+                join c in ctx.Codigos on t.CodiInterno equals c.CodiInterno into codigos
+                from c in codigos.DefaultIfEmpty()
+
+                where
+                    ((df.DefiTipoElemento == "POST" && p != null && x_seds.Contains((int)p.PostSubestacion)) ||
+                    (df.DefiTipoElemento == "VANO" && v != null && x_seds.Contains((int)v.VanoSubestacion))) &&
+                    ar.ArchActivo == true
+
+                select new
+                {
+                    Archivo = ar,
+                    TipoElemento = df.DefiTipoElemento,
+                    IdElemento = df.DefiTipoElemento == "POST" ? p!.PostInterno : v!.VanoInterno,
+                    CodigoElemento = df.DefiTipoElemento == "POST" ? p!.PostCodigoNodo : v!.VanoCodigo,
+                    CodigoTipificacion = c != null ? c.CodiCodigo : null
+                };
+
+            var data = query.ToList();
+
+            var result = data
+                .GroupBy(x => new {
+                    x.TipoElemento,
+                    x.IdElemento,
+                    x.CodigoTipificacion
+                })
+                .Select(g => new FileStruct
+                {
+                    IdElemento = g.Key.IdElemento,
+                    TipoElemento = g.Key.TipoElemento,
+                    CodigoElemento = g.First().CodigoElemento,
+
+                    CodigoTipificacion = g.Key.CodigoTipificacion,
+
+                    Estado = g.First().Archivo.EsgoInternoNavigation != null
+                        ? g.First().Archivo.EsgoInternoNavigation.EsgoNombre
+                        : null,
+
+                    Archivos = g.Select(x => x.Archivo).ToList()
+                })
+                .ToList();
+
+            return result;
+        }
+
 
         public Archivo DAARCH_GetTableData()
         {
@@ -117,7 +183,9 @@ namespace Sigre.DataAccess
             try
             {
                 var daDef = new DADeficiency();
-                var mappings = new List<(int localId, Archivo entity)>();
+
+                // 1) Resolver primero la deficiencia padre y la key normalizada de cada archivo offline
+                var resolved = new List<(ArchivoSyncDto dto, int defId, string syncKey)>();
 
                 foreach (var dto in archivosOffline)
                 {
@@ -144,20 +212,50 @@ namespace Sigre.DataAccess
 
                     dto.ArchCodTabla = idDeficiency;
 
-                    var key = NormalizarRutaSinRaiz(dto.ArchNombre);
+                    var syncKey = BuildArchivoSyncKey(idDeficiency, dto.ArchNombre);
 
-                    var existente = ctx.Archivos
-                        .Where(a => a.ArchCodTabla == idDeficiency && a.ArchNombre != null)
-                        .Where(a =>
-                            a.ArchNombre == dto.ArchNombre
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith(key))
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("/" + key))
-                            || (!string.IsNullOrWhiteSpace(key) && a.ArchNombre.EndsWith("\\" + key))
-                        )
-                        .OrderByDescending(a => a.ArchInterno)
-                        .FirstOrDefault();
+                    resolved.Add((dto, idDeficiency, syncKey));
+                }
 
-                    if (existente != null)
+                // 2) Traer de una sola vez los archivos existentes de esas deficiencias
+                var defIds = resolved
+                    .Select(x => x.defId)
+                    .Distinct()
+                    .ToList();
+
+                var existentes = ctx.Archivos
+                    .Where(a => defIds.Contains(a.ArchCodTabla) && a.ArchNombre != null)
+                    .OrderByDescending(a => a.ArchInterno)
+                    .ToList();
+
+                // 3) Crear diccionario por key normalizada
+                var existingByKey = new Dictionary<string, Archivo>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var a in existentes)
+                {
+                    var key = BuildArchivoSyncKey(a.ArchCodTabla, a.ArchNombre);
+
+                    if (string.IsNullOrWhiteSpace(key))
+                        continue;
+
+                    // Nos quedamos con el primero según OrderByDescending(ArchInterno)
+                    if (!existingByKey.ContainsKey(key))
+                    {
+                        existingByKey[key] = a;
+                    }
+                }
+
+                // 4) Actualizar si existe; insertar si no existe
+                var mappings = new List<(int localId, Archivo entity)>();
+
+                foreach (var item in resolved)
+                {
+                    var dto = item.dto;
+                    var idDeficiency = item.defId;
+                    var syncKey = item.syncKey;
+
+                    if (!string.IsNullOrWhiteSpace(syncKey) &&
+                        existingByKey.TryGetValue(syncKey, out var existente))
                     {
                         existente.ArchCodTabla = idDeficiency;
                         existente.ArchNombre = dto.ArchNombre;
@@ -174,7 +272,7 @@ namespace Sigre.DataAccess
                         if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
                         {
                             var uuid = dto.DefiUUID.Trim();
-                            existente.DefiUUID = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
+                            existente.DefiUuid = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
                         }
 
                         mappings.Add((dto.ArchInterno, existente));
@@ -183,6 +281,13 @@ namespace Sigre.DataAccess
                     {
                         var archivo = DAARCH_ConvertFile(dto);
                         ctx.Archivos.Add(archivo);
+
+                        // importante: evita duplicados dentro del mismo lote
+                        if (!string.IsNullOrWhiteSpace(syncKey))
+                        {
+                            existingByKey[syncKey] = archivo;
+                        }
+
                         mappings.Add((dto.ArchInterno, archivo));
                     }
                 }
@@ -234,7 +339,20 @@ namespace Sigre.DataAccess
             return path;
         }
 
+        private static string BuildArchivoSyncKey(int archCodTabla, string archNombre)
+        {
+            var key = NormalizarRutaSinRaiz(archNombre);
 
+            if (string.IsNullOrWhiteSpace(key))
+                return string.Empty;
+
+            key = key.Replace("\\", "/").Trim();
+
+            while (key.StartsWith("/"))
+                key = key.Substring(1);
+
+            return $"{archCodTabla}|{key}";
+        }
 
         // MÉTODO 1: ELIMINADO LÓGICO (Soft Delete)
         public bool DAFILE_SoftDelete(int idArchivo)
@@ -293,7 +411,7 @@ namespace Sigre.DataAccess
                 if (x_archivo.ArchInterno == 0)
                 {
                     // Heredamos el UUID del padre en lugar de inventar uno nuevo
-                    x_archivo.DefiUUID = uuidHeredado;
+                    x_archivo.DefiUuid = uuidHeredado;
 
                     x_archivo.ArchActivo = true;
                     if (x_archivo.ArchFecha == DateTime.MinValue || x_archivo.ArchFecha == null)
@@ -321,9 +439,9 @@ namespace Sigre.DataAccess
                             original.ArchFecha = x_archivo.ArchFecha;
 
                         // Si por alguna razón histórica no tiene UUID, lo reparamos heredándolo del padre
-                        if (string.IsNullOrEmpty(original.DefiUUID) && !string.IsNullOrEmpty(uuidHeredado))
+                        if (string.IsNullOrEmpty(original.DefiUuid) && !string.IsNullOrEmpty(uuidHeredado))
                         {
-                            original.DefiUUID = uuidHeredado;
+                            original.DefiUuid = uuidHeredado;
                         }
 
                         idDeficienciaAsociada = original.ArchCodTabla;
@@ -489,7 +607,7 @@ namespace Sigre.DataAccess
                 ArchActivo = arch_offline.ArchActivo,
 
                 // ✅ INSERT también guarda DEFI_UUID
-                DefiUUID = defiUuid
+                DefiUuid = defiUuid
             };
         }
         public List<Archivo> DAARCH_GetByDeficiencyWeb(int x_deficiency)
@@ -523,7 +641,7 @@ namespace Sigre.DataAccess
 
                         // === 👇 LA NUEVA COLUMNA (CRUCIAL) 👇 ===
                         // Asegúrate de que coincida con el nombre en tu clase Archivo.cs (DefiUUID)
-                        DefiUUID = a.DefiUUID
+                        DefiUuid = a.DefiUuid
                     });
 
                 return query.ToList();
@@ -582,7 +700,7 @@ namespace Sigre.DataAccess
                     a.ArchIdElemento,
                     a.TipiInterno,
                     a.ArchActivo,
-                    a.DefiUUID
+                    a.DefiUuid
                 );
             }
 
@@ -878,6 +996,112 @@ namespace Sigre.DataAccess
 
             // Si nada de la magia funcionó, devuelve la original (probablemente la foto se borró de la computadora)
             return rutaRelativaBD;
+        }
+
+        public async Task<List<object>> DAARCH_MigrarArchivosAWS(
+            List<Archivo> archivos,
+            string rutaOrigen,
+            IConfiguration config)
+        {
+            using var ctx = new SigreContext();
+            var resultados = new List<object>();
+
+            var awsConfig = config.GetSection("AWS");
+
+            var accessKey = awsConfig["AccessKey"];
+            var secretKey = awsConfig["SecretKey"];
+            var bucket = awsConfig["Bucket"];
+            var region = Amazon.RegionEndpoint.GetBySystemName(awsConfig["Region"]);
+
+            using var client = new Amazon.S3.AmazonS3Client(accessKey, secretKey, region);
+            var transfer = new Amazon.S3.Transfer.TransferUtility(client);
+
+            foreach (var arch in archivos)
+            {
+                try
+                {
+                    // 🔥 UUID correcto
+                    if (arch.ArchUuid == null)
+                        arch.ArchUuid = Guid.NewGuid();
+
+                    // 📁 Ruta local
+                    string rutaLocal = Path.Combine(
+                        rutaOrigen,
+                        arch.ArchNombre.Replace("/", Path.DirectorySeparatorChar.ToString())
+                    );
+
+                    if (!File.Exists(rutaLocal))
+                    {
+                        resultados.Add(new
+                        {
+                            arch.ArchInterno,
+                            error = "Archivo no existe",
+                            rutaLocal
+                        });
+                        continue;
+                    }
+
+                    // 📄 Extensión
+                    string extension = Path.GetExtension(rutaLocal);
+
+                    // ☁️ Key S3
+                    string key = $"{arch.ArchUuid}{extension}";
+
+                    // 🔥 Detectar MIME
+                    string contentType = GetContentType(extension);
+
+                    using (var stream = new FileStream(rutaLocal, FileMode.Open, FileAccess.Read))
+                    {
+                        await transfer.UploadAsync(new Amazon.S3.Transfer.TransferUtilityUploadRequest
+                        {
+                            InputStream = stream,
+                            BucketName = bucket,
+                            Key = key,
+                            ContentType = contentType
+                        });
+                    }
+
+                    // 💾 Update BD
+                    var entity = ctx.Archivos.FirstOrDefault(a => a.ArchInterno == arch.ArchInterno);
+
+                    if (entity != null)
+                    {
+                        entity.ArchUuid = arch.ArchUuid;
+                        entity.ArchNombre = key;
+                    }
+
+                    resultados.Add(new
+                    {
+                        arch.ArchInterno,
+                        uuid = arch.ArchUuid,
+                        rutaAWS = key
+                    });
+                }
+                catch (Exception ex)
+                {
+                    resultados.Add(new
+                    {
+                        arch.ArchInterno,
+                        error = ex.Message
+                    });
+                }
+            }
+
+            await ctx.SaveChangesAsync();
+
+            return resultados;
+        }
+
+        private string GetContentType(string extension)
+        {
+            return extension.ToLower() switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
         }
     }
 }
