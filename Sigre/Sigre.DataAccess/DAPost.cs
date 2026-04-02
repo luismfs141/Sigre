@@ -156,7 +156,8 @@ namespace Sigre.DataAccess
                             PostEsMt = dto.PostEsMt,
                             PostAltura = dto.PostAltura,
                             PostTramo = dto.PostTramo,
-                            PostVereda = dto.PostVereda
+                            PostVereda = dto.PostVereda,
+                            EsgoInterno = dto.EsgoInterno
                         };
 
                         ctx.Postes.Add(nuevo);
@@ -175,11 +176,13 @@ namespace Sigre.DataAccess
                         existente.PostCodigoNodo = dto.PostCodigoNodo;
                         existente.PostLatitud = dto.PostLatitud;
                         existente.PostLongitud = dto.PostLongitud;
+                        existente.AlimInterno = dto.AlimInterno;
                         existente.PostMaterial = dto.PostMaterial;
                         existente.PostArmadoTipo = dto.PostArmadoTipo;
                         existente.PostArmadoMaterial = dto.PostArmadoMaterial;
                         existente.PostRetenidaTipo = dto.PostRetenidaTipo;
                         existente.PostRetenidaMaterial = dto.PostRetenidaMaterial;
+                        existente.PostSubestacion = dto.PostSubestacion;
                         existente.PostTerceros = dto.PostTerceros;
                         existente.PostInspeccionado = dto.PostInspeccionado;
                         existente.PostEsBt = dto.PostEsBt;
@@ -187,6 +190,7 @@ namespace Sigre.DataAccess
                         existente.PostAltura = dto.PostAltura;
                         existente.PostTramo = dto.PostTramo;
                         existente.PostVereda = dto.PostVereda;
+                        existente.EsgoInterno = dto.EsgoInterno;
 
                         mappings.Add((dto.PostInterno.Value, existente));
                     }
@@ -296,12 +300,10 @@ namespace Sigre.DataAccess
         {
             using (SigreContext ctx = new SigreContext())
             {
-                // 1. Deshabilitar el rastreo de cambios (Aumenta mucho la velocidad en lectura)
                 ctx.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
                 var postes = ctx.Postes
                     .Where(p => p.AlimInterno == x_feeder_id)
-                    // 2. Select EXPLÍCITO: Solo mapeamos datos primitivos, NADA de objetos anidados (Navigation)
                     .Select(p => new Poste()
                     {
                         PostInterno = p.PostInterno,
@@ -310,25 +312,22 @@ namespace Sigre.DataAccess
                         PostLatitud = p.PostLatitud,
                         PostLongitud = p.PostLongitud,
                         AlimInterno = p.AlimInterno,
-
                         PostSubestacion = p.PostSubestacion,
                         PostMaterial = p.PostMaterial,
                         PostAltura = p.PostAltura,
                         PostTramo = p.PostTramo,
                         PostVereda = p.PostVereda,
-
                         PostArmadoTipo = p.PostArmadoTipo,
                         PostArmadoMaterial = p.PostArmadoMaterial,
                         PostRetenidaTipo = p.PostRetenidaTipo,
                         PostRetenidaMaterial = p.PostRetenidaMaterial,
-
                         PostTerceros = p.PostTerceros,
                         PostInspeccionado = p.PostInspeccionado,
                         PostEsBt = p.PostEsBt,
                         PostEsMt = p.PostEsMt,
-
+                        EsgoInterno = p.EsgoInterno
                     })
-                    .ToList(); // La consulta se ejecuta aquí
+                    .ToList();
 
                 return postes;
             }

@@ -19,7 +19,7 @@ namespace Sigre.DataAccess.Context
         public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Perfile> Perfiles { get; set; }
         public DbSet<PerfilesUsuario> PerfilesUsuarios { get; set; }
-        public DbSet<Archivo> Archivos { get; set;}
+        public DbSet<Archivo> Archivos { get; set; }
         public DbSet<ArmadoMaterial> ArmadoMaterials { get; set; }
         public DbSet<ArmadoTipo> ArmadoTipos { get; set; }
         public DbSet<RetenidaTipo> RetenidaTipos { get; set; }
@@ -30,8 +30,7 @@ namespace Sigre.DataAccess.Context
         public DbSet<Alimentadore> Alimentadores { get; set; }
         public DbSet<Codigo> Codigos { get; set; }
         public DbSet<CodigosOpcione> CodigosOpciones { get; set; }
-
-
+        public DbSet<EstadosGlobal> EstadosGlobals { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -42,21 +41,24 @@ namespace Sigre.DataAccess.Context
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuración opcional para autoincremento de claves y mapeo IdOriginal
             modelBuilder.Entity<PinStruct>().Property(p => p.Id).ValueGeneratedOnAdd();
             modelBuilder.Entity<PinStruct>().Property(p => p.IdOriginal).HasDefaultValue(0);
 
             modelBuilder.Entity<Deficiencia>(entity =>
             {
-                entity.HasKey(d => d.DefiInterno);          // Clave primaria
-                entity.Property(d => d.DefiInterno)
-                      .ValueGeneratedOnAdd();               // Auto-increment SQLite
-                entity.Property<int?>("EstadoOffLine");     // seguimiento
-                entity.Property<int?>("DefiServerId");      // sync server
+                entity.HasKey(d => d.DefiInterno);
+                entity.Property(d => d.DefiInterno).ValueGeneratedOnAdd();
+                entity.Property<int?>("EstadoOffLine");
+                entity.Property<int?>("DefiServerId");
             });
-            modelBuilder.Entity<Archivo>().Property<int?>("EstadoOffLine");
-            modelBuilder.Entity<Archivo>().Property<int?>("DefiServerId");
-            modelBuilder.Entity<Archivo>().Property<string?>("DefiUUID");
+
+            modelBuilder.Entity<Archivo>(entity =>
+            {
+                entity.Property<int?>("EstadoOffLine");
+                entity.Property<int?>("DefiServerId");
+                entity.Property<string?>("DefiUuid");
+            });
+
             modelBuilder.Entity<Poste>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Vano>().Property<int?>("EstadoOffLine");
             modelBuilder.Entity<Sed>().Property<int?>("EstadoOffLine");
@@ -73,6 +75,11 @@ namespace Sigre.DataAccess.Context
                 entity.Property(e => e.CodopInterno).ValueGeneratedNever();
             });
 
+            modelBuilder.Entity<EstadosGlobal>(entity =>
+            {
+                entity.HasKey(e => e.EsgoInterno);
+                entity.Property(e => e.EsgoInterno).ValueGeneratedNever();
+            });
         }
     }
 }

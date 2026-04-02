@@ -1,17 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Sigre.Entities.Entities.SyncData
 {
     public class ArchivoSyncDto
     {
         public int ArchInterno { get; set; }
-        //public int? ArchServerId { get; set; }
 
-        public string ArchTipo { get; set; }   // 👈 STRING
+        public string ArchTipo { get; set; }
         public string ArchTabla { get; set; }
         public int? ArchCodTabla { get; set; }
 
@@ -30,9 +25,9 @@ namespace Sigre.Entities.Entities.SyncData
         public int EstadoOffLine { get; set; }
 
         public int? DefiServerId { get; set; }
-        public string? DefiUUID { get; set; }
+        public string? DefiUuid { get; set; }
 
+        public Guid? ArchUuid { get; set; }
+        public int? EsgoInterno { get; set; }
     }
-
-
 }

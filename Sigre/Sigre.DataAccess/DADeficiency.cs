@@ -359,6 +359,8 @@ namespace Sigre.DataAccess
                     DefiAccesibilidad = d.DefiAccesibilidad,
                     DefiTipoCruce = d.DefiTipoCruce,
                     CodopInterno = d.CodopInterno,
+                    EsgoInterno = d.EsgoInterno,
+                    DefiMovil = d.DefiMovil,
                     EstadoOffLine = 0
                 })
                 .ToList();
@@ -443,6 +445,8 @@ namespace Sigre.DataAccess
                     DefiAccesibilidad = d.DefiAccesibilidad,
                     DefiTipoCruce = d.DefiTipoCruce,
                     CodopInterno = d.CodopInterno,
+                    EsgoInterno = d.EsgoInterno,
+                    DefiMovil = d.DefiMovil,
                     EstadoOffLine = 0
                 })
                 .ToList();
@@ -564,9 +568,11 @@ namespace Sigre.DataAccess
                         existente.DefiAccesibilidad = dto.DefiAccesibilidad;
                         existente.DefiTipoCruce = dto.DefiTipoCruce;
                         existente.CodopInterno = dto.CodopInterno;
-                        existente.DefiActivo = (bool)dto.DefiActivo;
+                        existente.DefiActivo = dto.DefiActivo ?? true;
                         existente.DefiCol1 = dto.DefiCol1;
                         existente.DefiCol2 = dto.DefiCol2;
+                        existente.EsgoInterno = dto.EsgoInterno;
+                        existente.DefiMovil = dto.DefiMovil;
 
                         mappings.Add((dto.DefiInterno, existente));
                     }
@@ -615,7 +621,7 @@ namespace Sigre.DataAccess
                             DefiPozoTierra2 = dto.DefiPozoTierra2,
                             DefiUsuarioInic = dto.DefiUsuarioInic,
                             DefiUsuarioMod = dto.DefiUsuarioMod,
-                            DefiActivo = (bool)dto.DefiActivo,
+                            DefiActivo = dto.DefiActivo ?? true,
                             DefiEstadoCriticidad = dto.DefiEstadoCriticidad,
                             DefiInspeccionado = dto.DefiInspeccionado,
                             DefiAccesibilidad = dto.DefiAccesibilidad,
@@ -624,6 +630,8 @@ namespace Sigre.DataAccess
                             DefiCol2 = dto.DefiCol2,
                             DefiCol1 = dto.DefiCol1,
                             CodopInterno = dto.CodopInterno,
+                            EsgoInterno = dto.EsgoInterno,
+                            DefiMovil = dto.DefiMovil
                         };
 
                         ctx.Deficiencias.Add(nueva);
@@ -718,23 +726,17 @@ namespace Sigre.DataAccess
         {
             return new Deficiencia
             {
-                // 🔑 Identificadores
                 DefiInterno = def_offline.DefiInterno,
-
-                // 📌 Estado
                 DefiEstado = def_offline.DefiEstado,
 
-                // 🔍 Relaciones
                 InspInterno = def_offline.InspInterno,
                 TablInterno = def_offline.TablInterno,
                 TipiInterno = def_offline.TipiInterno,
 
-                // 📍 Elemento
                 DefiCodigoElemento = def_offline.DefiCodigoElemento,
                 DefiTipoElemento = def_offline.DefiTipoElemento,
                 DefiIdElemento = def_offline.DefiIdElemento,
 
-                // 📅 Fechas
                 DefiFechaDenuncia = def_offline.DefiFechaDenuncia,
                 DefiFechaInspeccion = def_offline.DefiFechaInspeccion,
                 DefiFechaSubsanacion = def_offline.DefiFechaSubsanacion,
@@ -742,12 +744,10 @@ namespace Sigre.DataAccess
                 DefiFecModificacion = def_offline.DefiFecModificacion,
                 DefiFechaCreacion = def_offline.DefiFechaCreacion,
 
-                // 📝 Descripción
                 DefiObservacion = def_offline.DefiObservacion,
                 DefiComentario = def_offline.DefiComentario,
                 DefiEstadoSubsanacion = def_offline.DefiEstadoSubsanacion,
 
-                // 📐 Coordenadas
                 DefiLatitud = def_offline.DefiLatitud,
                 DefiLongitud = def_offline.DefiLongitud,
                 DefiCoordX = def_offline.DefiCoordX,
@@ -755,12 +755,10 @@ namespace Sigre.DataAccess
                 DefiPointX = def_offline.DefiPointX,
                 DefiPointY = def_offline.DefiPointY,
 
-                // 📏 Distancias
                 DefiDistHorizontal = def_offline.DefiDistHorizontal,
                 DefiDistVertical = def_offline.DefiDistVertical,
                 DefiDistTransversal = def_offline.DefiDistTransversal,
 
-                // 🏗️ Infraestructura
                 DefiTipoMaterial = def_offline.DefiTipoMaterial,
                 DefiNodoInicial = def_offline.DefiNodoInicial,
                 DefiNodoFinal = def_offline.DefiNodoFinal,
@@ -772,19 +770,16 @@ namespace Sigre.DataAccess
                 DefiPozoTierra = def_offline.DefiPozoTierra,
                 DefiPozoTierra2 = def_offline.DefiPozoTierra2,
 
-                // 👤 Usuarios
                 DefiUsuCre = def_offline.DefiUsuCre,
                 DefiUsuNpc = def_offline.DefiUsuNpc,
                 DefiUsuarioInic = def_offline.DefiUsuarioInic,
                 DefiUsuarioMod = def_offline.DefiUsuarioMod,
 
-                // ⚙️ Control
                 DefiActivo = def_offline.DefiActivo ?? true,
                 DefiResponsable = def_offline.DefiResponsable,
                 DefiInspeccionado = def_offline.DefiInspeccionado,
                 DefiEstadoCriticidad = def_offline.DefiEstadoCriticidad,
 
-                // 🚧 Otros
                 DefiAccesibilidad = def_offline.DefiAccesibilidad,
                 DefiTipoCruce = def_offline.DefiTipoCruce,
                 DefiNumSuministro = def_offline.DefiNumSuministro,
@@ -799,8 +794,11 @@ namespace Sigre.DataAccess
                 DefiCol2 = def_offline.DefiCol2,
                 DefiCol1 = def_offline.DefiCol1,
                 CodopInterno = def_offline.CodopInterno,
+                EsgoInterno = def_offline.EsgoInterno,
+                DefiMovil = def_offline.DefiMovil
             };
         }
+
         public int DADEFI_ExistDeficiency(Deficiencia def)
         {
             using var ctx = new SigreContext();
@@ -1421,7 +1419,6 @@ namespace Sigre.DataAccess
         {
             using var ctx = new SigreContext();
 
-            // 🔹 Consulta completa
             var list =
             (
                 from d in ctx.Deficiencias.AsNoTracking()
@@ -1436,10 +1433,9 @@ namespace Sigre.DataAccess
                     (d.DefiTipoElemento == "POST" && sedInternos.Contains((int)p.PostSubestacion)) ||
                     (d.DefiTipoElemento == "VANO" && sedInternos.Contains((int)v.VanoSubestacion))
 
-                select d   // 🔥 TODA la entidad
-            ).ToList();     // 🔥 UNA SOLA QUERY
+                select d
+            ).ToList();
 
-            // 🔹 Crear DataTable completo
             var dt = new DataTable();
 
             dt.Columns.Add("DEFI_Interno", typeof(int));
@@ -1453,7 +1449,7 @@ namespace Sigre.DataAccess
             dt.Columns.Add("DEFI_FechaInspeccion", typeof(DateTime));
             dt.Columns.Add("DEFI_FechaSubsanacion", typeof(DateTime));
             dt.Columns.Add("DEFI_Observacion", typeof(string));
-            dt.Columns.Add("DEFI_EstadoSubsanacion", typeof(int));
+            dt.Columns.Add("DEFI_EstadoSubsanacion", typeof(string));
             dt.Columns.Add("DEFI_Latitud", typeof(double));
             dt.Columns.Add("DEFI_Longitud", typeof(double));
             dt.Columns.Add("DEFI_TipoElemento", typeof(string));
@@ -1469,8 +1465,8 @@ namespace Sigre.DataAccess
             dt.Columns.Add("DEFI_Refer2", typeof(string));
             dt.Columns.Add("DEFI_CoordX", typeof(double));
             dt.Columns.Add("DEFI_CoordY", typeof(double));
-            dt.Columns.Add("DEFI_CodAMT", typeof(int));
-            dt.Columns.Add("DEFI_NroOrden", typeof(int));
+            dt.Columns.Add("DEFI_CodAMT", typeof(string));
+            dt.Columns.Add("DEFI_NroOrden", typeof(string));
             dt.Columns.Add("DEFI_PointX", typeof(double));
             dt.Columns.Add("DEFI_PointY", typeof(double));
             dt.Columns.Add("DEFI_UsuCre", typeof(string));
@@ -1485,23 +1481,22 @@ namespace Sigre.DataAccess
             dt.Columns.Add("DEFI_TipoArmado", typeof(string));
             dt.Columns.Add("DEFI_ArmadoMaterial", typeof(string));
             dt.Columns.Add("DEFI_NumPostes", typeof(int));
-            dt.Columns.Add("DEFI_PozoTierra", typeof(int));
-            dt.Columns.Add("DEFI_Responsable", typeof(string));
+            dt.Columns.Add("DEFI_PozoTierra", typeof(string));
+            dt.Columns.Add("DEFI_Responsable", typeof(bool));
             dt.Columns.Add("DEFI_Comentario", typeof(string));
-            dt.Columns.Add("DEFI_PozoTierra2", typeof(int));
+            dt.Columns.Add("DEFI_PozoTierra2", typeof(string));
             dt.Columns.Add("DEFI_UsuarioInic", typeof(string));
             dt.Columns.Add("DEFI_UsuarioMod", typeof(string));
-            dt.Columns.Add("DEFI_Activo", typeof(int));
+            dt.Columns.Add("DEFI_Activo", typeof(bool));
             dt.Columns.Add("DEFI_EstadoCriticidad", typeof(int));
-            dt.Columns.Add("DEFI_Inspeccionado", typeof(int));
+            dt.Columns.Add("DEFI_Inspeccionado", typeof(bool));
             dt.Columns.Add("DEFI_KeyWords", typeof(string));
             dt.Columns.Add("DEFI_Col1", typeof(string));
             dt.Columns.Add("DEFI_Col2", typeof(string));
-            dt.Columns.Add("DEFI_Col3", typeof(string)); // UUID
-            //dt.Columns.Add("DEFI_Accesibilidad", typeof(int));
-            //dt.Columns.Add("DEFI_TipoCruce", typeof(string));
+            dt.Columns.Add("DEFI_Col3", typeof(string));
+            dt.Columns.Add("ESGO_Interno", typeof(int));
+            dt.Columns.Add("DEFI_Movil", typeof(bool));
 
-            // 🔹 Cargar datos
             foreach (var d in list)
             {
                 dt.Rows.Add(
@@ -1560,9 +1555,9 @@ namespace Sigre.DataAccess
                     d.DefiKeyWords,
                     d.DefiCol1,
                     d.DefiCol2,
-                    d.DefiCol3
-                    //d.DefiAccesibilidad,
-                    //d.DefiTipoCruce
+                    d.DefiCol3,
+                    d.EsgoInterno,
+                    d.DefiMovil
                 );
             }
 
