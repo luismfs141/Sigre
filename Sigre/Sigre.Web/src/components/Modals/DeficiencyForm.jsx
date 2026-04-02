@@ -22,7 +22,6 @@ const TIPO_ELEMENTO_OPTIONS = [
 
 const ALL_CRITICIDAD_OPTIONS = [
     { label: 'LEVE', value: 1 },
-    { label: 'MEDIO', value: 2 },
     { label: 'CRÍTICO', value: 3 }
 ];
 
