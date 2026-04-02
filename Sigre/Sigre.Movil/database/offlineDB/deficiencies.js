@@ -175,26 +175,28 @@ export const saveOrUpdateDeficiency = async (def) => {
       "DefiAccesibilidad",
       "DefiTipoCruce",
       "CodopInterno",
+      "EsgoInterno",
+      "DefiMovil",
       "EstadoOffLine"
     ];
 
-    // ---------------- UPDATE ----------------
     if (def.DefiInterno) {
       const updateFields = allFields.filter(f => f !== "DefiInterno");
 
-      // 🔴 FIX: UPDATE = 1
       const estado = def.EstadoOffLine == null ? 1 : def.EstadoOffLine;
 
       const updateQuery = `
-            UPDATE Deficiencias
-            SET ${updateFields.map(f => `${f} = ?`).join(", ")}
-            WHERE DefiInterno = ?
-          `;
+        UPDATE Deficiencias
+        SET ${updateFields.map(f => `${f} = ?`).join(", ")}
+        WHERE DefiInterno = ?
+      `;
 
       const updateValues = [
-        ...updateFields.map(f =>
-          f === "EstadoOffLine" ? estado : def[f] ?? null
-        ),
+        ...updateFields.map(f => {
+          if (f === "EstadoOffLine") return estado;
+          if (f === "DefiMovil") return def[f] ?? 1;
+          return def[f] ?? null;
+        }),
         def.DefiInterno
       ];
 
@@ -202,17 +204,18 @@ export const saveOrUpdateDeficiency = async (def) => {
       return def.DefiInterno;
     }
 
-    // ---------------- INSERT ----------------
     const insertFields = allFields.filter(f => f !== "DefiInterno");
 
     const insertQuery = `
-          INSERT INTO Deficiencias (${insertFields.join(", ")})
-          VALUES (${insertFields.map(() => "?").join(", ")})
-        `;
+      INSERT INTO Deficiencias (${insertFields.join(", ")})
+      VALUES (${insertFields.map(() => "?").join(", ")})
+    `;
 
-    const insertValues = insertFields.map(f =>
-      f === "EstadoOffLine" ? 2 : def[f] ?? null
-    );
+    const insertValues = insertFields.map(f => {
+      if (f === "EstadoOffLine") return 2;
+      if (f === "DefiMovil") return def[f] ?? 1;
+      return def[f] ?? null;
+    });
 
     const result = await runQuery(insertQuery, insertValues);
 
@@ -224,19 +227,15 @@ export const saveOrUpdateDeficiency = async (def) => {
   }
 };
 
-export const deleteDeficiencyById = async (
-  defiInterno,
-  usuarioId = null,
-  nowIso = null
-) => {
+export const deleteDeficiencyById = async (defiInterno, usuarioId = null, nowIso = null) => {
   try {
-    // 0) Leer deficiencia (para DefiUUID)
+    // 0) Leer deficiencia (para DefiUuid)
     const defRow = await getDeficiencyByIdLocal(defiInterno);
     if (!defRow) return false;
 
-    const defiUUID = String(defRow.DefiCol3 ?? "").trim(); // tu UUID
-    if (!defiUUID) {
-      console.warn("⚠ deleteDeficiencyById: DefiCol3 (DefiUUID) vacío.");
+    const defiUuid = String(defRow.DefiCol3 ?? "").trim(); // tu UUID
+    if (!defiUuid) {
+      console.warn("⚠ deleteDeficiencyById: DefiCol3 (defiUuid) vacío.");
     }
 
     const now =
@@ -248,16 +247,16 @@ export const deleteDeficiencyById = async (
       })();
 
     // 1) Traer archivos activos asociados (por UUID)
-    const archivos = defiUUID
+    const archivos = defiUuid
       ? await runQuery(
         `
-          SELECT ArchInterno, ArchNombre, ArchTipo, EstadoOffLine
-          FROM Archivos
-          WHERE ArchTabla = 'Deficiencias'
-            AND DefiUUID = ?
-            AND ArchActivo = 1
-        `,
-        [defiUUID]
+      SELECT ArchInterno, ArchNombre, ArchTipo, EstadoOffLine
+      FROM Archivos
+      WHERE ArchTabla = 'Deficiencias'
+        AND DefiUuid = ?
+        AND ArchActivo = 1
+    `,
+        [defiUuid]
       )
       : [];
 

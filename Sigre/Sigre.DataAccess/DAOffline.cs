@@ -92,7 +92,7 @@ namespace Sigre.DataAccess
                                 CodopInterno = reader.GetNullableInt32("CodopInterno"),
                                 EsgoInterno = reader.GetNullableInt32("EsgoInterno"),
                                 DefiMovil = reader.GetNullableBool("DefiMovil") ?? false,
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
                                 DefiServerId = reader.GetNullableInt32("DefiServerId")
                             };
 
@@ -145,7 +145,7 @@ namespace Sigre.DataAccess
                                 DefiUuid = reader.GetNullableString("DefiUuid"),
                                 ArchUuid = archUuid,
                                 EsgoInterno = reader.GetNullableInt32("EsgoInterno"),
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
                                 DefiServerId = reader.GetNullableInt32("DefiServerId")
                             };
 
@@ -322,7 +322,7 @@ namespace Sigre.DataAccess
                             seds.Add(new SedSyncDto
                             {
                                 SedInterno = reader.GetNullableInt32("SedInterno") ?? 0,
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
                                 SedEtiqueta = reader.GetNullableString("SedEtiqueta"),
                                 SedLatitud = reader.GetNullableDouble("SedLatitud"),
                                 SedLongitud = reader.GetNullableDouble("SedLongitud"),
@@ -438,13 +438,9 @@ namespace Sigre.DataAccess
                     }
                 }
 
-                // ======================================
-                // ASIGNACIÓN FINAL
-                // ======================================
                 if (defiInterno > 0)
                 {
                     def.DefiInterno = defiInterno;
-
                     def.DefiCol3 = string.IsNullOrWhiteSpace(defiUuid)
                         ? def.DefiCol3
                         : defiUuid;

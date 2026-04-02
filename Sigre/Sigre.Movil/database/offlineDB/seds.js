@@ -40,11 +40,8 @@ export const getAllSedsLocal = async () => {
         SedArmadoMaterial,
         SedRetenidaTipo,
         SedRetenidaMaterial,
-        SedArmadoMaterialNavigationArmmtInterno,
-        SedArmadoTipoNavigationArmtpInterno,
-        SedMaterialNavigationSedInterno,
-        SedRetenidaMaterialNavigationRtnmtInterno,
-        SedRetenidaTipoNavigationRtntpInterno
+        TramInterno,
+        EsgoInterno
       FROM Seds
       ORDER BY SedEtiqueta ASC;
     `;

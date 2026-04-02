@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Sigre.Entities.Entities.SyncData
+﻿namespace Sigre.Entities.Entities.SyncData
 {
     public class SedSyncDto
     {
@@ -21,7 +19,7 @@ namespace Sigre.Entities.Entities.SyncData
         public string? SedRetenidaTipo { get; set; }
         public string? SedRetenidaMaterial { get; set; }
 
-        public int EstadoOffLine { get; set; }
         public int? EsgoInterno { get; set; }
+        public int? EstadoOffLine { get; set; }
     }
 }

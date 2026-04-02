@@ -48,13 +48,11 @@ const normalizeDeficiencyForSync = (d) => ({
 const normalizeArchivoForSync = (a, serverDefiId) => ({
   ...a,
 
-  // 🔑 relación servidor
   ArchCodTabla: serverDefiId,
-  ArchTabla: "DEFICIENCIA",
+  ArchTabla: "Deficiencias",
 
-  DefiUUID: (a.DefiUUID ?? a.DefiUUID ?? null)?.toString().slice(0, 50) ?? null,
+  DefiUuid: (a.DefiUuid ?? a.DefiUUID ?? null)?.toString().slice(0, 50) ?? null,
 
-  // 🧠 normalización backend .NET
   ArchActivo: toBooleanOrNull(a.ArchActivo),
   ArchPrincipal: toBooleanOrNull(a.ArchPrincipal),
   ArchFecRegistro: toIsoDate(a.ArchFecRegistro),

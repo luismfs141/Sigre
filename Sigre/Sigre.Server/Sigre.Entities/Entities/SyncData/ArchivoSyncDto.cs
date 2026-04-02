@@ -22,7 +22,7 @@ namespace Sigre.Entities.Entities.SyncData
         public int? TipiInterno { get; set; }
 
         public bool ArchActivo { get; set; }
-        public int EstadoOffLine { get; set; }
+        public int? EstadoOffLine { get; set; }
 
         public int? DefiServerId { get; set; }
         public string? DefiUuid { get; set; }

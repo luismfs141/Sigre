@@ -35,8 +35,6 @@ export const getNextArchCodTablaLocal = async () => {
  *
  *   - Audios: siempre 0
  */
-
-
 export const insertArchivoLocal = async ({
   archTipo,
   archTabla,
@@ -48,26 +46,15 @@ export const insertArchivoLocal = async ({
   archTipoElemento,
   archIdElemento,
   tipiInterno,
-  defiUUID = null,
-
+  defiUuid = null,
+  archUuid = null,
+  esgoInterno = null,
+  defiServerId = null,
   archActiv = 1,
 }) => {
   try {
-    // 🔎 LOG COMPLETO
-    console.log("🧪 insertArchivoLocal → payload:", {
-      archTipo,
-      archTabla,
-      archCodTabla,
-      archNombre,
-      archLatit,
-      archLong,
-      archFech,
-      archTipoElemento,
-      archIdElemento,
-      tipiInterno,
-      defiUUID,
-      archActiv,
-    });
+    const uuid = defiUuid != null ? String(defiUuid).slice(0, 50) : null;
+
     await runQuery(
       `
       INSERT INTO Archivos (
@@ -78,16 +65,17 @@ export const insertArchivoLocal = async ({
         ArchLatitud,
         ArchLongitud,
         ArchFecha,
-
-        archTipoElemento,
-        archIdElemento,
-        tipiInterno,
-        DefiUUID,
-
+        ArchTipoElemento,
+        ArchIdElemento,
+        TipiInterno,
+        DefiUuid,
+        ArchUuid,
+        EsgoInterno,
+        DefiServerId,
         ArchActivo,
         EstadoOffLine
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2);
       `,
       [
         String(archTipo),
@@ -100,27 +88,22 @@ export const insertArchivoLocal = async ({
         archTipoElemento,
         archIdElemento,
         tipiInterno,
-        defiUUID,
-
+        uuid,
+        archUuid,
+        esgoInterno,
+        defiServerId,
         archActiv,
       ]
     );
 
     const row = await runQuery(`SELECT last_insert_rowid() AS id;`);
-    return row[0].id;
+    return row?.[0]?.id ?? null;
   } catch (error) {
     console.error("❌ Error en insertArchivoLocal:", error);
     throw error;
   }
 };
 
-/**
- * Obtiene los archivos ACTIVOS (ArchActivo = 1) cuya ruta (ArchNombre)
- * comienza con un prefijo dado (por ejemplo, 'SIGRE/.../DEF001/Fotos/').
- *
- * Se usa para reconstruir las fotos y audios de una deficiencia
- * a partir de la base de datos offline.
- */
 export const getArchivosByBasePathLocal = async (basePathPrefix) => {
   try {
     const rows = await runQuery(
@@ -136,11 +119,12 @@ export const getArchivosByBasePathLocal = async (basePathPrefix) => {
         ArchFecha,
         ArchActivo,
         EstadoOffLine,
-        DefiUUID
+        DefiUuid,
+        DefiServerId,
+        ArchUuid,
+        EsgoInterno
       FROM Archivos
       WHERE ArchTabla = 'Deficiencias'
-        -- ✅ IMPORTANTE: NO filtrar por ArchActivo
-        -- porque para correlativos (7004) necesitamos ver también los movidos a ELIMINADOS
         AND ArchNombre LIKE ?;
       `,
       [`${basePathPrefix}%`]
@@ -153,28 +137,19 @@ export const getArchivosByBasePathLocal = async (basePathPrefix) => {
   }
 };
 
-/**
- * Marca un archivo como BORRADO en la tabla Archivos:
- *   - ArchActivo = 0
- *   - ArchNombre = nueva ruta (misma estructura pero arrancando en BORRADOS)
- *
- * El movimiento físico del archivo a la carpeta BORRADOS se hace
- * en la capa de la UI (registerDef.js).
- */
-export const markArchivoDeletedLocal = async (
-  archInterno,
-  newRelativePath
-) => {
+export const markArchivoDeletedLocal = async (archInterno, newRelativePath) => {
   try {
-    await runQuery( //---------------------------------------------------------------------------------------------------------------------------------------------------
-      `UPDATE Archivos
-     SET ArchActivo = 0,
-         ArchNombre = ?, 
-         EstadoOffLine = CASE
+    await runQuery(
+      `
+      UPDATE Archivos
+      SET ArchActivo = 0,
+          ArchNombre = ?,
+          EstadoOffLine = CASE
             WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
             ELSE 3
           END
-     WHERE ArchInterno = ?`,
+      WHERE ArchInterno = ?
+      `,
       [newRelativePath, archInterno]
     );
 
@@ -204,15 +179,21 @@ export const markArchivoAsSynced = async (archInterno) => {
   );
 };
 
-export const updateArchivoIdAfterSync = async (localId, serverId) => {
+/**
+ * OJO:
+ * serverId aquí es el ID del archivo en servidor.
+ * NO debe pisar DefiServerId.
+ *
+ * Como en tu SQLite no tienes ArchServerId, solo limpiamos EstadoOffLine.
+ */
+export const updateArchivoIdAfterSync = async (localId, _serverId) => {
   await runQuery(
     `
     UPDATE Archivos
-    SET DefiServerId = ?, EstadoOffLine = NULL
-    WHERE ArchInterno = ? 
-    
+    SET EstadoOffLine = NULL
+    WHERE ArchInterno = ?
     `,
-    [serverId, localId]
+    [localId]
   );
 };
 
@@ -230,12 +211,14 @@ export const markArchivoAsUpdated = async (archInterno) => {
 export const getFilesByElementAndTypi = async (idElement, typeElement, tipiInterno) => {
   try {
     const archivos = await runQuery(
-      `SELECT *
-       FROM Archivos
-       WHERE ArchIdElemento = ?
-         AND ArchTipoElemento = ?
-         AND TipiInterno = ?
-         AND ArchActivo = 1`,
+      `
+      SELECT *
+      FROM Archivos
+      WHERE ArchIdElemento = ?
+        AND ArchTipoElemento = ?
+        AND TipiInterno = ?
+        AND ArchActivo = 1
+      `,
       [idElement, typeElement, tipiInterno]
     );
 
@@ -246,7 +229,7 @@ export const getFilesByElementAndTypi = async (idElement, typeElement, tipiInter
 
     return archivos;
   } catch (error) {
-    console.error(`❌ Error al obtener archivos:`, error);
+    console.error("❌ Error al obtener archivos:", error);
     return [];
   }
 };
@@ -259,7 +242,7 @@ export const deleteFileById = async (archInterno) => {
       `
       UPDATE Archivos
       SET ArchActivo = 0,
-        EstadoOffLine = CASE
+          EstadoOffLine = CASE
             WHEN EstadoOffLine = 2 AND DefiServerId IS NULL THEN 2
             ELSE 3
           END
@@ -270,29 +253,27 @@ export const deleteFileById = async (archInterno) => {
 
     return true;
   } catch (error) {
-    console.error("❌ Error en markArchivoInactiveLocal:", error);
+    console.error("❌ Error en deleteFileById:", error);
     return false;
   }
 };
 
-// Alias explícito para el caso “falta archivo en carpeta pública”
-// (solo baja ArchActivo a 0; NO mueve nada a Eliminados)
 export const markArchivoInactiveLocal = async (archInterno) => {
   return await deleteFileById(archInterno);
 };
 
-
 export const saveOrUpdateArchivoLocal = async (arch) => {
   try {
-    // ✅ ÚNICA FUENTE: DefiUUID (NO usar DefiUuid nunca)
     const normalized = {
       ...arch,
-      DefiUUID: arch?.DefiUUID ?? null,
+      DefiUuid: arch?.DefiUuid ?? arch?.DefiUUID ?? null,
+      ArchUuid: arch?.ArchUuid ?? null,
+      EsgoInterno: arch?.EsgoInterno ?? null,
+      DefiServerId: arch?.DefiServerId ?? null,
     };
 
-    // ✅ Limita a 50
-    if (normalized.DefiUUID != null) {
-      normalized.DefiUUID = String(normalized.DefiUUID).slice(0, 50);
+    if (normalized.DefiUuid != null) {
+      normalized.DefiUuid = String(normalized.DefiUuid).slice(0, 50);
     }
 
     const allFields = [
@@ -310,10 +291,11 @@ export const saveOrUpdateArchivoLocal = async (arch) => {
       "ArchActivo",
       "EstadoOffLine",
       "DefiServerId",
-      "DefiUUID",
+      "DefiUuid",
+      "ArchUuid",
+      "EsgoInterno",
     ];
 
-    // ---------------- UPDATE ----------------
     if (normalized.ArchInterno !== null && normalized.ArchInterno !== undefined) {
       const updateFields = allFields.filter((f) => f !== "ArchInterno");
 
@@ -337,7 +319,6 @@ export const saveOrUpdateArchivoLocal = async (arch) => {
       return normalized.ArchInterno;
     }
 
-    // ---------------- INSERT ----------------
     const insertFields = allFields.filter((f) => f !== "ArchInterno");
 
     const insertQuery = `
@@ -359,9 +340,6 @@ export const saveOrUpdateArchivoLocal = async (arch) => {
   }
 };
 
-
-
-
 export const getMediosByDeficienciaIdLocal = async (deficienciaId) => {
   try {
     const rows = await runQuery(
@@ -378,10 +356,7 @@ export const getMediosByDeficienciaIdLocal = async (deficienciaId) => {
 
     return rows || [];
   } catch (error) {
-    console.error(
-      "❌ Error en getMediosByDeficienciaIdLocal:",
-      error
-    );
+    console.error("❌ Error en getMediosByDeficienciaIdLocal:", error);
     return [];
   }
 };
@@ -407,10 +382,13 @@ export const getArchivoByIdLocal = async (archInterno) => {
   }
 };
 
-
-export const getMediosByDefiUUIDLocal = async (defiUUID) => {
+/**
+ * Mantengo el nombre para no romper imports existentes,
+ * pero internamente ya usa la columna nueva DefiUuid.
+ */
+export const getMediosByDefiUUIDLocal = async (defiUuid) => {
   try {
-    const uuid = String(defiUUID ?? "").trim();
+    const uuid = String(defiUuid ?? "").trim();
     if (!uuid) return [];
 
     const rows = await runQuery(
@@ -418,7 +396,7 @@ export const getMediosByDefiUUIDLocal = async (defiUUID) => {
       SELECT *
       FROM Archivos
       WHERE ArchTabla = 'Deficiencias'
-        AND DefiUUID = ?
+        AND DefiUuid = ?
         AND ArchActivo = 1
       ORDER BY ArchInterno ASC;
       `,
@@ -435,15 +413,15 @@ export const getMediosByDefiUUIDLocal = async (defiUUID) => {
 export const markArchivosByDefiRefsInactiveLocal = async ({
   defiInterno = null,
   defiServerId = null,
-  defiUUID = null,
+  defiUuid = null,
 } = {}) => {
   try {
     const where = [];
     const params = [];
 
-    const uuid = String(defiUUID ?? "").trim();
+    const uuid = String(defiUuid ?? "").trim();
     if (uuid) {
-      where.push("DefiUUID = ?");
+      where.push("DefiUuid = ?");
       params.push(uuid);
     }
 
@@ -463,7 +441,6 @@ export const markArchivosByDefiRefsInactiveLocal = async ({
 
     const whereSql = `(${where.join(" OR ")})`;
 
-    // 1) UPDATE masivo: bajar activo y setear EstadoOffLine inteligente
     await runQuery(
       `
       UPDATE Archivos
@@ -478,7 +455,6 @@ export const markArchivosByDefiRefsInactiveLocal = async ({
       params
     );
 
-    // 2) devolver SOLO los que sí deben sincronizarse (EstadoOffLine=3)
     const rowsToSync = await runQuery(
       `
       SELECT ArchInterno
@@ -490,7 +466,7 @@ export const markArchivosByDefiRefsInactiveLocal = async ({
       params
     );
 
-    return (rowsToSync || []).map(r => r.ArchInterno).filter(Boolean);
+    return (rowsToSync || []).map((r) => r.ArchInterno).filter(Boolean);
   } catch (error) {
     console.error("❌ Error en markArchivosByDefiRefsInactiveLocal:", error);
     return [];

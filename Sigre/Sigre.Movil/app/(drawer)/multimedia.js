@@ -1157,7 +1157,7 @@ export default function Multimedia() {
   };
 
 
-  const saveFileRecord = async ({ filename, slot, isAudio, mediaData, codTablaReal, elementId, tipiId, defiUUID }) => {
+  const saveFileRecord = async ({ filename, slot, isAudio, mediaData, codTablaReal, elementId, tipiId, DefiUuid }) => {
     const { tipo } = getElementoInfo();
 
     return await saveArchivoLocal({
@@ -1179,7 +1179,7 @@ export default function Multimedia() {
       TipiInterno: tipiId,
       ArchActivo: 1,
       EstadoOffLine: 2,
-      DefiUUID: defiUUID
+      DefiUuid: DefiUuid
     });
   };
 
@@ -1580,7 +1580,7 @@ export default function Multimedia() {
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
           tipiId: currentTipiInterno,
-          defiUUID: defiCodUnico,
+          defiUuid: defiCodUnico,
         });
 
         // limpiar DRAFT en Android (en iOS ya se movió)
@@ -1647,7 +1647,7 @@ export default function Multimedia() {
           codTablaReal: codTablaParaGuardar,
           elementId: currentElementId,
           tipiId: currentTipiInterno,
-          defiUUID: defiCodUnico,
+          defiUuid: defiCodUnico,
         });
 
         if (Platform.OS === "android") {

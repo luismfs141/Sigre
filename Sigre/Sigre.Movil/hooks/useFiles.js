@@ -50,8 +50,6 @@ export function useFiles() {
   // 🔹 NORMALIZAR ANTES DE GUARDAR (SQLite)
   // ===============================
   const normalizeArchivoBeforeSave = useCallback((archivo) => {
-    // console.log("🧪 archivo:", archivo);
-
     return {
       archTipo: toNum(archivo.ArchTipo, 0),
       archTabla: archivo.ArchTabla ?? "Deficiencias",
@@ -61,15 +59,18 @@ export function useFiles() {
       archLatit: archivo.ArchLatitud ?? null,
       archLong: archivo.ArchLongitud ?? null,
 
-      // soporta fechaISO / ArchFecha / ArchFech
       archFech: archivo.fechaISO ?? archivo.ArchFecha ?? archivo.ArchFech ?? nowPeruISO(),
 
       archTipoElemento: archivo.ArchTipoElemento ?? null,
       archIdElemento: archivo.ArchIdElemento ?? null,
       tipiInterno: archivo.TipiInterno ?? null,
 
-      // ✅ CLAVE: acepta 0/1 o "0"/"1"
       archActiv: toNum(archivo.ArchActivo ?? archivo.ArchActiv ?? 1, 1),
+
+      defiUuid: archivo.DefiUuid ?? archivo.DefiUUID ?? null,
+      defiServerId: archivo.DefiServerId ?? null,
+      archUuid: archivo.ArchUuid ?? null,
+      esgoInterno: archivo.EsgoInterno ?? null,
     };
   }, []);
 
@@ -101,9 +102,10 @@ export function useFiles() {
       TipiInterno: arch.TipiInterno ?? null,
 
       DefiServerId: arch.DefiServerId ?? null,
+      DefiUuid: arch.DefiUuid ?? arch.DefiUUID ?? null,
 
-      // ✅ ÚNICO NOMBRE
-      DefiUUID: arch.DefiUUID ?? null,
+      ArchUuid: arch.ArchUuid ?? null,
+      EsgoInterno: arch.EsgoInterno ?? null,
 
       ArchActivo: activoNum === 1,
       EstadoOffLine: toNum(arch.EstadoOffLine ?? 0, 0),
@@ -205,11 +207,10 @@ export function useFiles() {
     const dbOk = await checkDatabase();
     if (!dbOk) return null;
 
-    //console.log("💾 saveArchivoLocal - data:", data);
     const normalized = normalizeArchivoBeforeSave(data);
 
     const archivoForDB = {
-      ArchInterno: data.ArchInterno ?? null,   // 👈 clave para UPDATE
+      ArchInterno: data.ArchInterno ?? null,
       ArchTipo: normalized.archTipo,
       ArchTabla: normalized.archTabla,
       ArchCodTabla: normalized.archCodTabla,
@@ -220,17 +221,13 @@ export function useFiles() {
       ArchTipoElemento: normalized.archTipoElemento,
       ArchIdElemento: normalized.archIdElemento,
       TipiInterno: normalized.tipiInterno,
-      DefiUUID: data.DefiUUID ?? null,
-
-      // ✅ 0/1 numérico en SQLite (tu Multimedia manda "0")
+      DefiUuid: normalized.defiUuid,
       ArchActivo: normalized.archActiv,
-
-      // ✅ evita nulls raros
       EstadoOffLine: data.EstadoOffLine ?? 1,
-      DefiServerId: data.DefiServerId ?? null
+      DefiServerId: normalized.defiServerId,
+      ArchUuid: normalized.archUuid,
+      EsgoInterno: normalized.esgoInterno,
     };
-
-    //console.log("💾 saveOrUpdateArchivoLocal:", archivoForDB);
 
     const localId = await saveOrUpdateArchivoLocal(archivoForDB);
 
