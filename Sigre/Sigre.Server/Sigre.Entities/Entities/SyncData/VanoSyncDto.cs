@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Sigre.Entities.Entities.SyncData
 {
@@ -29,5 +25,7 @@ namespace Sigre.Entities.Entities.SyncData
         public bool? VanoEsMt { get; set; }
         public bool? VanoEsBt { get; set; }
         public string? VanoTramo { get; set; }
+
+        public int? EsgoInterno { get; set; }
     }
 }

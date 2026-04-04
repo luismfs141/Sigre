@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Sigre.Entities.Entities.SyncData
+﻿namespace Sigre.Entities.Entities.SyncData
 {
     public class SedSyncDto
     {
@@ -24,8 +18,8 @@ namespace Sigre.Entities.Entities.SyncData
         public string? SedArmadoMaterial { get; set; }
         public string? SedRetenidaTipo { get; set; }
         public string? SedRetenidaMaterial { get; set; }
-        public int? TramInterno { get; set; }
 
-        public int EstadoOffLine { get; set; }
+        public int? EsgoInterno { get; set; }
+        public int? EstadoOffLine { get; set; }
     }
 }

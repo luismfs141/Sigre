@@ -18,26 +18,32 @@ namespace Sigre.DataAccess
         public List<Vano> DAGAP_GetByFeeder(int x_feeder_id)
         {
             SigreContext ctx = new SigreContext();
-            var vanos = ctx.Vanos.Where(v => v.AlimInterno == x_feeder_id).Select(van =>
-            new Vano()
-            {
-                AlimInterno = van.AlimInterno,
-                AlimInternoNavigation = van.AlimInternoNavigation,
-                VanoCodigo = van.VanoCodigo,
-                VanoEtiqueta = van.VanoEtiqueta,
-                VanoInspeccionado = van.VanoInspeccionado,
-                VanoInterno = van.VanoInterno,
-                VanoLatitudFin = van.VanoLatitudFin,
-                VanoLatitudIni = van.VanoLatitudIni,
-                VanoLongitudFin = van.VanoLongitudFin,
-                VanoLongitudIni = van.VanoLongitudIni,
-                VanoMaterial = van.VanoMaterial == null? "ALU" : van.VanoMaterial,
-                VanoNodoFinal = van.VanoNodoFinal,
-                VanoNodoInicial = van.VanoNodoInicial,
-                VanoTerceros = van.VanoTerceros,
-                VanoTramo = van.VanoTramo,
-            }
-            );
+
+            var vanos = ctx.Vanos
+                .Where(v => v.AlimInterno == x_feeder_id)
+                .Select(van => new Vano()
+                {
+                    AlimInterno = van.AlimInterno,
+                    AlimInternoNavigation = van.AlimInternoNavigation,
+                    VanoCodigo = van.VanoCodigo,
+                    VanoEtiqueta = van.VanoEtiqueta,
+                    VanoInspeccionado = van.VanoInspeccionado,
+                    VanoInterno = van.VanoInterno,
+                    VanoLatitudFin = van.VanoLatitudFin,
+                    VanoLatitudIni = van.VanoLatitudIni,
+                    VanoLongitudFin = van.VanoLongitudFin,
+                    VanoLongitudIni = van.VanoLongitudIni,
+                    VanoMaterial = van.VanoMaterial == null ? "ALU" : van.VanoMaterial,
+                    VanoNodoFinal = van.VanoNodoFinal,
+                    VanoNodoInicial = van.VanoNodoInicial,
+                    VanoTerceros = van.VanoTerceros,
+                    VanoTramo = van.VanoTramo,
+                    VanoSubestacion = van.VanoSubestacion,
+                    VanoEsBt = van.VanoEsBt,
+                    VanoEsMt = van.VanoEsMt,
+                    EsgoInterno = van.EsgoInterno
+                });
+
             return vanos.ToList();
         }
 
@@ -159,6 +165,7 @@ namespace Sigre.DataAccess
                             VanoEsMt = dto.VanoEsMt,
                             VanoEsBt = dto.VanoEsBt,
                             VanoTramo = dto.VanoTramo,
+                            EsgoInterno = dto.EsgoInterno
                         };
 
                         ctx.Vanos.Add(nuevo);
@@ -178,15 +185,18 @@ namespace Sigre.DataAccess
                         existente.VanoLongitudIni = dto.VanoLongitudIni;
                         existente.VanoLatitudFin = dto.VanoLatitudFin;
                         existente.VanoLongitudFin = dto.VanoLongitudFin;
+                        existente.AlimInterno = dto.AlimInterno;
                         existente.VanoEtiqueta = dto.VanoEtiqueta;
                         existente.VanoTerceros = dto.VanoTerceros;
                         existente.VanoMaterial = dto.VanoMaterial;
                         existente.VanoNodoInicial = dto.VanoNodoInicial;
                         existente.VanoNodoFinal = dto.VanoNodoFinal;
                         existente.VanoInspeccionado = dto.VanoInspeccionado;
+                        existente.VanoSubestacion = dto.VanoSubestacion;
                         existente.VanoEsMt = dto.VanoEsMt;
                         existente.VanoEsBt = dto.VanoEsBt;
                         existente.VanoTramo = dto.VanoTramo;
+                        existente.EsgoInterno = dto.EsgoInterno;
 
                         mappings.Add((dto.VanoInterno.Value, existente));
                     }

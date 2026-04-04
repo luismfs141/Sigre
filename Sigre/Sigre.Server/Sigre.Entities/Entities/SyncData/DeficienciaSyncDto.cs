@@ -1,18 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Sigre.Entities.Entities.SyncData
 {
-
     public class DeficienciaSyncDto
     {
-        public int DefiInterno { get; set; }          // ID LOCAL
-        public int? EstadoOffLine { get; set; }         // 2 = INSERT, 1 = UPDATE
-
-        public int? DefiServerId { get; set; }        // ID del backend
+        public int DefiInterno { get; set; }
+        public int? EstadoOffLine { get; set; }
+        public int? DefiServerId { get; set; }
 
         public string? DefiEstado { get; set; }
         public int? InspInterno { get; set; }
@@ -86,10 +80,11 @@ namespace Sigre.Entities.Entities.SyncData
         public string? DefiTipoCruce { get; set; }
         public int? CodopInterno { get; set; }
 
+        public string? DefiCol3 { get; set; }
+        public string? DefiCol2 { get; set; }
+        public string? DefiCol1 { get; set; }
 
-        public string? DefiCol3 {  get; set; }
-        public string? DefiCol2 {  get; set; }
-        public string? DefiCol1 {  get; set; }
-
+        public int? EsgoInterno { get; set; }
+        public bool DefiMovil { get; set; }
     }
 }
