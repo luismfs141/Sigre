@@ -188,12 +188,11 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
             processDeficiencyFolder(pathUpper);
         }
 
-        return Array.from(candidates).map((candidatePath) =>
-            `${API_BASE_URL}/${(candidatePath.startsWith('/') ? candidatePath.substring(1) : candidatePath)
-                .split('/')
-                .map(encodeURIComponent)
-                .join('/')}?t=${cacheBuster}`
-        );
+        return Array.from(candidates).map((candidatePath) => {
+            let baseUrlPath = `${API_BASE_URL}/${(candidatePath.startsWith('/') ? candidatePath.substring(1) : candidatePath).split('/').map(encodeURIComponent).join('/')}`;
+            // Solo agrega el cache buster si NO está vacío. Así aprovecha la memoria de Chrome.
+            return cacheBuster ? `${baseUrlPath}?t=${cacheBuster}` : baseUrlPath;
+        });
     };
 
     const candidates = useMemo(
@@ -215,7 +214,7 @@ const ResilientImage = ({ file, index, onImageClick, onUrlResolved, typeName, cu
     return (
         <div className="h-24 w-24 rounded border overflow-hidden relative cursor-pointer group hover:shadow-lg transition-all">
             <div onClick={() => onImageClick(index)} className="w-full h-full">
-                <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} />
+                <Image src={currentSrc} alt="Foto" preview={false} width="100%" className="w-full h-full object-cover" onError={handleError} onLoad={handleLoad} loading="lazy"/>
             </div>
 
             {/* BOTÓN ROJO: ELIMINAR (Siempre visible) */}
@@ -276,7 +275,7 @@ export default function EvidenceGallery({ deficiency, feeder, sed, suministro, e
     const [completedCrop, setCompletedCrop] = useState(null);
     const imgRef = useRef(null);
     const [isCroppingSave, setIsCroppingSave] = useState(false);
-    const [cacheBuster, setCacheBuster] = useState(Date.now());
+    const [cacheBuster, setCacheBuster] = useState("");
     useEffect(() => {
         if (deficiency?.defiInterno) {
             loadFiles(deficiency.defiInterno);
