@@ -565,6 +565,9 @@ export default function WebInspectionManager() {
     //     return Array.from(candidates);
     // };
 
+    // ==============================================================================
+    // 🔥 FUNCIÓN RESILIENTE INTELIGENTE (Máximo 5 intentos precisos, cero bucles)
+    // ==============================================================================
     const getCandidateUrls = (row) => {
         if (!row.originalName) return [];
 
@@ -574,126 +577,51 @@ export default function WebInspectionManager() {
             .replace(/^.*ELIMINADOS\//i, '');
 
         const candidates = new Set();
+        const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+        
+        // Helper para codificar la URL correctamente
+        const formatUrl = (pathStr) => 
+            `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+
+        // INTENTO 1: La ruta exacta de la base de datos (Ej: .../Vano/.../7004.1.1/FOT-...)
+        candidates.add(formatUrl(base));
+
+        // Separar nombre de archivo y ruta para los fallbacks
         const parts = base.split('/');
         const originalFileName = parts.pop();
+        const folderPath = parts.join('/');
 
-        if (!originalFileName) return [];
+        // INTENTO 2: Corrección de mayúsculas (Vano -> VANO, Poste -> POSTE) y SINDEF/0000
+        let upperFolder = folderPath.toUpperCase();
+        if (upperFolder.includes('/SINDEF/')) {
+            candidates.add(formatUrl(`${upperFolder.replace(/\/SINDEF\//g, '/0000/')}/${originalFileName}`));
+        }
+        if (upperFolder.includes('/0000/')) {
+            candidates.add(formatUrl(`${upperFolder.replace(/\/0000\//g, '/SINDEF/')}/${originalFileName}`));
+        }
 
-        const rootPathWithoutFile = parts.length > 0 ? `${parts.join('/')}/` : '';
-        let shortFileName = null;
+        // INTENTO 3: Corrección del caso especial de puntos (Ej: 7004.1.1 -> 7004/1/1 o 7004/1)
+        if (folderPath.includes('7004.')) {
+            // Convierte "7004.1.1" en "7004/1/1"
+            const fixDots = folderPath.replace(/7004\.(\d+)\.?(\d*)/, (match, p1, p2) => p2 ? `7004/${p1}/${p2}` : `7004/${p1}`);
+            candidates.add(formatUrl(`${fixDots}/${originalFileName}`));
+        }
 
+        // INTENTO 4: Nombre corto físico (Ej: FOT-8143-...-6.jpg -> 6.jpg)
         const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
         if (typeMatch) {
-            shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+            const shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
+            candidates.add(formatUrl(`${folderPath}/${shortFileName}`));
+            
+            // Si también era 7004., intentamos nombre corto en carpeta corregida
+            if (folderPath.includes('7004.')) {
+                const fixDots = folderPath.replace(/7004\.(\d+)\.?(\d*)/, (match, p1, p2) => p2 ? `7004/${p1}/${p2}` : `7004/${p1}`);
+                candidates.add(formatUrl(`${fixDots}/${shortFileName}`));
+            }
         }
 
-        const escapeRegExp = (text) =>
-            String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        const buildFolderAliasVariants = (folderPath) => {
-            const variants = new Set([folderPath]);
-
-            if (/\/SINDEF\//i.test(folderPath)) {
-                variants.add(folderPath.replace(/\/SINDEF\//gi, '/0000/'));
-            }
-
-            if (/\/0000\//i.test(folderPath)) {
-                variants.add(folderPath.replace(/\/0000\//gi, '/SINDEF/'));
-            }
-
-            return Array.from(variants);
-        };
-
-        const addPathVariations = (folderPath) => {
-            if (!folderPath) return;
-
-            for (const variantPath of buildFolderAliasVariants(folderPath)) {
-                const baseUrl = API_BASE_URL.replace(/\/+$/, '');
-                const formatUrl = (pathStr) =>
-                    `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
-
-                candidates.add(formatUrl(`${variantPath}${originalFileName}`));
-
-                if (shortFileName) {
-                    candidates.add(formatUrl(`${variantPath}${shortFileName}`));
-                }
-            }
-        };
-
-        const fileDef = historicalData?.find((d) => d.defiInterno === row.selectedDeficiencyId);
-
-        const rawDbCode = String((fileDef ? getCodeById(fileDef.tipiInterno) : '0000') || '0000')
-            .trim()
-            .toUpperCase();
-
-        const defCodesToTry =
-            rawDbCode === '0000' || rawDbCode === '0' || rawDbCode === 'SINDEF'
-                ? ['SINDEF', '0000']
-                : [rawDbCode];
-
-        const currentSupply = fileDef?.defiNumSuministro || '0';
-
-        const processDeficiencyFolder = (currentPath, codeVariants = defCodesToTry) => {
-            for (const pathVariant of buildFolderAliasVariants(currentPath)) {
-                addPathVariations(pathVariant);
-
-                for (const currentCode of codeVariants) {
-                    const escapedCode = escapeRegExp(currentCode);
-                    const complexRegex = new RegExp(`\\/(${escapedCode})\\.(\\d+)\\.([a-zA-Z0-9]+)\\/`, 'i');
-                    const matchComplex = pathVariant.match(complexRegex);
-
-                    if (currentSupply && currentSupply !== '0') {
-                        if (matchComplex) {
-                            const fullStr = matchComplex[0];
-                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}.1.${currentSupply}/`));
-                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${currentSupply}/`));
-                        } else {
-                            const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
-                            if (simpleDefRegex.test(pathVariant)) {
-                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}.1.${currentSupply}/`));
-                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${currentSupply}/`));
-                            }
-                        }
-                    }
-
-                    if (matchComplex) {
-                        const fullStr = matchComplex[0];
-                        addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/`));
-
-                        for (let i = 1; i <= 20; i++) {
-                            addPathVariations(pathVariant.replace(fullStr, `/${currentCode}/${i}/`));
-                        }
-                    } else {
-                        const simpleDefRegex = new RegExp(`\\/${escapedCode}\\/`, 'i');
-
-                        if (simpleDefRegex.test(pathVariant)) {
-                            for (let i = 1; i <= 20; i++) {
-                                addPathVariations(pathVariant.replace(simpleDefRegex, `/${currentCode}/${i}/`));
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        const pathNoType = rootPathWithoutFile.replace(/\/(?:Vano|Poste)\//gi, '/');
-        processDeficiencyFolder(pathNoType);
-        processDeficiencyFolder(rootPathWithoutFile);
-
-        const pathUpper = rootPathWithoutFile
-            .replace(/\/Vano\//i, '/VANO/')
-            .replace(/\/Poste\//i, '/POSTE/');
-
-        if (pathUpper !== rootPathWithoutFile) {
-            processDeficiencyFolder(pathUpper);
-        }
-
-        const match7004 = rootPathWithoutFile.match(/\/(7004)\.(\d+)\.([a-zA-Z0-9]+)\//);
-        if (match7004 && !defCodesToTry.includes('7004')) {
-            processDeficiencyFolder(rootPathWithoutFile, ['7004']);
-        }
-
-        return Array.from(candidates);
+        // Limitamos a un absoluto máximo de 5 URLs para JAMÁS colapsar Ngrok/Cloudflare
+        return Array.from(candidates).slice(0, 5);
     };
 
 
@@ -885,7 +813,8 @@ export default function WebInspectionManager() {
         if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
 
         return (
-            <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block"
+            <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block "
+                loading="lazy"
                 onError={(e) => {
                     if (srcIndex < urls.length - 1) setSrcIndex(srcIndex + 1);
                     else { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto'; }
