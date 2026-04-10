@@ -12,3 +12,4 @@ VALUES
 GO
 
 
+select * from Deficiencias where 
