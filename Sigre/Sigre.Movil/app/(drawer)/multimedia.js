@@ -837,6 +837,22 @@ export default function Multimedia() {
     });
   };
 
+  const getAllowedCopySlotIndexes = () => {
+    const { typeElement } = getSelectedElementRef();
+
+    if (typeElement === "POST") {
+      // Fotos 1, 2, 3, 4 y 5
+      return [0, 1, 2, 3, 4];
+    }
+
+    if (typeElement === "VANO") {
+      // Fotos 1 y 5
+      return [0, 4];
+    }
+
+    return [];
+  };
+
   const loadCopyPhotosForDef = async (defItem) => {
     const defId = Number(defItem?.defId);
     if (!defId) return [];
@@ -921,7 +937,11 @@ export default function Multimedia() {
       });
     }
 
-    const ordered = photos.sort((a, b) => a.slotIndex - b.slotIndex);
+    const allowedSlotIndexes = new Set(getAllowedCopySlotIndexes());
+
+    const ordered = photos
+      .filter((photo) => allowedSlotIndexes.has(Number(photo.slotIndex)))
+      .sort((a, b) => a.slotIndex - b.slotIndex);
 
     setCopyPhotosByDefId((prev) => ({
       ...prev,
@@ -998,6 +1018,17 @@ export default function Multimedia() {
       return;
     }
 
+    const allowedSlotIndexes = new Set(getAllowedCopySlotIndexes());
+
+    const validSelectedPhotos = selectedPhotos.filter((item) =>
+      allowedSlotIndexes.has(Number(item?.slotIndex))
+    );
+
+    if (!validSelectedPhotos.length) {
+      Alert.alert("Sin fotos válidas", "No hay fotos permitidas para copiar en este elemento.");
+      return;
+    }
+
     try {
       setLoading({ active: true, msg: "Copiando fotos..." });
 
@@ -1008,7 +1039,7 @@ export default function Multimedia() {
       const copiedSlots = [];
       const failedSlots = [];
 
-      const orderedSelection = [...selectedPhotos].sort((a, b) => a.slotIndex - b.slotIndex);
+      const orderedSelection = [...validSelectedPhotos].sort((a, b) => a.slotIndex - b.slotIndex);
 
       for (const item of orderedSelection) {
         try {
@@ -1979,7 +2010,7 @@ export default function Multimedia() {
             <Text style={styles.title}>📸 Registro de Fotos</Text>
 
             <TouchableOpacity
-              style={[styles.copyButton, { display: "none" }, !canEdit && { opacity: 0.45 }]}
+              style={[styles.copyButton, { display: "true" }, !canEdit && { opacity: 0.45 }]}
               onPress={openCopyPhotosModal}
               disabled={!canEdit}
             >

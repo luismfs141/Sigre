@@ -222,7 +222,7 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
           <View style={styles.previewContainer}>
             <View style={styles.cameraStage}>
               <View style={styles.cameraFrame}>
-                <Image source={{ uri: tempPhoto.uri }} style={styles.cameraMedia} />
+                <Image source={{ uri: tempPhoto.uri }} style={styles.previewImage} />
               </View>
             </View>
 
@@ -363,6 +363,11 @@ const styles = StyleSheet.create({
   cameraMedia: {
     width: "100%",
     height: "100%",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
   previewControls: {
     position: "absolute",
