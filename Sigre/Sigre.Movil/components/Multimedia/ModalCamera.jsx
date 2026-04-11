@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -118,55 +119,55 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
 
 
   const takePhoto = async () => {
-  if (!cameraRef.current || processing) return;
+    if (!cameraRef.current || processing) return;
 
-  setProcessing(true);
+    setProcessing(true);
 
-  // ✅ snapshot exacto al disparo
-  const coordsAtShot = lastCoords;
-  const capturedAtMs = getUniqueNowMs();
+    // ✅ snapshot exacto al disparo
+    const coordsAtShot = lastCoords;
+    const capturedAtMs = getUniqueNowMs();
 
-  try {
-    await cameraRef.current.takePictureAsync({
-      quality: 0.7,
-      exif: false,
+    try {
+      await cameraRef.current.takePictureAsync({
+        quality: 0.7,
+        exif: false,
 
-      // ✅ evita pantalla en blanco (archivo listo)
-      skipProcessing: false,
+        // ✅ evita pantalla en blanco (archivo listo)
+        skipProcessing: false,
 
-      // ✅ setTempPhoto SOLO cuando ya guardó el archivo
-      onPictureSaved: (photo) => {
-        try {
-          if (!photo?.uri) return;
+        // ✅ setTempPhoto SOLO cuando ya guardó el archivo
+        onPictureSaved: (photo) => {
+          try {
+            if (!photo?.uri) return;
 
-          let utm = null;
-          if (coordsAtShot) {
-            utm = convertToUTM(coordsAtShot.latitude, coordsAtShot.longitude);
+            let utm = null;
+            if (coordsAtShot) {
+              utm = convertToUTM(coordsAtShot.latitude, coordsAtShot.longitude);
+            }
+
+            const temp = {
+              uri: photo.uri,
+              latUtm: utm?.utmY ?? null,
+              lonUtm: utm?.utmX ?? null,
+              utmZone: utm?.zone ?? null,
+
+              capturedAtMs,
+              fechaISO: formatLocalISO(capturedAtMs),
+            };
+
+            setTempPhoto(temp);
+          } catch (e) {
+            console.error("❌ Error post-proceso foto:", e);
+          } finally {
+            setProcessing(false);
           }
-
-          const temp = {
-            uri: photo.uri,
-            latUtm: utm?.utmY ?? null,
-            lonUtm: utm?.utmX ?? null,
-            utmZone: utm?.zone ?? null,
-
-            capturedAtMs,
-            fechaISO: formatLocalISO(capturedAtMs),
-          };
-
-          setTempPhoto(temp);
-        } catch (e) {
-          console.error("❌ Error post-proceso foto:", e);
-        } finally {
-          setProcessing(false);
-        }
-      },
-    });
-  } catch (e) {
-    console.error("❌ Error cámara:", e);
-    setProcessing(false);
-  }
-};
+        },
+      });
+    } catch (e) {
+      console.error("❌ Error cámara:", e);
+      setProcessing(false);
+    }
+  };
 
 
 
@@ -218,11 +219,13 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
 
         {/* === CONDICIONAL: ¿HAY FOTO TOMADA? === */}
         {tempPhoto ? (
-          // --- VISTA PREVIA (GUARDAR O REPETIR) ---
           <View style={styles.previewContainer}>
-            <Image source={{ uri: tempPhoto.uri }} style={styles.previewImage} />
+            <View style={styles.cameraStage}>
+              <View style={styles.cameraFrame}>
+                <Image source={{ uri: tempPhoto.uri }} style={styles.previewImage} />
+              </View>
+            </View>
 
-            {/* ✅ BOTONES SUBIDOS PARA NO TAPAR CON NAV BAR */}
             <View style={styles.previewControls}>
               <Pressable style={styles.btnRetake} onPress={handleRetake}>
                 <Text style={styles.btnText}>↻ Repetir</Text>
@@ -236,16 +239,20 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
         ) : (
           // --- VISTA CÁMARA ---
           <>
-            <CameraView
-              ref={cameraRef}
-              style={{ flex: 1 }}
-              facing="back"
-              zoom={zoom}
-              onCameraReady={() => setIsReady(true)}
-              onMountError={(e) => console.error("❌ Error cámara", e)}
-            />
+            <View style={styles.cameraStage}>
+              <View style={styles.cameraFrame}>
+                <CameraView
+                  ref={cameraRef}
+                  style={styles.cameraMedia}
+                  facing="back"
+                  zoom={zoom}
+                  ratio={Platform.OS === "android" ? "4:3" : undefined}
+                  onCameraReady={() => setIsReady(true)}
+                  onMountError={(e) => console.error("❌ Error cámara", e)}
+                />
+              </View>
+            </View>
 
-            {/* 🔍 ZOOM CONTROLS */}
             <View style={styles.zoomControls}>
               <Pressable style={styles.zoomBtn} onPress={zoomOut}>
                 <Text style={styles.zoomBtnText}>−</Text>
@@ -256,7 +263,6 @@ function ModalCameraContent({ visible, onClose, onPhoto }) {
               </Pressable>
             </View>
 
-            {/* 🎛️ CONTROLES CAPTURA */}
             <View style={styles.controls}>
               {processing ? (
                 <ActivityIndicator size="large" color="#fff" />
@@ -340,8 +346,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "black",
   },
-  previewImage: {
+
+  cameraStage: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  cameraFrame: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    backgroundColor: "black",
+    overflow: "hidden",
+  },
+
+  cameraMedia: {
+    width: "100%",
+    height: "100%",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
     resizeMode: "contain",
   },
   previewControls: {

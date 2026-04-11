@@ -1,9 +1,9 @@
 import { useCallback, useRef } from "react";
+import uuid from "react-native-uuid";
 import { api } from "../config";
 import { useDatos } from "../context/DatosContext";
 import { nowPeruISO } from "../utils/dateUtils";
 import { useConnectivity } from "./useConnectivity";
-
 
 import {
   deleteFileById,
@@ -46,10 +46,15 @@ export function useFiles() {
 
   const syncingRef = useRef(false);
 
+  const generateUUID = () => uuid.v4();
+
   // ===============================
   // 🔹 NORMALIZAR ANTES DE GUARDAR (SQLite)
   // ===============================
   const normalizeArchivoBeforeSave = useCallback((archivo) => {
+    const isNew = archivo?.ArchInterno == null;
+    const incomingArchUuid = archivo?.ArchUuid ?? archivo?.archUuid ?? null;
+
     return {
       archTipo: toNum(archivo.ArchTipo, 0),
       archTabla: archivo.ArchTabla ?? "Deficiencias",
@@ -69,7 +74,11 @@ export function useFiles() {
 
       defiUuid: archivo.DefiUuid ?? archivo.DefiUUID ?? null,
       defiServerId: archivo.DefiServerId ?? null,
-      archUuid: archivo.ArchUuid ?? null,
+
+      archUuid: isNew
+        ? (incomingArchUuid ?? generateUUID())
+        : incomingArchUuid,
+
       esgoInterno: archivo.EsgoInterno ?? null,
     };
   }, []);
