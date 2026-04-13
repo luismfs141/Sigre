@@ -77,14 +77,33 @@ namespace Sigre.Server.Controllers
                 return StatusCode(500, new { message = "Error: " + ex.Message });
             }
         }
-        [HttpPost("GuardarVanoWeb")] // Nombre genérico
-        public IActionResult GuardarVanoWeb([FromBody] Vano x_vano)
+        [HttpPost("GuardarVanoWeb")]
+        public IActionResult GuardarVanoWeb([FromBody] VanoGuardarDTO x_vano_dto)
         {
             try
             {
+                // 1. EL MAPEO: Convertimos el DTO a la Entidad Vano
+                var entidadVano = new Vano
+                {
+                    VanoInterno = x_vano_dto.VanoInterno,
+                    VanoCodigo = x_vano_dto.VanoCodigo,
+                    VanoEtiqueta = x_vano_dto.VanoEtiqueta,
+                    AlimInterno = x_vano_dto.AlimInterno,
+                    VanoSubestacion = x_vano_dto.VanoSubestacion,
+                    VanoLatitudIni = x_vano_dto.VanoLatitudIni,
+                    VanoLongitudIni = x_vano_dto.VanoLongitudIni,
+                    VanoLatitudFin = x_vano_dto.VanoLatitudFin,
+                    VanoLongitudFin = x_vano_dto.VanoLongitudFin,
+                    VanoNodoInicial = x_vano_dto.VanoNodoInicial,
+                    VanoNodoFinal = x_vano_dto.VanoNodoFinal,
+                    VanoMaterial = x_vano_dto.VanoMaterial,
+                    VanoTerceros = x_vano_dto.VanoTerceros
+                };
+
                 var da = new DAGap();
-                // El método decide si es Insert o Update según el ID
-                int idResultante = da.DAVANO_GuardarWeb(x_vano);
+
+                // 2. Pasamos la ENTIDAD mapeada, no el DTO
+                int idResultante = da.DAVANO_GuardarWeb(entidadVano);
 
                 return Ok(idResultante);
             }
