@@ -17,6 +17,7 @@ import { Message } from 'primereact/message';
 import { Dialog } from 'primereact/dialog';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { ToggleButton } from 'primereact/togglebutton';
 
 // --- HOOKS ---
 import { useDeficiencyByGis } from '../hooks/useDeficiency';
@@ -31,6 +32,7 @@ import PhotoUploadModal from '../components/Modals/PhotoUploadModal';
 import { latLonToUTM } from '../utils/geoUtils';
 import { Checkbox } from 'primereact/checkbox';
 import { API_BASE_URL } from '../utils/ngrok';
+
 const highContrastStyle = `
   .p-datatable .p-datatable-tbody > tr.p-highlight {
       background-color: #bfdbfe !important; /* Azul más fuerte */
@@ -155,6 +157,7 @@ export default function WebInspectionManager() {
     const [zipLoading, setZipLoading] = useState(false);
     const [showPhotoModal, setShowPhotoModal] = useState(false);
     const sessionBlobs = useRef({});
+    const [useDeepSearch, setUseDeepSearch] = useState(false);
 
     // --- 4. EFECTOS GLOBALES ---
     useEffect(() => {
@@ -412,7 +415,8 @@ export default function WebInspectionManager() {
             const finalLon = isAudio ? 0 : ((applyGeo && globalLon) ? globalUtm.easting : row.archLongitud);
 
             let newPath = row.currentPath;
-            const currentPathParts = String(row.currentPath || '').split('/');
+            const normalizedPath = String(row.currentPath || '').replace(/\\/g, '/');
+            const currentPathParts = normalizedPath.split('/');
 
             if ((applyPath || applyTipi || applyGisCode || applyDate) && currentPathParts.length >= 5 && currentPathParts[0].includes("SIGRE.MOVIL")) {
                 const effectiveFeeder = applyPath ? newFeeder : currentPathParts[1];
@@ -565,8 +569,10 @@ export default function WebInspectionManager() {
     //     return Array.from(candidates);
     // };
 
+    
+   
     // ==============================================================================
-    // 🔥 FUNCIÓN RESILIENTE INTELIGENTE (Máximo 5 intentos precisos, cero bucles)
+    // ⚡ FAST PATH v5: Corrección de Posición Exacta (Adiós reemplazos fantasma)
     // ==============================================================================
     const getCandidateUrls = (row) => {
         if (!row.originalName) return [];
@@ -578,56 +584,114 @@ export default function WebInspectionManager() {
 
         const candidates = new Set();
         const baseUrl = API_BASE_URL.replace(/\/+$/, '');
-        
-        // Helper para codificar la URL correctamente
-        const formatUrl = (pathStr) => 
-            `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+        const formatUrl = (pathStr) => `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
 
-        // INTENTO 1: La ruta exacta de la base de datos (Ej: .../Vano/.../7004.1.1/FOT-...)
+        // 1. Ruta exacta original
         candidates.add(formatUrl(base));
 
-        // Separar nombre de archivo y ruta para los fallbacks
         const parts = base.split('/');
         const originalFileName = parts.pop();
-        const folderPath = parts.join('/');
+        let upperFolder = parts.join('/').toUpperCase();
+        let safeFolder = upperFolder + '/'; 
 
-        // INTENTO 2: Corrección de mayúsculas (Vano -> VANO, Poste -> POSTE) y SINDEF/0000
-        let upperFolder = folderPath.toUpperCase();
-        if (upperFolder.includes('/SINDEF/')) {
-            candidates.add(formatUrl(`${upperFolder.replace(/\/SINDEF\//g, '/0000/')}/${originalFileName}`));
-        }
-        if (upperFolder.includes('/0000/')) {
-            candidates.add(formatUrl(`${upperFolder.replace(/\/0000\//g, '/SINDEF/')}/${originalFileName}`));
+        // 🔥 CORRECCIÓN MAESTRA: Extraemos la tipificación de la posición EXACTA
+        // Ej: FOT - 2087 - PTO000059287 - 6002 - ... -> partsName[3] es "6002"
+        const partsName = originalFileName.split('-');
+        let dbCode = null;
+        if (partsName.length >= 5 && (partsName[0].toUpperCase() === 'FOT' || partsName[0].toUpperCase() === 'AUD')) {
+            dbCode = partsName[3].toUpperCase(); 
         }
 
-        // INTENTO 3: Corrección del caso especial de puntos (Ej: 7004.1.1 -> 7004/1/1 o 7004/1)
-        if (folderPath.includes('7004.')) {
-            // Convierte "7004.1.1" en "7004/1/1"
-            const fixDots = folderPath.replace(/7004\.(\d+)\.?(\d*)/, (match, p1, p2) => p2 ? `7004/${p1}/${p2}` : `7004/${p1}`);
+        // 2. Generar las 4 permutaciones base (0000 y SINDEF)
+        // Ya sea porque era SINDEF originalmente, o porque la BD nos mandó un 6002 falso,
+        // SIEMPRE generamos las rutas de rescate 0000/SINDEF.
+        if (dbCode) {
+            // Limpiamos la carpeta apuntando solo al código exacto
+            let folder0000 = safeFolder.replace(new RegExp(`/${dbCode}(?:/\\d+)?/`, 'gi'), '/0000/').replace(/\/(SINDEF|0000)\//gi, '/0000/').replace(/\/$/, '');
+            let folderSINDEF = safeFolder.replace(new RegExp(`/${dbCode}(?:/\\d+)?/`, 'gi'), '/SINDEF/').replace(/\/(SINDEF|0000)\//gi, '/SINDEF/').replace(/\/$/, '');
+            
+            // Limpiamos el archivo apuntando solo al código exacto
+            let file0000 = originalFileName.replace(new RegExp(`-${dbCode}-`, 'gi'), '-0000-');
+            let fileSINDEF = originalFileName.replace(new RegExp(`-${dbCode}-`, 'gi'), '-SINDEF-');
+
+            // Agregamos las 4 combinaciones cruzadas a la lista de intentos
+            candidates.add(formatUrl(`${folder0000}/${file0000}`));     
+            candidates.add(formatUrl(`${folderSINDEF}/${fileSINDEF}`)); 
+            candidates.add(formatUrl(`${folder0000}/${fileSINDEF}`));   
+            candidates.add(formatUrl(`${folderSINDEF}/${file0000}`));   
+        }
+
+        // 3. Caso especial 7004
+        if (upperFolder.includes('7004.')) {
+            const fixDots = upperFolder.replace(/7004\.(\d+)\.?(\d*)/, (match, p1) => `7004/${p1}`);
             candidates.add(formatUrl(`${fixDots}/${originalFileName}`));
         }
 
-        // INTENTO 4: Nombre corto físico (Ej: FOT-8143-...-6.jpg -> 6.jpg)
+        // 4. Nombre corto (ej. 1.jpg)
         const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
         if (typeMatch) {
-            const shortFileName = `${typeMatch[1]}.${typeMatch[2]}`;
-            candidates.add(formatUrl(`${folderPath}/${shortFileName}`));
+            const shortName = `${typeMatch[1]}.${typeMatch[2]}`;
+            candidates.add(formatUrl(`${upperFolder}/${shortName}`));
+        }
+
+        return Array.from(candidates).slice(0, 8);
+    };
+    
+    // ==============================================================================
+    // 🔎 SLOW PATH: Búsqueda profunda (Deep Search) forzada por el usuario
+    // ==============================================================================
+    const getDeepSearchUrls = (row) => {
+        if (!row.originalName) return [];
+        
+        const candidates = new Set();
+        const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+        const formatUrl = (pathStr) => `${baseUrl}/${pathStr.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+
+        let base = row.originalName.replace(/\\/g, '/').replace(/^.*SIGRE\.MOVIL\//i, '').replace(/^.*ELIMINADOS\//i, '');
+        const parts = base.split('/');
+        const originalFileName = parts.pop();
+        let folderPath = parts.join('/').toUpperCase();
+
+        // Buscamos a qué tipificación se cambió
+        const targetDefId = row.selectedDeficiencyId || row.archCodTabla;
+        if (!targetDefId) return []; // Si no hay tipificación nueva, no hay nada que buscar
+
+        const fileDef = historicalData?.find(d => d.defiInterno === targetDefId);
+        if (!fileDef) return [];
+
+        let dbCode = String(getCodeById(fileDef.tipiInterno) || "0000").trim();
+        const currentSupply = fileDef.defiNumSuministro || '1'; 
+
+        if (dbCode !== "0000" && dbCode !== "SINDEF") {
+            // Limpiamos la carpeta original de SINDEF/0000 y le pegamos el nuevo código
+            let cleanFolder = folderPath.replace(/\/(SINDEF|0000)\//g, '/').replace(/\/+$/, '');
+            let projectedFolder = cleanFolder ? `${cleanFolder}/${dbCode}.1.${currentSupply}` : `${dbCode}.1.${currentSupply}`;
+
+            // Reemplazamos de forma segura los guiones (Ej: -0000- por -6002-)
+            let projectedFileName = originalFileName
+                .replace(/-0000-/g, `-${dbCode}-`)
+                .replace(/-SINDEF-/gi, `-${dbCode}-`);
+
+            // Agregamos las candidatas mutadas
+            candidates.add(formatUrl(`${projectedFolder}/${projectedFileName}`));
+            candidates.add(formatUrl(`${projectedFolder}/${originalFileName}`));
             
-            // Si también era 7004., intentamos nombre corto en carpeta corregida
-            if (folderPath.includes('7004.')) {
-                const fixDots = folderPath.replace(/7004\.(\d+)\.?(\d*)/, (match, p1, p2) => p2 ? `7004/${p1}/${p2}` : `7004/${p1}`);
-                candidates.add(formatUrl(`${fixDots}/${shortFileName}`));
+            // Y el nombre corto en la nueva carpeta
+            const typeMatch = originalFileName.match(/[-_](\d+)\.(jpg|jpeg|png|m4a)$/i);
+            if (typeMatch) {
+                candidates.add(formatUrl(`${projectedFolder}/${typeMatch[1]}.${typeMatch[2]}`));
             }
         }
 
-        // Limitamos a un absoluto máximo de 5 URLs para JAMÁS colapsar Ngrok/Cloudflare
-        return Array.from(candidates).slice(0, 5);
+        return Array.from(candidates);
     };
 
-
-
-
-
+// =// ==============================================================================
+    // 🔥 8. LÓGICA DE DESCARGA ZIP (CON SCRAPER DINÁMICO REPARADO)
+    // ==============================================================================
+    // ==============================================================================
+    // 🔥 8. LÓGICA DE DESCARGA ZIP (CORS REPARADO Y ANTI-CRASHES)
+    // ==============================================================================
     const handleDownloadRenamedZip = async () => {
         if (fileRows.length === 0) {
             toast.current.show({ severity: 'warn', summary: 'Vacío', detail: 'No hay archivos para descargar.' });
@@ -640,64 +704,98 @@ export default function WebInspectionManager() {
         try {
             const zip = new JSZip();
 
+            // ⚠️ YA NO USAMOS fetchOptions AQUÍ. 
+            // Hacerlo desencadena un error de CORS (Preflight OPTIONS) que bloquea la descarga.
+            // Cloudflare servirá las imágenes .jpg directamente si hacemos un fetch limpio.
 
-
-            // Usamos map para crear las promesas de descarga en paralelo
             const downloadPromises = fileRows.map(async (row) => {
-                let zipPath = row.currentPath.replace(/^.*?SIGRE\.MOVIL\//, '');
-                const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
+                // 🛡️ ANTI-CRASH 1: Aseguramos que la ruta no sea null/undefined y normalizamos las barras
+                let safePath = String(row.currentPath || row.originalName || "archivo_desconocido.jpg").replace(/\\/g, '/');
+                let zipPath = safePath.replace(/^.*?SIGRE\.MOVIL\//i, '');
+                
+                const originalFileName = String(row.originalName || "").split(/[/\\]/).pop();
+                let success = false;
 
-                // 1. Verificar si es una foto subida recientemente (en la memoria RAM)
+                // 1. Memoria RAM (Fotos recién tomadas)
                 if (sessionBlobs.current && sessionBlobs.current[originalFileName]) {
                     zip.file(zipPath, sessionBlobs.current[originalFileName]);
-                    filesAdded++;
-                    return true;
+                    filesAdded++; return true;
                 }
 
-                // 2. 🚀 MÉTODO PRINCIPAL: Usar el endpoint API Oficial del Backend (No pierde la pista de los nombres cambiados)
+                // 2. API Backend
                 if (row.archInterno && row.archInterno > 0) {
-                    const baseUrl = API_BASE_URL.replace(/\/+$/, '');
-                    const apiUrl = `${baseUrl}/api/files/download/${row.archInterno}`;
-
                     try {
-                        const response = await fetch(apiUrl);
-                        const contentType = response.headers.get("content-type");
-
-                        if (response.ok && contentType && !contentType.includes("text/html")) {
-                            const blob = await response.blob();
-                            zip.file(zipPath, blob);
-                            filesAdded++;
-                            return true; // Éxito, no hacer el fallback
+                        const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+                        const response = await fetch(`${baseUrl}/api/files/download/${row.archInterno}`);
+                        
+                        // 🛡️ ANTI-CRASH 2: Protegemos contra contentType null
+                        const contentType = response.headers.get("content-type") || "";
+                        if (response.ok && !contentType.includes("text/html")) {
+                            zip.file(zipPath, await response.blob());
+                            filesAdded++; success = true;
                         }
-                    } catch (e) {
-                        console.warn(`Falló la API de descarga para ID ${row.archInterno}, intentando rutas físicas...`);
-                    }
+                    } catch (e) {}
                 }
 
-                // 3. FALLBACK: Intentar URLs físicas crudas
+                // 3. Fallback: Rutas físicas (El cazador original)
                 const urlsToTry = getCandidateUrls(row);
-
-                for (const url of urlsToTry) {
-                    try {
-                        const response = await fetch(url);
-                        const contentType = response.headers.get("content-type");
-
-                        if (response.ok && contentType && !contentType.includes("text/html")) {
-                            const blob = await response.blob();
-                            zip.file(zipPath, blob);
-                            filesAdded++;
-                            return true;
-                        }
-                    } catch (e) {
-                        // Sigue el bucle intentando
+                if (!success) {
+                    for (const url of urlsToTry) {
+                        try {
+                            const response = await fetch(url);
+                            const contentType = response.headers.get("content-type") || "";
+                            if (response.ok && !contentType.includes("text/html")) {
+                                zip.file(zipPath, await response.blob());
+                                filesAdded++; success = true; break;
+                            }
+                        } catch (e) {}
                     }
                 }
 
-                console.warn(`Fracaso total: No se encontró en servidor: ${row.originalName}`);
-                return false;
+                // =============================================================================
+                // 🚀 4. MODO SCRAPER: Por si hay desincronización de segundos en la hora
+                // =============================================================================
+                if (!success) {
+                    console.warn(`⏳ Desincronización en ${originalFileName}. Iniciando Scraper...`);
+                    
+                    const foldersToScrape = Array.from(new Set(urlsToTry.map(u => u.substring(0, u.lastIndexOf('/')))));
+                    const filePrefix = parseInt(row.archTipo) === 0 ? 'AUD' : 'FOT';
+                    const extRegex = parseInt(row.archTipo) === 0 ? 'm4a' : 'jpg|jpeg|png';
+                    
+                    // Extraemos solo el código GIS para ser súper precisos en la búsqueda
+                    const nameParts = originalFileName.split('-');
+                    const elemCode = nameParts.length > 2 ? nameParts[2] : "";
+                    const targetFileRegex = new RegExp(`href="(${filePrefix}-[^"]*${elemCode}[^"]*-${row.archTipo}\\.(?:${extRegex}))"`, 'i');
+
+                    for (const folderUrl of foldersToScrape) {
+                        try {
+                            const dirRes = await fetch(folderUrl + '/');
+                            if (dirRes.ok) {
+                                const htmlContent = await dirRes.text();
+                                const match = htmlContent.match(targetFileRegex);
+                                
+                                if (match) {
+                                    const realFileName = match[1]; 
+                                    const realFileUrl = `${folderUrl}/${realFileName}`;
+                                    
+                                    const finalImgRes = await fetch(realFileUrl);
+                                    const cType = finalImgRes.headers.get("content-type") || "";
+                                    
+                                    if (finalImgRes.ok && !cType.includes("text/html")) {
+                                        zip.file(zipPath, await finalImgRes.blob());
+                                        filesAdded++; success = true; break;
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                        if (success) break;
+                    }
+                }
+
+                if (!success) console.error(`❌ Fracaso total: No se pudo localizar ${originalFileName}.`);
+                return success;
             });
 
-            // Esperar que finalicen TODAS las descargas antes de comprimir el ZIP
             await Promise.all(downloadPromises);
 
             if (filesAdded === 0) {
@@ -706,19 +804,24 @@ export default function WebInspectionManager() {
             }
 
             const content = await zip.generateAsync({ type: "blob" });
-            const codeElemLbl = safeSeg(typeof structureCode === 'object' ? structureCode.codigo : structureCode);
-            saveAs(content, `Evidencias_Renombradas_${codeElemLbl || "LOTE"}.zip`);
+            
+            // 🛡️ ANTI-CRASH 3: Validamos que structureCode no cause un error de "Cannot read properties"
+            let finalCode = "LOTE";
+            if (structureCode) {
+                finalCode = typeof structureCode === 'object' ? (structureCode.codigo || "LOTE") : structureCode;
+            }
+            
+            saveAs(content, `Evidencias_Renombradas_${safeSeg(finalCode)}.zip`);
 
             toast.current.show({ severity: 'success', summary: 'Descargado', detail: `Se empaquetaron ${filesAdded} de ${fileRows.length} archivos.` });
 
         } catch (error) {
-            console.error(error);
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo crítico al generar el ZIP.' });
+            console.error("[ZIP ERROR]", error);
+            toast.current.show({ severity: 'error', summary: 'Error Crítico', detail: 'Fallo interno al generar el ZIP.' });
         } finally {
             setZipLoading(false);
         }
     };
-
     // ==============================================================================
     // 🔥 9. GUARDADO TOTAL (DB + ZIP) 🔥
     // ==============================================================================
@@ -803,22 +906,64 @@ export default function WebInspectionManager() {
     const FallbackImage = ({ row }) => {
         const isAudio = parseInt(row.archTipo) === 0;
         const urls = getCandidateUrls(row);
+        
+        // Estado para controlar en qué URL del array estamos
         const [srcIndex, setSrcIndex] = useState(0);
+        // Estado para saber si ya agotamos todos los intentos y debemos mostrar la imagen de error
+        const [hasFailedCompletely, setHasFailedCompletely] = useState(false);
+        
         const originalFileName = (row.originalName || "").split(/[/\\]/).pop();
 
+        // 1. Prioridad: Mostrar foto subida recientemente desde la RAM (sin red)
         if (sessionBlobs && sessionBlobs.current[originalFileName]) {
-            return <Image src={URL.createObjectURL(sessionBlobs.current[originalFileName])} alt="Foto" preview className="absolute inset-0 w-full h-full block" imageClassName="w-full h-full object-cover block" />;
+            return (
+                <Image 
+                    src={URL.createObjectURL(sessionBlobs.current[originalFileName])} 
+                    alt="Foto en Memoria" 
+                    preview 
+                    className="absolute inset-0 w-full h-full block" 
+                    imageClassName="w-full h-full object-cover block" 
+                />
+            );
         }
 
-        if (isAudio) return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
+        // 2. Si es un archivo de audio, mostrar el icono correspondiente
+        if (isAudio) {
+            return <i className="pi pi-volume-up text-4xl text-gray-400"></i>;
+        }
 
+        // 3. Manejo de errores definitivo para las peticiones de red
+        const handleError = () => {
+            // Si todavía nos quedan URLs candidatas en el array de 'urls', probamos la siguiente
+            if (srcIndex < urls.length - 1) {
+                setSrcIndex(prevIndex => prevIndex + 1);
+            } else {
+                // Si ya agotamos todas las URLs generadas por getCandidateUrls, nos rendimos y mostramos el fallback
+                setHasFailedCompletely(true);
+            }
+        };
+
+        // 4. Renderizado condicional
+        if (hasFailedCompletely) {
+            // Este es el final del camino. Nunca intentará cargar nada más, cero bucles.
+            return (
+                <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-gray-200">
+                    <i className="pi pi-image text-3xl text-gray-400 mb-1"></i>
+                    <span className="text-[10px] text-gray-500 font-bold">Sin Foto</span>
+                </div>
+            );
+        }
+
+        // Renderizado normal intentando cargar la URL actual del array
         return (
-            <Image src={urls[srcIndex]} alt="Foto" preview className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" imageClassName="w-full h-full object-cover block "
+            <Image 
+                src={urls[srcIndex]} 
+                alt="Evidencia" 
+                preview 
+                className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100" 
+                imageClassName="w-full h-full object-cover block"
                 loading="lazy"
-                onError={(e) => {
-                    if (srcIndex < urls.length - 1) setSrcIndex(srcIndex + 1);
-                    else { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100?text=Sin+Foto'; }
-                }}
+                onError={handleError} 
             />
         );
     };
@@ -958,6 +1103,17 @@ export default function WebInspectionManager() {
                                 {/* 🔥 ACTUALIZADO 🔥 */}
                                 <Button label="Aplicar Globales" icon="pi pi-arrow-down" severity="info" outlined onClick={openBulkUpdateModal} />
                                 <Button label={saving ? "Guardando..." : "Guardar en BD"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-save"} severity="success" onClick={handleSaveAll} disabled={fileRows.length === 0 || saving} />
+                                <ToggleButton 
+        checked={useDeepSearch} 
+        onChange={(e) => setUseDeepSearch(e.value)} 
+        onIcon="pi pi-search-plus" 
+        offIcon="pi pi-search" 
+        onLabel="Deep Search Activado" 
+        offLabel="Deep Search Apagado"
+        className={useDeepSearch ? 'p-button-warning' : 'p-button-secondary p-button-outlined'}
+        tooltip="Úsalo si cambiaste tipificaciones de SINDEF a otra"
+        tooltipOptions={{ position: 'top' }}
+    />
                             </div>
                         }
                     />
