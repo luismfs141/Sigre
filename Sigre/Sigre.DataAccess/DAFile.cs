@@ -194,9 +194,9 @@ namespace Sigre.DataAccess
 
                     int idDeficiency;
 
-                    if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+                    if (!string.IsNullOrWhiteSpace(dto.DefiUuid))
                     {
-                        idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUUID);
+                        idDeficiency = daDef.DADEFI_GetDeficiencyIDByUUID(dto.DefiUuid);
                     }
                     else
                     {
@@ -217,7 +217,33 @@ namespace Sigre.DataAccess
                     resolved.Add((dto, idDeficiency, syncKey));
                 }
 
-                // 2) Traer de una sola vez los archivos existentes de esas deficiencias
+                // 2) Traer existentes por UUID (VALIDACIÓN PRIORITARIA)
+                var incomingUuids = resolved
+                    .Where(x => x.dto.ArchUuid.HasValue)
+                    .Select(x => x.dto.ArchUuid.Value)
+                    .Distinct()
+                    .ToList();
+
+                var existentesPorUuid = incomingUuids.Count == 0
+                    ? new List<Archivo>()
+                    : ctx.Archivos
+                        .Where(a => a.ArchUuid.HasValue && incomingUuids.Contains(a.ArchUuid.Value))
+                        .OrderByDescending(a => a.ArchInterno)
+                        .ToList();
+
+                var existingByUuid = new Dictionary<Guid, Archivo>();
+
+                foreach (var a in existentesPorUuid)
+                {
+                    if (!a.ArchUuid.HasValue) continue;
+
+                    if (!existingByUuid.ContainsKey(a.ArchUuid.Value))
+                    {
+                        existingByUuid[a.ArchUuid.Value] = a;
+                    }
+                }
+
+                // 3) Traer existentes por key normalizada (fallback actual)
                 var defIds = resolved
                     .Select(x => x.defId)
                     .Distinct()
@@ -228,7 +254,6 @@ namespace Sigre.DataAccess
                     .OrderByDescending(a => a.ArchInterno)
                     .ToList();
 
-                // 3) Crear diccionario por key normalizada
                 var existingByKey = new Dictionary<string, Archivo>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var a in existentes)
@@ -238,14 +263,16 @@ namespace Sigre.DataAccess
                     if (string.IsNullOrWhiteSpace(key))
                         continue;
 
-                    // Nos quedamos con el primero según OrderByDescending(ArchInterno)
                     if (!existingByKey.ContainsKey(key))
                     {
                         existingByKey[key] = a;
                     }
                 }
 
-                // 4) Actualizar si existe; insertar si no existe
+                // 4) Actualizar si existe:
+                //    4.1 primero por ArchUuid
+                //    4.2 si no existe, fallback por key normalizada
+                //    4.3 si no existe por ninguno, insertar
                 var mappings = new List<(int localId, Archivo entity)>();
 
                 foreach (var item in resolved)
@@ -254,8 +281,22 @@ namespace Sigre.DataAccess
                     var idDeficiency = item.defId;
                     var syncKey = item.syncKey;
 
-                    if (!string.IsNullOrWhiteSpace(syncKey) &&
-                        existingByKey.TryGetValue(syncKey, out var existente))
+                    Archivo existente = null;
+
+                    // PRIORIDAD 1: UUID
+                    if (dto.ArchUuid.HasValue &&
+                        existingByUuid.TryGetValue(dto.ArchUuid.Value, out var existentePorUuid))
+                    {
+                        existente = existentePorUuid;
+                    }
+                    // PRIORIDAD 2: método actual
+                    else if (!string.IsNullOrWhiteSpace(syncKey) &&
+                             existingByKey.TryGetValue(syncKey, out var existentePorKey))
+                    {
+                        existente = existentePorKey;
+                    }
+
+                    if (existente != null)
                     {
                         existente.ArchCodTabla = idDeficiency;
                         existente.ArchNombre = dto.ArchNombre;
@@ -268,11 +309,23 @@ namespace Sigre.DataAccess
                         existente.ArchTipoElemento = dto.ArchTipoElemento;
                         existente.ArchIdElemento = dto.ArchIdElemento;
                         existente.TipiInterno = dto.TipiInterno;
+                        existente.EsgoInterno = dto.EsgoInterno;
 
-                        if (!string.IsNullOrWhiteSpace(dto.DefiUUID))
+                        if (dto.ArchUuid.HasValue)
                         {
-                            var uuid = dto.DefiUUID.Trim();
+                            existente.ArchUuid = dto.ArchUuid.Value;
+                            existingByUuid[dto.ArchUuid.Value] = existente;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(dto.DefiUuid))
+                        {
+                            var uuid = dto.DefiUuid.Trim();
                             existente.DefiUuid = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(syncKey))
+                        {
+                            existingByKey[syncKey] = existente;
                         }
 
                         mappings.Add((dto.ArchInterno, existente));
@@ -282,7 +335,11 @@ namespace Sigre.DataAccess
                         var archivo = DAARCH_ConvertFile(dto);
                         ctx.Archivos.Add(archivo);
 
-                        // importante: evita duplicados dentro del mismo lote
+                        if (dto.ArchUuid.HasValue)
+                        {
+                            existingByUuid[dto.ArchUuid.Value] = archivo;
+                        }
+
                         if (!string.IsNullOrWhiteSpace(syncKey))
                         {
                             existingByKey[syncKey] = archivo;
@@ -472,35 +529,35 @@ namespace Sigre.DataAccess
                 return 0;
             }
         }
-        public Archivo ARCH_ConvertFile(ArchivoSyncDto arch_offline)
-        {
-            return new Archivo
-            {
-                // 🔑 Identificadores
-                ArchInterno = arch_offline.ArchInterno,
+        //public Archivo ARCH_ConvertFile(ArchivoSyncDto arch_offline)
+        //{
+        //    return new Archivo
+        //    {
+        //        // 🔑 Identificadores
+        //        ArchInterno = arch_offline.ArchInterno,
 
-                // 📁 Información del archivo
-                ArchTipo = arch_offline.ArchTipo,
-                ArchTabla = arch_offline.ArchTabla,
-                ArchCodTabla = (int)arch_offline.ArchCodTabla,
-                ArchNombre = arch_offline.ArchNombre,
+        //        // 📁 Información del archivo
+        //        ArchTipo = arch_offline.ArchTipo,
+        //        ArchTabla = arch_offline.ArchTabla,
+        //        ArchCodTabla = (int)arch_offline.ArchCodTabla,
+        //        ArchNombre = arch_offline.ArchNombre,
 
-                // 📍 Ubicación
-                ArchLatitud = arch_offline.ArchLatitud,
-                ArchLongitud = arch_offline.ArchLongitud,
+        //        // 📍 Ubicación
+        //        ArchLatitud = arch_offline.ArchLatitud,
+        //        ArchLongitud = arch_offline.ArchLongitud,
 
-                // 📅 Fecha
-                ArchFecha = arch_offline.ArchFecha,
+        //        // 📅 Fecha
+        //        ArchFecha = arch_offline.ArchFecha,
 
-                // 🔗 Relación con elemento
-                ArchTipoElemento = arch_offline.ArchTipoElemento,
-                ArchIdElemento = arch_offline.ArchIdElemento,
-                TipiInterno = arch_offline.TipiInterno,
+        //        // 🔗 Relación con elemento
+        //        ArchTipoElemento = arch_offline.ArchTipoElemento,
+        //        ArchIdElemento = arch_offline.ArchIdElemento,
+        //        TipiInterno = arch_offline.TipiInterno,
 
-                // ⚙️ Estado
-                ArchActivo = arch_offline.ArchActivo,
-            };
-        }
+        //        // ⚙️ Estado
+        //        ArchActivo = arch_offline.ArchActivo,
+        //    };
+        //}
         public void DADEFI_UpdateCodTablaByDeficiency(
             SigreContext ctx,
             Deficiencia deficiencia
@@ -582,34 +639,33 @@ namespace Sigre.DataAccess
         public Archivo DAARCH_ConvertFile(ArchivoSyncDto arch_offline)
         {
             string defiUuid = null;
-            if (!string.IsNullOrWhiteSpace(arch_offline.DefiUUID))
+            if (!string.IsNullOrWhiteSpace(arch_offline.DefiUuid))
             {
-                defiUuid = arch_offline.DefiUUID.Trim();
-                if (defiUuid.Length > 50) defiUuid = defiUuid.Substring(0, 50);
+                defiUuid = arch_offline.DefiUuid.Trim();
+                if (defiUuid.Length > 50)
+                    defiUuid = defiUuid.Substring(0, 50);
             }
 
             return new Archivo
             {
+                ArchInterno = 0,
                 ArchTipo = arch_offline.ArchTipo,
                 ArchTabla = arch_offline.ArchTabla,
                 ArchCodTabla = (int)arch_offline.ArchCodTabla,
                 ArchNombre = arch_offline.ArchNombre,
-
                 ArchLatitud = arch_offline.ArchLatitud,
                 ArchLongitud = arch_offline.ArchLongitud,
-
                 ArchFecha = arch_offline.ArchFecha,
-
                 ArchTipoElemento = arch_offline.ArchTipoElemento,
                 ArchIdElemento = arch_offline.ArchIdElemento,
                 TipiInterno = arch_offline.TipiInterno,
-
                 ArchActivo = arch_offline.ArchActivo,
-
-                // ✅ INSERT también guarda DEFI_UUID
-                DefiUuid = defiUuid
+                DefiUuid = defiUuid,
+                ArchUuid = arch_offline.ArchUuid,
+                EsgoInterno = arch_offline.EsgoInterno
             };
         }
+
         public List<Archivo> DAARCH_GetByDeficiencyWeb(int x_deficiency)
         {
             using (var ctx = new SigreContext())
@@ -640,7 +696,7 @@ namespace Sigre.DataAccess
                         ArchActivo = a.ArchActivo,
 
                         // === 👇 LA NUEVA COLUMNA (CRUCIAL) 👇 ===
-                        // Asegúrate de que coincida con el nombre en tu clase Archivo.cs (DefiUUID)
+                        // Asegúrate de que coincida con el nombre en tu clase Archivo.cs (DefiUuid)
                         DefiUuid = a.DefiUuid
                     });
 
@@ -648,64 +704,67 @@ namespace Sigre.DataAccess
             }
         }
         public DataTable DAARCH_GetArchivosBySedsDT(List<int> sedInternos)
-        {
-            using var ctx = new SigreContext();
+{
+    using var ctx = new SigreContext();
 
-            var list =
-            (
-                from a in ctx.Archivos.AsNoTracking()
+    var list =
+    (
+        from a in ctx.Archivos.AsNoTracking()
 
-                join p in ctx.Postes on a.ArchIdElemento equals p.PostInterno into pj
-                from p in pj.DefaultIfEmpty()
+        join p in ctx.Postes on a.ArchIdElemento equals p.PostInterno into pj
+        from p in pj.DefaultIfEmpty()
 
-                join v in ctx.Vanos on a.ArchIdElemento equals v.VanoInterno into vj
-                from v in vj.DefaultIfEmpty()
+        join v in ctx.Vanos on a.ArchIdElemento equals v.VanoInterno into vj
+        from v in vj.DefaultIfEmpty()
 
-                where
-                    (a.ArchTipoElemento == "POST" && sedInternos.Contains((int)p.PostSubestacion)) ||
-                    (a.ArchTipoElemento == "VANO" && sedInternos.Contains((int)v.VanoSubestacion))
+        where
+            (a.ArchTipoElemento == "POST" && sedInternos.Contains((int)p.PostSubestacion)) ||
+            (a.ArchTipoElemento == "VANO" && sedInternos.Contains((int)v.VanoSubestacion))
 
-                select a
-            ).ToList();   // 🔥 UNA SOLA CONSULTA
+        select a
+    ).ToList();
 
-            // 🔹 DataTable completo
-            var dt = new DataTable();
+    var dt = new DataTable();
 
-            dt.Columns.Add("ARCH_Interno", typeof(int));
-            dt.Columns.Add("ARCH_Tipo", typeof(int));
-            dt.Columns.Add("ARCH_Tabla", typeof(string));
-            dt.Columns.Add("ARCH_CodTabla", typeof(int));
-            dt.Columns.Add("ARCH_Nombre", typeof(string));
-            dt.Columns.Add("ARCH_Latitud", typeof(double));
-            dt.Columns.Add("ARCH_Longitud", typeof(double));
-            dt.Columns.Add("ARCH_Fecha", typeof(DateTime));
-            dt.Columns.Add("ARCH_TipoElemento", typeof(string));
-            dt.Columns.Add("ARCH_IdElemento", typeof(int));
-            dt.Columns.Add("TIPI_Interno", typeof(int));
-            dt.Columns.Add("ARCH_Activo", typeof(bool));
-            dt.Columns.Add("DEFI_UUID", typeof(string));
+    dt.Columns.Add("ARCH_Interno", typeof(int));
+    dt.Columns.Add("ARCH_Tipo", typeof(string));
+    dt.Columns.Add("ARCH_Tabla", typeof(string));
+    dt.Columns.Add("ARCH_CodTabla", typeof(int));
+    dt.Columns.Add("ARCH_Nombre", typeof(string));
+    dt.Columns.Add("ARCH_Latitud", typeof(double));
+    dt.Columns.Add("ARCH_Longitud", typeof(double));
+    dt.Columns.Add("ARCH_Fecha", typeof(DateTime));
+    dt.Columns.Add("ARCH_TipoElemento", typeof(string));
+    dt.Columns.Add("ARCH_IdElemento", typeof(int));
+    dt.Columns.Add("TIPI_Interno", typeof(int));
+    dt.Columns.Add("ARCH_Activo", typeof(bool));
+    dt.Columns.Add("DEFI_UUID", typeof(string));
+    dt.Columns.Add("ARCH_UUID", typeof(Guid));
+    dt.Columns.Add("ESGO_Interno", typeof(int));
 
-            foreach (var a in list)
-            {
-                dt.Rows.Add(
-                    a.ArchInterno,
-                    a.ArchTipo,
-                    a.ArchTabla,
-                    a.ArchCodTabla,
-                    a.ArchNombre,
-                    a.ArchLatitud,
-                    a.ArchLongitud,
-                    a.ArchFecha,
-                    a.ArchTipoElemento,
-                    a.ArchIdElemento,
-                    a.TipiInterno,
-                    a.ArchActivo,
-                    a.DefiUuid
-                );
-            }
+    foreach (var a in list)
+    {
+        dt.Rows.Add(
+            a.ArchInterno,
+            a.ArchTipo,
+            a.ArchTabla,
+            a.ArchCodTabla,
+            a.ArchNombre,
+            a.ArchLatitud,
+            a.ArchLongitud,
+            a.ArchFecha,
+            a.ArchTipoElemento,
+            a.ArchIdElemento,
+            a.TipiInterno,
+            a.ArchActivo,
+            a.DefiUuid,
+            a.ArchUuid,
+            a.EsgoInterno
+        );
+    }
 
-            return dt;
-        }
+    return dt;
+}
         public void ReevaluarEstadoInspeccionDeficiencia(int defiInterno)
         {
             if (defiInterno <= 0) return;

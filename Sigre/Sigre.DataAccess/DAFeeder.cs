@@ -161,6 +161,8 @@ namespace Sigre.DataAccess
                     var codigos = ctx.Codigos.AsNoTracking().ToList();
                     var codigosOpciones = ctx.CodigosOpciones.AsNoTracking().ToList();
 
+                    var estadosGlobales = ctx.EstadosGlobals.AsNoTracking().ToList();
+
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();
                     var armadoTipo = ctx.ArmadoTipos.Where(a => a.ArmtpActivo == true).ToList();
                     var retenidaTipo = ctx.RetenidaTipos.Where(r => r.RtntpActivo == true).ToList();
@@ -178,6 +180,8 @@ namespace Sigre.DataAccess
                     sqliteCtx.Alimentadores.AddRange(alimentadores);
                     sqliteCtx.Codigos.AddRange(codigos);
                     sqliteCtx.CodigosOpciones.AddRange(codigosOpciones);
+
+                    sqliteCtx.EstadosGlobals.AddRange(estadosGlobales);
 
                     if (usuario != null) sqliteCtx.Usuarios.Add(usuario);
 
@@ -283,6 +287,8 @@ namespace Sigre.DataAccess
                     var codigos = ctx.Codigos.AsNoTracking().ToList();
                     var codigosOpciones = ctx.CodigosOpciones.AsNoTracking().ToList();
 
+                    var estadosGlobales = ctx.EstadosGlobals.AsNoTracking().ToList();
+
                     var armadoMaterial = ctx.ArmadoMaterials.Where(a => a.ArmmtActivo == true).ToList();
                     var armadoTipo = ctx.ArmadoTipos.Where(a => a.ArmtpActivo == true).ToList();
                     var retenidaTipo = ctx.RetenidaTipos.Where(r => r.RtntpActivo == true).ToList();
@@ -299,6 +305,8 @@ namespace Sigre.DataAccess
                     sqliteCtx.Alimentadores.AddRange(alimentadores);
                     sqliteCtx.Codigos.AddRange(codigos);
                     sqliteCtx.CodigosOpciones.AddRange(codigosOpciones);
+
+                    sqliteCtx.EstadosGlobals.AddRange(estadosGlobales);
 
                     if (usuario != null) sqliteCtx.Usuarios.Add(usuario);
 

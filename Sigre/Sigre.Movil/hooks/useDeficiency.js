@@ -95,7 +95,7 @@ export const useDeficiency = () => {
 
     return {
       ArchInterno: arch?.ArchInterno,
-      ArchServerId: arch?.ArchServerId ?? null, // si existe en tu tabla, ok; si no, queda null
+      ArchServerId: arch?.ArchServerId ?? null,
 
       ArchTabla: arch?.ArchTabla ?? "Deficiencias",
       ArchCodTabla: arch?.ArchCodTabla ?? null,
@@ -115,7 +115,10 @@ export const useDeficiency = () => {
       TipiInterno: arch?.TipiInterno ?? null,
 
       DefiServerId: arch?.DefiServerId ?? null,
-      DefiUUID: arch?.DefiUUID ?? null,
+      DefiUuid: arch?.DefiUuid ?? arch?.DefiUUID ?? null,
+
+      ArchUuid: arch?.ArchUuid ?? null,
+      EsgoInterno: arch?.EsgoInterno ?? null,
 
       ArchActivo: activoNum === 1,
       EstadoOffLine: toNum(arch?.EstadoOffLine ?? 0, 0),
@@ -448,6 +451,9 @@ export const useDeficiency = () => {
       DefiTipoCruce: base?.DefiTipoCruce ?? "",
       CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
 
+      EsgoInterno: base?.EsgoInterno ?? null,
+      DefiMovil: base?.DefiMovil ?? 1,
+
       DefiUsuarioMod: userId != null ? String(userId) : null,
       DefiFecModificacion: nowIso,
     };
@@ -465,9 +471,13 @@ export const useDeficiency = () => {
       normalized.DefiLatitud = base?.DefiLatitud ?? 0;
       normalized.DefiLongitud = base?.DefiLongitud ?? 0;
       normalized.DefiInspeccionado = base?.DefiInspeccionado ?? 0;
+      normalized.DefiMovil = 1;
     } else {
       if (isBlank(base?.DefiFechaCreacion)) normalized.DefiFechaCreacion = nowIso;
       if (isBlank(base?.DefiFecRegistro)) normalized.DefiFecRegistro = nowIso;
+      if (base?.DefiMovil === null || base?.DefiMovil === undefined) {
+        normalized.DefiMovil = 1;
+      }
     }
 
     return normalized;
@@ -520,6 +530,9 @@ export const useDeficiency = () => {
       DefiCol3: base?.DefiCol3 ?? null,
       DefiCol2: base?.DefiCol2 ?? null,
       CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
+
+      EsgoInterno: base?.EsgoInterno ?? null,
+      DefiMovil: toBool(base?.DefiMovil, true),
     };
   };
 
@@ -796,7 +809,7 @@ export const useDeficiency = () => {
       const archIdsToSync = await markArchivosByDefiRefsInactiveLocal({
         defiInterno: def?.DefiInterno,
         defiServerId: def?.DefiServerId,
-        defiUUID: def?.DefiCol3,
+        defiUuid: def?.DefiCol3,
       });
 
       // 3) SYNC archivos (solo los que realmente quedaron con EstadoOffLine=3)

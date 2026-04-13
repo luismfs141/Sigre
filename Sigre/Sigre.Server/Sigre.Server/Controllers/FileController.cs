@@ -71,9 +71,17 @@ namespace Sigre.Server.Controllers
             }
             catch (Exception ex)
             {
+                var real = ex;
+                while (real.InnerException != null)
+                {
+                    real = real.InnerException;
+                }
+
                 return BadRequest(new
                 {
-                    message = ex.Message
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    root = real.Message
                 });
             }
         }

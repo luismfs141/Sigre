@@ -90,7 +90,9 @@ namespace Sigre.DataAccess
                                 DefiCol2 = reader.GetNullableString("DefiCol2"),
                                 DefiCol3 = reader.GetNullableString("DefiCol3"),
                                 CodopInterno = reader.GetNullableInt32("CodopInterno"),
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                EsgoInterno = reader.GetNullableInt32("EsgoInterno"),
+                                DefiMovil = reader.GetNullableBool("DefiMovil") ?? false,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
                                 DefiServerId = reader.GetNullableInt32("DefiServerId")
                             };
 
@@ -119,6 +121,13 @@ namespace Sigre.DataAccess
                     {
                         while (await reader.ReadAsync())
                         {
+                            Guid? archUuid = null;
+                            var rawArchUuid = reader.GetNullableString("ArchUuid");
+                            if (!string.IsNullOrWhiteSpace(rawArchUuid) && Guid.TryParse(rawArchUuid, out var parsedGuid))
+                            {
+                                archUuid = parsedGuid;
+                            }
+
                             var archivo = new ArchivoSyncDto
                             {
                                 ArchInterno = reader.GetNullableInt32("ArchInterno") ?? 0,
@@ -133,8 +142,11 @@ namespace Sigre.DataAccess
                                 ArchIdElemento = reader.GetNullableInt32("ArchIdElemento"),
                                 TipiInterno = reader.GetNullableInt32("TipiInterno"),
                                 ArchActivo = reader.GetNullableBool("ArchActivo") ?? false,
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
-                                DefiServerId = reader.GetNullableInt32("DefiServerId") ?? 0
+                                DefiUuid = reader.GetNullableString("DefiUuid"),
+                                ArchUuid = archUuid,
+                                EsgoInterno = reader.GetNullableInt32("EsgoInterno"),
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
+                                DefiServerId = reader.GetNullableInt32("DefiServerId")
                             };
 
                             archivos.Add(archivo);
@@ -147,7 +159,7 @@ namespace Sigre.DataAccess
         }
 
 
-        public async Task<(int defInsertadas, int defModificadas, int archInsertados, int archModificados )> DAOFF_SyncDataOffline(string sqlitePath)
+        public async Task<(int defInsertadas, int defModificadas, int archInsertados, int archModificados)> DAOFF_SyncDataOffline(string sqlitePath)
         {
             int defInsertadas = 0;
             int defModificadas = 0;
@@ -232,7 +244,7 @@ namespace Sigre.DataAccess
             // =====================================================
 
             var archivos = archivos_off
-                .Select(a => dAFile.ARCH_ConvertFile(a))
+                .Select(a => dAFile.DAARCH_ConvertFile(a))
                 .ToList();
 
             // =====================================================
@@ -299,7 +311,8 @@ namespace Sigre.DataAccess
                     SedArmadoTipo,
                     SedArmadoMaterial,
                     SedRetenidaTipo,
-                    SedRetenidaMaterial
+                    SedRetenidaMaterial,
+                    EsgoInterno
                 FROM Seds";
 
                     using (var reader = await command.ExecuteReaderAsync())
@@ -309,7 +322,7 @@ namespace Sigre.DataAccess
                             seds.Add(new SedSyncDto
                             {
                                 SedInterno = reader.GetNullableInt32("SedInterno") ?? 0,
-                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine") ?? 0,
+                                EstadoOffLine = reader.GetNullableInt32("EstadoOffLine"),
                                 SedEtiqueta = reader.GetNullableString("SedEtiqueta"),
                                 SedLatitud = reader.GetNullableDouble("SedLatitud"),
                                 SedLongitud = reader.GetNullableDouble("SedLongitud"),
@@ -324,7 +337,8 @@ namespace Sigre.DataAccess
                                 SedArmadoTipo = reader.GetNullableString("SedArmadoTipo"),
                                 SedArmadoMaterial = reader.GetNullableString("SedArmadoMaterial"),
                                 SedRetenidaTipo = reader.GetNullableString("SedRetenidaTipo"),
-                                SedRetenidaMaterial = reader.GetNullableString("SedRetenidaMaterial")
+                                SedRetenidaMaterial = reader.GetNullableString("SedRetenidaMaterial"),
+                                EsgoInterno = reader.GetNullableInt32("EsgoInterno")
                             });
                         }
                     }
@@ -335,12 +349,14 @@ namespace Sigre.DataAccess
         }
 
 
-        public List<Deficiencia> DAOFF_ResolverDeficienciasInternoSimple( DataTable dtDefOnline, List<Deficiencia> deficienciasOffline )
-{
+        public List<Deficiencia> DAOFF_ResolverDeficienciasInternoSimple(
+    DataTable dtDefOnline,
+    List<Deficiencia> deficienciasOffline)
+        {
             foreach (var def in deficienciasOffline)
             {
                 int defiInterno = 0;
-                string defiUUID = null;
+                string defiUuid = null;
 
                 foreach (DataRow r in dtDefOnline.Rows)
                 {
@@ -353,7 +369,7 @@ namespace Sigre.DataAccess
                             r["DEFI_Col3"].ToString() == def.DefiCol3)
                         {
                             defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
-                            defiUUID = r["DEFI_Col3"].ToString();
+                            defiUuid = r["DEFI_Col3"].ToString();
                             break;
                         }
                     }
@@ -375,7 +391,7 @@ namespace Sigre.DataAccess
                             )
                             {
                                 defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
-                                defiUUID = r["DEFI_Col3"] == DBNull.Value
+                                defiUuid = r["DEFI_Col3"] == DBNull.Value
                                     ? null
                                     : r["DEFI_Col3"].ToString();
                                 break;
@@ -413,7 +429,7 @@ namespace Sigre.DataAccess
                             )
                             {
                                 defiInterno = Convert.ToInt32(r["DEFI_Interno"]);
-                                defiUUID = r["DEFI_Col3"] == DBNull.Value
+                                defiUuid = r["DEFI_Col3"] == DBNull.Value
                                     ? null
                                     : r["DEFI_Col3"].ToString();
                                 break;
@@ -422,24 +438,17 @@ namespace Sigre.DataAccess
                     }
                 }
 
-                // ======================================
-                // ASIGNACIÓN FINAL
-                // ======================================
-
                 if (defiInterno > 0)
                 {
                     def.DefiInterno = defiInterno;
-
-                    // Si existe en DB pero no tenía UUID → usar el de DB
-                    def.DefiCol3 = string.IsNullOrWhiteSpace(defiUUID)
+                    def.DefiCol3 = string.IsNullOrWhiteSpace(defiUuid)
                         ? def.DefiCol3
-                        : defiUUID;
+                        : defiUuid;
                 }
                 else
                 {
                     def.DefiInterno = 0;
 
-                    // Crear UUID si no existe
                     if (string.IsNullOrWhiteSpace(def.DefiCol3))
                         def.DefiCol3 = Guid.NewGuid().ToString().ToUpper();
                 }
@@ -448,16 +457,16 @@ namespace Sigre.DataAccess
             return deficienciasOffline;
         }
 
-        public List<Archivo> DAOFF_ResolverArchivosInternoSimple(DataTable dtDefOnline, DataTable dtArchOnline, List<Archivo> archivosOffline )
+        public List<Archivo> DAOFF_ResolverArchivosInternoSimple(DataTable dtDefOnline, DataTable dtArchOnline, List<Archivo> archivosOffline)
         {
             foreach (var archivo in archivosOffline)
             {
                 int codTabla = 0;
                 int archInterno = 0;
-                string defiUUID = null;
+                string defiUuid = null;
 
                 // =================================================
-                // 1️⃣ RESOLVER DEFICIENCIA (ArchCodTabla + DefiUUID)
+                // 1️⃣ RESOLVER DEFICIENCIA (ArchCodTabla + DefiUuid)
                 // =================================================
 
                 // 🔹 Prioridad: DEFI_UUID
@@ -469,7 +478,7 @@ namespace Sigre.DataAccess
                             r["DEFI_Col3"].ToString() == archivo.DefiUuid)
                         {
                             codTabla = Convert.ToInt32(r["DEFI_Interno"]);
-                            defiUUID = r["DEFI_Col3"].ToString();
+                            defiUuid = r["DEFI_Col3"].ToString();
                             break;
                         }
                     }
@@ -486,7 +495,7 @@ namespace Sigre.DataAccess
                         )
                         {
                             codTabla = Convert.ToInt32(r["DEFI_Interno"]);
-                            defiUUID = r["DEFI_Col3"] == DBNull.Value
+                            defiUuid = r["DEFI_Col3"] == DBNull.Value
                                 ? null
                                 : r["DEFI_Col3"].ToString();
                             break;
@@ -496,7 +505,7 @@ namespace Sigre.DataAccess
 
                 // Setear Deficiencia
                 archivo.ArchCodTabla = codTabla;
-                archivo.DefiUuid = defiUUID;
+                archivo.DefiUuid = defiUuid;
 
                 // =================================================
                 // 2️⃣ VERIFICAR SI EL ARCHIVO EXISTE
