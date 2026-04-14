@@ -2074,14 +2074,13 @@ namespace Sigre.DataAccess
 
                     // 4. CLONAR ARCHIVOS (Base de Datos + Físico)
                     var archivosOriginales = ctx.Archivos.Where(a => a.ArchCodTabla == idDeficienciaOriginal && a.ArchActivo == true).ToList();
-                    var daFile = new DAFile();
 
                     foreach (var arch in archivosOriginales)
                     {
                         System.Diagnostics.Debug.WriteLine($"🔍 ARCHIVO ORIG: ID={arch.ArchInterno} | Fecha={arch.ArchFecha}");
 
-                        string nuevaRutaFisica = arch.ArchNombre;
-                        string elemCodigo = original.DefiCodigoElemento; // Ej: "VBT000262999"
+                        string nuevaRutaLogica = arch.ArchNombre;
+                        string elemCodigo = original.DefiCodigoElemento;
 
                         // 🔥 2. EXTRACCIÓN INTELIGENTE DE LA RUTA VIEJA
                         // Como no sabemos si la original era 7006, 6026 o 7004/1, lo extraemos directo del string
@@ -2111,41 +2110,24 @@ namespace Sigre.DataAccess
                             }
 
                             // 🔥 3. REEMPLAZO QUIRÚRGICO
-                            // Reemplazamos exactamente la carpeta y exactamente el nombre de archivo
+                            // 🔥 Reemplazo para crear la nueva ruta LÓGICA
                             if (!string.IsNullOrEmpty(codeViejoFolder))
-                                nuevaRutaFisica = nuevaRutaFisica.Replace($"/{elemCodigo}/{codeViejoFolder}/", $"/{elemCodigo}/{codeNuevoFolder}/");
+                                nuevaRutaLogica = nuevaRutaLogica.Replace($"/{elemCodigo}/{codeViejoFolder}/", $"/{elemCodigo}/{codeNuevoFolder}/");
 
                             if (!string.IsNullOrEmpty(codeViejoFile))
-                                nuevaRutaFisica = nuevaRutaFisica.Replace($"-{elemCodigo}-{codeViejoFile}-", $"-{elemCodigo}-{codeNuevoFile}-");
+                                nuevaRutaLogica = nuevaRutaLogica.Replace($"-{elemCodigo}-{codeViejoFile}-", $"-{elemCodigo}-{codeNuevoFile}-");
                         }
 
-                        if (arch.ArchNombre == nuevaRutaFisica) continue;
-
-                        // 🔥 LA MAGIA RESCATADORA AQUÍ 🔥
-                        // Extraemos la ruta real (por si la BD tiene el formato sucio 7004.X.Y)
-                        // Como instanciaste 'daFile' unas líneas arriba, usamos esa misma instancia
-                        // Extraemos la ruta resiliente
-                        string rutaViejaReal = daFile.ObtenerRutaFisicaReal(arch.ArchNombre);
-
-                        // Le decimos a C# que continúe si a pesar de los rescates, el archivo no existe en el disco
-                        if (!File.Exists(Path.Combine(daFile._baseDirectory, rutaViejaReal.Replace("/", "\\"))))
-                        {
-                            continue;
-                        }
-
-                        // Clonamos
-                        bool seCopioConExito = await daFile.CopiarArchivoFisicoAsync(rutaViejaReal, nuevaRutaFisica);
+                        if (arch.ArchNombre == nuevaRutaLogica) continue;
 
                        
-
-                        if (seCopioConExito)
                         {
                             var clonArch = new Archivo
                             {
                                 ArchCodTabla = clonDefi.DefiInterno,
                                 ArchTabla = "Deficiencias",
                                 DefiUuid = clonDefi.DefiCol3,
-                                ArchNombre = nuevaRutaFisica,
+                                ArchNombre = nuevaRutaLogica,
                                 TipiInterno = nuevaTipificacion,
                                 ArchTipo = arch.ArchTipo,
                                 ArchLatitud = arch.ArchLatitud,
@@ -2164,7 +2146,7 @@ namespace Sigre.DataAccess
                     ctx.SaveChanges();
                     transaction.Commit();
 
-                    return clonDefi.DefiInterno; // Retornamos el ID de la nueva deficiencia
+                    return clonDefi.DefiInterno; 
                 }
                 catch (Exception ex)
                 {

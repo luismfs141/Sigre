@@ -217,7 +217,33 @@ namespace Sigre.DataAccess
                     resolved.Add((dto, idDeficiency, syncKey));
                 }
 
-                // 2) Traer de una sola vez los archivos existentes de esas deficiencias
+                // 2) Traer existentes por UUID (VALIDACIÓN PRIORITARIA)
+                var incomingUuids = resolved
+                    .Where(x => x.dto.ArchUuid.HasValue)
+                    .Select(x => x.dto.ArchUuid.Value)
+                    .Distinct()
+                    .ToList();
+
+                var existentesPorUuid = incomingUuids.Count == 0
+                    ? new List<Archivo>()
+                    : ctx.Archivos
+                        .Where(a => a.ArchUuid.HasValue && incomingUuids.Contains(a.ArchUuid.Value))
+                        .OrderByDescending(a => a.ArchInterno)
+                        .ToList();
+
+                var existingByUuid = new Dictionary<Guid, Archivo>();
+
+                foreach (var a in existentesPorUuid)
+                {
+                    if (!a.ArchUuid.HasValue) continue;
+
+                    if (!existingByUuid.ContainsKey(a.ArchUuid.Value))
+                    {
+                        existingByUuid[a.ArchUuid.Value] = a;
+                    }
+                }
+
+                // 3) Traer existentes por key normalizada (fallback actual)
                 var defIds = resolved
                     .Select(x => x.defId)
                     .Distinct()
@@ -228,7 +254,6 @@ namespace Sigre.DataAccess
                     .OrderByDescending(a => a.ArchInterno)
                     .ToList();
 
-                // 3) Crear diccionario por key normalizada
                 var existingByKey = new Dictionary<string, Archivo>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var a in existentes)
@@ -238,14 +263,16 @@ namespace Sigre.DataAccess
                     if (string.IsNullOrWhiteSpace(key))
                         continue;
 
-                    // Nos quedamos con el primero según OrderByDescending(ArchInterno)
                     if (!existingByKey.ContainsKey(key))
                     {
                         existingByKey[key] = a;
                     }
                 }
 
-                // 4) Actualizar si existe; insertar si no existe
+                // 4) Actualizar si existe:
+                //    4.1 primero por ArchUuid
+                //    4.2 si no existe, fallback por key normalizada
+                //    4.3 si no existe por ninguno, insertar
                 var mappings = new List<(int localId, Archivo entity)>();
 
                 foreach (var item in resolved)
@@ -254,8 +281,22 @@ namespace Sigre.DataAccess
                     var idDeficiency = item.defId;
                     var syncKey = item.syncKey;
 
-                    if (!string.IsNullOrWhiteSpace(syncKey) &&
-                        existingByKey.TryGetValue(syncKey, out var existente))
+                    Archivo existente = null;
+
+                    // PRIORIDAD 1: UUID
+                    if (dto.ArchUuid.HasValue &&
+                        existingByUuid.TryGetValue(dto.ArchUuid.Value, out var existentePorUuid))
+                    {
+                        existente = existentePorUuid;
+                    }
+                    // PRIORIDAD 2: método actual
+                    else if (!string.IsNullOrWhiteSpace(syncKey) &&
+                             existingByKey.TryGetValue(syncKey, out var existentePorKey))
+                    {
+                        existente = existentePorKey;
+                    }
+
+                    if (existente != null)
                     {
                         existente.ArchCodTabla = idDeficiency;
                         existente.ArchNombre = dto.ArchNombre;
@@ -268,13 +309,23 @@ namespace Sigre.DataAccess
                         existente.ArchTipoElemento = dto.ArchTipoElemento;
                         existente.ArchIdElemento = dto.ArchIdElemento;
                         existente.TipiInterno = dto.TipiInterno;
-                        existente.ArchUuid = dto.ArchUuid;
                         existente.EsgoInterno = dto.EsgoInterno;
+
+                        if (dto.ArchUuid.HasValue)
+                        {
+                            existente.ArchUuid = dto.ArchUuid.Value;
+                            existingByUuid[dto.ArchUuid.Value] = existente;
+                        }
 
                         if (!string.IsNullOrWhiteSpace(dto.DefiUuid))
                         {
                             var uuid = dto.DefiUuid.Trim();
                             existente.DefiUuid = uuid.Length > 50 ? uuid.Substring(0, 50) : uuid;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(syncKey))
+                        {
+                            existingByKey[syncKey] = existente;
                         }
 
                         mappings.Add((dto.ArchInterno, existente));
@@ -284,7 +335,11 @@ namespace Sigre.DataAccess
                         var archivo = DAARCH_ConvertFile(dto);
                         ctx.Archivos.Add(archivo);
 
-                        // importante: evita duplicados dentro del mismo lote
+                        if (dto.ArchUuid.HasValue)
+                        {
+                            existingByUuid[dto.ArchUuid.Value] = archivo;
+                        }
+
                         if (!string.IsNullOrWhiteSpace(syncKey))
                         {
                             existingByKey[syncKey] = archivo;
@@ -593,7 +648,7 @@ namespace Sigre.DataAccess
 
             return new Archivo
             {
-                ArchInterno = arch_offline.ArchInterno,
+                ArchInterno = 0,
                 ArchTipo = arch_offline.ArchTipo,
                 ArchTabla = arch_offline.ArchTabla,
                 ArchCodTabla = (int)arch_offline.ArchCodTabla,

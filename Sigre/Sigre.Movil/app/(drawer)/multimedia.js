@@ -37,6 +37,7 @@ import { styles } from "../../styles/MultimediaStyles";
 import { MaterialIcons } from "@expo/vector-icons";
 import ModalCopyPhotos from "../../components/Multimedia/ModalCopyPhotos";
 
+import uuid from "react-native-uuid";
 
 
 import {
@@ -156,6 +157,8 @@ export default function Multimedia() {
   // ==========================
   const DRAFT_VERSION = 1;
 
+  const generateArchivoUUID = () => uuid.v4();
+
   const getDraftBaseRel = (defId) => `SIGRE.DRAFT/DEF_${defId}/`;
   const getDraftPhotosDir = (defId) =>
     FileSystem.documentDirectory + getDraftBaseRel(defId) + "photos/";
@@ -224,6 +227,7 @@ export default function Multimedia() {
 
   const buildDraftSnapshot = ({ nextPhotos, nextAudios, nextDeletedIds }) => {
     const draftPhotos = Array(6).fill(null);
+
     for (let i = 0; i < 6; i++) {
       const p = nextPhotos?.[i];
       if (!p) continue;
@@ -236,6 +240,7 @@ export default function Multimedia() {
         uri: cleanUri(p.uri),
         capturedAtMs: Number(p?.capturedAtMs) || null,
         fechaISO: p?.fechaISO ?? null,
+        archUuid: p?.archUuid ?? null,
       };
     }
 
@@ -246,6 +251,7 @@ export default function Multimedia() {
         capturedAtMs: Number(a?.capturedAtMs) || null,
         fechaISO: a?.fechaISO ?? null,
         title: a?.title ?? "Audio",
+        archUuid: a?.archUuid ?? null,
       }));
 
     return {
@@ -277,6 +283,7 @@ export default function Multimedia() {
     const raw = Number(photo?.capturedAtMs) || getUniqueNowMs();
     const ms = roundMsForSqlDatetime(raw);
     const fechaISO = formatLocalISO(ms);
+    const archUuid = photo?.archUuid ?? generateArchivoUUID();
 
     const { date, time } = getStampPartsFromMs(ms);
     const fileName = `DRAFT_FOT_${slotIndex + 1}_${date}_${time}.jpg`;
@@ -289,14 +296,16 @@ export default function Multimedia() {
 
     await FileSystem.copyAsync({ from: fromUri, to: toUri });
 
-    // limpiamos el temporal
-    try { await FileSystem.deleteAsync(fromUri, { idempotent: true }); } catch { }
+    try {
+      await FileSystem.deleteAsync(fromUri, { idempotent: true });
+    } catch { }
 
     return {
       ...photo,
       uri: toUri,
       capturedAtMs: ms,
       fechaISO,
+      archUuid,
       isDraft: true,
     };
   };
@@ -305,6 +314,7 @@ export default function Multimedia() {
     const raw = Number(audio?.capturedAtMs) || getUniqueNowMs();
     const ms = roundMsForSqlDatetime(raw);
     const fechaISO = formatLocalISO(ms);
+    const archUuid = audio?.archUuid ?? generateArchivoUUID();
 
     const { date, time } = getStampPartsFromMs(ms);
     const fileName = `DRAFT_AUD_${date}_${time}.m4a`;
@@ -317,14 +327,16 @@ export default function Multimedia() {
 
     await FileSystem.copyAsync({ from: fromUri, to: toUri });
 
-    // limpiamos el temporal
-    try { await FileSystem.deleteAsync(fromUri, { idempotent: true }); } catch { }
+    try {
+      await FileSystem.deleteAsync(fromUri, { idempotent: true });
+    } catch { }
 
     return {
       ...audio,
       uri: toUri,
       capturedAtMs: ms,
       fechaISO,
+      archUuid,
       isDraft: true,
     };
   };
@@ -529,8 +541,10 @@ export default function Multimedia() {
                 uri: dp.uri,
                 capturedAtMs: Number(dp?.capturedAtMs) || null,
                 fechaISO: dp?.fechaISO ?? null,
+                archUuid: dp?.archUuid ?? null,
                 isDraft: true,
               };
+
               appliedDraft = true;
             } catch { }
           }
@@ -552,8 +566,10 @@ export default function Multimedia() {
                 type: 0,
                 fechaISO: da?.fechaISO ?? null,
                 capturedAtMs: Number(da?.capturedAtMs) || null,
+                archUuid: da?.archUuid ?? null,
                 isDraft: true,
               });
+
               appliedDraft = true;
             } catch { }
           }
@@ -762,6 +778,7 @@ export default function Multimedia() {
     const raw = getUniqueNowMs();
     const ms = roundMsForSqlDatetime(raw);
     const fechaISO = formatLocalISO(ms);
+    const archUuid = generateArchivoUUID();
 
     const { date, time } = getStampPartsFromMs(ms);
     const fileName = `DRAFT_FOT_${slotIndex + 1}_${date}_${time}.jpg`;
@@ -780,6 +797,7 @@ export default function Multimedia() {
       lonUtm,
       capturedAtMs: ms,
       fechaISO,
+      archUuid,
       isDraft: true,
     };
   };
@@ -817,6 +835,22 @@ export default function Multimedia() {
           : "",
       };
     });
+  };
+
+  const getAllowedCopySlotIndexes = () => {
+    const { typeElement } = getSelectedElementRef();
+
+    if (typeElement === "POST") {
+      // Fotos 1, 2, 3, 4 y 5
+      return [0, 1, 2, 3, 4];
+    }
+
+    if (typeElement === "VANO") {
+      // Fotos 1 y 5
+      return [0, 4];
+    }
+
+    return [];
   };
 
   const loadCopyPhotosForDef = async (defItem) => {
@@ -903,7 +937,11 @@ export default function Multimedia() {
       });
     }
 
-    const ordered = photos.sort((a, b) => a.slotIndex - b.slotIndex);
+    const allowedSlotIndexes = new Set(getAllowedCopySlotIndexes());
+
+    const ordered = photos
+      .filter((photo) => allowedSlotIndexes.has(Number(photo.slotIndex)))
+      .sort((a, b) => a.slotIndex - b.slotIndex);
 
     setCopyPhotosByDefId((prev) => ({
       ...prev,
@@ -980,6 +1018,17 @@ export default function Multimedia() {
       return;
     }
 
+    const allowedSlotIndexes = new Set(getAllowedCopySlotIndexes());
+
+    const validSelectedPhotos = selectedPhotos.filter((item) =>
+      allowedSlotIndexes.has(Number(item?.slotIndex))
+    );
+
+    if (!validSelectedPhotos.length) {
+      Alert.alert("Sin fotos válidas", "No hay fotos permitidas para copiar en este elemento.");
+      return;
+    }
+
     try {
       setLoading({ active: true, msg: "Copiando fotos..." });
 
@@ -990,7 +1039,7 @@ export default function Multimedia() {
       const copiedSlots = [];
       const failedSlots = [];
 
-      const orderedSelection = [...selectedPhotos].sort((a, b) => a.slotIndex - b.slotIndex);
+      const orderedSelection = [...validSelectedPhotos].sort((a, b) => a.slotIndex - b.slotIndex);
 
       for (const item of orderedSelection) {
         try {
@@ -1157,7 +1206,17 @@ export default function Multimedia() {
   };
 
 
-  const saveFileRecord = async ({ filename, slot, isAudio, mediaData, codTablaReal, elementId, tipiId, DefiUuid }) => {
+  const saveFileRecord = async ({
+    filename,
+    slot,
+    isAudio,
+    mediaData,
+    codTablaReal,
+    elementId,
+    tipiId,
+    defiUuid,
+    archUuid,
+  }) => {
     const { tipo } = getElementoInfo();
 
     return await saveArchivoLocal({
@@ -1167,11 +1226,9 @@ export default function Multimedia() {
       ArchCodTabla: codTablaReal,
       ArchNombre: filename,
 
-      // ✅ solo fotos tienen coordenadas
       ArchLatitud: isAudio ? null : (mediaData?.latUtm ?? null),
       ArchLongitud: isAudio ? null : (mediaData?.lonUtm ?? null),
 
-      // ✅ LA MISMA FECHA DE CAPTURA
       ArchFecha: mediaData?.fechaISO ?? nowPeruISO(),
 
       ArchTipoElemento: tipo === "Poste" ? "POST" : "VANO",
@@ -1179,7 +1236,9 @@ export default function Multimedia() {
       TipiInterno: tipiId,
       ArchActivo: 1,
       EstadoOffLine: 2,
-      DefiUuid: DefiUuid
+
+      DefiUuid: defiUuid ?? null,
+      ArchUuid: archUuid ?? mediaData?.archUuid ?? null,
     });
   };
 
@@ -1581,6 +1640,7 @@ export default function Multimedia() {
           elementId: currentElementId,
           tipiId: currentTipiInterno,
           defiUuid: defiCodUnico,
+          archUuid: photo?.archUuid ?? null,
         });
 
         // limpiar DRAFT en Android (en iOS ya se movió)
@@ -1648,6 +1708,7 @@ export default function Multimedia() {
           elementId: currentElementId,
           tipiId: currentTipiInterno,
           defiUuid: defiCodUnico,
+          archUuid: audio?.archUuid ?? null,
         });
 
         if (Platform.OS === "android") {
@@ -1949,7 +2010,7 @@ export default function Multimedia() {
             <Text style={styles.title}>📸 Registro de Fotos</Text>
 
             <TouchableOpacity
-              style={[styles.copyButton, !canEdit && { opacity: 0.45 }]}
+              style={[styles.copyButton, { display: "true" }, !canEdit && { opacity: 0.45 }]}
               onPress={openCopyPhotosModal}
               disabled={!canEdit}
             >
@@ -2131,6 +2192,7 @@ export default function Multimedia() {
                 title: staged.title ?? `Nota ${audios.length + 1}`,
                 fechaISO: staged.fechaISO,
                 capturedAtMs: staged.capturedAtMs,
+                archUuid: staged.archUuid ?? null,
                 isDraft: true,
               },
             ];

@@ -452,7 +452,7 @@ export const useDeficiency = () => {
       CodopInterno: Number.isFinite(codopInternoParsed) ? codopInternoParsed : null,
 
       EsgoInterno: base?.EsgoInterno ?? null,
-      DefiMovil: base?.DefiMovil ?? true,
+      DefiMovil: base?.DefiMovil ?? 1,
 
       DefiUsuarioMod: userId != null ? String(userId) : null,
       DefiFecModificacion: nowIso,
@@ -471,12 +471,12 @@ export const useDeficiency = () => {
       normalized.DefiLatitud = base?.DefiLatitud ?? 0;
       normalized.DefiLongitud = base?.DefiLongitud ?? 0;
       normalized.DefiInspeccionado = base?.DefiInspeccionado ?? 0;
-      normalized.DefiMovil = true;
+      normalized.DefiMovil = 1;
     } else {
       if (isBlank(base?.DefiFechaCreacion)) normalized.DefiFechaCreacion = nowIso;
       if (isBlank(base?.DefiFecRegistro)) normalized.DefiFecRegistro = nowIso;
       if (base?.DefiMovil === null || base?.DefiMovil === undefined) {
-        normalized.DefiMovil = true;
+        normalized.DefiMovil = 1;
       }
     }
 
