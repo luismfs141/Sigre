@@ -4,4 +4,4 @@
 //export const API_BASE_URL = "http://localhost:8080";
 
 // Servidor Ngrok
-export const API_BASE_URL = "https://karen-victor-romance-phil.trycloudflare.com/";
+export const API_BASE_URL = "https://ammonium-defame-nicotine.ngrok-free.dev/";
