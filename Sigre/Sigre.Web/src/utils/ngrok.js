@@ -4,4 +4,4 @@
 //export const API_BASE_URL = "http://localhost:8080";
 
 // Servidor Ngrok
-export const API_BASE_URL = "https://rebirth-qualified-awning.ngrok-free.dev/";
+export const API_BASE_URL = " https://suggested-helping-gives-ciao.trycloudflare.com/";
