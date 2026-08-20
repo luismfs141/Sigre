@@ -1,0 +1,234 @@
+/* 1. TAILWIND PRIMERO (Para evitar que rompa los estilos de los botones) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. PRIMEREACT DESPUÉS (Para que sus estilos ganen) */
+@import "primereact/resources/themes/lara-light-cyan/theme.css";
+@import "primereact/resources/primereact.min.css";
+@import "primeicons/primeicons.css";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+
+/* Executive Dashboard Design System
+   Professional, high-clarity interface for infrastructure management
+   All colors in HSL format
+*/
+
+
+
+@layer base {
+  :root {
+    /* Core palette - Executive Navy theme */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary - Deep Navy */
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Secondary - Slate Gray */
+    --secondary: 215 25% 27%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Muted surfaces */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent */
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    /* Status colors */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 72% 41%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Pending/Info status */
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar - slightly darker */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 222 47% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 47% 18%;
+    --sidebar-ring: 199 89% 48%;
+    --primary-color: hsl(var(--primary)); 
+    --primary-color-text: hsl(var(--primary-foreground));
+    
+    /* Para que el botón sepa qué color usar al pasar el mouse (un poco más claro u oscuro) */
+    --primary-color-text: hsl(var(--primary-foreground));
+
+    /* Opcional: Enfocar el 'focus ring' con tu color */
+    --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+
+
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 14%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 215 25% 35%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 47% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 222 47% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 32 95% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 199 89% 55%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 222 47% 20%;
+    --input: 222 47% 20%;
+    --ring: 210 40% 80%;
+
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 199 89% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 47% 15%;
+    --sidebar-ring: 199 89% 55%;
+
+
+    --primary-color: hsl(var(--primary)); 
+    --primary-color-text: hsl(var(--primary-foreground));
+    
+    /* Para que el botón sepa qué color usar al pasar el mouse (un poco más claro u oscuro) */
+    --primary-color-text: hsl(var(--primary-foreground));
+
+    /* Opcional: Enfocar el 'focus ring' con tu color */
+    --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* High-density data tables */
+  .data-table {
+    @apply text-sm;
+  }
+
+  .data-table th {
+    @apply bg-table-header font-semibold text-foreground sticky top-0;
+  }
+
+  .data-table tr:hover {
+    @apply bg-table-row-hover;
+  }
+}
+
+@layer components {
+  /* Status badges */
+  .badge-success {
+    @apply bg-success/15 text-success border-success/30;
+  }
+
+  .badge-warning {
+    @apply bg-warning/15 text-warning border-warning/30;
+  }
+
+  .badge-destructive {
+    @apply bg-destructive/15 text-destructive border-destructive/30;
+  }
+
+  .badge-info {
+    @apply bg-info/15 text-info border-info/30;
+  }
+
+  /* KPI Cards */
+  .kpi-card {
+    @apply bg-card border border-border rounded-lg p-6 shadow-sm;
+  }
+
+  .kpi-value {
+    @apply text-3xl font-bold text-foreground;
+  }
+
+  .kpi-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  .kpi-trend-up {
+    @apply text-success;
+  }
+
+  .kpi-trend-down {
+    @apply text-destructive;
+  }
+
+  /* Executive section headers */
+  .section-header {
+    @apply text-lg font-semibold text-foreground mb-4;
+  }
+
+  .page-header {
+    @apply text-2xl font-semibold text-foreground;
+  }
+}
+
+/* Leaflet map overrides */
+.leaflet-container {
+  @apply rounded-lg;
+  font-family: 'Inter', sans-serif;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg shadow-lg;
+}
+
+.leaflet-popup-content {
+  @apply text-sm;
+}

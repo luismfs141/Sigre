@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using OfficeOpenXml;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
@@ -523,6 +524,33 @@ namespace Sigre.Server.Controllers
                 // Cualquier otro error (ej. SQL Server abajo)
                 return StatusCode(500, new { mensaje = "Error interno al clonar la deficiencia", detalle = ex.Message });
             }
+        }
+
+        [HttpPost("list-from-excel")]
+        [Consumes("multipart/form-data")]
+        public ActionResult<List<Deficiencia>> ListFromExcel(
+            IFormFile file,
+            string x_codAmt)
+        {
+            var daDeficiency = new DADeficiency();
+
+            if (file == null || file.Length == 0)
+                return BadRequest("Debe enviar un archivo Excel.");
+
+            using var stream = file.OpenReadStream();
+
+            ExcelPackage.License.SetNonCommercialOrganization("SIGRE");
+
+            using var package = new ExcelPackage(stream);
+
+            var ws = package.Workbook.Worksheets[0];
+
+            var resultado =
+                daDeficiency.ListarDeficienciasMTporReporte(
+                    ws,
+                    x_codAmt);
+
+            return Ok(resultado);
         }
     }
 }

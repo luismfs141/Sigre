@@ -2,6 +2,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using OfficeOpenXml;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
 using Sigre.Entities.Entities.Structs;
@@ -2164,6 +2165,392 @@ namespace Sigre.DataAccess
                     throw new Exception(realError.Message);
                 }
             }
+        }
+
+        public List<Deficiencia> ListarDeficienciasMTporVano(ExcelWorksheet ws, string x_codAmt)
+        {
+            var deficiencias = new List<Deficiencia>();
+
+            const int filaCodigoVano = 10;
+            const int filaInicioDeficiencia = 11;
+            const int filaFinDeficiencia = 17;
+            const int filaCriticidad = 18;
+            const int columnaCodigoDeficiencia = 11; // K
+            const int columnaInicioVanos = 13;       // M
+
+            int columna = columnaInicioVanos;
+
+            while (true)
+            {
+                var codigoElemento = ws.Cells[filaCodigoVano, columna]
+                    .Text?
+                    .Trim();
+
+                // Ya no hay más vanos
+                if (string.IsNullOrWhiteSpace(codigoElemento))
+                    break;
+
+                var criticidadTexto = ws.Cells[filaCriticidad, columna]
+                    .Text?
+                    .Trim();
+
+                int criticidad = 0;
+                int.TryParse(criticidadTexto, out criticidad);
+
+                for (int fila = filaInicioDeficiencia; fila <= filaFinDeficiencia; fila++)
+                {
+                    var codigoDeficienciaTexto =
+                        ws.Cells[fila, columnaCodigoDeficiencia]
+                            .Text?
+                            .Trim();
+
+                    if (string.IsNullOrWhiteSpace(codigoDeficienciaTexto))
+                        continue;
+
+                    var valor = ws.Cells[fila, columna]
+                        .Text?
+                        .Trim();
+
+                    // Solo SI genera una deficiencia
+                    if (!string.Equals(
+                            valor,
+                            "SI",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var codigoDeficiencia =
+                        codigoDeficienciaTexto.Replace("(*)", "").Trim();
+
+                    var deficiencia = new Deficiencia
+                    {
+                        DefiCodAmt = x_codAmt,
+                        DefiCodigoElemento = codigoElemento,
+                        DefiCodDef = codigoDeficiencia,
+                        DefiEstadoCriticidad = criticidad,
+                        DefiActivo = true
+                    };
+
+                    deficiencias.Add(deficiencia);
+                }
+
+                columna++;
+            }
+
+            return deficiencias;
+        }
+
+        public List<Deficiencia> ListarDeficienciasMTporPoste(ExcelWorksheet ws, string x_codAmt)
+        {
+            var deficiencias = new List<Deficiencia>();
+
+            const int filaCodigoPoste = 9;
+            const int filaInicioDeficiencia = 10;
+            const int filaFinDeficiencia = 25;
+            const int filaCriticidad = 26;
+
+            const int columnaCodigoDeficiencia = 11; // K
+            const int columnaInicioPostes = 13;      // M
+
+            int columna = columnaInicioPostes;
+
+            while (true)
+            {
+                var codigoPoste = ws.Cells[filaCodigoPoste, columna]
+                    .Text?
+                    .Trim();
+
+                // Ya no hay más postes
+                if (string.IsNullOrWhiteSpace(codigoPoste))
+                    break;
+
+                var criticidadTexto = ws.Cells[filaCriticidad, columna]
+                    .Text?
+                    .Trim();
+
+                int criticidad = 0;
+                int.TryParse(criticidadTexto, out criticidad);
+
+                for (int fila = filaInicioDeficiencia;
+                     fila <= filaFinDeficiencia;
+                     fila++)
+                {
+                    var codigoDeficienciaTexto =
+                        ws.Cells[fila, columnaCodigoDeficiencia]
+                            .Text?
+                            .Trim();
+
+                    if (string.IsNullOrWhiteSpace(codigoDeficienciaTexto))
+                        continue;
+
+                    var valor = ws.Cells[fila, columna]
+                        .Text?
+                        .Trim();
+
+                    // Solo SI genera una deficiencia
+                    if (!string.Equals(
+                            valor,
+                            "SI",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var codigoDeficiencia =
+                        codigoDeficienciaTexto
+                            .Replace("(*)", "")
+                            .Trim();
+
+                    deficiencias.Add(new Deficiencia
+                    {
+                        DefiCodAmt = x_codAmt,
+
+                        // El elemento es el código del POSTE
+                        DefiCodigoElemento = codigoPoste,
+
+                        DefiCodDef = codigoDeficiencia,
+                        DefiEstadoCriticidad = criticidad,
+                        DefiActivo = true
+                    });
+                }
+
+                columna++;
+            }
+
+            return deficiencias;
+        }
+
+        public List<Deficiencia> ListarDeficienciasMTporSed(
+    ExcelWorksheet ws,
+    string x_codAmt)
+        {
+            var deficiencias = new List<Deficiencia>();
+
+            const int filaCodigoSed = 8;
+            const int filaInicioDeficiencia = 11;
+            const int filaFinDeficiencia = 31;
+            const int filaCriticidad = 32;
+
+            const int columnaCodigoDeficiencia = 12; // L
+            const int columnaInicioSeds = 13;        // M
+
+            int columna = columnaInicioSeds;
+
+            while (true)
+            {
+                var codigoSed = ws.Cells[filaCodigoSed, columna]
+                    .Text?
+                    .Trim();
+
+                // Ya no hay más SEDs
+                if (string.IsNullOrWhiteSpace(codigoSed))
+                    break;
+
+                var criticidadTexto = ws.Cells[filaCriticidad, columna]
+                    .Text?
+                    .Trim();
+
+                int criticidad = 0;
+                int.TryParse(criticidadTexto, out criticidad);
+
+                for (int fila = filaInicioDeficiencia;
+                     fila <= filaFinDeficiencia;
+                     fila++)
+                {
+                    var codigoDeficienciaTexto =
+                        ws.Cells[fila, columnaCodigoDeficiencia]
+                            .Text?
+                            .Trim();
+
+                    if (string.IsNullOrWhiteSpace(codigoDeficienciaTexto))
+                        continue;
+
+                    var valor = ws.Cells[fila, columna]
+                        .Text?
+                        .Trim();
+
+                    // Solo SI genera una deficiencia
+                    if (!string.Equals(
+                            valor,
+                            "SI",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var codigoDeficiencia =
+                        codigoDeficienciaTexto
+                            .Replace("(*)", "")
+                            .Trim();
+
+                    deficiencias.Add(new Deficiencia
+                    {
+                        DefiCodAmt = x_codAmt,
+
+                        // El elemento es el código de la SED
+                        DefiCodigoElemento = codigoSed,
+
+                        DefiCodDef = codigoDeficiencia,
+                        DefiEstadoCriticidad = criticidad,
+                        DefiActivo = true
+                    });
+                }
+
+                columna++;
+            }
+
+            return deficiencias;
+        }
+
+        public List<Deficiencia> ListarDeficienciasMTporReporte(ExcelWorksheet ws, string x_codAmt)
+        {
+            var deficiencias = new List<Deficiencia>();
+
+            // Vanos
+            deficiencias.AddRange(
+                ListarDeficienciasMTporVano(ws, x_codAmt));
+
+            // Postes
+            deficiencias.AddRange(
+                ListarDeficienciasMTporPoste(ws, x_codAmt));
+
+            // SEDs
+            deficiencias.AddRange(
+                ListarDeficienciasMTporSed(ws, x_codAmt));
+
+            return deficiencias;
+        }
+
+        public void ActualizarDeficienciasMT(List<Deficiencia> x_deficienciasExcel, string x_codAmt, string x_usuario)
+        {
+            using var ctx = new SigreContext();
+
+            var deficienciasBD = ctx.Deficiencias.Where(d => d.DefiCodAmt == x_codAmt).ToList();
+
+            // ---------------------------------------------------------
+            // 1. INSERT / UPDATE
+            // ---------------------------------------------------------
+
+            foreach (var defExcel in x_deficienciasExcel)
+            {
+                var existente = deficienciasBD.FirstOrDefault(d =>
+                    d.DefiCodAmt == defExcel.DefiCodAmt &&
+                    d.DefiCodigoElemento == defExcel.DefiCodigoElemento &&
+                    d.DefiCodDef == defExcel.DefiCodDef);
+
+                if (existente != null)
+                {
+                    // UPDATE
+                    existente.DefiEstadoCriticidad =
+                        defExcel.DefiEstadoCriticidad;
+
+                    existente.DefiActivo = true;
+
+                    existente.DefiFecModificacion = DateTime.Now;
+                    existente.DefiUsuarioMod = x_usuario;
+                }
+                else
+                {
+                    // INSERT
+                    defExcel.DefiActivo = true;
+
+                    defExcel.DefiFecRegistro = DateTime.Now;
+                    defExcel.DefiFechaCreacion = DateTime.Now;
+                    defExcel.DefiUsuCre = x_usuario;
+
+                    ctx.Deficiencias.Add(defExcel);
+                }
+            }
+
+            // ---------------------------------------------------------
+            // 2. DESACTIVAR
+            // ---------------------------------------------------------
+
+            foreach (var defBD in deficienciasBD)
+            {
+                var existeEnExcel = x_deficienciasExcel.Any(d =>
+                    d.DefiCodAmt == defBD.DefiCodAmt &&
+                    d.DefiCodigoElemento == defBD.DefiCodigoElemento &&
+                    d.DefiCodDef == defBD.DefiCodDef);
+
+                if (!existeEnExcel)
+                {
+                    defBD.DefiActivo = false;
+                    defBD.DefiFecModificacion = DateTime.Now;
+                    defBD.DefiUsuarioMod = x_usuario;
+                }
+            }
+
+            ctx.SaveChanges();
+        }
+
+        public List<DeficiencyReport> LeerReporte(ExcelWorkbook workbook)
+        {
+            var lista = new List<DeficiencyReport>();
+
+            foreach (var ws in workbook.Worksheets)
+            {
+                string tipoElemento = ws.Name;
+                string alimentador = ws.Cells["N5"].Text?.Trim();
+
+                // Buscar dónde empiezan las tipificaciones
+                int filaInicioTipificaciones = 1;
+                int filaFinTipificaciones = ws.Dimension.End.Row;
+
+                // Columna K = 11
+                for (int fila = 1; fila <= ws.Dimension.End.Row; fila++)
+                {
+                    if (!string.IsNullOrWhiteSpace(ws.Cells[fila, 11].Text))
+                    {
+                        filaInicioTipificaciones = fila;
+                        break;
+                    }
+                }
+
+                // Detectar columnas de elementos
+                int columnaInicioElementos = 13; // M
+                int columnaFinElementos = ws.Dimension.End.Column;
+
+                for (int col = columnaInicioElementos; col <= columnaFinElementos; col++)
+                {
+                    var codigo = ws.Cells[7, col].Text?.Trim();
+
+                    if (string.IsNullOrWhiteSpace(codigo))
+                        continue;
+
+                    var item = new DeficiencyReport
+                    {
+                        Alimentador = alimentador,
+                        Codigo = codigo,
+                        TipoElemento = tipoElemento,
+                        Tipificaciones = new List<TipificacionReport>()
+                    };
+
+                    for (int fila = filaInicioTipificaciones; fila <= filaFinTipificaciones; fila++)
+                    {
+                        string codTipificacion = ws.Cells[fila, 11].Text?.Trim();
+
+                        if (string.IsNullOrWhiteSpace(codTipificacion))
+                            continue;
+
+                        string valor = ws.Cells[fila, col].Text?.Trim();
+
+                        if (valor.Equals("SI", StringComparison.OrdinalIgnoreCase) ||
+                            valor.Equals("SÍ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            item.Tipificaciones.Add(new TipificacionReport
+                            {
+                                CodTipificacion = codTipificacion
+                            });
+                        }
+                    }
+
+                    lista.Add(item);
+                }
+            }
+
+            return lista;
         }
     }
 }
