@@ -75,6 +75,8 @@ const AgregarTramos = () => {
       return;
     }
 
+    console.log(selectedFeeder);
+
     const resultado = await agregarTramosAlReporte(file, selectedFeeder);
 
     if (resultado) {

@@ -195,9 +195,9 @@ namespace Sigre.Server.Controllers
                 using var stream = file.OpenReadStream();
                 using var package = new ExcelPackage(stream);
 
-                var blGap = new BLGap();
+                var daGap = new DAGap();
 
-                var workbook = blGap.BLGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
+                var workbook = daGap.DAGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
 
                 using var output = new MemoryStream();
 
