@@ -146,6 +146,11 @@ const navItems = [
         href: "/ActualizarDeficiencias",
         icon: UploadCloud,
       },
+      {
+        title: "Agregar Tramos",
+        href: "/agregar-tramos",
+        icon: UploadCloud,
+      },
     ],
   },
 ];

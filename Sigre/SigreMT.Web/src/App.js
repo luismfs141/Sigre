@@ -22,6 +22,8 @@ import ImportacionMasivaInversa from './pages/ImportacionMasivaInversa';
 import ReporteMaestro from './pages/ReporteMaestro';
 import MigrationPanel from './pages/MigrationPanel';
 import ActualizarDeficiencias from './pages/ActualizarDeficiencias';
+import AgregarTramos from './pages/Utilidades/AgregarTramos'; 
+
 function App() {
   return (
     // 4. ENVUELVE TODO EL CONTENIDO CON EL PROVIDER
@@ -49,6 +51,7 @@ function App() {
           <Route path="/reporteMaestro" element={<ReporteMaestro />} />
           <Route path="/AwsSubida" element={<MigrationPanel />} />
           <Route path="/ActualizarDeficiencias" element={<ActualizarDeficiencias />} />
+          <Route path="/agregar-tramos" element={<AgregarTramos />} />
         </Route>
 
         {/* REDIRECCIÓN */}

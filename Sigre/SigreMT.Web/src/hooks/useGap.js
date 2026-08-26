@@ -4,6 +4,7 @@ import api from '../api/apiConfig';
 export const useGapsBySed = () => {
     const [gaps, setGaps] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [loadingTramos, setLoadingTramos] = useState(false);
 
     const fetchGapsBySed = useCallback(async (sedId) => {
         if (!sedId) return [];
@@ -52,5 +53,94 @@ export const useGapsBySed = () => {
         }
     }, []);
 
-    return { gaps, loading, fetchGapsBySed };
+    const agregarTramosAlReporte = useCallback(
+        async (file, alimInterno) => {
+            if (!file) {
+                console.warn("⚠️ No se proporcionó archivo Excel.");
+                return null;
+            }
+
+            if (!alimInterno) {
+                console.warn("⚠️ No se proporcionó alimInterno.");
+                return null;
+            }
+
+            setLoadingTramos(true);
+
+            try {
+                const formData = new FormData();
+
+                formData.append('file', file);
+                formData.append('alimInterno', alimInterno);
+
+                const response = await api.post(
+                    '/Gap/AgregarTramosAlReporte',
+                    formData,
+                    {
+                        responseType: 'blob',
+                    }
+                );
+
+                const contentDisposition =
+                    response.headers['content-disposition'];
+
+                let nombreArchivo = 'reporte_tramos.xlsx';
+
+                if (contentDisposition) {
+                    const match = contentDisposition.match(
+                        /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+                    );
+
+                    if (match?.[1]) {
+                        nombreArchivo = match[1].replace(/['"]/g, '');
+                    }
+                }
+
+                const blob = new Blob(
+                    [response.data],
+                    {
+                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    }
+                );
+
+                const url = window.URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = nombreArchivo;
+
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                window.URL.revokeObjectURL(url);
+
+                console.log(
+                    '✅ Tramos agregados correctamente al reporte.'
+                );
+
+                return response.data;
+
+            } catch (err) {
+                console.error(
+                    '❌ ERROR AL AGREGAR TRAMOS:',
+                    err
+                );
+
+                return null;
+
+            } finally {
+                setLoadingTramos(false);
+            }
+        },
+        []
+    );
+
+    return {
+        gaps,
+        loading,
+        loadingTramos,
+        fetchGapsBySed,
+        agregarTramosAlReporte
+    };
 };
