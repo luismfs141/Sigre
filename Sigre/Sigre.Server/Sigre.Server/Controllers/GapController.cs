@@ -1,5 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
+using Sigre.BusinessLogic.Principal;
+using Sigre.BusinessLogic.Vano;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using Sigre.Entities.Entities;
@@ -175,6 +178,46 @@ namespace Sigre.Server.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error", error = ex.Message });
+            }
+        }
+
+        [HttpPost("AgregarTramosAlReporte")]
+        [Consumes("multipart/form-data")]
+        public IActionResult AgregarTramosAlReporte(IFormFile file, int alimInterno)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("Debe enviar un archivo Excel.");
+
+            try
+            {
+                ExcelPackage.License.SetNonCommercialPersonal("Sigre");
+
+                using var stream = file.OpenReadStream();
+                using var package = new ExcelPackage(stream);
+
+                var blGap = new BLGap();
+
+                var workbook = blGap.BLGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
+
+                using var output = new MemoryStream();
+
+                package.SaveAs(output);
+                output.Position = 0;
+
+                string nombreArchivo = Path.GetFileNameWithoutExtension(file.FileName)
+                    + "_tramos"
+                    + Path.GetExtension(file.FileName);
+
+                return File(
+                    output.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    nombreArchivo);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    $"Error al agregar los tramos al reporte: {ex.Message}");
             }
         }
     }
