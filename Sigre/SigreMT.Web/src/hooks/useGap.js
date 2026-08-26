@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import api from '../api/apiConfig';
 
-export const useGapsBySed = () => {
+export const useGap = () => {
     const [gaps, setGaps] = useState([]);
     const [loading, setLoading] = useState(false);
     const [loadingTramos, setLoadingTramos] = useState(false);
@@ -53,8 +53,7 @@ export const useGapsBySed = () => {
         }
     }, []);
 
-    const agregarTramosAlReporte = useCallback(
-        async (file, alimInterno) => {
+    const agregarTramosAlReporte = useCallback( async (file, alimInterno) => {
             if (!file) {
                 console.warn("⚠️ No se proporcionó archivo Excel.");
                 return null;
@@ -73,16 +72,9 @@ export const useGapsBySed = () => {
                 formData.append('file', file);
                 formData.append('alimInterno', alimInterno);
 
-                const response = await api.post(
-                    '/Gap/AgregarTramosAlReporte',
-                    formData,
-                    {
-                        responseType: 'blob',
-                    }
-                );
+                const response = await api.post('/Gap/AgregarTramosAlReporte',formData,{ responseType: 'blob',} );
 
-                const contentDisposition =
-                    response.headers['content-disposition'];
+                const contentDisposition = response.headers['content-disposition'];
 
                 let nombreArchivo = 'reporte_tramos.xlsx';
 

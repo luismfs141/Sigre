@@ -61,10 +61,12 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
             "http://localhost:3000",
+            "http://localhost:7280",
             "https://kind-coast-0e9ecb71e.2.azurestaticapps.net"
         )
         .AllowAnyHeader()
-        .AllowAnyMethod();
+        .AllowAnyMethod()
+        .WithExposedHeaders("Content-Disposition");
     });
 });
 

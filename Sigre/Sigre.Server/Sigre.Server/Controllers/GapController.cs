@@ -183,7 +183,7 @@ namespace Sigre.Server.Controllers
 
         [HttpPost("AgregarTramosAlReporte")]
         [Consumes("multipart/form-data")]
-        public IActionResult AgregarTramosAlReporte(IFormFile file, int alimInterno)
+        public IActionResult AgregarTramosAlReporte([FromForm]  IFormFile file, [FromForm]  int alimInterno)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("Debe enviar un archivo Excel.");
@@ -195,18 +195,22 @@ namespace Sigre.Server.Controllers
                 using var stream = file.OpenReadStream();
                 using var package = new ExcelPackage(stream);
 
-                var daGap = new DAGap();
+                //var daGap = new DAGap();
 
-                var workbook = daGap.DAGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
+                //var workbook = daGap.DAGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
+
+                var blGap = new BLGap();
+                var workbook = blGap.BLGAP_AgregarTramosAlReporte(package.Workbook, alimInterno);
 
                 using var output = new MemoryStream();
 
                 package.SaveAs(output);
                 output.Position = 0;
 
-                string nombreArchivo = Path.GetFileNameWithoutExtension(file.FileName)
-                    + "_tramos"
-                    + Path.GetExtension(file.FileName);
+                //string nombreArchivo = Path.GetFileNameWithoutExtension(file.FileName)
+                //    + "_tramos"
+                //    + Path.GetExtension(file.FileName);
+                string nombreArchivo = $"{Path.GetFileNameWithoutExtension(file.FileName)}_Tramos{Path.GetExtension(file.FileName)}";
 
                 return File(
                     output.ToArray(),

@@ -14,14 +14,14 @@ import {
 } from "lucide-react";
 
 import { useFeeder } from "../../hooks/useFeeder";
-import { useGapsBySed } from "../../hooks/useGap";
+import { useGap } from "../../hooks/useGap";
 
 const AgregarTramos = () => {
   const toast = useRef(null);
 
   const { feeders, loading: loadingFeeders } = useFeeder();
 
-  const { agregarTramosAlReporte, loadingTramos } = useGapsBySed();
+  const { agregarTramosAlReporte, loadingTramos } = useGap();
 
   const [selectedFeeder, setSelectedFeeder] = useState(null);
   const [file, setFile] = useState(null);
@@ -74,8 +74,6 @@ const AgregarTramos = () => {
 
       return;
     }
-
-    console.log(selectedFeeder);
 
     const resultado = await agregarTramosAlReporte(file, selectedFeeder);
 
