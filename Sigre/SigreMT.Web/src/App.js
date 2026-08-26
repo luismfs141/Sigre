@@ -23,7 +23,7 @@ import ReporteMaestro from './pages/ReporteMaestro';
 import MigrationPanel from './pages/MigrationPanel';
 import ActualizarDeficiencias from './pages/ActualizarDeficiencias';
 import AgregarTramos from './pages/Utilidades/AgregarTramos'; 
-// Asegúrate de que la ruta sea correcta
+// Asegúrate de que la ruta sea correcta 
 
 function App() {
   return (
