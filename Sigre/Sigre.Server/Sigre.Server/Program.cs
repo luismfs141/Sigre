@@ -12,17 +12,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen(); //Comentar para Server Online
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "SIGRE API",
-        Version = "v1"
-    });
+//builder.Services.AddSwaggerGen(c =>
+//{
+//    c.SwaggerDoc("v1", new OpenApiInfo
+//    {
+//        Title = "SIGRE API",
+//        Version = "v1"
+//    });
 
-    // 🔥 Soporte para subida de archivos
-    c.OperationFilter<FileUploadOperationFilter>();
-});
+//    // 🔥 Soporte para subida de archivos
+//    c.OperationFilter<FileUploadOperationFilter>();
+//});
 
 // 🔑 Configuración de JWT
 var key = Encoding.UTF8.GetBytes("esta_es_una_clave_super_segura_123456!");
@@ -75,8 +75,8 @@ var app = builder.Build();
 // Pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger(); //Comentar para Server Online
-    app.UseSwaggerUI(); //Comentar para Server Online
+    //app.UseSwagger(); //Comentar para Server Online
+    //app.UseSwaggerUI(); //Comentar para Server Online
 }
 
 app.UseHttpsRedirection();
