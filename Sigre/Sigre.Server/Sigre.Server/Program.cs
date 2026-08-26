@@ -63,7 +63,7 @@ builder.Services.AddCors(options =>
             "http://localhost:3000",
             "http://localhost:7280",
             "https://kind-coast-0e9ecb71e.2.azurestaticapps.net",
-            "https://happy-ocean-0fcadaf10.7.azurestaticapps.net/"
+            "https://witty-mud-0b9894910.7.azurestaticapps.net"
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
