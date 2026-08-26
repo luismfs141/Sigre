@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Sigre.DataAccess\Sigre.DataAccess.csproj" />
+    <ProjectReference Include="..\Sigre.BusinessLogic\Sigre.BusinessLogic.csproj" />
   </ItemGroup>
 
   <ItemGroup>

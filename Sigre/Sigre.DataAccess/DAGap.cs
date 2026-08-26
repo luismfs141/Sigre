@@ -553,5 +553,26 @@ namespace Sigre.DataAccess
                 return new PagedResult<Vano> { TotalRecords = totalRecords, Data = data };
             }
         }
+
+        public Dictionary<string, string> DAGAP_ObtenerTramosPorAlimentador(int alimInterno)
+        {
+            using var ctx = new SigreContext();
+
+            return (
+                from v in ctx.Vanos.AsNoTracking()
+                join t in ctx.Tramos.AsNoTracking()
+                    on v.TramInterno equals t.TramInterno
+                where v.AlimInterno == alimInterno
+                      && v.VanoEsMt == true
+                select new
+                {
+                    VanoCodigo = v.VanoCodigo,
+                    TramoCodigo = t.TramCodigo
+                }
+            ).ToDictionary(
+                x => x.VanoCodigo,
+                x => x.TramoCodigo
+            );
+        }
     }
 }

@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using OfficeOpenXml;
+using Sigre.BusinessLogic.Principal;
+using Sigre.BusinessLogic.Utilidades;
 using Sigre.DataAccess;
 using Sigre.DataAccess.Context;
 using Sigre.Entities;
@@ -528,12 +530,9 @@ namespace Sigre.Server.Controllers
 
         [HttpPost("list-from-excel")]
         [Consumes("multipart/form-data")]
-        public ActionResult<List<Deficiencia>> ListFromExcel(
-            IFormFile file,
-            string x_codAmt)
+        public ActionResult<List<DeficiencyResult>> ListFromExcel(
+            IFormFile file)
         {
-            var daDeficiency = new DADeficiency();
-
             if (file == null || file.Length == 0)
                 return BadRequest("Debe enviar un archivo Excel.");
 
@@ -543,12 +542,9 @@ namespace Sigre.Server.Controllers
 
             using var package = new ExcelPackage(stream);
 
-            var ws = package.Workbook.Worksheets[0];
+            var blDefciency = new BLDefciency();
 
-            var resultado =
-                daDeficiency.ListarDeficienciasMTporReporte(
-                    ws,
-                    x_codAmt);
+            var resultado = blDefciency.LeerReporte(package.Workbook);
 
             return Ok(resultado);
         }
